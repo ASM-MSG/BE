@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+
+if ! grep -qE "^MSG-[0-9]+ (feat|fix|refactor|docs|test|chore|style): " "$1"; then
+  echo "X 커밋 메시지 형식 위반"
+  echo ""
+  echo "O 올바른 형식: MSG-123 feat: 요약"
+  echo "  타입 후보: feat, fix, refactor, docs, test, chore, style"
+  exit 1
+fi
