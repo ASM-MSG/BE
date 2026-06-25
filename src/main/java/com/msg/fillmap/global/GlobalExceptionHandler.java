@@ -19,7 +19,7 @@ public class GlobalExceptionHandler {
 				.body(ApiResponseDto.builder()
 						.developCode(errorCode.getErrorCode())
 						.httpStatus(errorCode.getHttpStatus())
-						.message(errorCode.getMessage())
+						.message(e.getMessage() != null ? e.getMessage() : errorCode.getMessage())
 						.build());
 	}
 
