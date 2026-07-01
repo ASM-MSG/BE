@@ -1,0 +1,25 @@
+# 로컬 개발 전용 — 운영은 AWS RDS 사용
+services:
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: fillmap-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fillmap
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: user1234
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user -d fillmap" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+
+
