@@ -17,4 +17,4 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
     org.flywaydb: INFO
-    com.momentmap: DEBUG
+    com.fillmap: DEBUG
