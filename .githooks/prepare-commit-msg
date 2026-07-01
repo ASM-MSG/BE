@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+# 브랜치 이름에서 MSG-<번호> 를 추출해 커밋 메시지 첫 줄 앞에 자동으로 붙인다.
+# 예: feature/MSG-43-signup 에서 `git commit -m "feat: 회원가입"` →
+#     "MSG-43 feat: 회원가입"
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# merge/squash 커밋은 개입하지 않는다
+case "$COMMIT_SOURCE" in
+	merge|squash) exit 0 ;;
+esac
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+[ -z "$BRANCH" ] && exit 0
+
+TICKET=$(echo "$BRANCH" | grep -oE 'MSG-[0-9]+' | head -1)
+[ -z "$TICKET" ] && exit 0
+
+# 이미 티켓이 붙어 있으면 그대로 둔다
+FIRST_LINE=$(head -n 1 "$COMMIT_MSG_FILE")
+if echo "$FIRST_LINE" | grep -qE "^MSG-[0-9]+"; then
+	exit 0
+fi
+
+# 빈 라인/코멘트만 있는 경우(에디터로 열린 상태) 는 사용자가 직접 쓰도록 두어도 되지만,
+# 일단 첫 줄 자리를 확보해준다는 관점에서 그대로 prepend 한다.
+TEMP=$(mktemp)
+printf "%s %s\n" "$TICKET" "$FIRST_LINE" > "$TEMP"
+tail -n +2 "$COMMIT_MSG_FILE" >> "$TEMP"
+mv "$TEMP" "$COMMIT_MSG_FILE"

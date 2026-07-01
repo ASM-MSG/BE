@@ -46,3 +46,17 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// --- Git hooks 자동 활성화 ---
+// clone 직후 팀원이 별도 설정 없이도 .githooks/ 하위 훅이 적용되도록
+// compileJava 앞에 한 번 git config 를 걸어둔다. 이미 설정돼 있으면 idempotent.
+tasks.register('installGitHooks', Exec) {
+	workingDir = project.rootDir
+	commandLine 'git', 'config', 'core.hooksPath', '.githooks'
+	ignoreExitValue = true
+	onlyIf { file('.git').exists() }
+}
+
+tasks.named('compileJava') {
+	dependsOn 'installGitHooks'
+}
