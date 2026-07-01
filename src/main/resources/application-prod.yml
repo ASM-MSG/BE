@@ -1,0 +1,39 @@
+# 운영 — AWS RDS + ElastiCache
+# 실제 값은 환경변수로 주입 (EC2/ECS 환경변수, Secrets Manager 등)
+spring:
+  datasource:
+    url: ${DB_URL}                 # 예: jdbc:postgresql://fillmap.xxx.ap-northeast-2.rds.amazonaws.com:5432/fillmap
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    show-sql: false                # 운영에선 절대 켜지 말 것
+
+  # Redis (ElastiCache) — 활성화는 추후
+  data:
+    redis:
+      host: ${REDIS_HOST}          # 예: fillmap-redis.xxx.cache.amazonaws.com
+      port: ${REDIS_PORT:6379}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+server:
+  port: ${SERVER_PORT:8080}
+
+logging:
+  level:
+    root: INFO
+    com.fillmap: INFO
+    org.hibernate.SQL: WARN
+    org.flywaydb: INFO

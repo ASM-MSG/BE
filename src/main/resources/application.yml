@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: fillmap
+  profiles:
+    active: local                  # local yml로 돌린다 일단은
+
+  jpa:
+    hibernate:
+      ddl-auto: create        # 나중에는 update나 validate(운영 중 일때)로 변경
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect   # 여기만 수정
+        format_sql: true
+        default_batch_fetch_size: 100
+#    open-in-view: false            # OSIV ?? (N+1 ??)
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-on-migrate: true
+
+server:
+  port: 8080
