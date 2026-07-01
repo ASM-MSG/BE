@@ -6,7 +6,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create        # 나중에는 update나 validate(운영 중 일때)로 변경
+      ddl-auto: validate        # 나중에는 update나 validate(운영 중 일때)로 변경
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect   # 여기만 수정
