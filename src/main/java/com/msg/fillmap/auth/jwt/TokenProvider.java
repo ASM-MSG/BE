@@ -25,6 +25,14 @@ public interface TokenProvider {
 	String issueAccessToken(Long userId, UserRole role);
 
 	/**
+	 * access token 을 현재 서버 인스턴스에서 더 이상 사용할 수 없도록 무효화한다.
+	 *
+	 * @param accessToken Bearer 접두어를 제거한 순수 토큰 문자열
+	 * @throws ApiException 만료(EXPIRED_TOKEN) 또는 위조·형식오류(INVALID_TOKEN)
+	 */
+	void invalidateAccessToken(String accessToken);
+
+	/**
 	 * 요청에서 파싱한 access token 을 검증하고 principal 정보를 리턴한다.
 	 * (JWT 인증 필터가 사용. 소셜 로그인 담당자는 이 메서드를 직접 호출할 일이 없다.)
 	 *
