@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -25,6 +26,8 @@ import com.msg.fillmap.user.entity.AuthProvider;
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+	private static final String BEARER_PREFIX = "Bearer ";
 
 	private final AuthService authService;
 	private final OidcLoginService oidcLoginService;

@@ -25,10 +25,12 @@ public class JwtTokenProvider implements TokenProvider {
 
 	private final JwtProperties jwtProperties;
 	private final SecretKey secretKey;
+	private final InvalidatedTokenStore invalidatedTokenStore;
 
-	public JwtTokenProvider(JwtProperties jwtProperties) {
+	public JwtTokenProvider(JwtProperties jwtProperties, InvalidatedTokenStore invalidatedTokenStore) {
 		this.jwtProperties = jwtProperties;
 		this.secretKey = Keys.hmacShaKeyFor(jwtProperties.secret().getBytes(StandardCharsets.UTF_8));
+		this.invalidatedTokenStore = invalidatedTokenStore;
 	}
 
 	@Override
@@ -45,16 +47,35 @@ public class JwtTokenProvider implements TokenProvider {
 	}
 
 	@Override
+	public void invalidateAccessToken(String accessToken) {
+		Claims claims = parseClaims(accessToken);
+		invalidatedTokenStore.invalidate(accessToken, claims.getExpiration().toInstant());
+	}
+
+	@Override
 	public AuthPrincipal parseAccessToken(String accessToken) {
 		try {
-			Claims claims = Jwts.parser()
+			Claims claims = parseClaims(accessToken);
+			if (invalidatedTokenStore.isInvalidated(accessToken)) {
+				throw new ApiException(AuthErrorCode.INVALID_TOKEN);
+			}
+			Long userId = Long.parseLong(claims.getSubject());
+			UserRole role = UserRole.valueOf(claims.get(ROLE_CLAIM, String.class));
+			return new AuthPrincipal(userId, role);
+		} catch (ApiException e) {
+			throw e;
+		} catch (IllegalArgumentException e) {
+			throw new ApiException(AuthErrorCode.INVALID_TOKEN);
+		}
+	}
+
+	private Claims parseClaims(String accessToken) {
+		try {
+			return Jwts.parser()
 				.verifyWith(secretKey)
 				.build()
 				.parseSignedClaims(accessToken)
 				.getPayload();
-			Long userId = Long.parseLong(claims.getSubject());
-			UserRole role = UserRole.valueOf(claims.get(ROLE_CLAIM, String.class));
-			return new AuthPrincipal(userId, role);
 		} catch (ExpiredJwtException e) {
 			throw new ApiException(AuthErrorCode.EXPIRED_TOKEN);
 		} catch (JwtException | IllegalArgumentException e) {

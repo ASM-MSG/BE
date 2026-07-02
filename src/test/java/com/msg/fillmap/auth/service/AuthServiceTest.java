@@ -20,8 +20,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Optional;
+
+import com.msg.fillmap.auth.dto.LoginRequestDto;
+import com.msg.fillmap.auth.dto.LoginResponseDto;
 import com.msg.fillmap.auth.dto.SignupRequestDto;
 import com.msg.fillmap.auth.dto.SignupResponseDto;
+import com.msg.fillmap.auth.exception.AuthErrorCode;
+import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.entity.AuthProvider;
 import com.msg.fillmap.user.entity.User;
@@ -38,6 +44,9 @@ class AuthServiceTest {
 
 	@Mock
 	private PasswordEncoder passwordEncoder;
+
+	@Mock
+	private TokenProvider tokenProvider;
 
 	@InjectMocks
 	private AuthService authService;
@@ -95,6 +104,72 @@ class AuthServiceTest {
 
 			verify(passwordEncoder, never()).encode(any());
 			verify(userRepository, never()).save(any());
+		}
+	}
+
+	@Nested
+	@DisplayName("login")
+	class Login {
+
+		private final LoginRequestDto request = new LoginRequestDto("test@example.com", "password123");
+
+		@Test
+		@DisplayName("성공: 이메일·비밀번호가 맞으면 access token 을 발급해 반환한다")
+		void login_success() {
+			User user = User.createLocalUser(request.email(), "encoded-hash", "테스터");
+			ReflectionTestUtils.setField(user, "id", 42L);
+
+			given(userRepository.findByEmail(request.email())).willReturn(Optional.of(user));
+			given(passwordEncoder.matches(request.password(), "encoded-hash")).willReturn(true);
+			given(tokenProvider.issueAccessToken(42L, UserRole.USER)).willReturn("jwt-token");
+
+			LoginResponseDto response = authService.login(request);
+
+			assertThat(response.accessToken()).isEqualTo("jwt-token");
+		}
+
+		@Test
+		@DisplayName("실패: 이메일이 존재하지 않으면 INVALID_CREDENTIALS 를 던지고 후속 호출 없음")
+		void login_emailNotFound() {
+			given(userRepository.findByEmail(request.email())).willReturn(Optional.empty());
+
+			assertThatThrownBy(() -> authService.login(request))
+				.isInstanceOf(ApiException.class)
+				.satisfies(thrown -> assertThat(((ApiException) thrown).getErrorCode())
+					.isEqualTo(AuthErrorCode.INVALID_CREDENTIALS));
+
+			verify(passwordEncoder, never()).matches(any(), any());
+			verify(tokenProvider, never()).issueAccessToken(any(), any());
+		}
+
+		@Test
+		@DisplayName("실패: 비밀번호가 불일치하면 INVALID_CREDENTIALS 를 던지고 토큰을 발급하지 않는다")
+		void login_wrongPassword() {
+			User user = User.createLocalUser(request.email(), "encoded-hash", "테스터");
+			ReflectionTestUtils.setField(user, "id", 42L);
+
+			given(userRepository.findByEmail(request.email())).willReturn(Optional.of(user));
+			given(passwordEncoder.matches(request.password(), "encoded-hash")).willReturn(false);
+
+			assertThatThrownBy(() -> authService.login(request))
+				.isInstanceOf(ApiException.class)
+				.satisfies(thrown -> assertThat(((ApiException) thrown).getErrorCode())
+					.isEqualTo(AuthErrorCode.INVALID_CREDENTIALS));
+
+			verify(tokenProvider, never()).issueAccessToken(any(), any());
+		}
+	}
+
+	@Nested
+	@DisplayName("logout")
+	class Logout {
+
+		@Test
+		@DisplayName("성공: access token 무효화를 TokenProvider 에 위임한다")
+		void logout_success() {
+			authService.logout("jwt-token");
+
+			verify(tokenProvider).invalidateAccessToken("jwt-token");
 		}
 	}
 }
