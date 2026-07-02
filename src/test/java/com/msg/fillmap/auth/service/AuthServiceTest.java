@@ -159,4 +159,17 @@ class AuthServiceTest {
 			verify(tokenProvider, never()).issueAccessToken(any(), any());
 		}
 	}
+
+	@Nested
+	@DisplayName("logout")
+	class Logout {
+
+		@Test
+		@DisplayName("성공: access token 무효화를 TokenProvider 에 위임한다")
+		void logout_success() {
+			authService.logout("jwt-token");
+
+			verify(tokenProvider).invalidateAccessToken("jwt-token");
+		}
+	}
 }
