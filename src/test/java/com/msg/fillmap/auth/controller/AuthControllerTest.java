@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -38,6 +39,7 @@ class AuthControllerTest {
 
 	private static final String SIGNUP_URL = "/auth/signup";
 	private static final String LOGIN_URL = "/auth/login";
+	private static final String LOGOUT_URL = "/auth/logout";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -182,6 +184,34 @@ class AuthControllerTest {
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.developCode").value(2411))
 				.andExpect(jsonPath("$.message").value("이메일 또는 비밀번호가 올바르지 않습니다"));
+		}
+	}
+
+	@Nested
+	@DisplayName("POST /auth/logout")
+	class Logout {
+
+		@Test
+		@DisplayName("성공: Bearer 토큰을 제거 대상으로 넘기고 200 을 반환한다")
+		void logout_success() throws Exception {
+			mockMvc.perform(post(LOGOUT_URL)
+					.header(HttpHeaders.AUTHORIZATION, "Bearer jwt-token"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.developCode").value(200));
+
+			verify(authService).logout("jwt-token");
+		}
+
+		@Test
+		@DisplayName("실패: Bearer 형식이 아니면 INVALID_TOKEN(2401) 을 반환하고 서비스는 호출되지 않는다")
+		void logout_invalidAuthorizationHeader() throws Exception {
+			mockMvc.perform(post(LOGOUT_URL)
+					.header(HttpHeaders.AUTHORIZATION, "Basic jwt-token"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2401))
+				.andExpect(jsonPath("$.message").value("유효하지 않은 토큰입니다"));
+
+			verify(authService, never()).logout(any());
 		}
 	}
 }

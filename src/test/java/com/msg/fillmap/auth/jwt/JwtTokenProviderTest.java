@@ -25,7 +25,7 @@ class JwtTokenProviderTest {
 	@BeforeEach
 	void setUp() {
 		JwtProperties properties = new JwtProperties(SECRET, Duration.ofHours(1));
-		this.tokenProvider = new JwtTokenProvider(properties);
+		this.tokenProvider = new JwtTokenProvider(properties, new InMemoryInvalidatedTokenStore());
 	}
 
 	@Nested
@@ -55,6 +55,26 @@ class JwtTokenProviderTest {
 	}
 
 	@Nested
+	@DisplayName("invalidateAccessToken")
+	class Invalidate {
+
+		@Test
+		@DisplayName("성공: 무효화한 토큰은 이후 INVALID_TOKEN 으로 거부된다")
+		void invalidate_success() {
+			String token = tokenProvider.issueAccessToken(42L, UserRole.USER);
+
+			tokenProvider.invalidateAccessToken(token);
+
+			assertThatThrownBy(() -> tokenProvider.parseAccessToken(token))
+				.isInstanceOf(ApiException.class)
+				.satisfies(thrown -> {
+					ApiException api = (ApiException) thrown;
+					assertThat(api.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_TOKEN);
+				});
+		}
+	}
+
+	@Nested
 	@DisplayName("parseAccessToken 검증 실패")
 	class ParseFailure {
 
@@ -62,7 +82,7 @@ class JwtTokenProviderTest {
 		@DisplayName("만료된 토큰이면 EXPIRED_TOKEN")
 		void expired() {
 			JwtProperties expiredProps = new JwtProperties(SECRET, Duration.ofSeconds(-1));
-			JwtTokenProvider expiredIssuer = new JwtTokenProvider(expiredProps);
+			JwtTokenProvider expiredIssuer = new JwtTokenProvider(expiredProps, new InMemoryInvalidatedTokenStore());
 			String expiredToken = expiredIssuer.issueAccessToken(1L, UserRole.USER);
 
 			assertThatThrownBy(() -> tokenProvider.parseAccessToken(expiredToken))
@@ -77,7 +97,7 @@ class JwtTokenProviderTest {
 		@DisplayName("다른 시크릿으로 발급된 토큰이면 INVALID_TOKEN")
 		void forgedSignature() {
 			JwtProperties otherProps = new JwtProperties(OTHER_SECRET, Duration.ofHours(1));
-			JwtTokenProvider forger = new JwtTokenProvider(otherProps);
+			JwtTokenProvider forger = new JwtTokenProvider(otherProps, new InMemoryInvalidatedTokenStore());
 			String forgedToken = forger.issueAccessToken(1L, UserRole.USER);
 
 			assertThatThrownBy(() -> tokenProvider.parseAccessToken(forgedToken))
