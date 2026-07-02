@@ -22,8 +22,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import tools.jackson.databind.ObjectMapper;
 
+import com.msg.fillmap.auth.dto.LoginRequestDto;
+import com.msg.fillmap.auth.dto.LoginResponseDto;
 import com.msg.fillmap.auth.dto.SignupRequestDto;
 import com.msg.fillmap.auth.dto.SignupResponseDto;
+import com.msg.fillmap.auth.exception.AuthErrorCode;
 import com.msg.fillmap.auth.service.AuthService;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.exception.UserErrorCode;
@@ -34,6 +37,7 @@ import com.msg.fillmap.user.exception.UserErrorCode;
 class AuthControllerTest {
 
 	private static final String SIGNUP_URL = "/auth/signup";
+	private static final String LOGIN_URL = "/auth/login";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -130,6 +134,54 @@ class AuthControllerTest {
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.developCode").value(1409))
 				.andExpect(jsonPath("$.message").value("이미 사용 중인 이메일입니다"));
+		}
+	}
+
+	@Nested
+	@DisplayName("POST /auth/login")
+	class Login {
+
+		@Test
+		@DisplayName("성공: 정상 요청이면 200 과 accessToken 을 반환한다")
+		void login_success() throws Exception {
+			LoginRequestDto request = new LoginRequestDto("test@example.com", "password123");
+			given(authService.login(any(LoginRequestDto.class)))
+				.willReturn(new LoginResponseDto("jwt-token"));
+
+			mockMvc.perform(post(LOGIN_URL)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.developCode").value(200))
+				.andExpect(jsonPath("$.body.accessToken").value("jwt-token"));
+		}
+
+		@Test
+		@DisplayName("실패: 이메일 형식이 잘못되면 400 을 반환하고 서비스는 호출되지 않는다")
+		void login_invalidEmail() throws Exception {
+			LoginRequestDto request = new LoginRequestDto("not-an-email", "password123");
+
+			mockMvc.perform(post(LOGIN_URL)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isBadRequest());
+
+			verify(authService, never()).login(any());
+		}
+
+		@Test
+		@DisplayName("실패: 자격 증명이 틀리면 401 INVALID_CREDENTIALS(2411) 로 응답한다")
+		void login_invalidCredentials() throws Exception {
+			LoginRequestDto request = new LoginRequestDto("test@example.com", "wrong-password");
+			given(authService.login(any(LoginRequestDto.class)))
+				.willThrow(new ApiException(AuthErrorCode.INVALID_CREDENTIALS));
+
+			mockMvc.perform(post(LOGIN_URL)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2411))
+				.andExpect(jsonPath("$.message").value("이메일 또는 비밀번호가 올바르지 않습니다"));
 		}
 	}
 }
