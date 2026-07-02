@@ -26,5 +26,11 @@ jwt:
   # 여기서는 만료시간만 관리.
   access-token-ttl: PT1H
 
+oauth:
+  kakao:
+    issuer: https://kauth.kakao.com
+    jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
+    # client-id(카카오 REST API 키) 는 application-local.yml (로컬) / KAKAO_CLIENT_ID 환경변수 (운영) 로 주입한다.
+
 server:
   port: 8080
