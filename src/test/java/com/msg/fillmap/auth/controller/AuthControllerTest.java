@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -25,8 +24,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import com.msg.fillmap.auth.dto.LoginResponseDto;
 import com.msg.fillmap.auth.dto.OidcLoginRequestDto;
-import com.msg.fillmap.auth.dto.LoginRequestDto;
-import com.msg.fillmap.auth.dto.LoginResponseDto;
 import com.msg.fillmap.auth.dto.SignupRequestDto;
 import com.msg.fillmap.auth.dto.SignupResponseDto;
 import com.msg.fillmap.auth.exception.AuthErrorCode;
@@ -42,8 +39,6 @@ import com.msg.fillmap.user.exception.UserErrorCode;
 class AuthControllerTest {
 
 	private static final String SIGNUP_URL = "/auth/signup";
-	private static final String LOGIN_URL = "/auth/login";
-	private static final String LOGOUT_URL = "/auth/logout";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -158,18 +153,7 @@ class AuthControllerTest {
 				.willReturn(new LoginResponseDto("jwt-token"));
 
 			mockMvc.perform(post("/auth/oauth/kakao")
-	@DisplayName("POST /auth/login")
-	class Login {
-
-		@Test
-		@DisplayName("성공: 정상 요청이면 200 과 accessToken 을 반환한다")
-		void login_success() throws Exception {
-			LoginRequestDto request = new LoginRequestDto("test@example.com", "password123");
-			given(authService.login(any(LoginRequestDto.class)))
-				.willReturn(new LoginResponseDto("jwt-token"));
-
-			mockMvc.perform(post(LOGIN_URL)
-					.contentType(MediaType.APPLICATION_JSON)
+							.contentType(MediaType.APPLICATION_JSON)
 					.content(objectMapper.writeValueAsString(request)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.developCode").value(200))
@@ -182,7 +166,14 @@ class AuthControllerTest {
 			OidcLoginRequestDto request = new OidcLoginRequestDto("");
 
 			mockMvc.perform(post("/auth/oauth/kakao")
-		@DisplayName("실패: 이메일 형식이 잘못되면 400 을 반환하고 서비스는 호출되지 않는다")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request)))
+					.andExpect(status().isBadRequest());
+			verify(oidcLoginService, never()).login(any(), any());
+
+		}
+
+				@DisplayName("실패: 이메일 형식이 잘못되면 400 을 반환하고 서비스는 호출되지 않는다")
 		void login_invalidEmail() throws Exception {
 			LoginRequestDto request = new LoginRequestDto("not-an-email", "password123");
 
@@ -220,7 +211,6 @@ class AuthControllerTest {
 					.content(objectMapper.writeValueAsString(request)))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.developCode").value(2421));
-			verify(authService, never()).login(any());
 		}
 
 		@Test
