@@ -47,4 +47,9 @@ public class AuthService {
 		String accessToken = tokenProvider.issueAccessToken(user.getId(), user.getRole());
 		return new LoginResponseDto(accessToken);
 	}
+
+	@Transactional
+	public void logout(String accessToken) {
+		tokenProvider.invalidateAccessToken(accessToken);
+	}
 }
