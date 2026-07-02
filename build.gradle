@@ -29,6 +29,11 @@ dependencies {
     implementation 'org.flywaydb:flyway-database-postgresql'
 
 
+	// --- JWT (JJWT) ---
+	implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+	runtimeOnly    'io.jsonwebtoken:jjwt-impl:0.13.0'
+	runtimeOnly    'io.jsonwebtoken:jjwt-jackson:0.13.0'
+
 	// --- PostgreSQL + PostGIS ---
 	runtimeOnly  'org.postgresql:postgresql'
 	implementation 'org.hibernate.orm:hibernate-spatial'   // Spring Boot 3.x가 버전 관리
