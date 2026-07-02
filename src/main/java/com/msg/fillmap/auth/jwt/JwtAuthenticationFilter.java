@@ -8,18 +8,19 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import com.msg.fillmap.global.exception.ApiException;
 
-@Component
+/**
+ * SecurityConfig 에서 @Bean 으로 명시 등록. @Component 를 걸지 않는 이유:
+ * @WebMvcTest 슬라이스가 필터를 자동 로드하면서 TokenProvider 미해결로 컨텍스트가 깨진다.
+ */
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 	private static final String BEARER_PREFIX = "Bearer ";
@@ -27,10 +28,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	private final TokenProvider tokenProvider;
 	private final HandlerExceptionResolver resolver;
 
-	public JwtAuthenticationFilter(
-		TokenProvider tokenProvider,
-		@Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver
-	) {
+	public JwtAuthenticationFilter(TokenProvider tokenProvider, HandlerExceptionResolver resolver) {
 		this.tokenProvider = tokenProvider;
 		this.resolver = resolver;
 	}

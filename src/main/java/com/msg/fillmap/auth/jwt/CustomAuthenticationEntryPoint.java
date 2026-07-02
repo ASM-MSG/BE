@@ -9,7 +9,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
-import org.springframework.stereotype.Component;
 
 import lombok.RequiredArgsConstructor;
 
@@ -18,7 +17,9 @@ import tools.jackson.databind.ObjectMapper;
 import com.msg.fillmap.auth.exception.AuthErrorCode;
 import com.msg.fillmap.response.ApiResponseDto;
 
-@Component
+/**
+ * SecurityConfig 에서 @Bean 으로 명시 등록. JwtAuthenticationFilter 와 같은 이유로 @Component 미사용.
+ */
 @RequiredArgsConstructor
 public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
