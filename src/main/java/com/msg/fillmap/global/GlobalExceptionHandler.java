@@ -1,6 +1,9 @@
 package com.msg.fillmap.global;
 
+import java.util.stream.Collectors;
+
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -20,6 +23,20 @@ public class GlobalExceptionHandler {
 						.developCode(errorCode.getErrorCode())
 						.httpStatus(errorCode.getHttpStatus())
 						.message(e.getMessage() != null ? e.getMessage() : errorCode.getMessage())
+						.build());
+	}
+
+	@ExceptionHandler(MethodArgumentNotValidException.class)
+	public ResponseEntity<ApiResponseDto<Object>> handleValidation(MethodArgumentNotValidException e) {
+		String message = e.getBindingResult().getFieldErrors().stream()
+				.map(fieldError -> fieldError.getField() + ": " + fieldError.getDefaultMessage())
+				.collect(Collectors.joining(", "));
+		return ResponseEntity
+				.status(ErrorCode.BAD_REQUEST.getHttpStatus())
+				.body(ApiResponseDto.builder()
+						.developCode(ErrorCode.BAD_REQUEST.getErrorCode())
+						.httpStatus(ErrorCode.BAD_REQUEST.getHttpStatus())
+						.message(message.isBlank() ? ErrorCode.BAD_REQUEST.getMessage() : message)
 						.build());
 	}
 
