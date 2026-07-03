@@ -66,8 +66,9 @@ public class User {
 	private LocalDateTime createdAt;
 
 	@Builder(access = AccessLevel.PRIVATE)
-	private User(AuthProvider provider, String email, String passwordHash, String nickname, UserRole role) {
+	private User(AuthProvider provider, String oid, String email, String passwordHash, String nickname, UserRole role) {
 		this.provider = provider;
+		this.oid = oid;
 		this.email = email;
 		this.passwordHash = passwordHash;
 		this.nickname = nickname;
@@ -80,6 +81,16 @@ public class User {
 			.provider(AuthProvider.LOCAL)
 			.email(email)
 			.passwordHash(encodedPassword)
+			.nickname(nickname)
+			.role(UserRole.USER)
+			.build();
+	}
+
+	public static User createOAuthUser(AuthProvider provider, String oid, String email, String nickname) {
+		return User.builder()
+			.provider(provider)
+			.oid(oid)
+			.email(email)
 			.nickname(nickname)
 			.role(UserRole.USER)
 			.build();

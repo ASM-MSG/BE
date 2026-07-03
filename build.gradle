@@ -34,6 +34,9 @@ dependencies {
 	runtimeOnly    'io.jsonwebtoken:jjwt-impl:0.13.0'
 	runtimeOnly    'io.jsonwebtoken:jjwt-jackson:0.13.0'
 
+	// --- OAuth2 / OIDC ID Token 검증 (카카오, 추후 애플) ---
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
 	// --- PostgreSQL + PostGIS ---
 	runtimeOnly  'org.postgresql:postgresql'
 	implementation 'org.hibernate.orm:hibernate-spatial'   // Spring Boot 3.x가 버전 관리
