@@ -13,7 +13,7 @@ FillMap 백엔드 프로젝트의 코딩 컨벤션. 모든 커밋에 강제 적�
 
 ## Import 순서
 
-```
+```text
 static import
 ─ 빈 줄 ─
 java.*
@@ -52,7 +52,7 @@ com.*
 
 git hook으로 강제됨. 형식:
 
-```
+```text
 MSG-{번호} {타입}: {요약}
 ```
 
@@ -65,7 +65,7 @@ MSG-{번호} {타입}: {요약}
 
 ## 브랜치 명명
 
-```
+```text
 feature/MSG-{번호}/{짧은-설명}   # 기능
 fix/MSG-{번호}/{짧은-설명}       # 버그 수정
 refactor/MSG-{번호}/{짧은-설명}  # 리팩터링
@@ -84,7 +84,7 @@ chore/MSG-{번호}/{짧은-설명}     # 설정/도구
 
 ## 3-Layer MVC
 
-```
+```text
 Controller → Service → Repository → DB
 ```
 

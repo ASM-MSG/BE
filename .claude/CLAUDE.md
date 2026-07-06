@@ -51,6 +51,6 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 ## 협업 원칙 (요약)
 
 - **Owner A**: 지도 인프라 도메인 (`com.msg.fillmap.grid.*`, `com.msg.fillmap.region.*`)
-- **Owner B**: 콘텐츠/인증 도메인 (`com.msg.fillmap.user.*`, `com.msg.fillmap.video.*`, `com.msg.fillmap.auth.*`)
++ **Owner B**: 콘텐츠/인증 도메인 (`com.msg.fillmap.user.*`, `com.msg.fillmap.video.*`, `com.msg.fillmap.auth.*`, `com.msg.fillmap.usergrid.*`)
 - 두 도메인의 접점은 인터페이스로만 (`GridQueryService`, `UserGridQueryService` 등)
 - 상세: `@.claude/docs/infrastructure.md`

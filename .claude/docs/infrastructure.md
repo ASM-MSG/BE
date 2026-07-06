@@ -2,7 +2,7 @@
 
 ## 패키지 구조
 
-```
+```text
 com.msg.fillmap
 ├── FillmapApplication.java
 ├── response/                     # 공통 응답 (모든 API 사용)

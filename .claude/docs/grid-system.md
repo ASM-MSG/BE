@@ -36,7 +36,8 @@ FillMap의 핵심 공간 모델. 용어 정의는 `.claude/rules/glossary.md`가
 | `videos` | 격자에 올린 영상 1건 = 방문 1회 | 방문 · 재방문 |
 
 - **전역 격자 등록**: 첫 영상 업로드 시 `grids` row 생성 (없으면). 한 번 생기면 사라지지 않음.
-- **개인 점령**: 그 사용자의 첫 업로드 시 `user_grids` (user_id, grid_id) row 생성 → 도감에 색칠.
+- **개인 점령**: 그 사용자의 첫 업로드 시 `user_grids` (user_id, geohash) row 생성 → 도감에 색칠.
+  (DB 저장 키 컬럼명은 `geohash` — 논리 식별자 `grid_id`와 표기 구분. 상세: glossary `격자(Grid)` 항목)
 - **재방문**: 이미 개인 점령한 격자 재업로드 → `user_grids.video_count++`, `last_uploaded_at` 갱신.
 - **점령 롤백**: 해당 격자의 사용자 영상이 모두 삭제되어 `video_count == 0`이면 `user_grids` row 삭제
   (개인 점령만 롤백, 전역 격자 등록/`grids` row는 유지). 세부 규칙은 glossary 참조.

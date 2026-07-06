@@ -16,15 +16,26 @@ FillMap 프로젝트에서 사용하는 도메인 용어의 공식 정의. 코�
 **정의**: 지구 표면을 100m × 100m 정사각형으로 나눈 하나의 셀.
 
 - 위경도 상 `(grid_y, grid_x)` 인덱스로 유일하게 식별
-- `grid_id` 문자열 포맷: `"{grid_y}_{grid_x}"` (예: `"41642_110458"`)
+- `grid_id` 문자열 포맷: `"{grid_y}_{grid_x}"` (예: `"41642_110458"`) — **개념/코드 레벨의 논리 식별자**
 - 물리적으로는 항상 존재하는 논리적 개념
 - DB 저장 여부는 별개 → **grids 테이블에 row가 있음 = "누군가 영상을 올린 격자"**
+
+**DB 저장 키 = `geohash` 컬럼**: 실제 스키마(`V1__init.sql`)에서 격자 키는 `grids.geohash VARCHAR(7)`
+(PK)이며 `videos` · `user_grids` · `sponsor_ads`가 이 컬럼을 FK로 참조한다. **저장 키를 지칭할 때는
+`grid_id`가 아니라 실제 컬럼명 `geohash`로 표기한다.** `geohash`라는 컬럼명은 저장 키의 이름일 뿐,
+그 안에 담기는 값이 표준 geohash 알고리즘 결과인지 자체 100×100m 양자화 키인지는 별개다.
+
+> ⚠️ **미해결 불일치 (grid 구현 전 확정 필요)**: 스키마는 `VARCHAR(7)`("GeoHash7") — 표준 7자 geohash에는
+> 맞지만 위 논리 포맷 `"{grid_y}_{grid_x}"`(예 `"41642_110458"`, 12자)는 **VARCHAR(7)에 들어가지 않는다.**
+> 실제 인코딩 규칙의 단일 진실 원천은 코드의 `GridEncoder`/`GridConstants`인데 아직 미구현이다.
+> 둘 중 무엇을 저장할지(표준 geohash7 vs 자체 양자화 키) 확정하고, 확정된 쪽으로 컬럼 타입/포맷/이
+> 문서를 일치시켜야 한다.
 
 ### 점령 (Occupation)
 
 **정의**: 사용자가 특정 격자에 **첫 영상을 업로드한 상태**.
 
-- `user_grids` 테이블에 (user_id, grid_id) row가 생성됨
+- `user_grids` 테이블에 (user_id, geohash) row가 생성됨 (UNIQUE 제약 `uq_user_grids`)
 - 도감에 격자가 색으로 표시되는 시점 = 점령 시점
 - `first_collected_at` 컬럼에 최초 점령 시각 기록
 - **MVP에는 개인 점령 하나만 존재.** (전역/친구 점령 개념은 백엔드 내부용)

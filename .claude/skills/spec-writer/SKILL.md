@@ -16,7 +16,7 @@ MSG-XX 티켓을 `docs/MSG-XXX.md` 스펙 문서로 만드는 단일 작업 스�
    조회를 시도한다. 조회 실패 시 사용자에게 티켓 내용을 요청한다 — 추측하지 않는다.
 2. **기존 스펙 확인**: `docs/MSG-{번호}.md`가 이미 있으면 덮어쓰기 전에 diff를 요약해
    사용자에게 갱신 의사를 확인한다.
-3. `프로젝트/.claude/agents/spec-writer.md`에 정의된 에이전트를 호출한다:
+3. `.claude/agents/spec-writer.md`에 정의된 에이전트를 호출한다:
 
 ```
 Agent(

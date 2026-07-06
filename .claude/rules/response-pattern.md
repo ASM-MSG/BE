@@ -43,7 +43,7 @@ public SuccessResponse<SignupResponseDto> signup(@Valid @RequestBody SignupReque
 
 | 대역 | 도메인 | 예시 |
 |---|---|---|
-| `9xxx` | 공통(`ErrorCode`) | — |
+| `200` / `4xx` / `5xx` | 공통(`ErrorCode`) | `OK`, `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_SERVER_ERROR`
 | `2xxx` | auth | `2401 INVALID_TOKEN`, `2422 UNSUPPORTED_PROVIDER` |
 
 새 도메인 에러 enum 추가 시:
