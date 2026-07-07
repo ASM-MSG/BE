@@ -57,10 +57,10 @@ CREATE INDEX idx_regions_boundary ON regions USING GIST (boundary_geom);
 CREATE INDEX idx_regions_parent   ON regions (parent_code);
 
 -- ============================================================================
--- grids (GeoHash7 격자)
+-- grids (100×100m 양자화 격자)
 -- ============================================================================
 CREATE TABLE grids (
-                       geohash        VARCHAR(7) PRIMARY KEY,
+                       grid_id        VARCHAR(20) PRIMARY KEY,
                        region_code    VARCHAR(10) REFERENCES regions(region_code),
                        center_geom    GEOGRAPHY(POINT, 4326)   NOT NULL,
                        bbox_geom      GEOGRAPHY(POLYGON, 4326) NOT NULL,
@@ -69,7 +69,6 @@ CREATE TABLE grids (
 );
 CREATE INDEX idx_grids_bbox       ON grids USING GIST (bbox_geom);
 CREATE INDEX idx_grids_region     ON grids (region_code);
-CREATE INDEX idx_grids_prefix_5   ON grids (LEFT(geohash, 5));  -- viewport prefix 쿼리용
 
 -- ============================================================================
 -- push_tokens (FCM)
@@ -117,7 +116,7 @@ CREATE TABLE streaks (
 CREATE TABLE videos (
                         id                 BIGSERIAL PRIMARY KEY,
                         user_id            BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                        geohash            VARCHAR(7) NOT NULL REFERENCES grids(geohash),
+                        grid_id            VARCHAR(20) NOT NULL REFERENCES grids(grid_id),
                         original_s3_key    VARCHAR(500),
                         encoded_url        TEXT,
                         thumbnail_url      TEXT,
@@ -130,9 +129,9 @@ CREATE TABLE videos (
                         created_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_videos_geom         ON videos USING GIST (geom);
-CREATE INDEX idx_videos_geohash      ON videos (geohash);
+CREATE INDEX idx_videos_grid_id      ON videos (grid_id);
 CREATE INDEX idx_videos_user_created ON videos (user_id, created_at DESC);
-CREATE INDEX idx_videos_active       ON videos (geohash, created_at DESC)
+CREATE INDEX idx_videos_active       ON videos (grid_id, created_at DESC)
     WHERE status = 'ACTIVE' AND visibility = 'PUBLIC';
 
 -- ============================================================================
@@ -141,13 +140,13 @@ CREATE INDEX idx_videos_active       ON videos (geohash, created_at DESC)
 CREATE TABLE user_grids (
                             id                  BIGSERIAL PRIMARY KEY,
                             user_id             BIGINT     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                            geohash             VARCHAR(7) NOT NULL REFERENCES grids(geohash),
+                            grid_id             VARCHAR(20) NOT NULL REFERENCES grids(grid_id),
                             first_collected_at  TIMESTAMP  NOT NULL DEFAULT CURRENT_TIMESTAMP,
                             last_uploaded_at    TIMESTAMP  NOT NULL DEFAULT CURRENT_TIMESTAMP,
                             video_count         INTEGER    NOT NULL DEFAULT 1,
                             cover_video_id      BIGINT REFERENCES videos(id) ON DELETE SET NULL,
 
-                            CONSTRAINT uq_user_grids UNIQUE (user_id, geohash)
+                            CONSTRAINT uq_user_grids UNIQUE (user_id, grid_id)
 );
 CREATE INDEX idx_user_grids_user ON user_grids (user_id);
 
@@ -226,7 +225,7 @@ CREATE INDEX idx_reports_pending      ON reports (created_at) WHERE status = 'PE
 -- ============================================================================
 CREATE TABLE sponsor_ads (
                              id              BIGSERIAL PRIMARY KEY,
-                             geohash         VARCHAR(7) NOT NULL REFERENCES grids(geohash),
+                             grid_id         VARCHAR(20) NOT NULL REFERENCES grids(grid_id),
                              advertiser_name VARCHAR(200) NOT NULL,
                              promo_video_url TEXT         NOT NULL,
                              bid_amount      DECIMAL(10,2) NOT NULL,
@@ -238,5 +237,5 @@ CREATE TABLE sponsor_ads (
                              CONSTRAINT chk_sponsor_dates CHECK (start_date <= end_date)
 );
 CREATE INDEX idx_sponsor_ads_active
-    ON sponsor_ads (geohash, end_date)
+    ON sponsor_ads (grid_id, end_date)
     WHERE status = 'ACTIVE';
