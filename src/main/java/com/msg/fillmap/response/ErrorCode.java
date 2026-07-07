@@ -10,8 +10,6 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum ErrorCode implements ErrorCodeIfs {
 
-	OK(200, HttpStatus.OK, "성공"),
-
 	BAD_REQUEST(400, HttpStatus.BAD_REQUEST, "잘못된 요청"),
 	UNAUTHORIZED(401, HttpStatus.UNAUTHORIZED, "인증이 필요합니다"),
 	FORBIDDEN(403, HttpStatus.FORBIDDEN, "접근 권한이 없습니다"),

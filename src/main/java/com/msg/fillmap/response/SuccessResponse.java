@@ -5,12 +5,15 @@ import org.springframework.http.ResponseEntity;
 
 public class SuccessResponse<T> extends ResponseEntity<ApiResponseDto<T>> {
 
+	private static final int SUCCESS_CODE = 200;
+	private static final String SUCCESS_MESSAGE = "성공";
+
 	public SuccessResponse(T data) {
 		super(
 			ApiResponseDto.<T>builder()
-				.developCode(ErrorCode.OK.getErrorCode())
-				.httpStatus(ErrorCode.OK.getHttpStatus())
-				.message(ErrorCode.OK.getMessage())
+				.developCode(SUCCESS_CODE)
+				.httpStatus(HttpStatus.OK)
+				.message(SUCCESS_MESSAGE)
 				.body(data)
 				.build(),
 			HttpStatus.OK
