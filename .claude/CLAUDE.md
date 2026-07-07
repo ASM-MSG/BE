@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## About FillMap
 
-**FillMap** — 사용자가 방문한 장소를 짧은 영상(자유 길이, 최대 30초)으로 기록하고, 지도 위 약 100×100m 격자를 수집하는 서비스.
+**FillMap** — 사용자가 방문한 장소를 5초 영상으로 기록하고, 지도 위 100×100m 정사각형 격자를 수집하는 서비스.
 Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + PostgreSQL(PostGIS).
 
 ## Read First — 항상 준수 (규칙)
@@ -19,10 +19,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 
 - `@.claude/docs/project.md` — 프로젝트 개요 · 기술 스택 · 빌드/실행
 - `@.claude/docs/grid-system.md` — 100×100m 격자 시스템
-- `@.claude/docs/infrastructure.md` — 패키지 구조 · 로컬 DB 세팅 · AWS 인프라
-- `@.claude/docs/deploy.md` — 프로파일 · 환경변수 · 배포 설정
-- `@.claude/docs/architecture.md` — 서비스 아키텍처(SA, 정본) · 8개 서비스 · AI Highlight-Blur
-- `@.claude/docs/ia.md` — 화면 구조(IA) · User Journey · 구현 갭
+- `@.claude/docs/infrastructure.md` — 패키지 구조 · 로컬 DB 세팅
 
 ## Skills — 특정 워크플로우
 

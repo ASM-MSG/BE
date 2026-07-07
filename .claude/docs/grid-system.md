@@ -1,4 +1,4 @@
-# Grid System — 약 100×100m 격자 (한국 위도 기준)
+# Grid System — 100×100m 격자
 
 FillMap의 핵심 공간 모델. 용어 정의는 `.claude/rules/glossary.md`가 단일 진실 원천이며,
 이 문서는 그 용어를 전제로 격자의 **설계·좌표 규약·저장/조회 구조**를 설명한다.
@@ -8,8 +8,7 @@ FillMap의 핵심 공간 모델. 용어 정의는 `.claude/rules/glossary.md`가
 
 ## 격자란
 
-지구 표면을 위경도 등간격 셀로 나눈 것 (**한국 위도 기준 ≈100m × 100m**, 엄밀한 정사각형이 아닌 등간격
-근사 — 상세는 glossary "격자 계산 규칙"). 각 셀은 물리적으로 **항상 존재하는 논리 개념**이며,
+지구 표면을 100m × 100m 정사각형 셀로 나눈 것. 각 셀은 물리적으로 **항상 존재하는 논리 개념**이며,
 누군가 영상을 올리기 전까지는 DB(`grids` 테이블)에 row가 없다 (lazy insert).
 
 - 식별: `(grid_y, grid_x)` 정수 인덱스 쌍으로 유일
@@ -37,8 +36,8 @@ FillMap의 핵심 공간 모델. 용어 정의는 `.claude/rules/glossary.md`가
 | `videos` | 격자에 올린 영상 1건 = 방문 1회 | 방문 · 재방문 |
 
 - **전역 격자 등록**: 첫 영상 업로드 시 `grids` row 생성 (없으면). 한 번 생기면 사라지지 않음.
-- **개인 점령**: 그 사용자의 첫 업로드 시 `user_grids` (user_id, grid_id) row 생성 → 도감에 색칠.
-  (DB 저장 키 컬럼명도 `grid_id` — 논리 식별자와 동일, 자체 100×100m 양자화 키. MSG-78 확정)
+- **개인 점령**: 그 사용자의 첫 업로드 시 `user_grids` (user_id, geohash) row 생성 → 도감에 색칠.
+  (DB 저장 키 컬럼명은 `geohash` — 논리 식별자 `grid_id`와 표기 구분. 상세: glossary `격자(Grid)` 항목)
 - **재방문**: 이미 개인 점령한 격자 재업로드 → `user_grids.video_count++`, `last_uploaded_at` 갱신.
 - **점령 롤백**: 해당 격자의 사용자 영상이 모두 삭제되어 `video_count == 0`이면 `user_grids` row 삭제
   (개인 점령만 롤백, 전역 격자 등록/`grids` row는 유지). 세부 규칙은 glossary 참조.
