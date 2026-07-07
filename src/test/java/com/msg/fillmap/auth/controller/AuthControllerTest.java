@@ -16,12 +16,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import tools.jackson.databind.ObjectMapper;
 
+import com.msg.fillmap.auth.dto.LoginRequestDto;
 import com.msg.fillmap.auth.dto.LoginResponseDto;
 import com.msg.fillmap.auth.dto.OidcLoginRequestDto;
 import com.msg.fillmap.auth.dto.SignupRequestDto;
@@ -39,6 +41,8 @@ import com.msg.fillmap.user.exception.UserErrorCode;
 class AuthControllerTest {
 
 	private static final String SIGNUP_URL = "/auth/signup";
+	private static final String LOGIN_URL = "/auth/login";
+	private static final String LOGOUT_URL = "/auth/logout";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -173,7 +177,8 @@ class AuthControllerTest {
 
 		}
 
-				@DisplayName("실패: 이메일 형식이 잘못되면 400 을 반환하고 서비스는 호출되지 않는다")
+		@Test
+		@DisplayName("실패: 이메일 형식이 잘못되면 400 을 반환하고 서비스는 호출되지 않는다")
 		void login_invalidEmail() throws Exception {
 			LoginRequestDto request = new LoginRequestDto("not-an-email", "password123");
 
@@ -249,6 +254,17 @@ class AuthControllerTest {
 		void logout_invalidAuthorizationHeader() throws Exception {
 			mockMvc.perform(post(LOGOUT_URL)
 					.header(HttpHeaders.AUTHORIZATION, "Basic jwt-token"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2401))
+				.andExpect(jsonPath("$.message").value("유효하지 않은 토큰입니다"));
+
+			verify(authService, never()).logout(any());
+		}
+
+		@Test
+		@DisplayName("실패: Authorization 헤더가 없으면 INVALID_TOKEN(2401) 을 반환하고 서비스는 호출되지 않는다")
+		void logout_missingAuthorizationHeader() throws Exception {
+			mockMvc.perform(post(LOGOUT_URL))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.developCode").value(2401))
 				.andExpect(jsonPath("$.message").value("유효하지 않은 토큰입니다"));

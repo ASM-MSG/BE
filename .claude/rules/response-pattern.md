@@ -33,7 +33,8 @@ public SuccessResponse<SignupResponseDto> signup(@Valid @RequestBody SignupReque
 모든 에러 코드 enum은 `ErrorCodeIfs`를 구현한다 (`getHttpStatus`, `getErrorCode`, `getMessage`).
 
 - **공통 에러**: `com.msg.fillmap.response.ErrorCode`
-  (`OK`, `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_SERVER_ERROR`)
+  (`BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_SERVER_ERROR`)
+  - 성공(`developCode 200`, message "성공")은 에러 코드가 아니므로 `ErrorCode`에 두지 않고 `SuccessResponse`가 자체 상수로 보유한다.
 - **도메인 에러**: 각 도메인 `exception/` 하위에 `XxxErrorCode` enum으로 정의
   (예: `auth/exception/AuthErrorCode`)
 
@@ -43,7 +44,7 @@ public SuccessResponse<SignupResponseDto> signup(@Valid @RequestBody SignupReque
 
 | 대역 | 도메인 | 예시 |
 |---|---|---|
-| `200` / `4xx` / `5xx` | 공통(`ErrorCode`) | `OK`, `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_SERVER_ERROR`
+| `4xx` / `5xx` | 공통(`ErrorCode`) | `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_SERVER_ERROR` |
 | `2xxx` | auth | `2401 INVALID_TOKEN`, `2422 UNSUPPORTED_PROVIDER` |
 
 새 도메인 에러 enum 추가 시:
