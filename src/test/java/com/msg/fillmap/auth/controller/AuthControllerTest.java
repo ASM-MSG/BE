@@ -260,5 +260,16 @@ class AuthControllerTest {
 
 			verify(authService, never()).logout(any());
 		}
+
+		@Test
+		@DisplayName("실패: Authorization 헤더가 없으면 INVALID_TOKEN(2401) 을 반환하고 서비스는 호출되지 않는다")
+		void logout_missingAuthorizationHeader() throws Exception {
+			mockMvc.perform(post(LOGOUT_URL))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2401))
+				.andExpect(jsonPath("$.message").value("유효하지 않은 토큰입니다"));
+
+			verify(authService, never()).logout(any());
+		}
 	}
 }

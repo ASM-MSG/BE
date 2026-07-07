@@ -45,8 +45,9 @@ public class AuthController {
 	}
 
 	@PostMapping("/logout")
-	public SuccessResponse<Void> logout(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization) {
-		if (!authorization.startsWith(BEARER_PREFIX)) {
+	public SuccessResponse<Void> logout(
+		@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+		if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
 			throw new ApiException(AuthErrorCode.INVALID_TOKEN);
 		}
 		authService.logout(authorization.substring(BEARER_PREFIX.length()));
