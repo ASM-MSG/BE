@@ -16,7 +16,7 @@ FillMap 백엔드의 서비스 수준 아키텍처. 원본은 기획팀이 작�
 
 **원본 다이어그램 (drawio 소스):** `.claude/docs/diagrams/`
 - 유즈케이스 → `0_FillMap_UseCase.drawio.xml`
-- SA(Service Architecture) → `3_SA_v2.drawio (1).xml`
+- SA(Service Architecture) → `3_SA_v2.drawio.xml`
 - SysA(System Architecture v4, 정본) → `4_FillMap_SysA_v4.drawio.xml`
 - CA(Component Architecture) → `5_FillMap_CA_v3.drawio.xml`
 

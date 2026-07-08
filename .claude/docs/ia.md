@@ -8,8 +8,8 @@
 > 실제 구현 여부는 `.claude/docs/infrastructure.md` 패키지 구조가 기준.
 
 **원본 다이어그램 (drawio 소스):** `.claude/docs/diagrams/`
-- IA v2 → `1_IA_v2.drawio (1).xml`
-- User Journey → `2_UserJourney.drawio (1).xml`
+- IA v2 → `1_IA_v2.drawio.xml`
+- User Journey → `2_UserJourney.drawio.xml`
 
 ## 화면 구조 (IA v2)
 
