@@ -139,6 +139,25 @@ docker compose up -d
 | CI/CD | GitHub Actions → ECR → Systems Manager Run Command |
 | 관측/보안 | CloudWatch Logs+Metrics, Secrets Manager(`/dev/*`, `/prod/*`) |
 
+> 원본 다이어그램: `.claude/docs/diagrams/5_FillMap_CA_v3.drawio.xml` (Component Architecture v3)
+
+### 논리(SysA) → 물리(CA) 매핑
+
+`architecture.md`의 논리 서비스·저장소가 실제 AWS 리소스로 어떻게 내려앉는지:
+
+| 논리 (SysA) | 물리 (CA, AWS) |
+|---|---|
+| Auth ~ Moderation (Spring Boot 7종) | 단일 EC2 Spring Boot API Server 컨테이너에 함께 패킹 |
+| AI Highlight-Blur (FastAPI 1종) | 별도 EC2 Python FastAPI AI Server |
+| PostgreSQL + PostGIS | RDS PostgreSQL + PostGIS (Dev/Prod 분리) |
+| Redis (Hot ZSET · Cache) | ElastiCache Redis (Prod 전용) |
+| S3 (원본·인코딩본) | Amazon S3 + CloudFront CDN |
+| Message Queue | Apache Kafka (App Tier) |
+| Notification | Firebase FCM (VPC 외부) |
+
+MVP는 논리 서비스 8종을 물리적으로 **EC2 2대(Spring Boot 1 + FastAPI 1)** 에 얹는 단일 인스턴스
+구성이다. 서비스 분리(ECS 등)는 Phase 4 검토 대상.
+
 ### DB (RDS PostgreSQL + PostGIS)
 
 | 환경 | 인스턴스 | 구성 | 비용 |

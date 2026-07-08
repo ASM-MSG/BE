@@ -14,6 +14,12 @@ FillMap 백엔드의 서비스 수준 아키텍처. 원본은 기획팀이 작�
 **SA(System Architecture v4)가 정본(canonical)** 이고, User Journey는 UX 참고용 보조자료다.
 이전 버전 SA1은 User Journey 보조자료로 격하, SA2는 폐기됨.
 
+**원본 다이어그램 (drawio 소스):** `.claude/docs/diagrams/`
+- 유즈케이스 → `0_FillMap_UseCase.drawio.xml`
+- SA(Service Architecture) → `3_SA_v2.drawio (1).xml`
+- SysA(System Architecture v4, 정본) → `4_FillMap_SysA_v4.drawio.xml`
+- CA(Component Architecture) → `5_FillMap_CA_v3.drawio.xml`
+
 > 이 문서와 실제 코드가 다르면 **코드가 맞다.** 특히 아직 패키지로 구현되지 않은 도메인(Social·
 > Notification·Moderation·광고)은 "설계상 존재"일 뿐 구현 여부는 `.claude/docs/infrastructure.md`
 > 패키지 구조를 기준으로 판단할 것.
@@ -56,6 +62,28 @@ Python FastAPI AI Server가 나란히 배치).
 | 알림 | Notification |
 | 신고·차단 | Moderation |
 | AI | AI Highlight-Blur |
+
+> SysA 다이어그램에서 각 서비스 카드 상단의 SA3 컬러 스트립이 위 매핑을 1:1로 표현한다
+> (같은 색·이름 = 같은 서비스). SysA는 SA와 같은 시스템의 다른 줌 레벨이다.
+
+### SysA — 서비스 ↔ 데이터 저장소 통신
+
+각 서비스가 실제로 읽고 쓰는 저장소(SysA 다이어그램의 실선 = 실시간 요청/응답):
+
+| 서비스 | PostgreSQL | Redis | S3 | 기술 |
+|---|---|---|---|---|
+| Auth | 세션·프로필 | JWT Refresh | — | Spring Boot |
+| Grid | 격자 | Hot ZSET(핫존 랭킹) | — | Spring Boot |
+| Video | 메타데이터 | — | 원본·인코딩본 | Spring Boot |
+| Collection | 도감 | — | — | Spring Boot |
+| Social | 소셜(친구·그룹) | — | — | Spring Boot |
+| Notification | — | — | — | Spring Boot (FCM 외부 호출) |
+| Moderation | 신고 | — | — | Spring Boot |
+| AI Highlight-Blur | — | — | 인코딩본 | Python FastAPI |
+
+**Kafka 비동기 파이프라인** (점선 = 비동기): `Video → enqueue → Kafka → consume →
+AI Highlight-Blur → S3(인코딩본) → Video(처리 완료 응답)`. Spring Boot 7종 + FastAPI 1종이
+Kafka로 영상/AI 파이프라인을 비동기 연결한다.
 
 ## Client Tier (클라이언트 4종)
 
