@@ -155,7 +155,7 @@ docker compose up -d
 | Message Queue | Apache Kafka (App Tier) |
 | Notification | Firebase FCM (VPC 외부) |
 
-MVP는 논리 서비스 8종을 물리적으로 **EC2 2대(Spring Boot 1 + FastAPI 1)** 에 얹는 단일 인스턴스
+MVP는 논리 서비스 8종을 물리적으로 **EC2 2대(Spring Boot 1 + FastAPI 1)** 에 각 EC2는 1개 인스턴스로 운용한다
 구성이다. 서비스 분리(ECS 등)는 Phase 4 검토 대상.
 
 ### DB (RDS PostgreSQL + PostGIS)
