@@ -7,6 +7,10 @@
 > 목적: 화면 단위 요구사항이 어떤 백엔드 도메인/서비스에 대응하는지 빠르게 파악하기 위함.
 > 실제 구현 여부는 `.claude/docs/infrastructure.md` 패키지 구조가 기준.
 
+**원본 다이어그램 (drawio 소스):** `.claude/docs/diagrams/`
+- IA v2 → `1_IA_v2.drawio.xml`
+- User Journey → `2_UserJourney.drawio.xml`
+
 ## 화면 구조 (IA v2)
 
 로그인 → 메인 화면 하위에 8개 카테고리.

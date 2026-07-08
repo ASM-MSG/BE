@@ -17,6 +17,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 
 ## Reference — 필요 시 참조 (문서)
 
+- `@.claude/docs/status.md` — **구현 현황 (문서 중 먼저 확인)** · 코드에 실제 있는 패키지/인터페이스/엔티티
 - `@.claude/docs/project.md` — 프로젝트 개요 · 기술 스택 · 빌드/실행
 - `@.claude/docs/grid-system.md` — 100×100m 격자 시스템
 - `@.claude/docs/infrastructure.md` — 패키지 구조 · 로컬 DB 세팅 · AWS 인프라

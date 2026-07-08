@@ -1,5 +1,8 @@
 # Infrastructure & Package Structure
 
+> ⚠️ **목표 설계 문서다.** 아래 패키지 구조·계약 인터페이스는 대부분 아직 코드에 없다.
+> 실제 구현 현황은 `status.md` 참조 — 여기 나온 패키지/인터페이스가 코드에 있다고 가정하지 말 것.
+
 ## 패키지 구조
 
 ```text
@@ -135,6 +138,25 @@ docker compose up -d
 | Private Subnet · Data Tier | RDS(Dev/Prod), ElastiCache Redis |
 | CI/CD | GitHub Actions → ECR → Systems Manager Run Command |
 | 관측/보안 | CloudWatch Logs+Metrics, Secrets Manager(`/dev/*`, `/prod/*`) |
+
+> 원본 다이어그램: `.claude/docs/diagrams/5_FillMap_CA_v3.drawio.xml` (Component Architecture v3)
+
+### 논리(SysA) → 물리(CA) 매핑
+
+`architecture.md`의 논리 서비스·저장소가 실제 AWS 리소스로 어떻게 내려앉는지:
+
+| 논리 (SysA) | 물리 (CA, AWS) |
+|---|---|
+| Auth ~ Moderation (Spring Boot 7종) | 단일 EC2 Spring Boot API Server 컨테이너에 함께 패킹 |
+| AI Highlight-Blur (FastAPI 1종) | 별도 EC2 Python FastAPI AI Server |
+| PostgreSQL + PostGIS | RDS PostgreSQL + PostGIS (Dev/Prod 분리) |
+| Redis (Hot ZSET · Cache) | ElastiCache Redis (Prod 전용) |
+| S3 (원본·인코딩본) | Amazon S3 + CloudFront CDN |
+| Message Queue | Apache Kafka (App Tier) |
+| Notification | Firebase FCM (VPC 외부) |
+
+MVP는 논리 서비스 8종을 물리적으로 **EC2 2대(Spring Boot 1 + FastAPI 1)** 에 각 EC2는 1개 인스턴스로 운용한다
+구성이다. 서비스 분리(ECS 등)는 Phase 4 검토 대상.
 
 ### DB (RDS PostgreSQL + PostGIS)
 
