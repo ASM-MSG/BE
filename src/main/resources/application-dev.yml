@@ -1,0 +1,32 @@
+# 개발(dev) — EC2 위 Docker PostGIS (dev 전용 컨테이너, prod와 격리)
+# 값은 환경변수로 주입하되, 없으면 로컬/서버 dev 컨테이너 기본값으로 동작한다.
+# DB는 prod와 물리적으로 분리된 별도 컨테이너다 (docker-compose.server.yml: postgres-dev, 5432).
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/fillmap}
+    username: ${DB_USERNAME:dev}
+    password: ${DB_PASSWORD:dev1234}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    show-sql: true                 # dev에서는 SQL 확인 허용 (운영은 false)
+
+oauth:
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID:}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+jwt:
+  secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef}
+
+logging:
+  level:
+    root: INFO
+    com.fillmap: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.flywaydb: INFO

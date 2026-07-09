@@ -1,0 +1,51 @@
+# EC2 서버 전용 — dev / prod DB를 같은 호스트에서 별도 컨테이너로 격리 운용.
+# 로컬 개발은 docker-compose.yml 사용. 이 파일은 EC2에서만 띄운다.
+#
+#   docker compose -f docker-compose.server.yml up -d
+#
+# dev 앱(profile=dev)  -> localhost:5432 (postgres-dev)
+# prod 앱(profile=prod) -> localhost:5433 (postgres-prod, DB_URL로 주입)
+#
+# ⚠️ 비밀번호는 아래 기본값을 그대로 쓰지 말고 .env 파일로 주입할 것.
+services:
+  postgres-dev:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: fillmap-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fillmap
+      POSTGRES_USER: ${DEV_DB_USER:-dev}
+      POSTGRES_PASSWORD: ${DEV_DB_PASSWORD:-dev1234}
+      TZ: Asia/Seoul
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DEV_DB_USER:-dev} -d fillmap" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres-prod:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: fillmap-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fillmap
+      POSTGRES_USER: ${PROD_DB_USER:-prod}
+      POSTGRES_PASSWORD: ${PROD_DB_PASSWORD:?PROD_DB_PASSWORD 필수}
+      TZ: Asia/Seoul
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${PROD_DB_USER:-prod} -d fillmap" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata_dev:
+  pgdata_prod:
