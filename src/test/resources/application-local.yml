@@ -1,0 +1,16 @@
+# 테스트 전용 local 프로파일 오버라이드 — @SpringBootTest 컨텍스트 로드용 더미 값.
+# main application.yml(issuer·jwk-set-uri·flyway 등)은 그대로 살아있고, 여기서는
+# local 프로파일이 요구하는 datasource·jwt.secret·kakao client-id만 채운다.
+# CI는 이 datasource(localhost:5432)에 PostGIS 서비스 컨테이너를 붙인다.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fillmap
+    username: user
+    password: user1234
+
+jwt:
+  secret: test-secret-0123456789-0123456789-0123456789
+
+oauth:
+  kakao:
+    client-id: test-client-id

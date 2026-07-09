@@ -1,0 +1,41 @@
+name: CI
+
+# PR과 develop/main push에서 빌드+테스트. dev/prod 공통 CI.
+on:
+  pull_request:
+  push:
+    branches: [ develop, main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # @SpringBootTest 컨텍스트 로드가 DB를 필요로 한다 (local 프로파일: localhost:5432/fillmap).
+    # 로컬 docker-compose.yml과 동일한 PostGIS 이미지로 맞춘다.
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4-alpine
+        env:
+          POSTGRES_DB: fillmap
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: user1234
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U user -d fillmap"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build & Test
+        run: ./gradlew build
