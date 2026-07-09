@@ -1,0 +1,51 @@
+name: CD (prod)
+
+# main 브랜치 push -> prod 환경 배포.
+# environment: production 에 GitHub 보호 규칙(수동 승인 리뷰어)을 걸어 승인 후 배포한다.
+# EC2(MSG-51) 준비 전까지 DEPLOY_ENABLED 로 비활성(skip). 준비되면 secrets 등록:
+#   PROD_EC2_HOST / PROD_EC2_USER / PROD_EC2_SSH_KEY
+# prod 앱은 systemd 서비스 fillmap-prod (profile=prod, DB 5433 컨테이너)로 상시 구동.
+# 지금은 dev와 같은 EC2를 가리켜도 되고, 나중에 EC2를 분리하면 secret만 바꾸면 된다.
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy-prod:
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: production        # 보호 규칙으로 수동 승인
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Build bootJar
+        run: ./gradlew bootJar -x test
+
+      - name: Upload jar to prod EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PROD_EC2_HOST }}
+          username: ${{ secrets.PROD_EC2_USER }}
+          key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          source: build/libs/fillmap-0.0.1-SNAPSHOT.jar
+          target: /home/${{ secrets.PROD_EC2_USER }}/fillmap-prod
+          strip_components: 2
+
+      - name: Restart prod service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_EC2_HOST }}
+          username: ${{ secrets.PROD_EC2_USER }}
+          key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/${{ secrets.PROD_EC2_USER }}/fillmap-prod
+            mv -f fillmap-0.0.1-SNAPSHOT.jar app.jar
+            sudo systemctl restart fillmap-prod
