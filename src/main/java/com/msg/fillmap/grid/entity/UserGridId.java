@@ -3,13 +3,19 @@ package com.msg.fillmap.grid.entity;
 import java.io.Serializable;
 import java.util.Objects;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
+
 /**
- * user_grids 복합 PK (user_id, grid_id) — {@link UserGrid}의 {@code @IdClass} (v6).
- * 필드명·타입은 {@link UserGrid}의 {@code @Id} 필드와 일치해야 한다.
+ * user_grids 복합 PK (user_id, grid_id) — {@link UserGrid}의 {@code @EmbeddedId} (v6).
  */
+@Embeddable
 public class UserGridId implements Serializable {
 
+	@Column(name = "user_id", nullable = false)
 	private Long userId;
+
+	@Column(name = "grid_id", nullable = false, length = 20)
 	private String gridId;
 
 	protected UserGridId() {
@@ -18,6 +24,14 @@ public class UserGridId implements Serializable {
 	public UserGridId(Long userId, String gridId) {
 		this.userId = userId;
 		this.gridId = gridId;
+	}
+
+	public Long getUserId() {
+		return userId;
+	}
+
+	public String getGridId() {
+		return gridId;
 	}
 
 	@Override

@@ -3,9 +3,8 @@ package com.msg.fillmap.grid.entity;
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 
 import org.hibernate.annotations.CreationTimestamp;
@@ -17,23 +16,17 @@ import lombok.NoArgsConstructor;
 
 /**
  * 개인 도감 — 사용자가 점령한 격자 (user_grids). 첫 방문 = 점령 = 이 row 생성.
- * v6: 서러게이트 id 제거, (user_id, grid_id) 복합 PK.
+ * v6: 서러게이트 id 제거, (user_id, grid_id) 복합 PK를 {@link UserGridId} {@code @EmbeddedId}로 매핑.
  * write는 native UPSERT({@code UserGridRepository.upsertOccupation})로 하므로 @Builder는 이 경로에서 쓰이지 않는다.
  */
 @Entity
 @Table(name = "user_grids")
-@IdClass(UserGridId.class)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserGrid {
 
-	@Id
-	@Column(name = "user_id", nullable = false)
-	private Long userId;
-
-	@Id
-	@Column(name = "grid_id", nullable = false, length = 20)
-	private String gridId;
+	@EmbeddedId
+	private UserGridId id;
 
 	@CreationTimestamp
 	@Column(name = "first_collected_at", nullable = false, updatable = false)
@@ -51,8 +44,7 @@ public class UserGrid {
 
 	@Builder
 	private UserGrid(Long userId, String gridId, Long coverVideoId) {
-		this.userId = userId;
-		this.gridId = gridId;
+		this.id = new UserGridId(userId, gridId);
 		this.coverVideoId = coverVideoId;
 		this.videoCount = 1;
 	}

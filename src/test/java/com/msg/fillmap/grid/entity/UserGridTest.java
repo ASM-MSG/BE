@@ -3,8 +3,8 @@ package com.msg.fillmap.grid.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.persistence.Column;
-import jakarta.persistence.Id;
-import jakarta.persistence.IdClass;
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Table;
 
 import org.junit.jupiter.api.Test;
@@ -12,14 +12,17 @@ import org.junit.jupiter.api.Test;
 class UserGridTest {
 
 	@Test
-	void UserGrid는_user_id와_grid_id_복합키를_가진다() throws NoSuchFieldException {
+	void UserGrid는_user_id와_grid_id_복합키를_EmbeddedId로_가진다() throws NoSuchFieldException {
 		Table table = UserGrid.class.getAnnotation(Table.class);
-		IdClass idClass = UserGrid.class.getAnnotation(IdClass.class);
 
 		assertThat(table.name()).isEqualTo("user_grids");
-		assertThat(idClass.value()).isEqualTo(UserGridId.class);
-		assertThat(UserGrid.class.getDeclaredField("userId").isAnnotationPresent(Id.class)).isTrue();
-		assertThat(UserGrid.class.getDeclaredField("gridId").isAnnotationPresent(Id.class)).isTrue();
+		assertThat(UserGrid.class.getDeclaredField("id").isAnnotationPresent(EmbeddedId.class)).isTrue();
+		assertThat(UserGridId.class.isAnnotationPresent(Embeddable.class)).isTrue();
+
+		Column userIdColumn = UserGridId.class.getDeclaredField("userId").getAnnotation(Column.class);
+		Column gridIdColumn = UserGridId.class.getDeclaredField("gridId").getAnnotation(Column.class);
+		assertThat(userIdColumn.name()).isEqualTo("user_id");
+		assertThat(gridIdColumn.name()).isEqualTo("grid_id");
 	}
 
 	@Test
