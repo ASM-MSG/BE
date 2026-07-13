@@ -14,7 +14,7 @@
 | `global` | ✅ 완성 | `ApiException`, `GlobalExceptionHandler`, `config/SecurityConfig` | — |
 | `auth` (Owner B) | ✅ 완성 | `controller`, `service`(AuthService·OidcLoginService), `dto`, `jwt`(TokenProvider·필터·JwtProperties), `oidc`(Kakao OIDC), `exception/AuthErrorCode` | — |
 | `user` (Owner B) | 🟡 부분 | `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode` | `service`, `controller`, `dto` |
-| `grid` (Owner A) | 🟡 부분 | `GridEncoder`, `GridConstants`(순수 유틸), `entity/UserGrid`(도감 엔티티, MSG-78 D6로 Owner A 소유) | `service`(+ 계약 인터페이스), `repository`, `controller`, `dto`, `Grid` 엔티티 |
+| `grid` (Owner A) | 🟡 부분 | `GridEncoder`·`GridConstants`·`GridWkt`(순수 유틸), `entity/Grid`·`entity/UserGrid`(+`UserGridId` 복합키)·`repository/GridRepository`·`repository/UserGridRepository`·`service/GridOccupationService`(+impl)·`dto/OccupationResult` (MSG-68, v6) | `controller`, `GridQueryService`(read, MSG-73) |
 | `usergrid` (Owner B) | ❌ 미생성 | — | 패키지 전체. `UserGridQueryService` 계약 포함 |
 | `region` (Owner A) | ❌ 미생성 | — | 패키지 전체 (entity·repository·service·controller·dto) |
 | `video` (Owner B) | ❌ 미생성 | — | 패키지 전체 (entity·repository·service·controller·dto) |
@@ -26,7 +26,8 @@
 
 | 인터페이스 | 제공자 | 상태 |
 |---|---|---|
-| `GridQueryService` | Owner A | ❌ 미생성 |
+| `GridOccupationService` | Owner A | ✅ built (MSG-68 — 격자 write: 점령/재방문) |
+| `GridQueryService` | Owner A | ❌ 미생성 (read, MSG-73) |
 | `HotZoneService` | Owner A | ❌ 미생성 |
 | `UserGridQueryService` | Owner B | ❌ 미생성 |
 | `UserOidcCommandService` | Owner B | ❌ 미생성 |
@@ -37,9 +38,10 @@
 
 | 테이블 | 엔티티 | 상태 |
 |---|---|---|
-| `users` | `user/entity/User` | ✅ (단, 스키마의 `grid_color` 컬럼이 엔티티에 아직 없음) |
-| `user_grids` | `grid/entity/UserGrid` | ✅ |
-| `grids` · `videos` · `regions` · `region_stats` · `badges` · `user_badges` · `friendships` · `likes` · `push_tokens` · `reports` · `sponsor_ads` · `streaks` | — | ❌ 엔티티 없음 |
+| `users` | `user/entity/User` | ✅ (v6 ENUM→VARCHAR 정합: provider/role은 plain `@Enumerated(STRING)`. `grid_color` 컬럼은 엔티티에 아직 없음) |
+| `user_grids` | `grid/entity/UserGrid` | ✅ (v6 복합 PK `@IdClass(UserGridId)`) |
+| `grids` | `grid/entity/Grid` | ✅ (MSG-68 — `center_geom`/`bbox_geom`/`grid_y`/`grid_x` 미매핑, write는 native) |
+| `videos` · `regions` · `region_stats` · `badges` · `user_badges` · `friendships` · `likes` · `push_tokens` · `reports` · `sponsor_ads` · `streaks` | — | ❌ 엔티티 없음 |
 
 ## 로드맵 / 백로그
 

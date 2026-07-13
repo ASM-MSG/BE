@@ -3,22 +3,23 @@ package com.msg.fillmap.grid.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 
 import org.junit.jupiter.api.Test;
 
 class UserGridTest {
 
 	@Test
-	void UserGrid는_user_id와_grid_id_조합에_유니크_제약을_가진다() {
+	void UserGrid는_user_id와_grid_id_복합키를_가진다() throws NoSuchFieldException {
 		Table table = UserGrid.class.getAnnotation(Table.class);
+		IdClass idClass = UserGrid.class.getAnnotation(IdClass.class);
 
 		assertThat(table.name()).isEqualTo("user_grids");
-		assertThat(table.uniqueConstraints()).hasSize(1);
-
-		UniqueConstraint constraint = table.uniqueConstraints()[0];
-		assertThat(constraint.columnNames()).containsExactly("user_id", "grid_id");
+		assertThat(idClass.value()).isEqualTo(UserGridId.class);
+		assertThat(UserGrid.class.getDeclaredField("userId").isAnnotationPresent(Id.class)).isTrue();
+		assertThat(UserGrid.class.getDeclaredField("gridId").isAnnotationPresent(Id.class)).isTrue();
 	}
 
 	@Test

@@ -4,11 +4,9 @@ import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -19,20 +17,21 @@ import lombok.NoArgsConstructor;
 
 /**
  * 개인 도감 — 사용자가 점령한 격자 (user_grids). 첫 방문 = 점령 = 이 row 생성.
+ * v6: 서러게이트 id 제거, (user_id, grid_id) 복합 PK.
+ * write는 native UPSERT({@code UserGridRepository.upsertOccupation})로 하므로 @Builder는 이 경로에서 쓰이지 않는다.
  */
 @Entity
-@Table(name = "user_grids", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "grid_id"}))
+@Table(name = "user_grids")
+@IdClass(UserGridId.class)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class UserGrid {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Long id;
-
 	@Column(name = "user_id", nullable = false)
 	private Long userId;
 
+	@Id
 	@Column(name = "grid_id", nullable = false, length = 20)
 	private String gridId;
 
