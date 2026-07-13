@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" agent="FillMap">
+  <diagram name="As-Is (개발)" id="fillmap-asis">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="720" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="FillMap — As-Is (개발/현재 환경) · 2026-07" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#334155;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="600" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- VPC box -->
+        <mxCell id="vpc" value="VPC 10.0.0.0/16 · AZ ap-northeast-2a" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#8C4FFF;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=8;fontSize=13;fontStyle=1;fontColor=#8C4FFF;" vertex="1" parent="1">
+          <mxGeometry x="280" y="80" width="1080" height="580" as="geometry" />
+        </mxCell>
+        <!-- Public subnet -->
+        <mxCell id="pub" value="Public Subnet" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E9F3E6;strokeColor=#248814;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=12;fontStyle=1;fontColor=#248814;" vertex="1" parent="1">
+          <mxGeometry x="440" y="170" width="880" height="340" as="geometry" />
+        </mxCell>
+        <!-- EC2 box -->
+        <mxCell id="ec2box" value="EC2 fillmap-app (퍼블릭 IP · 키페어 SSH)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#ED7100;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=12;fontStyle=1;fontColor=#7C2D12;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="220" width="820" height="270" as="geometry" />
+        </mxCell>
+        <!-- Docker box -->
+        <mxCell id="docker" value="Docker" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EAF1FB;strokeColor=#1E76D2;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=11;fontStyle=1;fontColor=#1E4E8C;" vertex="1" parent="1">
+          <mxGeometry x="700" y="255" width="560" height="205" as="geometry" />
+        </mxCell>
+        <!-- Private subnet (unused) -->
+        <mxCell id="priv" value="Private Subnet (현재 미사용)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F1F5F9;strokeColor=#94A3B8;dashed=1;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=11;fontStyle=1;fontColor=#64748B;" vertex="1" parent="1">
+          <mxGeometry x="440" y="525" width="880" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- EC2 icon -->
+        <mxCell id="ec2icon" value="" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#ED7100;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ec2;" vertex="1" parent="1">
+          <mxGeometry x="478" y="235" width="34" height="34" as="geometry" />
+        </mxCell>
+        <!-- IGW -->
+        <mxCell id="igw" value="Internet Gateway" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=none;fillColor=#8C4FFF;strokeColor=#ffffff;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;fontSize=10;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_gateway;" vertex="1" parent="1">
+          <mxGeometry x="320" y="110" width="48" height="48" as="geometry" />
+        </mxCell>
+
+        <!-- Spring apps -->
+        <mxCell id="springdev" value="Spring Boot dev&#10;:8080 (profile=dev)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE8CC;strokeColor=#ED7100;fontSize=11;fontStyle=1;fontColor=#7C2D12;" vertex="1" parent="1">
+          <mxGeometry x="500" y="290" width="160" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="springprod" value="Spring Boot prod&#10;:8081 (profile=prod)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE8CC;strokeColor=#ED7100;fontSize=11;fontStyle=1;fontColor=#7C2D12;" vertex="1" parent="1">
+          <mxGeometry x="500" y="350" width="160" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- DB / redis containers -->
+        <mxCell id="pgdev" value="postgres-dev&#10;:5432" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1E76D2;fontSize=10;fontStyle=1;fontColor=#0D47A1;" vertex="1" parent="1">
+          <mxGeometry x="720" y="295" width="150" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="pgprod" value="postgres-prod&#10;:5433" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1E76D2;fontSize=10;fontStyle=1;fontColor=#0D47A1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="295" width="150" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="redisdev" value="redis-dev :6379&#10;(앱 미연동)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E7E7;strokeColor=#C0504D;fontSize=10;fontColor=#8A2F2C;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="720" y="390" width="150" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="redisprod" value="redis-prod :6380&#10;(앱 미연동)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E7E7;strokeColor=#C0504D;fontSize=10;fontColor=#8A2F2C;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="390" width="150" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Outside VPC left -->
+        <mxCell id="devpc" value="👤 개발자 PC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4A4A4A;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="110" width="150" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="client" value="클라이언트&#10;(Web · Mobile)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#64748B;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="210" width="150" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="github" value="GitHub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#24292E;strokeColor=#1F2328;fontSize=11;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="60" y="330" width="140" height="38" as="geometry" />
+        </mxCell>
+        <mxCell id="ghactions" value="GitHub Actions&#10;(CI: build·test / CD)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2088FF;strokeColor=#0F62B4;fontSize=10;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="60" y="395" width="140" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="kakao" value="Kakao OAuth (외부)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEE500;strokeColor=#3D1F00;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="510" width="150" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Note -->
+        <mxCell id="note" value="※ Redis 2개 = 인프라만(앱 미연동) · DB 포트(5432/5433/6379/6380) 외부 미개방 · RDS·CloudFront·ALB·NAT·Lambda 없음" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontColor=#64748B;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="280" y="620" width="1000" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="e1" value="SSH :22 (내 IP만)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#3B3B3B;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="devpc" target="ec2box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="HTTP :8080" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#3B3B3B;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="client" target="springdev">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="JDBC :5432" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#1E76D2;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="springdev" target="pgdev">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="JDBC :5433" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#1E76D2;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="springprod" target="pgprod">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="OIDC (HTTPS)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#B7791F;strokeWidth=1.5;fontSize=10;dashed=1;" edge="1" parent="1" source="springdev" target="kakao">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#3B3B3B;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="github" target="ghactions">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="jar scp + systemd 재시작" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#2088FF;strokeWidth=1.5;fontSize=10;dashed=1;" edge="1" parent="1" source="ghactions" target="ec2box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="egress" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=classic;strokeColor=#8C4FFF;strokeWidth=1.5;fontSize=10;" edge="1" parent="1" source="ec2box" target="igw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -46,6 +46,39 @@ services:
       timeout: 3s
       retries: 10
 
+  # Redis — 인프라만 격리 배치 (앱 연동은 실제 사용 기능 생길 때).
+  # dev=6379, prod=6380. prod는 requirepass 필수.
+  redis-dev:
+    image: redis:7-alpine
+    container_name: fillmap-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata_dev:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-prod:
+    image: redis:7-alpine
+    container_name: fillmap-redis-prod
+    restart: unless-stopped
+    command: [ "redis-server", "--requirepass", "${PROD_REDIS_PASSWORD:?PROD_REDIS_PASSWORD 필수}" ]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata_prod:/data
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli -a \"$$PROD_REDIS_PASSWORD\" ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   pgdata_dev:
   pgdata_prod:
+  redisdata_dev:
+  redisdata_prod:
