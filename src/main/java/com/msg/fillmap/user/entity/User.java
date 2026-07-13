@@ -12,8 +12,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -31,8 +29,7 @@ public class User {
 	private Long id;
 
 	@Enumerated(EnumType.STRING)
-	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
-	@Column(nullable = false, columnDefinition = "auth_provider")
+	@Column(nullable = false, length = 20)
 	private AuthProvider provider;
 
 	@Column(length = 64)
@@ -51,8 +48,11 @@ public class User {
 	private String profileImageUrl;
 
 	@Enumerated(EnumType.STRING)
-	@JdbcTypeCode(SqlTypes.NAMED_ENUM)
-	@Column(nullable = false, columnDefinition = "user_role")
+	@Column(name = "grid_color", nullable = false, length = 10)
+	private GridColor gridColor;
+
+	@Enumerated(EnumType.STRING)
+	@Column(nullable = false, length = 10)
 	private UserRole role;
 
 	@Column(name = "email_verified", nullable = false)
@@ -73,6 +73,7 @@ public class User {
 		this.passwordHash = passwordHash;
 		this.nickname = nickname;
 		this.role = role;
+		this.gridColor = GridColor.BLUE;
 		this.emailVerified = false;
 	}
 
