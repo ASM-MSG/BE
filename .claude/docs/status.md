@@ -17,7 +17,7 @@
 | `grid` (Owner A) | 🟡 부분 | `GridEncoder`, `GridConstants`(순수 유틸), `entity/UserGrid`(도감 엔티티, MSG-78 D6로 Owner A 소유) | `service`(+ 계약 인터페이스), `repository`, `controller`, `dto`, `Grid` 엔티티 |
 | `usergrid` (Owner B) | ❌ 미생성 | — | 패키지 전체. `UserGridQueryService` 계약 포함 |
 | `region` (Owner A) | ❌ 미생성 | — | 패키지 전체 (entity·repository·service·controller·dto) |
-| `video` (Owner B) | ❌ 미생성 | — | 패키지 전체 (entity·repository·service·controller·dto) |
+| `video` (Owner B) | 🟡 부분 | `entity`(Video·ProcessingStatus·Visibility·VideoStatus), `repository/VideoRepository`(grids·user_grids native UPSERT), 메타저장 `service`·`controller`(`POST /api/videos`)·`dto`, `support/GeoSupport`, `exception/VideoErrorCode`(3xxx) — MSG-66 | presigned(MSG-64), 인코딩(MSG-65), 교체(71), 삭제(72) |
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
@@ -39,7 +39,8 @@
 |---|---|---|
 | `users` | `user/entity/User` | ✅ (단, 스키마의 `grid_color` 컬럼이 엔티티에 아직 없음) |
 | `user_grids` | `grid/entity/UserGrid` | ✅ |
-| `grids` · `videos` · `regions` · `region_stats` · `badges` · `user_badges` · `friendships` · `likes` · `push_tokens` · `reports` · `sponsor_ads` · `streaks` | — | ❌ 엔티티 없음 |
+| `videos` | `video/entity/Video` | ✅ (MSG-66) |
+| `grids` · `regions` · `region_stats` · `badges` · `user_badges` · `friendships` · `likes` · `push_tokens` · `reports` · `sponsor_ads` · `streaks` | — | ❌ 엔티티 없음 |
 
 ## 로드맵 / 백로그
 
