@@ -35,7 +35,7 @@ jobs:
           username: ${{ secrets.DEV_EC2_USER }}
           key: ${{ secrets.DEV_EC2_SSH_KEY }}
           source: build/libs/fillmap-0.0.1-SNAPSHOT.jar
-          target: /home/${{ secrets.DEV_EC2_USER }}/fillmap-dev
+          target: /home/${{ secrets.DEV_EC2_USER }}
           strip_components: 2
 
       - name: Restart dev service
@@ -46,6 +46,6 @@ jobs:
           key: ${{ secrets.DEV_EC2_SSH_KEY }}
           script: |
             set -e
-            cd /home/${{ secrets.DEV_EC2_USER }}/fillmap-dev
+            cd /home/${{ secrets.DEV_EC2_USER }}
             mv -f fillmap-0.0.1-SNAPSHOT.jar app.jar
             sudo systemctl restart fillmap-dev
