@@ -19,7 +19,6 @@ import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
 import com.msg.fillmap.grid.service.GridCellView;
 import com.msg.fillmap.grid.service.GridQueryService;
-import com.msg.fillmap.grid.service.OccupiedGridView;
 import com.msg.fillmap.grid.service.ViewportStrategy;
 import com.msg.fillmap.response.SuccessResponse;
 
@@ -40,7 +39,7 @@ public class GridController {
 		@PathVariable String gridId
 	) {
 		GridCellView view = gridQueryService.getCell(principal.userId(), gridId);
-		return SuccessResponse.of(new GridCellResponseDto(view.gridId(), view.occupied(), view.videoCount()));
+		return SuccessResponse.of(GridCellResponseDto.from(view));
 	}
 
 	@GetMapping
@@ -55,7 +54,7 @@ public class GridController {
 		ViewportBounds bounds = toBounds(swLat, swLng, neLat, neLng);
 		List<OccupiedGridResponseDto> body = gridQueryService.getOccupiedInViewport(principal.userId(), bounds, strategy)
 			.stream()
-			.map(this::toDto)
+			.map(OccupiedGridResponseDto::from)
 			.toList();
 		return SuccessResponse.of(body);
 	}
@@ -65,9 +64,5 @@ public class GridController {
 			throw new ApiException(GridErrorCode.INVALID_VIEWPORT);
 		}
 		return new ViewportBounds(swLat, swLng, neLat, neLng);
-	}
-
-	private OccupiedGridResponseDto toDto(OccupiedGridView view) {
-		return new OccupiedGridResponseDto(view.gridId(), view.gridY(), view.gridX());
 	}
 }
