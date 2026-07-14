@@ -14,7 +14,7 @@
 | `global` | ✅ 완성 | `ApiException`, `GlobalExceptionHandler`, `config/SecurityConfig` | — |
 | `auth` (Owner B) | ✅ 완성 | `controller`, `service`(AuthService·OidcLoginService), `dto`, `jwt`(TokenProvider·필터·JwtProperties), `oidc`(Kakao OIDC), `exception/AuthErrorCode` | — |
 | `user` (Owner B) | 🟡 부분 | `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode` | `service`, `controller`, `dto` |
-| `grid` (Owner A) | 🟡 부분 | `GridEncoder`, `GridConstants`(순수 유틸), `entity/UserGrid`(도감 엔티티, MSG-78 D6로 Owner A 소유) | `service`(+ 계약 인터페이스), `repository`, `controller`, `dto`, `Grid` 엔티티 |
+| `grid` (Owner A) | 🟡 부분 | `GridEncoder`·`GridConstants`(순수 유틸), `entity/{UserGrid,UserGridId,Grid}`, `repository/GridRepository`, `service/GridQueryService`(+impl, read 계약 A→B), `controller/GridController`, `dto/*`, `exception/GridErrorCode`(4xxx) (MSG-73) | `GridOccupationService`(write는 MSG-66이 흡수), `HotZoneService`, `region` |
 | `usergrid` (Owner B) | ❌ 미생성 | — | 패키지 전체. `UserGridQueryService` 계약 포함 |
 | `region` (Owner A) | ❌ 미생성 | — | 패키지 전체 (entity·repository·service·controller·dto) |
 | `video` (Owner B) | 🟡 부분 | `entity`(Video·ProcessingStatus·Visibility·VideoStatus), `repository/VideoRepository`(grids·user_grids native UPSERT), 메타저장 `service`·`controller`(`POST /api/videos`)·`dto`, `support/GeoSupport`, `exception/VideoErrorCode`(3xxx) — MSG-66 | presigned(MSG-64), 인코딩(MSG-65), 교체(71), 삭제(72) |
@@ -26,7 +26,7 @@
 
 | 인터페이스 | 제공자 | 상태 |
 |---|---|---|
-| `GridQueryService` | Owner A | ❌ 미생성 |
+| `GridQueryService` | Owner A | ✅ built (MSG-73 — 격자 색칠 조회 read) |
 | `HotZoneService` | Owner A | ❌ 미생성 |
 | `UserGridQueryService` | Owner B | ❌ 미생성 |
 | `UserOidcCommandService` | Owner B | ❌ 미생성 |
@@ -40,7 +40,8 @@
 | `users` | `user/entity/User` | ✅ (단, 스키마의 `grid_color` 컬럼이 엔티티에 아직 없음) |
 | `user_grids` | `grid/entity/UserGrid` | ✅ |
 | `videos` | `video/entity/Video` | ✅ (MSG-66) |
-| `grids` · `regions` · `region_stats` · `badges` · `user_badges` · `friendships` · `likes` · `push_tokens` · `reports` · `sponsor_ads` · `streaks` | — | ❌ 엔티티 없음 |
+| `grids` | `grid/entity/Grid` | ✅ (MSG-73 — 조회 전용 최소 매핑: grid_id/grid_y/grid_x, geom 미매핑) |
+| `regions` · `region_stats` · `badges` · `user_badges` · `friendships` · `likes` · `push_tokens` · `reports` · `sponsor_ads` · `streaks` | — | ❌ 엔티티 없음 |
 
 ## 로드맵 / 백로그
 

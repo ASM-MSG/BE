@@ -46,7 +46,7 @@ grid 도메인은 **순수 유틸 + 도감 엔티티만** 있고 조회 인프�
 | `grid/entity/UserGrid`, `grid/entity/UserGridId` (복합 PK `@EmbeddedId`) | `grid/repository/GridRepository` |
 | `response/*` (`SuccessResponse.of`, `ApiResponseDto`, `ErrorCodeIfs`) | `grid/service/GridQueryService` (+ `impl/`) |
 | v6 스키마 `grids`(grid_y/grid_x + center_geom/bbox_geom), `user_grids`(복합 PK) | `grid/controller/GridController`, `grid/dto/*`, `grid/exception/GridErrorCode` |
-| `video/exception/VideoErrorCode` (**3xxx 대역 이미 사용** — `3400 INVALID_COORDINATE`) | Testcontainers PostGIS 베이스(`AbstractPostgisTest`) — 재도입 |
+| `video/service/VideoServiceIntegrationTest` (MSG-66 — `@SpringBootTest`+local 프로파일 테스트 선례) | 격자 조회 통합 테스트 |
 
 > **중요**: MSG-68 백업 스펙이 만들었다고 기록한 `Grid` 엔티티·`GridRepository`·`GridOccupationService`·Testcontainers 인프라는
 > **현재 브랜치 코드에 존재하지 않는다**(폐기됨). 본 티켓은 이들을 "이미 있다"고 가정하지 않고, 조회에 필요한 부분을 **처음부터** 만든다.
@@ -62,7 +62,7 @@ grid 도메인은 **순수 유틸 + 도감 엔티티만** 있고 조회 인프�
 3. 두 API 모두 `SuccessResponse.of(...)`로 감싸 HTTP 200 + `developCode 200`으로 응답한다.
 4. 잘못된 bbox(남서 > 북동, 범위 초과 등)는 `GridErrorCode` 기반 `ApiException`으로 일관 처리된다.
 5. `GridQueryService` 인터페이스가 grid 도메인에 노출돼 Owner B가 import 가능하다.
-6. Testcontainers PostGIS 위에서 공간/범위 쿼리가 실제 스키마(V1 Flyway 적용)로 검증된다 — 전체 테스트 green.
+6. `@SpringBootTest`(local 프로파일, Flyway V1 적용) 위에서 공간/범위 쿼리가 실제 스키마로 검증된다 — 전체 테스트 green.
 7. **viewport 조회 전략을 A(정수 범위 스캔)/B(GIST 공간쿼리) 두 접근을 모두 구현하고 EXPLAIN(ANALYZE) 벤치마크로 채택**한다 — 하나를 기본 경로로, 다른 하나를 폴백/제거 대상으로 결정한 근거가 스펙/PR에 남는다.
 
 ---
@@ -77,7 +77,7 @@ grid 도메인은 **순수 유틸 + 도감 엔티티만** 있고 조회 인프�
 - `GridController` — 3-layer, 얇게 (파싱 + 서비스 호출 + `SuccessResponse` 변환만)
 - 응답 DTO: `GridCellResponseDto`(단일, occupied+videoCount), `OccupiedGridResponseDto`(viewport 항목, 최소 필드)
 - `GridErrorCode` — 신규 (§계약 변경에서 대역 확정)
-- Testcontainers `AbstractPostgisTest` 재도입 + 조회 쿼리 테스트(A·B 각각)
+- 조회 통합 테스트 (`@SpringBootTest` + local 프로파일 — §테스트 인프라, A·B 각각)
 
 ## 스코프 밖
 
@@ -227,13 +227,18 @@ List<OccupiedGridView> getOccupiedInViewport(Long userId, ViewportBounds bounds)
 
 ## 테스트 시나리오 (JUnit5 + AssertJ · 한국어 백틱 메서드명)
 
-### 테스트 인프라 (재도입)
+### 테스트 인프라 (`@SpringBootTest` + local 프로파일)
 
-MSG-68 백업이 폐기됐으므로 Testcontainers PostGIS 베이스를 다시 만든다. 이미지 `postgis/postgis:16-3.4-alpine`,
-**싱글턴 컨테이너 + `@ServiceConnection`**(캐시된 `@DataJpaTest` 컨텍스트가 죽은 컨테이너를 가리키는 문제 회피 — MSG-68 백업 작업로그의 교훈).
-Flyway가 `V1__init.sql`을 실제로 실행하므로 스키마·인덱스·쿼리가 함께 검증된다. 공통 베이스 `AbstractPostgisTest`로 뺀다.
+**Testcontainers를 도입하지 않는다.** MSG-68 백업이 세운 Testcontainers(D6) 선례는 MSG-68이 폐기되며 근거가 사라졌고,
+develop/MSG-66이 이미 **서비스 컨테이너 + `local` 프로파일** 방식을 쓰고 있어 팀 단일 테스트 패턴을 유지한다(두 번째 테스트 인프라 도입 회피).
 
-### `GridRepository` (`@DataJpaTest` + Testcontainers) — 접근 A·B 각각
+- **서비스/리포지토리 테스트**: `@SpringBootTest` + `local` 프로파일(`localhost:5432` PostGIS). `video/service/VideoServiceIntegrationTest`(MSG-66)를 미러링한다.
+- **컨트롤러 테스트**: `@SpringBootTest` + `@AutoConfigureMockMvc`.
+- Flyway가 `V1__init.sql`을 적용한 실제 스키마 위에서 공간/범위 쿼리가 검증된다.
+- **인프라**: CI(`ci.yml`)가 PostGIS 서비스 컨테이너를 제공하고, 로컬은 `docker-compose`로 5432를 띄운다.
+- **트레이드오프**: 로컬 테스트 시 5432 DB가 떠 있어야 하며, V1 재작성 이력이 있으면 로컬 DB는 `flyway repair`/`clean` 후 재마이그레이션이 필요하다(일회성).
+
+### `GridRepository` (`@SpringBootTest` + local 프로파일) — 접근 A·B 각각
 
 - `점령한_격자를_단일_조회하면_occupied가_참이고_videoCount를_반환한다`
 - `점령하지_않은_격자를_단일_조회하면_occupied가_거짓이고_videoCount는_0이다`
@@ -246,7 +251,7 @@ Flyway가 `V1__init.sql`을 실제로 실행하므로 스키마·인덱스·쿼�
 - `경계_셀이_뷰포트_범위에_포함된다` — grid_y/grid_x BETWEEN 경계 정확도
 - `GIST쿼리는_경도위도_순서로_envelope를_만든다` — **축 순서 회귀(필수)**
 
-### `GridQueryServiceImpl` (통합)
+### `GridQueryServiceImpl` (`@SpringBootTest` + local 프로파일)
 
 - `미점령_격자_조회는_occupied가_거짓이고_videoCount가_0이다`
 - `점령_격자_조회는_occupied가_참이고_videoCount를_반환한다`
@@ -255,7 +260,7 @@ Flyway가 `V1__init.sql`을 실제로 실행하므로 스키마·인덱스·쿼�
 - `면적_상한을_초과하면_VIEWPORT_TOO_LARGE를_던진다`
 - `포맷이_틀린_gridId는_INVALID_GRID_ID를_던진다`
 
-### `GridController` (`@WebMvcTest` 또는 통합)
+### `GridController` (`@SpringBootTest` + `@AutoConfigureMockMvc`)
 
 - `단일_격자_조회_API는_200과_점령여부와_videoCount를_반환한다`
 - `뷰포트_조회_API는_필수_좌표가_없으면_400이다`
@@ -269,3 +274,54 @@ Flyway가 `V1__init.sql`을 실제로 실행하므로 스키마·인덱스·쿼�
 ## 미해결 질문
 
 **없음 — 전부 확정.** (MSG-73은 색칠 응답 전용, `videos` 미접근. 격자 상세 조회는 별도 티켓/Owner B.)
+
+---
+
+## 작업 로그
+
+### 2026-07-14 — 테스트 인프라 결정 변경
+
+- **Testcontainers 폐기, `@SpringBootTest` + `local` 프로파일로 통일.** MSG-68 D6가 세운 Testcontainers(PostGIS 싱글턴 컨테이너 + `@ServiceConnection`) 선례는 **MSG-68이 폐기되며 근거도 함께 사라졌다.** develop/MSG-66이 이미 `@SpringBootTest` + `local` 프로파일(`video/service/VideoServiceIntegrationTest`)을 쓰고 있어, 두 번째 테스트 인프라를 새로 들이지 않고 팀 단일 패턴에 맞춘다.
+- CI(`ci.yml`) PostGIS 서비스 컨테이너 + 로컬 `docker-compose` 5432로 실행. 트레이드오프: 로컬 테스트 시 5432 DB 상시 필요, V1 재작성 시 로컬 DB `flyway repair`/`clean` 일회성.
+- **convention-reviewer 정적 리뷰 PASS** — 색칠 전용 스코프·A/B 벤치마크·`GridQueryService` 단일 계약·`GridErrorCode` 4xxx 대역·응답 패턴 준수 확인. (구현 착수 전 스펙 단계 리뷰.)
+
+### 2026-07-14 — viewport 전략 A/B EXPLAIN 벤치마크 (MSG-86 흡수)
+
+**목적**: 같은 결과(내 점령 격자 ∩ 뷰포트)를 두 방식으로 얻을 때 쿼리 플랜·인덱스 사용·실행시간이 어떻게 갈리는지 측정한다.
+최종 채택은 하지 않는다(아래 "보류" 참조) — 여기서는 **단일 노드·정적 EXPLAIN 근거**만 남긴다.
+
+**측정 방법 (재현 가능)**:
+- 시드: `GridFixtures.seedGridBlock` / `seedUserGridBlock` 로 서울 대략 경계(약 37.42~37.70°N, 126.76~127.18°E)를
+  격자 인덱스 블록으로 환산해 채운다. 이번 실행 규모 = **grids 114,192 row / 내 점령(user_grids) 38,064 row**(밀도 ≈ 1/3).
+  시드 직후 `ANALYZE grids; ANALYZE user_grids;` 로 플래너 통계를 갱신한다.
+- 대표 뷰포트: 지도 한 화면(약 4.4km × 5.6km, `0.04° × 0.05°`) 하나에 대해 `EXPLAIN (ANALYZE, BUFFERS, VERBOSE)` 수집.
+- 실행: `GRID_BENCHMARK=true ./gradlew test --tests "com.msg.fillmap.grid.benchmark.GridViewportExplainBenchmark"`.
+  일반 빌드에선 `@EnabledIfEnvironmentVariable` 로 제외된다. `@Transactional` 롤백이라 시드는 DB에 남지 않는다(스키마·데이터 무변경).
+
+**핵심 결과** (동일 뷰포트, 양쪽 모두 **675행 동일 반환** → A≡B 정합·축 순서가 대규모에서도 성립):
+
+| 항목 | 접근 A (정수 범위 스캔) | 접근 B (GIST 공간 쿼리) |
+|---|---|---|
+| grids 접근 | `Index Scan using uq_grids_yx` (btree) — `grid_y/grid_x` 범위 조건으로 2,025행 | `Bitmap Index Scan on idx_grids_bbox` (GiST) → `Bitmap Heap Scan` + `ST_Intersects` 재검사 |
+| 지오메트리 연산 | 없음 | `st_intersects(geography, …)` 재검사 (Rows Removed by Filter: 287), 병렬 워커 1 기동 |
+| shared buffers hit | 504 | 1,378 |
+| Planning Time | 0.878 ms | 1.468 ms |
+| **Execution Time** | **5.765 ms** | **88.604 ms** |
+
+**해석**:
+- A는 btree(`uq_grids_yx`)의 `grid_y/grid_x` 범위 조건만으로 후보를 좁히고 지오메트리 연산이 전혀 없다.
+- B는 GiST(`idx_grids_bbox`)로 후보를 빠르게(bitmap index scan 0.8ms) 좁히지만, **`bbox_geom`이 `GEOGRAPHY`라
+  `ST_Intersects` 재검사가 구면(spherical) 연산으로 비싸다** — 이 재검사가 실행시간(≈88ms)을 지배한다.
+  같은 인덱스라도 geometry였다면 재검사가 훨씬 쌌을 것이다.
+- 이번 규모에서 A가 약 **15배 빠르다**(5.8ms vs 88.6ms). v6 주석("center_geom/bbox_geom + GIST는 정수 범위 스캔 벤치마크 후 제거 검토")의 예측과 방향이 같다.
+
+**caveat (해석 시 유의)**:
+- 이번 시드는 **단일 사용자가 전체 user_grids를 소유**해 양쪽 다 `user_grids`를 seq scan(user_id=… 필터)했다.
+  다중 사용자·분산 점령 분포에선 복합 PK(`user_id, grid_id`) 프리픽스로 `user_grids`를 인덱스 스캔할 여지가 있어
+  절대 수치는 달라질 수 있다. **차이의 본질(btree 범위 vs GEOGRAPHY 재검사)은 그대로다.**
+- 단일 노드·워밍 캐시(shared hit only) 기준 — 동시성·콜드 캐시·처리량은 미측정.
+
+**잠정 권고**: 정적 EXPLAIN 근거로는 **접근 A(정수 범위 스캔)가 기본 경로 후보**다(지오메트리 연산 제거 → 낮은 지연·버퍼).
+다만 **최종 채택은 MSG-128(관측 스택: Prometheus/Grafana/postgres_exporter) 구축 후, `load-test/k6/viewport-ab-benchmark.js`로
+동시성·처리량·p95/p99까지 본 부하테스트 결과로 결정한다(보류).** 그 전까지 **두 경로(A·B)와 `?strategy=A|B` 파라미터를 모두 유지**한다
+(어느 쪽도 미리 삭제하지 않는다). 최종 채택 시 `grids.center_geom`/`bbox_geom` + `idx_grids_bbox` 유지/제거도 함께 확정한다(별도 마이그레이션).
