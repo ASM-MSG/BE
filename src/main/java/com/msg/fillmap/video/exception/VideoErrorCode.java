@@ -17,6 +17,8 @@ import com.msg.fillmap.response.ErrorCodeIfs;
 public enum VideoErrorCode implements ErrorCodeIfs {
 
 	INVALID_COORDINATE(3400, HttpStatus.BAD_REQUEST, "서비스 지역 범위를 벗어난 좌표입니다"),
+	FILE_TOO_LARGE(3413, HttpStatus.BAD_REQUEST, "허용 크기를 초과한 영상입니다"),
+	UNSUPPORTED_EXTENSION(3415, HttpStatus.BAD_REQUEST, "지원하지 않는 영상 확장자입니다 (mp4, mov)"),
 	;
 
 	private final Integer errorCode;
