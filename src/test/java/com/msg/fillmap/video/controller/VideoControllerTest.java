@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import tools.jackson.databind.ObjectMapper;
 
+import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.service.VideoService;
 
@@ -30,6 +31,7 @@ import com.msg.fillmap.video.service.VideoService;
 class VideoControllerTest {
 
 	private static final String UPLOAD_URL = "/api/videos";
+	private static final String PRESIGNED_URL = "/api/videos/presigned-url";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -52,5 +54,18 @@ class VideoControllerTest {
 			.andExpect(status().isBadRequest());
 
 		verify(videoService, never()).saveVideo(anyLong(), any());
+	}
+
+	@Test
+	@DisplayName("presigned URL 요청에 contentLength 가 없으면 400 을 반환하고 서비스는 호출되지 않는다")
+	void contentLength_누락이면_400() throws Exception {
+		PresignedUrlRequestDto request = new PresignedUrlRequestDto("mp4", "video/mp4", null);
+
+		mockMvc.perform(post(PRESIGNED_URL)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(objectMapper.writeValueAsString(request)))
+			.andExpect(status().isBadRequest());
+
+		verify(videoService, never()).issuePresignedUrl(anyLong(), any());
 	}
 }
