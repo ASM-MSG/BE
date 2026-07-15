@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FillMap 영상 업로드 플로우 — MSG-64 + MSG-66</title>
+<style>
+	:root {
+		--bg: #ffffff;
+		--bg-soft: #f6f7f9;
+		--bg-code: #f2f4f7;
+		--fg: #1b1f24;
+		--fg-soft: #5b6673;
+		--line: #dfe3e8;
+		--accent: #2d6cdf;
+		--accent-soft: #eaf1fd;
+		--warn: #b4690e;
+		--warn-soft: #fdf3e3;
+		--danger: #c0392b;
+		--danger-soft: #fdeeec;
+		--ok: #1f7a4d;
+		--ok-soft: #e9f6ef;
+		--mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #0f1216;
+			--bg-soft: #161a20;
+			--bg-code: #1a1f26;
+			--fg: #e6e9ed;
+			--fg-soft: #9aa4b2;
+			--line: #2a313a;
+			--accent: #6ea8ff;
+			--accent-soft: #16233a;
+			--warn: #e0a44a;
+			--warn-soft: #2a2113;
+			--danger: #f0796b;
+			--danger-soft: #2d1917;
+			--ok: #5fc38d;
+			--ok-soft: #12251b;
+		}
+	}
+
+	* { box-sizing: border-box; }
+
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--fg);
+		font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard",
+			"Malgun Gothic", sans-serif;
+		overflow-wrap: break-word;
+	}
+
+	.wrap {
+		display: grid;
+		grid-template-columns: 240px minmax(0, 1fr);
+		gap: 48px;
+		max-width: 1180px;
+		margin: 0 auto;
+		padding: 40px 24px 96px;
+		align-items: start;
+	}
+
+	@media (max-width: 900px) {
+		.wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+		nav.toc { position: static !important; }
+	}
+
+	nav.toc {
+		position: sticky;
+		top: 24px;
+		font-size: 14px;
+		border-left: 2px solid var(--line);
+		padding-left: 16px;
+	}
+	nav.toc p {
+		margin: 0 0 10px;
+		font-weight: 700;
+		font-size: 12px;
+		letter-spacing: .08em;
+		color: var(--fg-soft);
+		text-transform: uppercase;
+	}
+	nav.toc a {
+		display: block;
+		padding: 4px 0;
+		color: var(--fg-soft);
+		text-decoration: none;
+	}
+	nav.toc a:hover { color: var(--accent); }
+
+	header.title { margin-bottom: 8px; }
+	h1 { font-size: 30px; line-height: 1.3; margin: 0 0 8px; letter-spacing: -.02em; }
+	.sub { color: var(--fg-soft); margin: 0 0 4px; }
+
+	h2 {
+		font-size: 22px;
+		margin: 56px 0 12px;
+		padding-top: 20px;
+		border-top: 1px solid var(--line);
+		letter-spacing: -.01em;
+		scroll-margin-top: 20px;
+	}
+	h3 { font-size: 17px; margin: 28px 0 8px; }
+	p { margin: 0 0 14px; }
+	ul { margin: 0 0 14px; padding-left: 20px; }
+	li { margin-bottom: 6px; }
+
+	code {
+		font-family: var(--mono);
+		font-size: .88em;
+		background: var(--bg-code);
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		padding: 1px 5px;
+	}
+	pre {
+		background: var(--bg-code);
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		padding: 14px 16px;
+		overflow-x: auto;
+		margin: 0 0 16px;
+	}
+	pre code { background: none; border: 0; padding: 0; font-size: 13px; line-height: 1.6; }
+
+	.badge {
+		display: inline-block;
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: .04em;
+		padding: 2px 7px;
+		border-radius: 999px;
+		vertical-align: middle;
+		border: 1px solid transparent;
+	}
+	.badge.new { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+	.badge.done { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+
+	.note {
+		border: 1px solid var(--line);
+		border-left: 4px solid var(--accent);
+		background: var(--accent-soft);
+		border-radius: 0 8px 8px 0;
+		padding: 12px 16px;
+		margin: 0 0 18px;
+	}
+	.note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+	.note.danger { border-left-color: var(--danger); background: var(--danger-soft); }
+	.note.ok { border-left-color: var(--ok); background: var(--ok-soft); }
+	.note > :last-child { margin-bottom: 0; }
+	.note strong { display: block; margin-bottom: 4px; }
+
+	table { border-collapse: collapse; width: 100%; margin: 0 0 18px; font-size: 14px; }
+	th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+	th { background: var(--bg-soft); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+
+	/* --- 시퀀스 다이어그램 (CSS 조판 — 외부 라이브러리 없음) --- */
+	.seq-scroll { overflow-x: auto; margin: 0 0 20px; }
+	.seq { min-width: 640px; }
+	.lanes, .step {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 8px;
+	}
+	.lanes { margin-bottom: 10px; }
+	.lane {
+		text-align: center;
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: .04em;
+		color: var(--fg-soft);
+		background: var(--bg-soft);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		padding: 6px 4px;
+	}
+	.step { margin-bottom: 8px; align-items: center; }
+	.msg {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: var(--bg-soft);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		padding: 8px 10px;
+		font-size: 13px;
+		min-height: 44px;
+	}
+	.msg.hi { border-color: var(--accent); background: var(--accent-soft); }
+	/* 서버 레인을 '가로질러' 가는 메시지. 채운 막대로 그리면 서버를 경유하는 것처럼 읽히므로
+	   속을 비우고 점선으로 그려 통과(bypass)임을 드러낸다. */
+	.msg.bypass {
+		background: repeating-linear-gradient(
+			90deg, var(--ok-soft) 0 10px, transparent 10px 20px);
+		border: 1px dashed var(--ok);
+	}
+	.msg.bypass .n { background: var(--ok); }
+	.msg.bypass .arrow { color: var(--ok); }
+	.msg.bypass .t { background: var(--bg); border-radius: 4px; padding: 2px 6px; }
+	.msg .n {
+		flex: none;
+		width: 20px; height: 20px;
+		border-radius: 50%;
+		background: var(--accent);
+		color: #fff;
+		font-size: 11px;
+		font-weight: 700;
+		display: grid;
+		place-items: center;
+	}
+	.msg .arrow { flex: none; color: var(--accent); font-weight: 700; }
+	.msg .t { flex: 1; }
+	.msg .t code { font-size: 12px; }
+	.msg .who { display: block; color: var(--fg-soft); font-size: 11.5px; margin-top: 2px; }
+
+	.foot { color: var(--fg-soft); font-size: 13px; margin-top: 56px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+	<p>목차</p>
+	<a href="#why">1. 왜 서버를 안 거치나</a>
+	<a href="#flow">2. 전체 플로우</a>
+	<a href="#grid">3. 격자와 점령</a>
+	<a href="#msg64">4. MSG-64 설계 결정</a>
+	<a href="#owner">5. Owner A/B 경계면</a>
+	<a href="#gaps">6. 알려진 갭</a>
+</nav>
+
+<main>
+<header class="title">
+	<h1>영상 업로드 플로우</h1>
+	<p class="sub">presigned URL 발급 → S3 직접 PUT → 메타저장 → 격자 점령</p>
+	<p class="sub">
+		<span class="badge done">MSG-66 머지됨</span>
+		<span class="badge new">MSG-64 구현 완료</span>
+		<span class="badge done">dev E2E 검증 완료</span>
+		· 대상: 백엔드 팀원 · 2026-07-15
+	</p>
+</header>
+
+<p>
+	영상 업로드는 티켓 2개(MSG-64 presigned 발급, MSG-66 메타저장)와 도메인 2개(Owner B의
+	<code>video</code>, Owner A의 <code>grid</code>)에 걸쳐 있다. 스펙 문서는 티켓 단위로 쪼개져 있어서
+	"영상을 올리면 실제로 무슨 일이 일어나는가"를 알려면 문서 2개와 코드 5개를 오가야 한다.
+	이 문서는 그 조각을 하나의 관통 서사로 묶는다.
+</p>
+
+<h2 id="why">1. 왜 서버를 안 거치나</h2>
+
+<p>
+	영상 파일은 <strong>서버를 통과하지 않는다.</strong> 클라이언트가 S3로 직접 PUT 하고, 서버는
+	<strong>업로드 권한(서명)만 발급</strong>한다. 파일이 서버를 거치면 대역폭·요청 타임아웃·메모리를 모두
+	잡아먹는데, 최대 30초짜리 영상이 수십 MB인 걸 감안하면 서버가 중계할 이유가 없다.
+</p>
+<p>
+	그래서 서버가 이 플로우에서 다루는 바이트는 0이다. 다루는 건 <code>s3Key</code> 문자열뿐이고,
+	이 문자열이 발급(MSG-64)과 메타저장(MSG-66)을 잇는 유일한 끈이다.
+</p>
+
+<h2 id="flow">2. 전체 플로우</h2>
+
+<div class="seq-scroll">
+<div class="seq">
+	<div class="lanes">
+		<div class="lane">Client</div>
+		<div class="lane">Server</div>
+		<div class="lane">S3</div>
+		<div class="lane">DB (PostGIS)</div>
+	</div>
+
+	<div class="step">
+		<div class="msg hi" style="grid-column: 1 / 3;">
+			<span class="n">1</span>
+			<span class="t"><code>POST /api/videos/presigned-url</code>
+				<span class="who">JWT 필요 · {extension, contentType, contentLength}</span></span>
+			<span class="arrow">→</span>
+		</div>
+	</div>
+
+	<div class="step">
+		<div class="msg hi" style="grid-column: 2 / 3;">
+			<span class="n">2</span>
+			<span class="t">확장자·타입 쌍 검증 → 크기 상한 검증 → s3Key 생성 → presign
+				<span class="who">VideoServiceImpl.issuePresignedUrl</span></span>
+		</div>
+	</div>
+
+	<div class="step">
+		<div class="msg hi" style="grid-column: 1 / 3;">
+			<span class="arrow">←</span>
+			<span class="t"><code>{uploadUrl, s3Key, expiresInSec: 600}</code>
+				<span class="who">TTL 10분</span></span>
+		</div>
+	</div>
+
+	<div class="step">
+		<div class="msg bypass" style="grid-column: 1 / 4;">
+			<span class="n">3</span>
+			<span class="t"><strong>PUT uploadUrl</strong> — 파일 바이트가 <strong>Server 레인을 통과만</strong> 하고 S3로 직행
+				<span class="who">서버는 이 바이트를 보지 않는다 · Content-Type 헤더 필수 (서명에 포함됨)</span></span>
+			<span class="arrow">→</span>
+		</div>
+	</div>
+
+	<div class="step">
+		<div class="msg" style="grid-column: 1 / 3;">
+			<span class="n">4</span>
+			<span class="t"><code>POST /api/videos</code>
+				<span class="who">{s3Key, lat, lon, durationSec, recordedAt}</span></span>
+			<span class="arrow">→</span>
+		</div>
+	</div>
+
+	<div class="step">
+		<div class="msg" style="grid-column: 2 / 5;">
+			<span class="n">5</span>
+			<span class="t">한 트랜잭션: 좌표 검증 → <code>GridEncoder.encode</code> → grids lazy insert
+				→ videos INSERT → user_grids UPSERT
+				<span class="who">VideoServiceImpl.saveVideo</span></span>
+			<span class="arrow">→</span>
+		</div>
+	</div>
+
+	<div class="step">
+		<div class="msg" style="grid-column: 1 / 3;">
+			<span class="arrow">←</span>
+			<span class="t"><code>{videoId, gridId, processingStatus: "UPLOADED", occupied}</code>
+				<span class="who">occupied = 이번 업로드가 첫 점령인가</span></span>
+		</div>
+	</div>
+</div>
+</div>
+
+<div class="note">
+	<strong>1~3단계가 MSG-64, 4~6단계가 MSG-66</strong>
+	MSG-66이 먼저 머지됐지만 <code>s3Key</code>를 발급하는 주체가 없어서 4단계부터는 호출할 방법이
+	없었다. MSG-64가 1~3단계를 채우면서 비로소 플로우가 끝에서 끝까지 이어졌다.
+</div>
+
+<h3>3단계가 왜 중요한가</h3>
+<p>
+	<code>uploadUrl</code>은 단순한 링크가 아니라 <strong>서명된 권한</strong>이다. 서명에는 버킷·키뿐
+	아니라 <code>Content-Type</code>과 <code>Content-Length</code>가 함께 들어간다. 즉 클라이언트가
+	발급받을 때 선언한 것과 다른 타입·크기로 올리려 하면 S3가 <code>403 SignatureDoesNotMatch</code>로
+	거부한다. 자세한 근거는 <a href="#msg64">4장</a>에 있다.
+</p>
+
+<h2 id="grid">3. 격자와 점령</h2>
+
+<p>
+	여기부터가 FillMap의 본체다. 용어의 단일 진실 원천은 <code>.claude/rules/glossary.md</code>이고,
+	인코딩 규칙의 단일 진실 원천은 <code>GridEncoder</code> / <code>GridConstants</code>다.
+</p>
+
+<h3>격자 인코딩</h3>
+
+<pre><code>// GridConstants
+public static final double GRID_LAT_STEP = 0.0009;
+public static final double GRID_LNG_STEP = 0.00115;
+
+// GridEncoder — 경계는 floor 반열림 구간 [n·step, (n+1)·step)
+public static String encode(double lat, double lon) {
+    long gridY = (long) Math.floor(lat / GRID_LAT_STEP);
+    long gridX = (long) Math.floor(lon / GRID_LNG_STEP);
+    return gridY + "_" + gridX;
+}</code></pre>
+
+<p>성수(37.5445, 127.0560)를 실제로 넣어보면:</p>
+
+<pre><code>37.5445 / 0.0009  = 41716.1111  → floor → grid_y = 41716
+127.0560 / 0.00115 = 110483.4783 → floor → grid_x = 110483
+
+grid_id = "41716_110483"
+중심     = (37.544850, 127.056025)
+셀 범위  = 위도 [37.5444, 37.5453)  경도 [127.05545, 127.05660)</code></pre>
+
+<p>
+	<code>grid_id</code>는 논리 식별자이자 DB 저장 키다(<code>grids.grid_id VARCHAR(20)</code> PK).
+	표준 geohash가 <strong>아니라</strong> 자체 양자화 키이므로, 코드 심볼이나 컬럼명에
+	<code>geohash</code>라는 이름을 새로 쓰지 않는다.
+</p>
+
+<div class="note warn">
+	<strong>"100×100m 정사각형"은 근사다 — 오해하면 격자 로직을 잘못 짠다</strong>
+	<p>
+		위경도 <em>등간격</em> 양자화라서 셀의 실제 미터 크기는 위도에 따라 달라진다.
+		남북은 <code>0.0009 × 111,000 ≈ 99.9m</code>로 위치와 무관하게 거의 일정하지만,
+		동서는 <code>0.00115 × 111,320 × cos(위도)</code>라 위도를 탄다.
+	</p>
+	<table>
+		<tr><th>위치</th><th>동서 폭</th></tr>
+		<tr><td>서울 (37.5°N)</td><td>101.6 m</td></tr>
+		<tr><td>부산 (35.1°N)</td><td>104.7 m</td></tr>
+		<tr><td>적도 (0°)</td><td>128.0 m</td></tr>
+	</table>
+	<p style="margin-bottom:0">
+		즉 <code>GRID_LNG_STEP</code>은 <strong>한국 위도에서 동서 폭이 ≈100m가 되도록 맞춘 값</strong>이다.
+		한국 내에서는 오차 1~5%로 충분한 근사지만, 적도로 갈수록 가로로 긴 직사각형이 된다.
+	</p>
+</div>
+
+<h3>Lazy insert — grids row가 있다는 것의 의미</h3>
+
+<p>
+	격자는 지구 전체에 대해 <em>계산 가능한</em> 논리적 개념이라 미리 저장해둘 수 없다(수억 개다).
+	그래서 <strong>실제로 영상이 올라오는 순간에만</strong> grids에 등록한다. 뒤집으면
+	<strong>grids에 row가 있다 = 누군가 거기에 영상을 올렸다</strong>는 뜻이다.
+</p>
+
+<pre><code>-- VideoRepository.upsertGrid — 이미 있으면 no-op, 멱등
+INSERT INTO grids (grid_id, grid_y, grid_x, center_geom, bbox_geom)
+VALUES (
+    :gridId, :gridY, :gridX,
+    ST_SetSRID(ST_MakePoint(:centerLon, :centerLat), 4326)::geography,
+    ST_SetSRID(ST_GeomFromText(:bboxWkt), 4326)::geography
+)
+ON CONFLICT (grid_id) DO NOTHING</code></pre>
+
+<p>
+	같은 격자에 두 번째 영상이 올라와도 <code>ON CONFLICT DO NOTHING</code> 덕에 grids row는 1개로 유지된다.
+	이 멱등성은 MSG-66의 완료 조건 중 하나였고 통합 테스트로 검증돼 있다.
+</p>
+
+<div class="note">
+	<strong>전역 격자 등록은 백엔드 전용 개념이다</strong>
+	grids row가 생기는 것을 glossary는 "전역 격자 등록"이라 부르는데, 이건 <strong>사용자 UI·기획서에
+	절대 노출하지 않는</strong> 내부 개념이다. 코드·설계 논의에서만 쓴다.
+</div>
+
+<h3>점령 — 개인 도감의 실체</h3>
+
+<p>
+	<strong>점령</strong>은 사용자가 특정 격자에 <strong>첫 영상을 올린 상태</strong>이고, 그 실체는
+	<code>user_grids</code>의 row 하나다. 도감에 격자가 색으로 칠해지는 시점이 곧 이 row가 생기는 시점이다.
+</p>
+
+<pre><code>-- VideoRepository.upsertUserGrid
+-- 첫 방문이면 INSERT(video_count=1), 재방문이면 video_count+1
+INSERT INTO user_grids (user_id, grid_id, video_count, cover_video_id, first_collected_at, last_uploaded_at)
+VALUES (:userId, :gridId, 1, :coverVideoId, now(), now())
+ON CONFLICT (user_id, grid_id) DO UPDATE
+    SET video_count = user_grids.video_count + 1,
+        last_uploaded_at = now()</code></pre>
+
+<p>구분해두면 헷갈리지 않는 개념 쌍:</p>
+
+<table>
+	<tr><th>개념</th><th>실체</th><th>횟수</th></tr>
+	<tr><td>방문</td><td><code>videos</code> row 1개</td><td>이벤트 — N회 반복</td></tr>
+	<tr><td>점령</td><td><code>user_grids</code> row 1개</td><td>상태 — 격자당 1회</td></tr>
+	<tr><td>도감</td><td><code>user_grids</code> 집합</td><td>결과</td></tr>
+</table>
+
+<p>
+	즉 <strong>첫 방문 = 점령</strong>이고, 재방문은 <code>video_count</code>만 올린다.
+	응답의 <code>occupied</code> 필드가 바로 "이번 업로드가 첫 점령이었나"를 알려준다.
+</p>
+
+<div class="note warn">
+	<strong>"점령"은 백엔드에서만 쓴다</strong>
+	glossary의 사용 규칙상 UI·기획·발표에서는 <strong>"수집" / "채우기"</strong>를 쓴다
+	("이 격자를 채워보세요", "성수 카페 격자 수집됨"). "점령"·"정복"은 톤이 안 맞아 노출 금지고,
+	코드에서도 <code>owned</code>·<code>conquered</code>는 쓰지 않는다 — 소유권·정복 뉘앙스 때문이다.
+	권장 네이밍은 <code>isOccupied</code>, <code>occupiedGrids</code>, <code>myGrids</code>.
+	이 문서는 백엔드용이라 "점령"을 쓰지만, 밖으로 나갈 문구에는 옮기지 말 것.
+</div>
+
+<h3>MVP 범위</h3>
+<p>
+	MVP에는 <strong>개인 도감 하나만</strong> 존재한다. 친구·전체 도감, 핫구역, 스폰서 격자는 Phase 2+로
+	유예됐다. 그리고 <strong>미점령 격자는 지도에 표시하지 않는다</strong> — 격자망 오버레이 없이 지도 배경만
+	보인다(시각적 노이즈 최소화 + 발견의 재미 + 렌더링 성능).
+</p>
+
+<h2 id="msg64">4. MSG-64 설계 결정 <span class="badge new">이번 작업</span></h2>
+
+<h3>크기 제한: 스펙대로는 불가능했다</h3>
+
+<p>
+	스펙(D3)은 "presigned 조건에 <code>content-length-range</code>를 걸어 상한 강제"를 요구했다.
+	<strong>이건 PUT presign에서 불가능하다.</strong> <code>content-length-range</code>는
+	<strong>POST policy 전용 조건</strong>이다. PUT presign은 policy 문서가 아니라 canonical request에
+	서명하므로 조건식을 표현할 자리가 없고, AWS SDK for Java v2에는 <code>createPresignedPost</code>에
+	해당하는 API도 없다(JS/Python SDK 전용).
+</p>
+
+<p>대신 <strong>정확 길이 서명</strong>이 가능하다는 걸 SDK 소스로 확인했다:</p>
+<ul>
+	<li><code>PutObjectRequest.contentLength(...)</code>는 <code>Content-Length</code> 헤더로 마셜된다.</li>
+	<li><code>DefaultS3Presigner</code>는 이 헤더를 필터링하지 않는다.</li>
+	<li>SigV4 서명 제외 목록(<code>connection, x-amzn-trace-id, user-agent, expect,
+		transfer-encoding, x-forwarded-for</code>)에 <code>content-length</code>가 없다
+		→ <code>X-Amz-SignedHeaders</code>에 포함된다.</li>
+</ul>
+
+<p>그래서 <strong>2중 방어</strong>로 D3의 의도를 달성한다:</p>
+<ul>
+	<li><strong>서버측 상한</strong> — <code>contentLength &gt; aws.s3.max-upload-bytes</code>면
+		<code>FILE_TOO_LARGE</code>(400). 정책 집행.</li>
+	<li><strong>서명측 정확 일치</strong> — 선언한 크기와 다르게 올리면 S3가 403. 선언 위조 방지.</li>
+</ul>
+
+<p>
+	합치면 "100MB 이하이면서 <em>선언한 크기와 정확히 일치하는</em> 업로드만 통과"가 된다.
+	임의 범위 <code>[0, MAX]</code>가 아니라 매 요청마다 크기를 선언한다는 점만 다른데,
+	클라이언트는 업로드 전에 <code>file.size</code>를 알기 때문에 실무상 제약이 없다.
+</p>
+
+<pre><code>// VideoPresignTest — X-Amz-SignedHeaders 값을 파싱해 실제로 검증한다.
+// SDK 업그레이드로 서명 헤더 구성이 바뀌면 이 테스트가 회귀를 잡는다.
+@Test
+void presigned_URL_은_content_length_와_content_type_을_서명한다() {
+    PresignedUrlResponseDto response = videoService.issuePresignedUrl(
+        USER_ID, new PresignedUrlRequestDto("mp4", "video/mp4", 8388608L));
+
+    assertThat(signedHeadersOf(response.uploadUrl()))
+        .contains("content-length", "content-type");
+}</code></pre>
+
+<div class="note ok">
+	<strong>실측으로 확인됨 (2026-07-15, dev 버킷)</strong>
+	<p>
+		위 단위 테스트가 보장하는 건 <em>서명 헤더에 content-length가 들어간다</em>는 사실까지다.
+		<strong>S3가 실제로 위조된 크기를 거부하는지</strong>는 별개 문제라 dev 버킷에 직접 쏴봤고,
+		설계대로 동작했다.
+	</p>
+<pre><code># 발급된 URL에 서명 헤더가 실제로 박혀 있다
+X-Amz-SignedHeaders=content-length;content-type;host
+
+# ① 선언한 크기 그대로 PUT
+$ curl -X PUT "$URL" -H 'Content-Type: video/mp4' --upload-file sample.mp4   # 1,048,576 bytes
+HTTP 200
+$ aws s3api head-object ...   # ContentLength=1048576  ContentType=video/mp4
+
+# ② contentLength=1000 으로 발급받은 URL에 1MB 파일을 PUT (크기 위조)
+$ curl -X PUT "$FAKE_URL" -H 'Content-Type: video/mp4' --upload-file sample.mp4
+HTTP 403
+&lt;Code&gt;SignatureDoesNotMatch&lt;/Code&gt;</code></pre>
+	<p style="margin-bottom:0">
+		즉 <code>content-length-range</code>를 못 쓰는 대신 택한 <strong>정확 길이 서명이 실제로 크기를
+		강제한다.</strong> 서버측 상한(<code>FILE_TOO_LARGE</code>)과 합쳐 D3의 의도가 성립한다.
+	</p>
+</div>
+
+<h3>검증 규칙</h3>
+
+<pre><code>// VideoServiceImpl — 확장자와 Content-Type을 '쌍'으로 검증한다.
+private static final Map&lt;String, String&gt; ALLOWED_TYPES = Map.of(
+    "mp4", "video/mp4",
+    "mov", "video/quicktime");
+
+String extension = request.extension().toLowerCase();
+String allowedType = ALLOWED_TYPES.get(extension);
+if (allowedType == null || !allowedType.equals(request.contentType())) {
+    throw new ApiException(VideoErrorCode.UNSUPPORTED_EXTENSION);
+}</code></pre>
+
+<p>
+	화이트리스트를 확장자와 타입 <strong>쌍</strong>으로 검사해서 <code>mp4</code> +
+	<code>video/quicktime</code> 같은 엇갈린 조합도 막는다. Content-Type을 서명에 넣기 때문에
+	저장된 객체의 메타데이터가 확실히 <code>video/mp4</code>가 되고, 이건 MSG-65 인코딩 파이프라인이
+	기대는 전제가 된다.
+</p>
+
+<h3>보안 경계</h3>
+<p>
+	<code>s3Key</code>는 <code>videos/original/{userId}/{uuid}.{ext}</code> 형식인데, 여기 들어가는
+	<code>userId</code>는 <strong>JWT(<code>AuthPrincipal.userId()</code>)에서만</strong> 온다.
+	요청 DTO에는 userId가 없으므로 <strong>남의 경로에 대한 서명을 받아낼 방법이 없다.</strong>
+	인증 자체는 <code>SecurityConfig</code>의 <code>.anyRequest().authenticated()</code>가 이미
+	커버하므로 이 티켓에서 SecurityConfig는 건드리지 않았다.
+</p>
+
+<h3>TTL 10분이 임의값이 아닌 이유</h3>
+<p>
+	dev/prod는 EC2 인스턴스 role의 <strong>임시</strong> 자격증명으로 서명한다. 임시 자격증명으로 만든
+	presigned URL은 <strong>세션 토큰이 만료되면 URL도 함께 무효화</strong>된다. IMDS 세션이 약 6시간이므로
+	10분 TTL은 안전하지만, <strong>TTL을 6시간 이상으로 늘리면 URL이 조기에 깨진다.</strong>
+	바꿀 일이 없는 값이라 yml이 아니라 서비스 상수로 뒀다.
+</p>
+
+<h3>에러 코드</h3>
+<p>
+	스펙은 <code>UNSUPPORTED_EXTENSION</code>에 3400을 배정했는데, MSG-66이 먼저 머지되며
+	<code>VideoErrorCode</code>를 만들고 <code>INVALID_COORDINATE(3400)</code>으로 3400을 선점한 상태였다.
+	이미 머지된 API 계약을 깨지 않으려고 재배정했다.
+</p>
+
+<table>
+	<tr><th>상수</th><th>developCode</th><th>HTTP</th><th>출처</th></tr>
+	<tr><td><code>INVALID_COORDINATE</code></td><td>3400</td><td>400</td><td>MSG-66 (변경 없음)</td></tr>
+	<tr><td><code>FILE_TOO_LARGE</code></td><td>3413</td><td>400</td><td>MSG-64 (413 니모닉)</td></tr>
+	<tr><td><code>UNSUPPORTED_EXTENSION</code></td><td>3415</td><td>400</td><td>MSG-64 (415 니모닉)</td></tr>
+</table>
+
+<p>
+	대역 스킴은 <code>AuthErrorCode</code>(2401, 2422)와 같은 <code>3{의미상 HTTP status}</code> 꼴이다.
+	스펙에 있던 <code>PRESIGN_FAILED(3500)</code>은 <strong>넣지 않았다</strong> — presign은 네트워크 호출이
+	아니라 순수 로컬 서명 연산이라 실패 경로가 사실상 없고, 만에 하나 실패해도
+	<code>GlobalExceptionHandler</code>가 이미 500으로 처리한다.
+</p>
+
+<h3>자격증명</h3>
+<p>
+	<code>S3Config</code>는 <code>credentialsProvider</code>를 명시하지 않는다. 기본값인
+	<code>DefaultCredentialsProvider</code> 체인이 local(환경변수·프로파일)과 dev/prod(EC2 IMDS)를
+	모두 커버하기 때문에 프로파일별 빈 분기가 필요 없다. 이 체인은 <strong>lazy</strong>라서
+	자격증명이 없는 CI에서도 <code>@SpringBootTest</code> 컨텍스트가 정상적으로 뜬다
+	(테스트 90건 통과로 확인).
+</p>
+
+<h2 id="owner">5. Owner A/B 경계면</h2>
+
+<p>
+	협업 원칙상 <code>grid</code>는 Owner A, <code>video</code>는 Owner B이고, 두 도메인의 접점은
+	인터페이스로만 두기로 돼 있다. 그런데 <strong>현재 코드는 그렇지 않다.</strong>
+</p>
+
+<p>
+	Owner B의 <code>VideoRepository</code>가 Owner A 소유 테이블인 <code>grids</code>와
+	<code>user_grids</code>에 <strong>native SQL로 직접 쓴다</strong>(<code>upsertGrid</code>,
+	<code>existsUserGrid</code>, <code>upsertUserGrid</code>). <code>status.md</code> 기준으로
+	점령 write 경로는 MSG-66이 흡수했고, Owner A가 제공하는 <code>GridQueryService</code>는
+	read 계약(격자 색칠 조회, MSG-73)만 담당한다.
+</p>
+
+<div class="note danger">
+	<strong>MSG-68 브랜치와 정리가 필요하다</strong>
+	<code>origin/feature/MSG-68-deal-with-grid-color</code>(진행 중)가 <code>GridOccupationService</code>와
+	<code>UserGridRepository</code>로 <strong>같은 점령 write 영역</strong>을 구현하고 있다.
+	게다가 이 브랜치는 MSG-66 머지 <em>이전</em> 시점(<code>b89521a</code>)에서 분기된 stale 상태라
+	<code>V1__init.sql</code>을 통째로 재작성한다. 머지하면 <strong>스키마 충돌 + 점령 로직 이중화</strong>가
+	난다. 어느 쪽이 점령 write를 소유할지 팀에서 정해야 한다.
+</div>
+
+<h2 id="gaps">6. 알려진 갭</h2>
+
+<div class="note warn">
+	<strong>① occupied 판정에 2쿼리 race가 있다</strong>
+	<p>
+		<code>saveVideo</code>는 <code>existsUserGrid</code>(SELECT)로 점령 여부를 <em>먼저</em> 판정한 뒤
+		<code>upsertUserGrid</code>를 실행한다. 두 쿼리 사이에 같은 사용자·같은 격자의 업로드가 동시에
+		들어오면 <strong>둘 다 "첫 점령"으로 응답</strong>할 수 있다.
+	</p>
+	<p style="margin-bottom:0">
+		MSG-66 스펙 D3는 원자적 UPSERT를 요구했는데 판정이 별도 SELECT로 빠져 있는 상태다.
+		<code>user_grids</code>의 UNIQUE 제약 덕에 <strong>데이터는 깨지지 않는다</strong> — 틀어지는 건
+		응답의 <code>occupied</code> 플래그뿐이다. UPSERT의 <code>RETURNING</code>이나
+		<code>xmax = 0</code> 판정으로 1쿼리화하면 해소된다.
+	</p>
+</div>
+
+<div class="note warn">
+	<strong>② recordedAt 미래 시각 거부가 미구현</strong>
+	MSG-66 스펙 D9는 미래 시각 <code>recordedAt</code>을 거부하라고 했지만
+	<code>VideoServiceImpl</code>에는 좌표 검증만 있고, DTO에도 <code>@PastOrPresent</code>가 없다.
+</div>
+
+<div class="note">
+	<strong>③ 프론트 계약 — Content-Type 헤더 필수</strong>
+	<p>
+		Content-Type을 서명에 넣었으므로, 클라이언트는 <strong>발급 요청에 보낸 값을 PUT 헤더에 그대로</strong>
+		실어야 한다. blob이 자동 추론한 타입과 다르면 403이 난다 — 특히 <code>.mov</code>는 브라우저가
+		빈 문자열이나 다른 타입을 추론하는 경우가 있다.
+	</p>
+<pre style="margin-bottom:0"><code>fetch(uploadUrl, {
+  method: 'PUT',
+  headers: { 'Content-Type': contentType },  // 발급 때 보낸 값 그대로
+  body: file
+})</code></pre>
+</div>
+
+<h3>다음 티켓</h3>
+<p>
+	스펙상 착수 순서는 <code>66 → 64 → 65 → 72 → 71</code>이다. 64까지 끝났으니 다음은
+	MSG-65(FFmpeg 720p 인코딩 워커)로, <code>processing_status</code>를
+	<code>UPLOADED → ENCODING → READY</code>로 전이시키며 <code>encoded_url</code>·
+	<code>thumbnail_url</code>을 채운다. 지금 모든 영상이 <code>UPLOADED</code>에 머무는 이유다.
+</p>
+
+<p class="foot">
+	근거 파일: <code>VideoServiceImpl</code> · <code>VideoRepository</code> · <code>VideoController</code> ·
+	<code>GridEncoder</code> / <code>GridConstants</code> · <code>VideoErrorCode</code> ·
+	<code>S3Config</code> / <code>AwsProperties</code> · <code>VideoPresignTest</code><br>
+	규칙 문서: <code>.claude/rules/glossary.md</code>(용어) · <code>.claude/docs/status.md</code>(구현 현황) ·
+	<code>docs/MSG-64.md</code> / <code>docs/MSG-66.md</code>(스펙)
+</p>
+
+</main>
+</div>
+</body>
+</html>
