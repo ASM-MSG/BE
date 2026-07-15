@@ -205,7 +205,7 @@
 	<a href="#why">1. 왜 변환이 필요한가</a>
 	<a href="#pipeline">2. 파이프라인</a>
 	<a href="#states">3. 상태 전이</a>
-	<a href="#traps">4. 함정 셋</a>
+	<a href="#traps">4. 함정 다섯</a>
 	<a href="#infra">5. 인프라 제약</a>
 	<a href="#verified">6. 실측 결과</a>
 	<a href="#gaps">7. 알려진 갭</a>
@@ -314,9 +314,12 @@ public void markFailed() { this.processingStatus = ProcessingStatus.FAILED; }</c
 	<code>encode()</code>는 어떤 예외도 밖으로 내보내지 않는다.
 </p>
 
-<h2 id="traps">4. 함정 셋 <span class="badge new">읽을 가치 있음</span></h2>
+<h2 id="traps">4. 함정 다섯 <span class="badge new">읽을 가치 있음</span></h2>
 
-<p>구현하면서 실제로 밟은 함정들이다. 셋 다 조용히 잘못 동작하는 종류라 적어둔다.</p>
+<p>
+	구현하면서 실제로 밟은 함정들이다. 다섯 다 <strong>조용히 잘못 동작하는</strong> 종류 —
+	예외도 안 나고 테스트도 통과하는데 운영에서 터진다. ④⑤는 코드 리뷰에서 지적받아 잡았다.
+</p>
 
 <h3>① <code>@Transactional</code> self-invocation</h3>
 
@@ -375,6 +378,68 @@ TransactionSynchronizationManager.registerSynchronization(new TransactionSynchro
 	<strong>예외가 밖으로 새지 않고 <code>FAILED</code>로 기록됐다</strong> — 실패 처리가 설계대로
 	작동한다는 걸 의도치 않게 검증한 셈이다.
 </div>
+
+<h3>④ 스트림을 먼저 읽으면 타임아웃이 죽는다</h3>
+
+<p>
+	<code>FfmpegRunner</code>에 10분 타임아웃을 걸어뒀는데 <strong>동작하지 않았다.</strong> 원인은 순서다.
+</p>
+
+<pre><code>String stdout = new String(process.getInputStream().readAllBytes());   // ← 여기서 막힘
+if (!process.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {     // ← 도달 못 함
+    process.destroyForcibly();
+    throw new IllegalStateException("ffmpeg 타임아웃...");
+}</code></pre>
+
+<p>
+	<code>readAllBytes()</code>는 <strong>프로세스가 stdout을 닫을 때까지 블로킹</strong>한다. 정상 종료 시엔
+	문제없지만, ffmpeg가 행에 걸리면 스트림이 안 닫히고 <code>waitFor</code>는 영영 실행되지 않는다.
+	풀이 1개짜리라 <strong>그 순간 인코딩 전체가 영구 정지</strong>한다.
+</p>
+
+<p><code>sleep 5</code>로 재현한 결과 — 타임아웃 1초인데 5011ms 블로킹:</p>
+<pre><code>readAllBytes() 반환까지: 5011ms
+waitFor(1초) 결과: true      ← 프로세스가 이미 끝난 뒤라 항상 true</code></pre>
+
+<p>
+	stdout도 파일로 리다이렉트하고 <code>waitFor</code>를 <strong>먼저</strong> 호출하도록 고쳤다.
+	덤으로 임시 로그 파일이 예외 경로에서 새던 것도 <code>finally</code>로 옮겼다.
+</p>
+
+<div class="note ok">
+	<strong>회귀 가드</strong>
+	<code>프로세스가_행이면_타임아웃으로_끊는다</code> 테스트가 <code>sleep 30</code>을 300ms 타임아웃으로
+	잡는다. 옛 구현으로 되돌려 확인해보면 <strong>30.02초를 꽉 채우고 실패</strong>한다 — 테스트가 실제로
+	이 버그를 잡는다는 뜻이다. ffmpeg와 무관해서 CI에서도 돈다.
+</div>
+
+<h3>⑤ <code>@Async</code> 거부 예외는 호출자에게 날아온다</h3>
+
+<p>
+	큐가 가득 차면 <code>AbortPolicy</code>가 <code>TaskRejectedException</code>을 던진다. 문제는
+	<strong>어디서</strong> 던지느냐다.
+</p>
+
+<pre><code>호출 스레드가 잡은 예외: org.springframework.core.task.TaskRejectedException
+발생 위치: submit() — @Async 메서드 본문 진입 전</code></pre>
+
+<p>
+	<code>encode()</code> 안의 <code>catch (Exception e)</code>는 <strong>실행조차 되지 않는다.</strong>
+	메서드가 시작을 못 했으니까. 그리고 이 예외가 터지는 곳이 <code>afterCommit()</code> 안이라 더 나쁘다 —
+	Spring은 afterCommit 예외를 커밋 밖으로 전파하므로 <code>saveVideo</code>가 <strong>500을 던진다.</strong>
+</p>
+
+<p>즉 고치기 전엔 이랬다:</p>
+<ul>
+	<li>영상은 <strong>이미 커밋됨</strong> (DB에 저장 완료)</li>
+	<li>클라이언트는 <strong>500</strong> 수신 → 실패로 알고 재시도 → <strong>중복 업로드</strong></li>
+	<li>영상은 <code>UPLOADED</code>로 영구 방치 (FAILED 기록조차 없음)</li>
+</ul>
+
+<p>
+	<code>submitEncoding()</code>에서 <code>TaskRejectedException</code>을 삼키고 <code>markFailed</code>로
+	기록하도록 고쳤다. 업로드 자체는 성공했으므로 <strong>예외를 밖으로 내보내지 않는 게 핵심</strong>이다.
+</p>
 
 <h2 id="infra">5. 인프라 제약</h2>
 
@@ -439,7 +504,7 @@ executor.setQueueCapacity(50);</code></pre>
 	<tr><td>썸네일</td><td>1280x720 mjpeg, 35K</td></tr>
 	<tr><td>DB</td><td><code>READY</code> · <code>videos/encoded/121/22.mp4</code> · <code>videos/thumb/121/22.jpg</code></td></tr>
 	<tr><td>임시파일</td><td>누수 없음</td></tr>
-	<tr><td>테스트</td><td>106건 통과 (90 → 106)</td></tr>
+	<tr><td>테스트</td><td>108건 통과 (90 → 108)</td></tr>
 </table>
 
 <div class="note ok">
@@ -480,18 +545,18 @@ DB →  status=FAILED  encoded_url=null</code></pre>
 </div>
 
 <div class="note warn">
-	<strong>④ 큐가 차면 예외</strong>
-	풀 1 + 큐 50이라 51번째부터 <code>AbortPolicy</code>로 거부된다. 이때 <code>saveVideo</code>는 이미
-	커밋된 뒤라 <strong>영상은 저장되고 인코딩만 안 걸린다</strong>(<code>UPLOADED</code>로 남음).
-	MVP 트래픽에선 오지 않을 상황이지만, 온다면 그건 큐로 분리하라는 신호다.
+	<strong>④ 큐가 차면 그 영상은 인코딩되지 않는다</strong>
+	풀 1 + 큐 50이라 51번째부터 거부된다. <strong>업로드는 성공하고</strong>(500 안 남 — <a href="#traps">함정 ⑤</a>)
+	해당 영상만 <code>FAILED</code>로 기록된다. 재시도가 없으니 그 영상은 끝내 재생 불가다.
+	MVP 트래픽엔 오지 않을 상황이지만, 온다면 큐로 분리하라는 신호다.
 </div>
 
 <p class="foot">
 	근거 파일: <code>VideoEncodingServiceImpl</code> · <code>VideoStatusWriter</code> ·
 	<code>FfmpegRunner</code> · <code>AsyncConfig</code> · <code>Video</code>(상태 전이) ·
-	<code>VideoServiceImpl</code>(커밋 후 트리거) · <code>S3Config</code>(S3Client)<br>
-	테스트: <code>FfmpegRunnerTest</code>(실 ffmpeg) · <code>VideoEncodingServiceTest</code>(분기) ·
-	<code>VideoStatusTransitionTest</code><br>
+	<code>VideoServiceImpl</code>(커밋 후 트리거·큐 포화 처리) · <code>S3Config</code>(S3Client)<br>
+	테스트: <code>FfmpegRunnerTest</code>(실 ffmpeg + 행 타임아웃) · <code>VideoEncodingServiceTest</code>(분기) ·
+	<code>VideoEncodingTriggerTest</code>(큐 포화) · <code>VideoStatusTransitionTest</code><br>
 	문서: <code>docs/MSG-65.md</code>(스펙·정정) · <a href="MSG-64-flow.html">MSG-64-flow.html</a>(업로드 플로우)
 </p>
 
