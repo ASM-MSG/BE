@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -117,5 +118,24 @@ class FfmpegRunnerTest {
 
 		assertThatThrownBy(() -> runner.probeDurationSec(broken))
 			.isInstanceOf(IllegalStateException.class);
+	}
+
+	/**
+	 * 출력을 닫지 않고 오래 버티는 프로세스(=행)에서 타임아웃이 실제로 걸리는지 본다.
+	 * 스트림을 waitFor 보다 먼저 읽던 구현에서는 여기서 타임아웃이 무시돼 인코딩 풀(1개)이 영구 정지했다.
+	 * ffmpeg 와 무관한 회귀 가드라 ffmpeg 없이도 돈다.
+	 */
+	@Test
+	void 프로세스가_행이면_타임아웃으로_끊는다() {
+		FfmpegRunner shortTimeout = new FfmpegRunner(Duration.ofMillis(300));
+		long started = System.currentTimeMillis();
+
+		assertThatThrownBy(() -> shortTimeout.runForTest(List.of("sleep", "30")))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("타임아웃");
+
+		assertThat(System.currentTimeMillis() - started)
+			.as("타임아웃 300ms 안에 끊겨야 한다 (행 프로세스를 30초 기다리면 안 됨)")
+			.isLessThan(5_000);
 	}
 }

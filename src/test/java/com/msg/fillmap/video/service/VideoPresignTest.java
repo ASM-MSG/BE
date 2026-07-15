@@ -49,7 +49,8 @@ class VideoPresignTest {
 
 		// presign 경로는 DB 도 인코딩도 타지 않는다.
 		videoService = new VideoServiceImpl(
-			mock(VideoRepository.class), mock(VideoEncodingService.class), presigner, properties);
+			mock(VideoRepository.class), mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
+			presigner, properties);
 	}
 
 	@Test

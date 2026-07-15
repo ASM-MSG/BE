@@ -16,7 +16,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class FfmpegRunner {
 
-	private static final Duration TIMEOUT = Duration.ofMinutes(10);
+	private static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(10);
+
+	private final Duration timeout;
+
+	public FfmpegRunner() {
+		this(DEFAULT_TIMEOUT);
+	}
+
+	/** 타임아웃 주입은 테스트에서 행 상황을 검증하기 위한 것이다 — 운영은 기본 생성자를 쓴다. */
+	FfmpegRunner(Duration timeout) {
+		this.timeout = timeout;
+	}
 
 	/** 영상 길이(초). 손상 파일이면 ffprobe 가 실패하므로 여기서 걸러진다. */
 	public double probeDurationSec(Path input) {
@@ -52,27 +63,31 @@ public class FfmpegRunner {
 			output.toString()));
 	}
 
+	/**
+	 * 표준 출력·에러를 모두 파일로 받은 뒤 waitFor 로 기다린다.
+	 * 스트림을 직접 읽으면(readAllBytes) 프로세스가 출력을 닫을 때까지 블로킹되므로, 프로세스가 행에 걸리면
+	 * 아래 타임아웃에 도달하지 못한다. 인코딩 풀이 1개짜리라 그 경우 인코딩 전체가 멈춘다.
+	 */
 	private String run(List<String> command) {
 		Process process = null;
+		Path outFile = null;
+		Path errFile = null;
 		try {
-			Path stderr = Files.createTempFile("ffmpeg-err", ".log");
+			outFile = Files.createTempFile("ffmpeg-out", ".log");
+			errFile = Files.createTempFile("ffmpeg-err", ".log");
 			process = new ProcessBuilder(command)
-				.redirectErrorStream(false)
-				.redirectError(stderr.toFile())
+				.redirectOutput(outFile.toFile())
+				.redirectError(errFile.toFile())
 				.start();
 
-			String stdout = new String(process.getInputStream().readAllBytes());
-			if (!process.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
-				process.destroyForcibly();
-				throw new IllegalStateException("ffmpeg 타임아웃(" + TIMEOUT.toMinutes() + "분): " + command);
+			if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+				throw new IllegalStateException("ffmpeg 타임아웃(" + timeout + "): " + command);
 			}
 			if (process.exitValue() != 0) {
-				String err = Files.exists(stderr) ? Files.readString(stderr) : "";
-				throw new IllegalStateException(
-					"ffmpeg 실패(exit %d): %s%n%s".formatted(process.exitValue(), command, tail(err)));
+				throw new IllegalStateException("ffmpeg 실패(exit %d): %s%n%s"
+					.formatted(process.exitValue(), command, tail(Files.readString(errFile))));
 			}
-			Files.deleteIfExists(stderr);
-			return stdout;
+			return Files.readString(outFile);
 		} catch (IOException e) {
 			throw new IllegalStateException("ffmpeg 실행 실패: " + command, e);
 		} catch (InterruptedException e) {
@@ -82,6 +97,24 @@ public class FfmpegRunner {
 			if (process != null && process.isAlive()) {
 				process.destroyForcibly();
 			}
+			deleteQuietly(outFile);
+			deleteQuietly(errFile);
+		}
+	}
+
+	/** 행·타임아웃 회귀 테스트 전용 진입점 (같은 패키지에서만 보인다). */
+	String runForTest(List<String> command) {
+		return run(command);
+	}
+
+	private void deleteQuietly(Path file) {
+		if (file == null) {
+			return;
+		}
+		try {
+			Files.deleteIfExists(file);
+		} catch (IOException ignored) {
+			// 임시 로그 파일이라 삭제 실패가 인코딩 결과를 바꾸지 않는다.
 		}
 	}
 
