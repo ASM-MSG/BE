@@ -37,6 +37,10 @@ dependencies {
 	// --- OAuth2 / OIDC ID Token 검증 (카카오, 추후 애플) ---
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
+	// --- AWS S3 (presigned URL 발급, MSG-64) ---
+	implementation platform('software.amazon.awssdk:bom:2.48.0')
+	implementation 'software.amazon.awssdk:s3'             // S3Presigner 포함
+
 	// --- PostgreSQL + PostGIS ---
 	runtimeOnly  'org.postgresql:postgresql'
 	implementation 'org.hibernate.orm:hibernate-spatial'   // Spring Boot 3.x가 버전 관리
