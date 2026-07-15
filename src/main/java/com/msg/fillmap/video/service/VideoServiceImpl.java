@@ -7,6 +7,8 @@ import java.util.UUID;
 import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import lombok.RequiredArgsConstructor;
 
@@ -47,6 +49,7 @@ public class VideoServiceImpl implements VideoService {
 	private static final Duration PRESIGN_TTL = Duration.ofMinutes(10);
 
 	private final VideoRepository videoRepository;
+	private final VideoEncodingService videoEncodingService;
 	private final S3Presigner s3Presigner;
 	private final AwsProperties awsProperties;
 
@@ -67,9 +70,27 @@ public class VideoServiceImpl implements VideoService {
 			Video.create(userId, gridId, request.s3Key(), geom, request.durationSec(), request.recordedAt()));
 
 		videoRepository.upsertUserGrid(userId, gridId, video.getId());
+		triggerEncodingAfterCommit(video.getId());
 
 		return new VideoUploadResponseDto(
 			video.getId(), gridId, video.getProcessingStatus().name(), !alreadyOccupied);
+	}
+
+	/**
+	 * 인코딩은 커밋 이후에 띄운다. @Async 는 별도 스레드라 여기서 바로 호출하면 아직 커밋되지 않은
+	 * videos row 를 조회해 "영상 없음"으로 실패할 수 있다 (MSG-65 트리거 타이밍).
+	 */
+	private void triggerEncodingAfterCommit(Long videoId) {
+		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+			videoEncodingService.encode(videoId);
+			return;
+		}
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() {
+				videoEncodingService.encode(videoId);
+			}
+		});
 	}
 
 	@Override
