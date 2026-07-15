@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
+import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
+import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 import com.msg.fillmap.video.service.VideoService;
@@ -29,5 +31,13 @@ public class VideoController {
 		@Valid @RequestBody VideoUploadRequestDto request
 	) {
 		return SuccessResponse.of(videoService.saveVideo(principal.userId(), request));
+	}
+
+	@PostMapping("/presigned-url")
+	public SuccessResponse<PresignedUrlResponseDto> issuePresignedUrl(
+		@AuthenticationPrincipal AuthPrincipal principal,
+		@Valid @RequestBody PresignedUrlRequestDto request
+	) {
+		return SuccessResponse.of(videoService.issuePresignedUrl(principal.userId(), request));
 	}
 }
