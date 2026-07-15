@@ -32,6 +32,12 @@ oauth:
   kakao:
     client-id: ${KAKAO_CLIENT_ID}
 
+aws:
+  s3:
+    # 기본값을 두지 않는다 — 미설정 시 application.yml 기본값(fillmap-video-dev)으로 흘러
+    # prod 영상이 dev 버킷에 조용히 쌓인다. 기동 실패로 즉시 드러나게 한다.
+    bucket: ${S3_BUCKET_VIDEO}
+
 server:
   port: ${SERVER_PORT:8080}
 

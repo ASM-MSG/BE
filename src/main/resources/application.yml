@@ -32,6 +32,13 @@ oauth:
     jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
     # client-id(카카오 REST API 키) 는 application-local.yml (로컬) / KAKAO_CLIENT_ID 환경변수 (운영) 로 주입한다.
 
+aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  s3:
+    # 원본 영상 버킷. dev/prod 는 S3_BUCKET_VIDEO 환경변수로 주입한다 (버킷 자체가 분리돼 있음).
+    bucket: ${S3_BUCKET_VIDEO:fillmap-video-dev}
+    max-upload-bytes: ${S3_MAX_UPLOAD_BYTES:104857600}   # 100MB
+
 server:
   port: 8080
 
