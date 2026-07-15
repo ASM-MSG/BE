@@ -11,13 +11,13 @@
 | 패키지 | 상태 | 있는 것 | 없는 것 |
 |---|---|---|---|
 | `response` | ✅ 완성 | `ApiResponseDto`, `SuccessResponse`, `ErrorCode`, `ErrorCodeIfs` | — |
-| `global` | ✅ 완성 | `ApiException`, `GlobalExceptionHandler`, `config/SecurityConfig` | — |
+| `global` | ✅ 완성 | `ApiException`, `GlobalExceptionHandler`, `config/SecurityConfig`, `config/S3Config`(S3Presigner 빈)·`config/AwsProperties`(MSG-64) | — |
 | `auth` (Owner B) | ✅ 완성 | `controller`, `service`(AuthService·OidcLoginService), `dto`, `jwt`(TokenProvider·필터·JwtProperties), `oidc`(Kakao OIDC), `exception/AuthErrorCode` | — |
 | `user` (Owner B) | 🟡 부분 | `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode` | `service`, `controller`, `dto` |
 | `grid` (Owner A) | 🟡 부분 | `GridEncoder`·`GridConstants`(순수 유틸), `entity/{UserGrid,UserGridId,Grid}`, `repository/GridRepository`, `service/GridQueryService`(+impl, read 계약 A→B), `controller/GridController`, `dto/*`, `exception/GridErrorCode`(4xxx) (MSG-73) | `GridOccupationService`(write는 MSG-66이 흡수), `HotZoneService`, `region` |
 | `usergrid` (Owner B) | ❌ 미생성 | — | 패키지 전체. `UserGridQueryService` 계약 포함 |
 | `region` (Owner A) | ❌ 미생성 | — | 패키지 전체 (entity·repository·service·controller·dto) |
-| `video` (Owner B) | 🟡 부분 | `entity`(Video·ProcessingStatus·Visibility·VideoStatus), `repository/VideoRepository`(grids·user_grids native UPSERT), 메타저장 `service`·`controller`(`POST /api/videos`)·`dto`, `support/GeoSupport`, `exception/VideoErrorCode`(3xxx) — MSG-66 | presigned(MSG-64), 인코딩(MSG-65), 교체(71), 삭제(72) |
+| `video` (Owner B) | 🟡 부분 | `entity`(Video·ProcessingStatus·Visibility·VideoStatus), `repository/VideoRepository`(grids·user_grids native UPSERT), 메타저장 `service`·`controller`(`POST /api/videos`)·`dto`, `support/GeoSupport`, `exception/VideoErrorCode`(3xxx) — MSG-66 · presigned URL 발급(`POST /api/videos/presigned-url`, `VideoService.issuePresignedUrl`) — MSG-64 | 인코딩(MSG-65), 교체(71), 삭제(72) |
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
