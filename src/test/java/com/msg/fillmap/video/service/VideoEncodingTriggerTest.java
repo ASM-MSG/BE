@@ -1,0 +1,59 @@
+package com.msg.fillmap.video.service;
+
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+
+import java.time.LocalDateTime;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.core.task.TaskRejectedException;
+
+import com.msg.fillmap.global.config.AwsProperties;
+import com.msg.fillmap.video.dto.VideoUploadRequestDto;
+import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.repository.VideoRepository;
+
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+
+/**
+ * 인코딩 큐가 가득 찼을 때의 업로드 동작.
+ * executor 는 @Async 메서드 본문이 아니라 submit 을 호출한 스레드에 TaskRejectedException 을 던지므로,
+ * 이를 삼키지 않으면 이미 커밋된 업로드가 500 으로 응답된다.
+ */
+@DisplayName("인코딩 트리거 — 큐 포화")
+class VideoEncodingTriggerTest {
+
+	private static final long USER_ID = 1L;
+
+	@Test
+	void 큐가_포화여도_업로드는_성공하고_FAILED_로_기록된다() {
+		VideoRepository repository = mock(VideoRepository.class);
+		VideoEncodingService encodingService = mock(VideoEncodingService.class);
+		VideoStatusWriter statusWriter = mock(VideoStatusWriter.class);
+
+		Video saved = Video.create(USER_ID, "41716_110483", "videos/original/1/x.mp4", null, (short) 10,
+			LocalDateTime.now());
+		org.springframework.test.util.ReflectionTestUtils.setField(saved, "id", 7L);
+		org.mockito.BDDMockito.given(repository.save(org.mockito.ArgumentMatchers.any(Video.class)))
+			.willReturn(saved);
+
+		// 큐 포화 상황 재현
+		willThrow(new TaskRejectedException("queue full")).given(encodingService).encode(anyLong());
+
+		VideoService service = new VideoServiceImpl(repository, encodingService, statusWriter,
+			mock(S3Presigner.class),
+			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)));
+
+		VideoUploadRequestDto request = new VideoUploadRequestDto(
+			"videos/original/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now());
+
+		// 업로드는 이미 커밋된 상태다 — 여기서 예외가 나가면 클라이언트가 재시도해 중복 업로드가 된다.
+		assertThatCode(() -> service.saveVideo(USER_ID, request)).doesNotThrowAnyException();
+
+		verify(statusWriter).markFailed(7L);
+	}
+}

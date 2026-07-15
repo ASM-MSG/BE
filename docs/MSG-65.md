@@ -22,10 +22,49 @@
 |---|---|---|
 | D1 | 실행 방식 | **앱 내부 `@Async`** (별도 큐/워커/Lambda 없음). 메타저장(MSG-66) 트랜잭션 커밋 직후 비동기 호출. MVP 트래픽에 충분 |
 | D2 | 천장(스케일) | 동시 업로드가 스레드풀을 압박하면 그때 SQS/Redis 큐 + 별도 워커로 분리. `// ponytail: 앱 내부 @Async, 처리량 늘면 큐로 분리` |
-| D3 | FFmpeg 실행 | 런타임 이미지에 `ffmpeg` 바이너리 포함(Dockerfile `apt-get install ffmpeg`). `ProcessBuilder` 로 호출 |
+| D3 | FFmpeg 실행 | ~~Dockerfile~~ → **EC2 에 직접 설치** (`sudo apt-get install -y ffmpeg`). `ProcessBuilder` 로 PATH 의 바이너리 호출. ⚠️ 아래 "D3 정정" 참조 — 이 프로젝트에는 Dockerfile 이 없다 |
 | D4 | 변환 스펙 | 720p(scale=-2:720), H.264(libx264) + AAC 오디오. 썸네일 1장(첫 프레임 또는 1초 지점 jpg) |
 | D5 | 상태 전이 | `UPLOADED → ENCODING → READY`, 실패 시 `FAILED`. `@Async` 진입 시 ENCODING, 완료 시 READY, 예외 시 FAILED(+ERROR 로그). AI Highlight-Blur의 `BLURRING`은 **범위 외**(architecture.md) |
-| D6 | 결과 저장 | `videos.encoded_url`(720p mp4 URL), `videos.thumbnail_url`(jpg URL) 갱신. 결과 S3 key 예: `videos/encoded/{userId}/{videoId}.mp4`, `videos/thumb/{userId}/{videoId}.jpg` |
+| D6 | 결과 저장 | `videos.encoded_url` / `videos.thumbnail_url` 갱신. ⚠️ 아래 "D6 정정" 참조 — **URL 이 아니라 S3 key 를 저장한다**. key 규칙: `videos/encoded/{userId}/{videoId}.mp4`, `videos/thumb/{userId}/{videoId}.jpg` |
+
+---
+
+## 구현 중 확정된 정정 (2026-07-15, MSG-65 구현)
+
+### D3 정정 — Dockerfile 이 아니라 EC2 직접 설치
+
+**이 프로젝트에는 Dockerfile 이 없다.** 배포는 CD 가 jar 를 scp 하고 systemd(`fillmap-dev`)가
+`java -jar` 로 직접 실행하는 구조다(`.github/workflows/cd-dev.yml`). 따라서 "런타임 이미지에 포함"이
+성립하지 않는다.
+
+- **dev/prod EC2**: `sudo apt-get install -y ffmpeg` (인프라 담당이 1회 실행)
+- **로컬**: `brew install ffmpeg`
+- 앱은 PATH 의 `ffmpeg`/`ffprobe` 를 호출한다. 경로를 설정으로 빼지 않는다(YAGNI).
+- **CI 에는 ffmpeg 를 설치하지 않는다.** 실 ffmpeg 테스트(`FfmpegRunnerTest`)는 바이너리가 없으면
+  `assumeTrue` 로 전부 skip 되므로 CI 가 깨지지 않는다(검증 완료: 5건 skip, BUILD SUCCESSFUL).
+
+### D6 정정 — `encoded_url` 에는 URL 이 아니라 **S3 key** 를 저장한다
+
+버킷이 Block Public Access 라 **영구 URL 이 존재하지 않는다.** presigned GET 은 TTL 이 있어 DB 에
+박아둘 수 없고, CloudFront(MSG-67)는 아직 없다. 그래서 key 를 저장하고 재생 조회 시점에 presigned GET
+을 발급한다. MSG-67 도입 시 key 앞에 CDN 도메인만 붙이면 되므로 이식성도 이 편이 낫다.
+
+컬럼명(`encoded_url`)과 내용(key)이 어긋나지만 **컬럼명은 바꾸지 않는다** — V 파일 재작성은
+체크섬 불일치로 dev 를 32시간 죽인 원인(MSG-130)이다. 엔티티 필드 주석에 명시했다.
+재생 조회 API(presigned GET 발급)는 **본 티켓 범위 밖**이다.
+
+### IAM 정책 정정 — `videos/original/*` → `videos/*`
+
+MSG-64 에서 만든 `FillMapVideoUploadDev` 정책이 `videos/original/*` 만 허용해서 인코딩 결과 업로드가
+403 `AccessDenied` 로 실패했다(로컬 실측에서 발견). 결과물은 `videos/encoded/`·`videos/thumb/` 로
+올라간다. Resource 를 `arn:aws:s3:::fillmap-video-dev/videos/*` 로 넓힌다 — MSG-71/72 에서 경로가
+늘어도 정책을 다시 고치지 않아도 된다.
+
+### 산출물 정정 — `VideoStatusWriter` 추가
+
+상태 전이를 `REQUIRES_NEW` 로 커밋해야 하는데, `@Transactional` 은 프록시 기반이라 **같은 클래스 안에서
+호출하면(self-invocation) 적용되지 않는다.** `VideoEncodingServiceImpl` 안에 두면 ENCODING 이 DB 에
+보이지 않고 실패 시 markFailed 까지 롤백된다. 그래서 전이 전용 빈으로 분리했다.
 | D7 | duration 검증 | 변환 전 ffprobe 로 실제 길이 확인 → 30초 초과면 FAILED 처리(스키마 CHECK와 일관) |
 | D8 | 재시도 | MVP 최소: FAILED 기록 + 로그. 자동 재시도 없음(수동 재트리거 API는 백로그) |
 

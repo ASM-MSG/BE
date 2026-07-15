@@ -90,6 +90,7 @@
 		text-decoration: none;
 	}
 	nav.toc a:hover { color: var(--accent); }
+	nav.toc .rel { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
 
 	header.title { margin-bottom: 8px; }
 	h1 { font-size: 30px; line-height: 1.3; margin: 0 0 8px; letter-spacing: -.02em; }
@@ -230,6 +231,8 @@
 	<a href="#msg64">4. MSG-64 설계 결정</a>
 	<a href="#owner">5. Owner A/B 경계면</a>
 	<a href="#gaps">6. 알려진 갭</a>
+	<p class="rel" style="margin-bottom:4px">관련</p>
+	<a href="MSG-65-flow.html">인코딩 워커 (MSG-65) →</a>
 </nav>
 
 <main>
@@ -678,10 +681,11 @@ if (allowedType == null || !allowedType.equals(request.contentType())) {
 
 <h3>다음 티켓</h3>
 <p>
-	스펙상 착수 순서는 <code>66 → 64 → 65 → 72 → 71</code>이다. 64까지 끝났으니 다음은
-	MSG-65(FFmpeg 720p 인코딩 워커)로, <code>processing_status</code>를
-	<code>UPLOADED → ENCODING → READY</code>로 전이시키며 <code>encoded_url</code>·
-	<code>thumbnail_url</code>을 채운다. 지금 모든 영상이 <code>UPLOADED</code>에 머무는 이유다.
+	스펙상 착수 순서는 <code>66 → 64 → 65 → 72 → 71</code>이다. 64 다음인
+	<strong>MSG-65(FFmpeg 720p 인코딩 워커)는 구현이 끝났다</strong> —
+	<code>UPLOADED → ENCODING → READY</code> 전이와 썸네일 추출은
+	<a href="MSG-65-flow.html">인코딩 워커 문서</a>를 참고하면 된다. 그 다음은 MSG-72(삭제·점령 롤백),
+	MSG-71(교체) 순이다.
 </p>
 
 <p class="foot">

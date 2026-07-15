@@ -5,10 +5,14 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.locationtech.jts.geom.Point;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -29,6 +33,7 @@ import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 
 // ponytail: presign 을 VideoServiceImpl 에 합침. MSG-71 에서 S3 관심사가 2개째면 PresignedUrlService 로 분리.
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class VideoServiceImpl implements VideoService {
@@ -47,6 +52,8 @@ public class VideoServiceImpl implements VideoService {
 	private static final Duration PRESIGN_TTL = Duration.ofMinutes(10);
 
 	private final VideoRepository videoRepository;
+	private final VideoEncodingService videoEncodingService;
+	private final VideoStatusWriter videoStatusWriter;
 	private final S3Presigner s3Presigner;
 	private final AwsProperties awsProperties;
 
@@ -67,9 +74,42 @@ public class VideoServiceImpl implements VideoService {
 			Video.create(userId, gridId, request.s3Key(), geom, request.durationSec(), request.recordedAt()));
 
 		videoRepository.upsertUserGrid(userId, gridId, video.getId());
+		triggerEncodingAfterCommit(video.getId());
 
 		return new VideoUploadResponseDto(
 			video.getId(), gridId, video.getProcessingStatus().name(), !alreadyOccupied);
+	}
+
+	/**
+	 * 인코딩은 커밋 이후에 띄운다. @Async 는 별도 스레드라 여기서 바로 호출하면 아직 커밋되지 않은
+	 * videos row 를 조회해 "영상 없음"으로 실패할 수 있다 (MSG-65 트리거 타이밍).
+	 */
+	private void triggerEncodingAfterCommit(Long videoId) {
+		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+			submitEncoding(videoId);
+			return;
+		}
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() {
+				submitEncoding(videoId);
+			}
+		});
+	}
+
+	/**
+	 * 큐가 가득 차면 executor 가 TaskRejectedException 을 던지는데, 이는 @Async 메서드 본문이 아니라
+	 * submit 을 호출한 이 스레드에서 터진다. 그냥 두면 afterCommit 밖으로 전파돼 이미 커밋된 업로드가
+	 * 500 으로 응답되고(클라이언트는 재시도 → 중복 업로드), 인코딩 쪽 catch 는 실행조차 되지 않아
+	 * 영상이 UPLOADED 로 남는다. 그래서 여기서 삼키고 FAILED 로 기록한다.
+	 */
+	private void submitEncoding(Long videoId) {
+		try {
+			videoEncodingService.encode(videoId);
+		} catch (TaskRejectedException e) {
+			log.error("인코딩 큐 포화로 작업이 거부됨: videoId={}", videoId, e);
+			videoStatusWriter.markFailed(videoId);
+		}
 	}
 
 	@Override

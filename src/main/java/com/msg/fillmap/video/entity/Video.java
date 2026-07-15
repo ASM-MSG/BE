@@ -44,9 +44,15 @@ public class Video {
 	@Column(name = "original_s3_key", length = 500)
 	private String originalS3Key;
 
+	/**
+	 * 인코딩본 S3 key (예: videos/encoded/1/42.mp4). 컬럼명은 url 이지만 URL 이 아니라 key 를 담는다 —
+	 * 버킷이 Block Public Access 라 영구 URL 이 없고 presigned GET 은 TTL 이 있어 저장할 수 없다.
+	 * 재생 시 이 key 로 presigned GET 을 발급한다. 컬럼명 정정은 V 파일 재작성을 뜻하므로 하지 않는다(MSG-130).
+	 */
 	@Column(name = "encoded_url", columnDefinition = "text")
 	private String encodedUrl;
 
+	/** 썸네일 S3 key. encodedUrl 과 같은 이유로 URL 이 아니라 key 다. */
 	@Column(name = "thumbnail_url", columnDefinition = "text")
 	private String thumbnailUrl;
 
@@ -95,5 +101,22 @@ public class Video {
 	public static Video create(Long userId, String gridId, String originalS3Key, Point geom, Short durationSec,
 		LocalDateTime recordedAt) {
 		return new Video(userId, gridId, originalS3Key, geom, durationSec, recordedAt);
+	}
+
+	/** UPLOADED → ENCODING (MSG-65 워커 진입). */
+	public void markEncoding() {
+		this.processingStatus = ProcessingStatus.ENCODING;
+	}
+
+	/** ENCODING → READY. 인자는 URL 이 아니라 S3 key 다 (encodedUrl 필드 주석 참조). */
+	public void markReady(String encodedKey, String thumbnailKey) {
+		this.encodedUrl = encodedKey;
+		this.thumbnailUrl = thumbnailKey;
+		this.processingStatus = ProcessingStatus.READY;
+	}
+
+	/** 변환 실패. 재시도는 없고 기록만 남긴다 (MSG-65 D8). */
+	public void markFailed() {
+		this.processingStatus = ProcessingStatus.FAILED;
 	}
 }
