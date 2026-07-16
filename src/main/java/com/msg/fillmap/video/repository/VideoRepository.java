@@ -1,5 +1,7 @@
 package com.msg.fillmap.video.repository;
 
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -54,5 +56,56 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		@Param("userId") long userId,
 		@Param("gridId") String gridId,
 		@Param("coverVideoId") long coverVideoId
+	);
+
+	/* ---------- MSG-72 삭제 · 점령 롤백 ---------- */
+
+	/** 소유권 검증용. 없으면 NOT_FOUND, 있는데 주인이 다르면 FORBIDDEN 을 구분하려고 id 조회와 나눠 쓴다. */
+	Optional<Video> findByIdAndUserId(Long id, Long userId);
+
+	/**
+	 * 점령 카운트 원자적 감소 (MSG-72 D3). 읽고 계산해서 쓰지 않으므로 동시 삭제에도 어긋나지 않는다.
+	 * GREATEST 로 음수를 방어한다.
+	 */
+	@Modifying
+	@Query(value = """
+		UPDATE user_grids
+		SET video_count = GREATEST(video_count - 1, 0)
+		WHERE user_id = :userId AND grid_id = :gridId
+		""", nativeQuery = true)
+	void decrementVideoCount(@Param("userId") long userId, @Param("gridId") String gridId);
+
+	/**
+	 * 점령 롤백 — 그 격자의 내 영상이 모두 사라졌을 때만 도감에서 제거한다 (grids row 는 유지, D5).
+	 * 조건을 SQL 안에 두어 "카운트를 읽고 → 0인지 보고 → 지운다" 사이의 race 를 없앤다.
+	 * 반환값은 삭제된 행 수 — 1 이면 롤백됨, 0 이면 아직 점령 중이다.
+	 */
+	@Modifying
+	@Query(value = """
+		DELETE FROM user_grids
+		WHERE user_id = :userId AND grid_id = :gridId AND video_count = 0
+		""", nativeQuery = true)
+	int deleteUserGridIfEmpty(@Param("userId") long userId, @Param("gridId") String gridId);
+
+	/**
+	 * cover 재선정 (D4) — 남은 ACTIVE 영상 중 가장 오래된 것(최초 수집)을 고른다.
+	 * soft delete 라 videos row 가 남으므로 FK 의 ON DELETE SET NULL 이 동작하지 않는다. 직접 갱신해야 한다.
+	 * 남은 영상이 없으면 서브쿼리가 NULL 을 주고, 컬럼이 nullable 이라 그대로 비워진다.
+	 */
+	@Modifying
+	@Query(value = """
+		UPDATE user_grids ug
+		SET cover_video_id = (
+			SELECT v.id FROM videos v
+			WHERE v.user_id = :userId AND v.grid_id = :gridId AND v.status = 'ACTIVE'
+			ORDER BY v.created_at, v.id
+			LIMIT 1
+		)
+		WHERE ug.user_id = :userId AND ug.grid_id = :gridId AND ug.cover_video_id = :deletedVideoId
+		""", nativeQuery = true)
+	void reselectCover(
+		@Param("userId") long userId,
+		@Param("gridId") String gridId,
+		@Param("deletedVideoId") long deletedVideoId
 	);
 }
