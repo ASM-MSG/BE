@@ -14,7 +14,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
@@ -55,6 +59,7 @@ public class VideoServiceImpl implements VideoService {
 	private final VideoEncodingService videoEncodingService;
 	private final VideoStatusWriter videoStatusWriter;
 	private final S3Presigner s3Presigner;
+	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
 
 	@Override
@@ -63,6 +68,7 @@ public class VideoServiceImpl implements VideoService {
 		double lat = request.lat();
 		double lon = request.lon();
 		validateCoordinate(lat, lon);
+		validateUploadedS3Key(userId, request.s3Key());
 
 		String gridId = GridEncoder.encode(lat, lon);
 		registerGridIfAbsent(gridId);
@@ -170,6 +176,46 @@ public class VideoServiceImpl implements VideoService {
 	private void validateCoordinate(double lat, double lon) {
 		if (lat < MIN_LAT || lat > MAX_LAT || lon < MIN_LON || lon > MAX_LON) {
 			throw new ApiException(VideoErrorCode.INVALID_COORDINATE);
+		}
+	}
+
+	/**
+	 * 확정 요청의 s3Key 가 "내가 실제로 올린, 아직 안 쓴 파일"인지 확인한다 (MSG-132).
+	 *
+	 * 이 검증이 없으면 파일을 올리지 않고 좌표만 찍어서 격자를 점령할 수 있다 — upsertUserGrid 가
+	 * 인코딩보다 먼저 돌고, 인코딩이 FAILED 가 돼도 점령은 남기 때문이다. FillMap 은 직접 가서 찍어야
+	 * 격자를 채우는 게임이라 이건 게임 자체를 무너뜨린다.
+	 *
+	 * prefix 검사만으론 부족하다 — 공격자는 자기 userId 를 알기에 videos/original/{내id}/아무거나.mp4 를
+	 * 지어낼 수 있다. S3 에 실제로 있는지(headObject) 봐야 막힌다.
+	 */
+	private void validateUploadedS3Key(long userId, String s3Key) {
+		String requiredPrefix = "videos/original/%d/".formatted(userId);
+		if (!s3Key.startsWith(requiredPrefix)) {
+			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
+		}
+		// 영상 1개로 좌표만 바꿔가며 무한 점령하는 걸 막는다. DB 의 UNIQUE 제약이 최종 방어선이고,
+		// 여기서 미리 걸러 500 대신 4xx 를 준다.
+		if (videoRepository.existsByOriginalS3Key(s3Key)) {
+			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
+		}
+		requireObjectExists(s3Key);
+	}
+
+	private void requireObjectExists(String s3Key) {
+		try {
+			s3Client.headObject(HeadObjectRequest.builder()
+				.bucket(awsProperties.s3().bucket())
+				.key(s3Key)
+				.build());
+		} catch (NoSuchKeyException e) {
+			throw new ApiException(VideoErrorCode.UPLOAD_NOT_FOUND, e);
+		} catch (S3Exception e) {
+			// HeadObject 는 본문 없는 404 를 주므로 SDK 가 NoSuchKeyException 으로 못 좁히는 경우가 있다.
+			if (e.statusCode() == 404) {
+				throw new ApiException(VideoErrorCode.UPLOAD_NOT_FOUND, e);
+			}
+			throw e;
 		}
 	}
 

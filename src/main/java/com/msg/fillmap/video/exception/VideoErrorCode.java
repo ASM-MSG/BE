@@ -18,6 +18,8 @@ import com.msg.fillmap.response.ErrorCodeIfs;
 public enum VideoErrorCode implements ErrorCodeIfs {
 
 	INVALID_COORDINATE(3400, HttpStatus.BAD_REQUEST, "서비스 지역 범위를 벗어난 좌표입니다"),
+	INVALID_S3_KEY(3401, HttpStatus.BAD_REQUEST, "유효하지 않은 업로드 키입니다"),
+	UPLOAD_NOT_FOUND(3402, HttpStatus.BAD_REQUEST, "업로드된 파일을 찾을 수 없습니다"),
 	VIDEO_FORBIDDEN(3403, HttpStatus.FORBIDDEN, "본인의 영상만 처리할 수 있습니다"),
 	VIDEO_NOT_FOUND(3404, HttpStatus.NOT_FOUND, "영상을 찾을 수 없습니다"),
 	FILE_TOO_LARGE(3413, HttpStatus.BAD_REQUEST, "허용 크기를 초과한 영상입니다"),

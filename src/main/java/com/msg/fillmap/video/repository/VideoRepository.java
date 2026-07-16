@@ -58,6 +58,12 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		@Param("coverVideoId") long coverVideoId
 	);
 
+	/**
+	 * 같은 원본을 두 번 확정하는 걸 막는다 (MSG-132). DB 의 UNIQUE 제약이 최종 방어선이고,
+	 * 이 조회는 그 전에 걸러 500 대신 4xx 를 주기 위한 것이다.
+	 */
+	boolean existsByOriginalS3Key(String originalS3Key);
+
 	/* ---------- MSG-72 삭제 · 점령 롤백 ---------- */
 
 	/** 소유권 검증용. 없으면 NOT_FOUND, 있는데 주인이 다르면 FORBIDDEN 을 구분하려고 id 조회와 나눠 쓴다. */
