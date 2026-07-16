@@ -29,6 +29,8 @@ import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
+import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
+import com.msg.fillmap.video.dto.VideoReplaceResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 import com.msg.fillmap.video.entity.Video;
@@ -88,12 +90,53 @@ public class VideoServiceImpl implements VideoService {
 
 	@Override
 	@Transactional
-	public void deleteVideo(long userId, long videoId) {
+	public VideoReplaceResponseDto replaceVideo(long userId, long videoId, VideoReplaceRequestDto request) {
+		Video video = findOwnedVideo(userId, videoId);
+		if (video.isDeleted()) {
+			throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);   // 지운 영상은 되살리지 않는다
+		}
+		// 교체도 s3Key 를 받으므로 업로드와 같은 검증이 필요하다 — 없으면 "교체로 가짜 키 밀어넣기"가
+		// 되어 MSG-132 에서 막은 구멍이 옆문으로 다시 열린다. (스펙 D4 에는 없던 보강)
+		validateUploadedS3Key(userId, request.s3Key());
+		validateSameGrid(video, request);
+
+		video.replaceFile(request.s3Key(), request.durationSec());
+		triggerEncodingAfterCommit(videoId);
+		return VideoReplaceResponseDto.from(video);
+	}
+
+	/**
+	 * 좌표는 선택이다 — 안 보내면 파일만 교체하고 격자는 그대로 둔다.
+	 * 보냈다면 같은 격자여야 한다 (MSG-71 D3): 격자가 바뀌면 옛 격자의 점령 롤백 + 새 격자 점령이
+	 * 얽혀 복잡도가 급증하는데, MVP 에 그만한 값어치가 없다.
+	 */
+	private void validateSameGrid(Video video, VideoReplaceRequestDto request) {
+		if (request.hasPartialCoordinate()) {
+			throw new ApiException(VideoErrorCode.INVALID_COORDINATE);   // lat/lon 은 쌍으로만
+		}
+		if (!request.hasCoordinate()) {
+			return;
+		}
+		validateCoordinate(request.lat(), request.lon());
+		if (!GridEncoder.encode(request.lat(), request.lon()).equals(video.getGridId())) {
+			throw new ApiException(VideoErrorCode.GRID_MISMATCH);
+		}
+	}
+
+	/** 소유권 검증 — 교체·삭제가 공유한다 (MSG-71 스펙: "소유권 검증(MSG-72와 공통 헬퍼)"). */
+	private Video findOwnedVideo(long userId, long videoId) {
 		Video video = videoRepository.findById(videoId)
 			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
 		if (video.getUserId() != userId) {
 			throw new ApiException(VideoErrorCode.VIDEO_FORBIDDEN);
 		}
+		return video;
+	}
+
+	@Override
+	@Transactional
+	public void deleteVideo(long userId, long videoId) {
+		Video video = findOwnedVideo(userId, videoId);
 		if (video.isDeleted()) {
 			return;   // 중복 삭제는 멱등하게 성공 (MSG-72 D7)
 		}

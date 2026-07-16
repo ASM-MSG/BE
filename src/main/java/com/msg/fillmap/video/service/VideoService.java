@@ -2,6 +2,8 @@ package com.msg.fillmap.video.service;
 
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
+import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
+import com.msg.fillmap.video.dto.VideoReplaceResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 
@@ -22,4 +24,10 @@ public interface VideoService {
 	 * 이미 삭제된 영상이면 멱등하게 성공 처리한다.
 	 */
 	void deleteVideo(long userId, long videoId);
+
+	/**
+	 * 본인 영상의 파일 교체. row 를 유지한 채 파일 참조만 갈아끼우므로 도감(점령·video_count·cover)은
+	 * 변하지 않는다. 같은 격자 안에서만 가능하고, 교체 후 재인코딩이 돈다.
+	 */
+	VideoReplaceResponseDto replaceVideo(long userId, long videoId, VideoReplaceRequestDto request);
 }
