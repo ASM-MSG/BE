@@ -3,6 +3,8 @@ package com.msg.fillmap.video.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDateTime;
 
@@ -13,7 +15,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
+
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
@@ -47,11 +54,19 @@ class VideoDeleteIntegrationTest {
 	@Autowired
 	private EntityManager em;
 
+	/**
+	 * saveVideo 가 s3Key 실존을 headObject 로 확인한다(MSG-132). 목이 없으면 실제 S3 를 호출해
+	 * CI(자격증명 없음)에서 깨진다. 기본 스텁은 "객체가 있다" = 정상 업로드를 마친 상태다.
+	 */
+	@MockitoBean
+	private S3Client s3Client;
+
 	private Long userId;
 	private String gridId;
 
 	@BeforeEach
 	void setUp() {
+		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
 		userId = userRepository.save(User.createLocalUser("deleter@example.com", "hash", "삭제자")).getId();
 		gridId = GridEncoder.encode(여의도_LAT, 여의도_LON);
 	}
