@@ -44,8 +44,9 @@ class VideoEncodingTriggerTest {
 		// 큐 포화 상황 재현
 		willThrow(new TaskRejectedException("queue full")).given(encodingService).encode(anyLong());
 
+		// S3Client 목은 headObject 에서 예외를 던지지 않는다 = 객체가 존재하는 정상 업로드.
 		VideoService service = new VideoServiceImpl(repository, encodingService, statusWriter,
-			mock(S3Presigner.class),
+			mock(S3Presigner.class), mock(software.amazon.awssdk.services.s3.S3Client.class),
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)));
 
 		VideoUploadRequestDto request = new VideoUploadRequestDto(

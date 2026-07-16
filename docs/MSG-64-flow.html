@@ -233,6 +233,7 @@
 	<a href="#gaps">6. 알려진 갭</a>
 	<p class="rel" style="margin-bottom:4px">관련</p>
 	<a href="MSG-65-flow.html">인코딩 워커 (MSG-65) →</a>
+	<a href="MSG-132-troubleshooting.html">트러블슈팅: s3Key 검증 (MSG-132)</a>
 </nav>
 
 <main>
@@ -665,8 +666,28 @@ if (allowedType == null || !allowedType.equals(request.contentType())) {
 	<code>VideoServiceImpl</code>에는 좌표 검증만 있고, DTO에도 <code>@PastOrPresent</code>가 없다.
 </div>
 
+<div class="note ok">
+	<strong>[해소됨] s3Key 검증 없이 격자를 점령할 수 있었다 — MSG-132</strong>
+	<p>
+		한때 <code>saveVideo</code>가 클라이언트의 <code>s3Key</code>를 검증 없이 저장해서
+		<strong>파일을 안 올리고도 격자가 점령됐다.</strong> 점령이 인코딩보다 먼저 일어나고, 인코딩이
+		FAILED가 돼도 <code>user_grids</code> row는 남기 때문이다.
+	</p>
+	<p style="margin-bottom:0">
+		지금은 소유권(prefix)·실존(<code>headObject</code>)·중복(UNIQUE) 3중 검증이 막는다.
+		발견 경위와 설계 근거는 <a href="MSG-132-troubleshooting.html">트러블슈팅 문서</a> 참조.
+	</p>
+</div>
+
+<div class="note warn">
+	<strong>③ 고아 업로드가 S3에 쌓인다 — MSG-133</strong>
+	presigned URL을 발급받아 S3에 올린 뒤 <strong>확정 API를 부르지 않으면</strong> 그 객체는 영원히
+	남는다. 발급을 DB에 기록하지 않아 추적할 방법이 없고, S3 라이프사이클도 없다.
+	MSG-132의 <code>headObject</code>는 "안 올리고 확정"만 막을 뿐 이건 못 막는다.
+</div>
+
 <div class="note">
-	<strong>③ 프론트 계약 — Content-Type 헤더 필수</strong>
+	<strong>④ 프론트 계약 — Content-Type 헤더 필수</strong>
 	<p>
 		Content-Type을 서명에 넣었으므로, 클라이언트는 <strong>발급 요청에 보낸 값을 PUT 헤더에 그대로</strong>
 		실어야 한다. blob이 자동 추론한 타입과 다르면 403이 난다 — 특히 <code>.mov</code>는 브라우저가

@@ -47,10 +47,10 @@ class VideoPresignTest {
 		AwsProperties properties = new AwsProperties(
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", MAX_UPLOAD_BYTES));
 
-		// presign 경로는 DB 도 인코딩도 타지 않는다.
+		// presign 경로는 DB 도 인코딩도 S3 조회도 타지 않는다.
 		videoService = new VideoServiceImpl(
 			mock(VideoRepository.class), mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
-			presigner, properties);
+			presigner, mock(software.amazon.awssdk.services.s3.S3Client.class), properties);
 	}
 
 	@Test
