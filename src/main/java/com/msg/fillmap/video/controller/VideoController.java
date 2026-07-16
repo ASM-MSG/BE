@@ -6,6 +6,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +17,8 @@ import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
+import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
+import com.msg.fillmap.video.dto.VideoReplaceResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 import com.msg.fillmap.video.service.VideoService;
@@ -41,6 +44,15 @@ public class VideoController {
 		@Valid @RequestBody PresignedUrlRequestDto request
 	) {
 		return SuccessResponse.of(videoService.issuePresignedUrl(principal.userId(), request));
+	}
+
+	@PutMapping("/{videoId}")
+	public SuccessResponse<VideoReplaceResponseDto> replace(
+		@AuthenticationPrincipal AuthPrincipal principal,
+		@PathVariable Long videoId,
+		@Valid @RequestBody VideoReplaceRequestDto request
+	) {
+		return SuccessResponse.of(videoService.replaceVideo(principal.userId(), videoId, request));
 	}
 
 	@DeleteMapping("/{videoId}")
