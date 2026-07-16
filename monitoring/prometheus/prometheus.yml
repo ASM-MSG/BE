@@ -1,0 +1,23 @@
+# MSG-128 — 부하테스트 관측 scrape 설정. 부하 구간을 촘촘히 보려고 5s 간격.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # 앱 (Actuator/Micrometer). 로컬: host.docker.internal:8080. EC2면 앱 사설IP:8080 으로 교체.
+  - job_name: fillmap-app
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+        labels:
+          service: fillmap
+
+  # PostgreSQL (postgres_exporter) — 쿼리시간·인덱스 스캔(btree vs GiST) 근거용.
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  # Prometheus 자기 자신(선택).
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

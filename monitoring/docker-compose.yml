@@ -1,0 +1,51 @@
+# MSG-128 부하테스트 관측 스택 (임시). 대상(앱·DB)은 이 스택 "밖"에서 돈다.
+#
+# 로컬 실행:
+#   1) 앱: ./gradlew bootRun  (호스트 8080)
+#   2) DB: fillmap-postgres 컨테이너(5432) 가동 중
+#   3) docker compose -f monitoring/docker-compose.yml up -d
+#   → Prometheus http://localhost:9090 · Grafana http://localhost:3000
+#
+# 같은 리전 임시 EC2:
+#   - prometheus/prometheus.yml 의 fillmap-app target 을 앱 사설IP:8080 으로
+#   - POSTGRES_HOST 를 DB 사설IP(또는 host.docker.internal)로 (아래 .env 또는 export)
+#
+# 관측자효과 회피: 이 스택은 대상 서버가 아니라 로컬/별도 EC2에서 돌린다(MSG-128 D2).
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=6h
+      - --web.enable-remote-write-receiver   # k6 --out experimental-prometheus-rw 수신
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Linux(EC2)에서도 host 접근 가능하게
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-user1234}@${POSTGRES_HOST:-host.docker.internal}:5432/${POSTGRES_DB:-fillmap}?sslmode=disable"
+    ports:
+      - "9187:9187"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
