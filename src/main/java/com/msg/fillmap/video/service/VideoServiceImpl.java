@@ -80,6 +80,31 @@ public class VideoServiceImpl implements VideoService {
 			video.getId(), gridId, video.getProcessingStatus().name(), !alreadyOccupied);
 	}
 
+	@Override
+	@Transactional
+	public void deleteVideo(long userId, long videoId) {
+		Video video = videoRepository.findById(videoId)
+			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
+		if (video.getUserId() != userId) {
+			throw new ApiException(VideoErrorCode.VIDEO_FORBIDDEN);
+		}
+		if (video.isDeleted()) {
+			return;   // 중복 삭제는 멱등하게 성공 (MSG-72 D7)
+		}
+
+		// 아래 native 쿼리들은 이 변경을 본다 — Hibernate 가 native 쿼리 전에 영속성 컨텍스트를
+		// 자동 flush 하기 때문이다(FlushMode.AUTO). 그러지 않으면 cover 재선정이 방금 지운 영상을
+		// 다시 고른다. VideoDeleteIntegrationTest 의 cover 재선정 테스트가 이 순서를 지킨다.
+		video.markDeleted();
+
+		String gridId = video.getGridId();
+		videoRepository.decrementVideoCount(userId, gridId);
+		if (videoRepository.deleteUserGridIfEmpty(userId, gridId) == 0) {
+			// 아직 그 격자에 내 영상이 남아 있다 — 점령은 유지하고 cover 만 정리한다.
+			videoRepository.reselectCover(userId, gridId, videoId);
+		}
+	}
+
 	/**
 	 * 인코딩은 커밋 이후에 띄운다. @Async 는 별도 스레드라 여기서 바로 호출하면 아직 커밋되지 않은
 	 * videos row 를 조회해 "영상 없음"으로 실패할 수 있다 (MSG-65 트리거 타이밍).
