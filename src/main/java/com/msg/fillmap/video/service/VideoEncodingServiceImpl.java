@@ -66,6 +66,14 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			ffmpegRunner.encode720p(original, encoded);
 			ffmpegRunner.extractThumbnail(original, thumbnail, duration);
 
+			// ffmpeg 가 도는 동안 삭제됐으면 결과를 올려봐야 아무도 참조하지 않는 고아가 된다 —
+			// 삭제 시점 정리(MSG-133)는 아직 없던 객체를 지울 수 없기 때문이다.
+			// ponytail: 이 확인과 upload 사이 창(~100ms)은 남는다. 10초짜리 인코딩 창을 그만큼 줄이는 걸로 충분.
+			if (videoRepository.findById(videoId).map(Video::isDeleted).orElse(true)) {
+				log.info("인코딩 중 삭제됨 — 결과 업로드 생략: videoId={}", videoId);
+				return;
+			}
+
 			String encodedKey = "videos/encoded/%d/%d.mp4".formatted(video.getUserId(), videoId);
 			String thumbnailKey = "videos/thumb/%d/%d.jpg".formatted(video.getUserId(), videoId);
 			upload(encodedKey, "video/mp4", encoded);
