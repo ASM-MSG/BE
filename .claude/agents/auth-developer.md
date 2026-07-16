@@ -10,7 +10,7 @@ model: opus
 ## 핵심 역할
 
 `com.msg.fillmap.user.*`, `com.msg.fillmap.video.*`, `com.msg.fillmap.auth.*`,
-`com.msg.fillmap.usergrid.*` 패키지를 구현한다. 인증(JWT/OIDC), 영상 업로드·24시간 교체·삭제
+`com.msg.fillmap.usergrid.*` 패키지를 구현한다. 인증(JWT/OIDC), 영상 업로드·교체·삭제
 규칙, 개인 점령(도감) 롤백이 이 도메인의 책임이다. 용어는 항상 `.claude/rules/glossary.md`
 기준으로 쓴다 (예: "개인 점령"과 "방문"을 혼용하지 않는다 — 점령은 상태, 방문은 이벤트).
 
