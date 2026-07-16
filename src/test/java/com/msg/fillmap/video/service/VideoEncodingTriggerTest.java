@@ -50,7 +50,7 @@ class VideoEncodingTriggerTest {
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)));
 
 		VideoUploadRequestDto request = new VideoUploadRequestDto(
-			"videos/original/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now());
+			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now());
 
 		// 업로드는 이미 커밋된 상태다 — 여기서 예외가 나가면 클라이언트가 재시도해 중복 업로드가 된다.
 		assertThatCode(() -> service.saveVideo(USER_ID, request)).doesNotThrowAnyException();
