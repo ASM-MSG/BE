@@ -76,28 +76,47 @@ VACUUM ANALYZE grids;
 VACUUM ANALYZE user_grids;
 ```
 
-## 4. 부하 실행 (k6)
+## 4. 부하 실행 (k6 · 시나리오 선택)
 
-k6는 벤치 유저의 **JWT access token**이 필요하다(개인 도감 조회라 인증 필수).
-- 토큰 확보: 앱의 `TokenProvider`로 bench 유저 토큰 발급(로컬 로그인/유틸) → `TOKEN` 주입.
+k6는 벤치 유저 **JWT**가 필요하다(개인 도감 조회라 인증). §3에서 만든 bench 유저로 로그인해 확보:
+```bash
+APP=http://localhost:8080   # EC2면 앱 사설IP:8080
+TOKEN=$(curl -s -X POST $APP/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"bench@fillmap.kr","password":"Bench1234"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['body']['accessToken'])")
+```
+> bench 유저가 없으면 먼저 `POST /auth/signup` `{email,password:"Bench1234",nickname:"bench"}`.
+
+시나리오(각 시나리오는 strategy **A → B 순차**로 돌려 비교):
+
+| `SCENARIO` | 시나리오 | executor | 파라미터 |
+|---|---|---|---|
+| `s0` | 스모크 | per-vu-iterations | 1 VU × 5 |
+| `s1` | **동시 사용자 ("100명 3번씩")** | per-vu-iterations | `VUS`명 × 3 (기본 100) |
+| `s2` | 지속 부하(증가) | ramping-vus | 0→50→100→150 VU |
+| `s3` | 목표 RPS 고정(개방형) | constant-arrival-rate | `RATE` req/s, 2분 (기본 300) |
+| `s4` | 스트레스 | ramping-arrival-rate | 100→1000 req/s |
 
 ```bash
-# strategy A
-TOKEN="<bench-jwt>" k6 run --out experimental-prometheus-rw \
-  -e STRATEGY_DEFAULT=A load-test/k6/viewport-ab-benchmark.js
+# k6 설치된 경우
+TOKEN=$TOKEN k6 run -e SCENARIO=s1 -e BASE_URL=$APP \
+  --out experimental-prometheus-rw load-test/k6/viewport-ab-benchmark.js
 
-# strategy B (스크립트가 A·B 순차 시나리오로 둘 다 돌림 — 기본)
-TOKEN="<bench-jwt>" K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
-  k6 run --out experimental-prometheus-rw load-test/k6/viewport-ab-benchmark.js
+# k6 미설치 → grafana/k6 도커 (SCENARIO·TOKEN·BASE_URL은 k6 -e 플래그로)
+docker run --rm --add-host host.docker.internal:host-gateway \
+  -e K6_PROMETHEUS_RW_SERVER_URL=http://host.docker.internal:9090/api/v1/write \
+  -v "$PWD/load-test/k6:/scripts" \
+  grafana/k6 run \
+    -e SCENARIO=s1 -e TOKEN="$TOKEN" -e BASE_URL=http://host.docker.internal:8080 \
+    --out experimental-prometheus-rw /scripts/viewport-ab-benchmark.js
 ```
-
-> k6 스크립트(`load-test/k6/viewport-ab-benchmark.js`)는 A→B를 순차로 돌리며 전략별 지연/처리량을 분리 수집한다.
+⚠️ **t3.small(2 vCPU)**: `s3`/`s4`는 부하를 낮춰 시작해 포화점을 찾는다 — 예 `-e SCENARIO=s3 -e RATE=150`.
+> 스크립트는 A→B를 순차로 돌리고 strategy 태그로 지연/처리량을 분리 수집하며, 요약에 A/B 비교표(avg·p95·p99·max)를 출력한다.
 
 ## 5. 판정
 
 Grafana에서 strategy A/B의 **p95/p99 · RPS · 에러율**(k6) + **DB 쿼리시간·인덱스 스캔**(postgres_exporter) + **앱 지연·Hikari 포화**(actuator) 비교.
 → 낮은 지연·높은 처리량 쪽을 기본 경로로 채택하고 `?strategy` 고정/제거.
-→ 결과·그래프를 `docs/MSG-73` 작업 로그 및 블로그 "본선" 섹션에 기록.
+→ 결과·그래프를 채택 근거로 `docs/MSG-73` 작업 로그에 남긴다.
 
 ## 정리
 ```bash
