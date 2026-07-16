@@ -5,6 +5,9 @@ import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 import jakarta.persistence.EntityManager;
@@ -68,6 +71,23 @@ class GridQueryServiceIntegrationTest {
 			(baseY + 2.5) * GRID_LAT_STEP, (baseX + 2.5) * GRID_LNG_STEP);
 	}
 
+	/**
+	 * 블록 안 (baseY + dy, baseX + dx) 셀을 내 점령으로 시드한다 — 페이지 시나리오용 볼륨.
+	 */
+	private String seedOccupied(long dy, long dx) {
+		String gridId = GridFixtures.seedGrid(em, baseY + dy, baseX + dx);
+		GridFixtures.seedUserGrid(em, me, gridId, 1);
+		return gridId;
+	}
+
+	private static String base64Url(String raw) {
+		return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
+	}
+
+	private static List<String> gridIds(OccupiedGridPage page) {
+		return page.items().stream().map(OccupiedGridView::gridId).toList();
+	}
+
 	@Test
 	@DisplayName("미점령 격자 조회는 occupied 가 거짓이고 videoCount 가 0 이다")
 	void 미점령_격자_조회는_occupied가_거짓이고_videoCount가_0이다() {
@@ -100,12 +120,95 @@ class GridQueryServiceIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("접근 A 와 B 는 서비스 경유에서도 동일한 격자 집합을 반환한다")
-	void 접근_A와_B는_동일한_격자_집합을_반환한다() {
-		List<OccupiedGridView> a = gridQueryService.getOccupiedInViewport(me, blockBounds(), ViewportStrategy.A);
-		List<OccupiedGridView> b = gridQueryService.getOccupiedInViewport(me, blockBounds(), ViewportStrategy.B);
+	@DisplayName("첫 페이지 nextCursor 를 다음 요청에 넣으면 다음 페이지가 이어진다 (keyset 왕복)")
+	void 첫페이지_nextCursor를_다음요청에_넣으면_다음페이지가_이어진다() {
+		// 점령 4개, (grid_y, grid_x) 정렬: occupied(0,0) → b(0,1) → c(0,2) → d(1,0)
+		String b = seedOccupied(0, 1);
+		String c = seedOccupied(0, 2);
+		String d = seedOccupied(1, 0);
 
-		assertThat(a).containsExactlyInAnyOrderElementsOf(b);
+		OccupiedGridPage page1 = gridQueryService.getOccupiedInViewport(me, blockBounds(), null, 2);
+		assertThat(gridIds(page1)).containsExactly(occupiedGridId, b);
+		assertThat(page1.nextCursor()).isNotNull();
+
+		OccupiedGridPage page2 = gridQueryService.getOccupiedInViewport(me, blockBounds(), page1.nextCursor(), 2);
+		assertThat(gridIds(page2)).containsExactly(c, d);
+	}
+
+	@Test
+	@DisplayName("마지막 페이지의 nextCursor 는 null 이다")
+	void 마지막페이지의_nextCursor는_null이다() {
+		// 점령 3개, size 2 → 두 번째 페이지(항목 1개)가 마지막이다.
+		seedOccupied(0, 1);
+		String last = seedOccupied(1, 0);
+
+		OccupiedGridPage page1 = gridQueryService.getOccupiedInViewport(me, blockBounds(), null, 2);
+		OccupiedGridPage page2 = gridQueryService.getOccupiedInViewport(me, blockBounds(), page1.nextCursor(), 2);
+
+		assertThat(gridIds(page2)).containsExactly(last);
+		assertThat(page2.nextCursor()).isNull();
+	}
+
+	@Test
+	@DisplayName("정확히 size 로 나눠떨어져도 빈 마지막 페이지 없이 nextCursor 가 null 이 된다 (lookahead +1)")
+	void 정확히_size로_나눠떨어져도_빈_마지막페이지없이_nextCursor가_null이_된다() {
+		// 점령 4개 = size 2 × 2페이지. lookahead 덕에 두 번째 페이지에서 바로 null 이어야 한다.
+		seedOccupied(0, 1);
+		seedOccupied(0, 2);
+		seedOccupied(1, 0);
+
+		OccupiedGridPage page1 = gridQueryService.getOccupiedInViewport(me, blockBounds(), null, 2);
+		OccupiedGridPage page2 = gridQueryService.getOccupiedInViewport(me, blockBounds(), page1.nextCursor(), 2);
+
+		assertThat(page2.items()).hasSize(2);
+		assertThat(page2.nextCursor()).isNull();
+	}
+
+	@Test
+	@DisplayName("전체 페이지 순회 결과는 비페이지 조회 결과와 동일 집합이다 (누락·중복 없음)")
+	void 전체페이지_순회결과는_비페이지_조회결과와_동일_집합이다() {
+		seedOccupied(0, 1);
+		seedOccupied(1, 0);
+		seedOccupied(1, 2);
+		seedOccupied(2, 2);
+
+		List<String> collected = new ArrayList<>();
+		String cursor = null;
+		do {
+			OccupiedGridPage page = gridQueryService.getOccupiedInViewport(me, blockBounds(), cursor, 2);
+			collected.addAll(gridIds(page));
+			cursor = page.nextCursor();
+		} while (cursor != null);
+
+		List<String> full = gridQueryService.getOccupiedInViewport(me, blockBounds())
+			.stream().map(OccupiedGridView::gridId).toList();
+		assertThat(collected).doesNotHaveDuplicates();
+		assertThat(collected).containsExactlyInAnyOrderElementsOf(full);
+	}
+
+	@Test
+	@DisplayName("잘못된 커서는 INVALID_CURSOR 를 던진다 (Base64 불량·정수 아님·구분자 없음)")
+	void 잘못된_커서는_INVALID_CURSOR를_던진다() {
+		List<String> badCursors = List.of(
+			"!!!not-base64!!!",
+			base64Url("41643110460"),
+			base64Url("abc_def"));
+
+		for (String bad : badCursors) {
+			assertThatThrownBy(() -> gridQueryService.getOccupiedInViewport(me, blockBounds(), bad, 10))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.INVALID_CURSOR);
+		}
+	}
+
+	@Test
+	@DisplayName("size 가 0 이하거나 상한을 초과하면 INVALID_PAGE_SIZE 를 던진다")
+	void size가_0이하거나_상한초과면_INVALID_PAGE_SIZE를_던진다() {
+		for (int badSize : new int[] {0, -1, 5001}) {
+			assertThatThrownBy(() -> gridQueryService.getOccupiedInViewport(me, blockBounds(), null, badSize))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.INVALID_PAGE_SIZE);
+		}
 	}
 
 	@Test

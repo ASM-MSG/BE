@@ -1,7 +1,5 @@
 package com.msg.fillmap.grid.controller;
 
-import java.util.List;
-
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,16 +12,16 @@ import lombok.RequiredArgsConstructor;
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.dto.GridCellResponseDto;
-import com.msg.fillmap.grid.dto.OccupiedGridResponseDto;
+import com.msg.fillmap.grid.dto.OccupiedGridPageResponseDto;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
 import com.msg.fillmap.grid.service.GridCellView;
 import com.msg.fillmap.grid.service.GridQueryService;
-import com.msg.fillmap.grid.service.ViewportStrategy;
+import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.response.SuccessResponse;
 
 /**
- * 격자 색칠 조회 API (MSG-73). 3-layer 얇게 — 파싱 + 서비스 호출 + SuccessResponse 변환만.
+ * 격자 색칠 조회 API (MSG-73 · MSG-90 페이지네이션). 3-layer 얇게 — 파싱 + 서비스 호출 + SuccessResponse 변환만.
  * userId 는 SecurityContext(AuthPrincipal)에서 획득한다(개인 도감).
  */
 @RestController
@@ -43,20 +41,18 @@ public class GridController {
 	}
 
 	@GetMapping
-	public SuccessResponse<List<OccupiedGridResponseDto>> getOccupiedInViewport(
+	public SuccessResponse<OccupiedGridPageResponseDto> getOccupiedInViewport(
 		@AuthenticationPrincipal AuthPrincipal principal,
 		@RequestParam(required = false) Double swLat,
 		@RequestParam(required = false) Double swLng,
 		@RequestParam(required = false) Double neLat,
 		@RequestParam(required = false) Double neLng,
-		@RequestParam(required = false, defaultValue = "A") ViewportStrategy strategy
+		@RequestParam(required = false) String cursor,
+		@RequestParam(required = false, defaultValue = "1000") int size
 	) {
 		ViewportBounds bounds = toBounds(swLat, swLng, neLat, neLng);
-		List<OccupiedGridResponseDto> body = gridQueryService.getOccupiedInViewport(principal.userId(), bounds, strategy)
-			.stream()
-			.map(OccupiedGridResponseDto::from)
-			.toList();
-		return SuccessResponse.of(body);
+		OccupiedGridPage page = gridQueryService.getOccupiedInViewport(principal.userId(), bounds, cursor, size);
+		return SuccessResponse.of(OccupiedGridPageResponseDto.from(page));
 	}
 
 	private ViewportBounds toBounds(Double swLat, Double swLng, Double neLat, Double neLng) {

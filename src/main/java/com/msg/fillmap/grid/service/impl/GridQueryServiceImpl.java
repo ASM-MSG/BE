@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.GridCursor;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.dto.ViewportBounds;
@@ -16,8 +17,8 @@ import com.msg.fillmap.grid.repository.GridRepository;
 import com.msg.fillmap.grid.repository.OccupiedGridProjection;
 import com.msg.fillmap.grid.service.GridCellView;
 import com.msg.fillmap.grid.service.GridQueryService;
+import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.grid.service.OccupiedGridView;
-import com.msg.fillmap.grid.service.ViewportStrategy;
 
 @Service
 @RequiredArgsConstructor
@@ -25,8 +26,11 @@ import com.msg.fillmap.grid.service.ViewportStrategy;
 public class GridQueryServiceImpl implements GridQueryService {
 
 	// viewport 한 변의 최대 위경도 span(도). 초과 시 과도한 스캔으로 보고 VIEWPORT_TOO_LARGE.
-	// 대규모 범위 + 커서 페이지네이션은 MSG-90 소관 — 본 티켓은 상한 내 기본 viewport만 다룬다.
+	// MSG-134 확정: bbox 가 줌을 담고 span 상한 0.5° 유지(level 파라미터 없음).
 	private static final double MAX_VIEWPORT_SPAN_DEG = 0.5;
+
+	// 페이지 size 상한 (MSG-90 Q2). 기본값 1000 은 컨트롤러 defaultValue 소관.
+	private static final int MAX_PAGE_SIZE = 5000;
 
 	private final GridRepository gridRepository;
 
@@ -42,20 +46,45 @@ public class GridQueryServiceImpl implements GridQueryService {
 
 	@Override
 	public List<OccupiedGridView> getOccupiedInViewport(long userId, ViewportBounds bounds) {
-		return getOccupiedInViewport(userId, bounds, ViewportStrategy.DEFAULT);
+		validateBounds(bounds);
+		return toViews(queryByRange(userId, bounds));
 	}
 
 	@Override
-	public List<OccupiedGridView> getOccupiedInViewport(long userId, ViewportBounds bounds, ViewportStrategy strategy) {
+	public OccupiedGridPage getOccupiedInViewport(long userId, ViewportBounds bounds, String cursor, int size) {
 		validateBounds(bounds);
-		List<OccupiedGridProjection> occupied = switch (strategy) {
-			case A -> queryByRange(userId, bounds);
-			case B -> gridRepository.findOccupiedByIntersects(
-				userId, bounds.swLng(), bounds.swLat(), bounds.neLng(), bounds.neLat());
-		};
-		return occupied.stream()
-			.map(p -> new OccupiedGridView(p.getGridId(), p.getGridY(), p.getGridX()))
-			.toList();
+		if (size < 1 || size > MAX_PAGE_SIZE) {
+			throw new ApiException(GridErrorCode.INVALID_PAGE_SIZE);
+		}
+		// lookahead(size + 1)로 다음 페이지 존재를 판정 — 빈 마지막 페이지를 만들지 않는다.
+		List<OccupiedGridProjection> rows = queryPage(userId, bounds, cursor, size + 1);
+		boolean hasNext = rows.size() > size;
+		List<OccupiedGridProjection> pageRows = hasNext ? rows.subList(0, size) : rows;
+		String nextCursor = null;
+		if (hasNext) {
+			OccupiedGridProjection last = pageRows.get(pageRows.size() - 1);
+			nextCursor = GridCursor.encode(last.getGridY(), last.getGridX());
+		}
+		return new OccupiedGridPage(toViews(pageRows), nextCursor);
+	}
+
+	private List<OccupiedGridProjection> queryPage(long userId, ViewportBounds bounds, String cursor, int limit) {
+		GridIndex sw = GridEncoder.decode(GridEncoder.encode(bounds.swLat(), bounds.swLng()));
+		GridIndex ne = GridEncoder.decode(GridEncoder.encode(bounds.neLat(), bounds.neLng()));
+		if (cursor == null) {
+			return gridRepository.findOccupiedPage(userId, sw.gridY(), ne.gridY(), sw.gridX(), ne.gridX(), limit);
+		}
+		GridCursor decoded = decodeCursor(cursor);
+		return gridRepository.findOccupiedPageAfter(
+			userId, sw.gridY(), ne.gridY(), sw.gridX(), ne.gridX(), decoded.gridY(), decoded.gridX(), limit);
+	}
+
+	private GridCursor decodeCursor(String cursor) {
+		try {
+			return GridCursor.decode(cursor);
+		} catch (RuntimeException e) {
+			throw new ApiException(GridErrorCode.INVALID_CURSOR, e);
+		}
 	}
 
 	private List<OccupiedGridProjection> queryByRange(long userId, ViewportBounds bounds) {
@@ -63,6 +92,12 @@ public class GridQueryServiceImpl implements GridQueryService {
 		GridIndex sw = GridEncoder.decode(GridEncoder.encode(bounds.swLat(), bounds.swLng()));
 		GridIndex ne = GridEncoder.decode(GridEncoder.encode(bounds.neLat(), bounds.neLng()));
 		return gridRepository.findOccupiedInRange(userId, sw.gridY(), ne.gridY(), sw.gridX(), ne.gridX());
+	}
+
+	private List<OccupiedGridView> toViews(List<OccupiedGridProjection> rows) {
+		return rows.stream()
+			.map(p -> new OccupiedGridView(p.getGridId(), p.getGridY(), p.getGridX()))
+			.toList();
 	}
 
 	private void validateGridId(String gridId) {

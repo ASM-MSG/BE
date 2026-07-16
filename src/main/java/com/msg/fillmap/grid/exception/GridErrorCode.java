@@ -19,6 +19,8 @@ public enum GridErrorCode implements ErrorCodeIfs {
 	INVALID_GRID_ID(4400, HttpStatus.BAD_REQUEST, "올바르지 않은 격자 식별자입니다"),
 	INVALID_VIEWPORT(4401, HttpStatus.BAD_REQUEST, "유효하지 않은 지도 범위입니다"),
 	VIEWPORT_TOO_LARGE(4402, HttpStatus.BAD_REQUEST, "조회 범위가 너무 넓습니다"),
+	INVALID_CURSOR(4403, HttpStatus.BAD_REQUEST, "유효하지 않은 커서입니다"),
+	INVALID_PAGE_SIZE(4404, HttpStatus.BAD_REQUEST, "페이지 크기가 허용 범위를 벗어났습니다"),
 	;
 
 	private final Integer errorCode;
