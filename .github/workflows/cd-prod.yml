@@ -49,3 +49,31 @@ jobs:
             cd /home/${{ secrets.PROD_EC2_USER }}/fillmap-prod
             mv -f fillmap-0.0.1-SNAPSHOT.jar app.jar
             sudo systemctl restart fillmap-prod
+
+      # systemctl restart 는 기동을 '지시'하고 즉시 0 을 반환한다 — 앱이 직후 죽어도 위 step 은 성공이다 (MSG-129).
+      - name: Health check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_EC2_HOST }}
+          username: ${{ secrets.PROD_EC2_USER }}
+          key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          script: |
+            # 모든 경로가 인증을 요구하므로(SecurityConfig anyRequest().authenticated) 401 이 곧 기동 성공이다.
+            # 기동에 실패하면 컨텍스트가 안 떠서 포트가 안 열린다. 연결 실패 시 curl 은 000 을 '출력하므로'
+            # `|| echo 000` 을 붙이면 000000 이 되어 항상 통과해버린다 — 실제 HTTP 코드만 통과시킨다.
+            # TODO(MSG-128): actuator 도입되면 URL 을 /actuator/health 로 교체.
+            # ⚠️ prod 앱은 아직 구성 전이다(systemd 유닛·env 없음). dev 와 같은 EC2 를 쓰면 8080 이 겹치므로
+            #    prod 를 세울 때 SERVER_PORT 를 정하고 아래 포트를 맞출 것.
+            for i in $(seq 1 30); do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:8080/ || true)
+              case "$code" in
+                2??|3??|4??)
+                  echo "기동 확인 — HTTP $code ($((i * 5))초)"
+                  exit 0
+                  ;;
+              esac
+              sleep 5
+            done
+            echo "::error::150초 내 기동 실패 — 아래 로그에서 원인 확인"
+            journalctl -u fillmap-prod -n 50 --no-pager
+            exit 1
