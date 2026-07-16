@@ -1,7 +1,10 @@
 package com.msg.fillmap.video.service;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.locationtech.jts.geom.Point;
@@ -14,9 +17,15 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.Delete;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -57,6 +66,11 @@ public class VideoServiceImpl implements VideoService {
 
 	private static final Duration PRESIGN_TTL = Duration.ofMinutes(10);
 
+	// 발급은 pending 으로, 확정되면 original 로 옮긴다 — pending 만 라이프사이클로 만료시키기 위해서다(MSG-133).
+	// 한 prefix 를 쓰면 고아와 정상 영상이 섞여 만료 규칙을 걸 수 없다.
+	private static final String PENDING_PREFIX = "videos/pending/";
+	private static final String ORIGINAL_PREFIX = "videos/original/";
+
 	private final VideoRepository videoRepository;
 	private final VideoEncodingService videoEncodingService;
 	private final VideoStatusWriter videoStatusWriter;
@@ -70,7 +84,7 @@ public class VideoServiceImpl implements VideoService {
 		double lat = request.lat();
 		double lon = request.lon();
 		validateCoordinate(lat, lon);
-		validateUploadedS3Key(userId, request.s3Key());
+		String originalKey = confirmUpload(userId, request.s3Key());
 
 		String gridId = GridEncoder.encode(lat, lon);
 		registerGridIfAbsent(gridId);
@@ -79,8 +93,9 @@ public class VideoServiceImpl implements VideoService {
 
 		Point geom = GeoSupport.toPoint(lat, lon);
 		Video video = videoRepository.save(
-			Video.create(userId, gridId, request.s3Key(), geom, request.durationSec(), request.recordedAt()));
+			Video.create(userId, gridId, originalKey, geom, request.durationSec(), request.recordedAt()));
 
+		copyToOriginal(request.s3Key(), originalKey);
 		videoRepository.upsertUserGrid(userId, gridId, video.getId());
 		triggerEncodingAfterCommit(video.getId());
 
@@ -97,10 +112,18 @@ public class VideoServiceImpl implements VideoService {
 		}
 		// 교체도 s3Key 를 받으므로 업로드와 같은 검증이 필요하다 — 없으면 "교체로 가짜 키 밀어넣기"가
 		// 되어 MSG-132 에서 막은 구멍이 옆문으로 다시 열린다. (스펙 D4 에는 없던 보강)
-		validateUploadedS3Key(userId, request.s3Key());
+		String originalKey = confirmUpload(userId, request.s3Key());
 		validateSameGrid(video, request);
 
-		video.replaceFile(request.s3Key(), request.durationSec());
+		// replaceFile 이 필드를 덮어쓰므로 그 전에 잡아둔다.
+		String replacedKey = video.getOriginalS3Key();
+
+		video.replaceFile(originalKey, request.durationSec());
+		copyToOriginal(request.s3Key(), originalKey);
+
+		// 교체된 원본은 참조를 잃는다. 인코딩본·썸네일은 키가 videoId 기반이라 재인코딩이 같은 자리에
+		// 덮어쓰므로 지울 게 없다 — 고아가 되는 건 옛 original 하나뿐이다.
+		afterCommit(() -> deleteQuietly(replacedKey));
 		triggerEncodingAfterCommit(videoId);
 		return VideoReplaceResponseDto.from(video);
 	}
@@ -146,6 +169,12 @@ public class VideoServiceImpl implements VideoService {
 		// 다시 고른다. VideoDeleteIntegrationTest 의 cover 재선정 테스트가 이 순서를 지킨다.
 		video.markDeleted();
 
+		// 지웠으면 실제로 지운다 (MSG-133). MSG-72 D2 의 "즉시 삭제 안 함"은 보존 원칙이 아니라
+		// "정리는 별도 배치 백로그"라는 범위 유예였고, undelete 기능은 없다. 파일이 영원히 남는 쪽이
+		// 오히려 문제다. 시점에 지우면 배치·스케줄러가 통째로 필요 없다.
+		afterCommit(() -> deleteQuietly(
+			video.getOriginalS3Key(), video.getEncodedUrl(), video.getThumbnailUrl()));
+
 		String gridId = video.getGridId();
 		videoRepository.decrementVideoCount(userId, gridId);
 		if (videoRepository.deleteUserGridIfEmpty(userId, gridId) == 0) {
@@ -155,18 +184,55 @@ public class VideoServiceImpl implements VideoService {
 	}
 
 	/**
+	 * S3 객체 삭제. null 키는 건너뛴다 — 인코딩 전 영상은 encoded/thumb 가 아직 없다.
+	 *
+	 * 커밋 이후에 도는 정리 작업이라 실패해도 되돌릴 수 없다. 그대로 두면 이미 커밋된 삭제 요청이
+	 * 500 으로 응답돼 사용자는 "삭제 실패"로 알지만 실제로는 지워진 상태가 된다. 남은 객체는 비용·위생
+	 * 문제일 뿐이므로 로그만 남기고 삼킨다.
+	 *
+	 * DeleteObjects 는 배치 API 라 개별 객체 실패를 예외로 던지지 않는다 — 권한이 없어도 HTTP 200 에
+	 * errors 를 담아 돌려준다. 응답을 안 보면 삭제가 조용히 실패한다(IAM 에 s3:DeleteObject 가 빠진 채
+	 * 배포되면 정확히 그렇게 된다).
+	 */
+	private void deleteQuietly(String... s3Keys) {
+		List<ObjectIdentifier> targets = Arrays.stream(s3Keys)
+			.filter(Objects::nonNull)
+			.map(key -> ObjectIdentifier.builder().key(key).build())
+			.toList();
+		if (targets.isEmpty()) {
+			return;
+		}
+		try {
+			DeleteObjectsResponse response = s3Client.deleteObjects(DeleteObjectsRequest.builder()
+				.bucket(awsProperties.s3().bucket())
+				.delete(Delete.builder().objects(targets).build())
+				.build());
+			if (response.hasErrors()) {
+				log.error("S3 객체 삭제 실패 — 고아로 남는다: {}", response.errors());
+			}
+		} catch (SdkException e) {
+			log.error("S3 객체 삭제 호출 실패 — 고아로 남는다: keys={}", targets, e);
+		}
+	}
+
+	/**
 	 * 인코딩은 커밋 이후에 띄운다. @Async 는 별도 스레드라 여기서 바로 호출하면 아직 커밋되지 않은
 	 * videos row 를 조회해 "영상 없음"으로 실패할 수 있다 (MSG-65 트리거 타이밍).
 	 */
 	private void triggerEncodingAfterCommit(Long videoId) {
+		afterCommit(() -> submitEncoding(videoId));
+	}
+
+	/** 트랜잭션이 없으면(테스트 등) 그냥 지금 실행한다. */
+	private void afterCommit(Runnable action) {
 		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-			submitEncoding(videoId);
+			action.run();
 			return;
 		}
 		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 			@Override
 			public void afterCommit() {
-				submitEncoding(videoId);
+				action.run();
 			}
 		});
 	}
@@ -197,7 +263,7 @@ public class VideoServiceImpl implements VideoService {
 			throw new ApiException(VideoErrorCode.FILE_TOO_LARGE);
 		}
 
-		String s3Key = "videos/original/%d/%s.%s".formatted(userId, UUID.randomUUID(), extension);
+		String s3Key = "%s%d/%s.%s".formatted(PENDING_PREFIX, userId, UUID.randomUUID(), extension);
 
 		// contentLength/contentType 을 서명에 포함시켜 클라이언트가 선언과 다른 크기·타입으로 올리면 S3 가 403 을 낸다.
 		// (PUT presign 에는 POST policy 의 content-length-range 같은 범위 조건이 없다 — MSG-64 D3)
@@ -223,26 +289,48 @@ public class VideoServiceImpl implements VideoService {
 	}
 
 	/**
-	 * 확정 요청의 s3Key 가 "내가 실제로 올린, 아직 안 쓴 파일"인지 확인한다 (MSG-132).
+	 * 확정 요청의 pending 키가 "내가 실제로 올린, 아직 안 쓴 파일"인지 확인하고(MSG-132)
+	 * original 로 옮긴 뒤 그 키를 돌려준다(MSG-133).
 	 *
-	 * 이 검증이 없으면 파일을 올리지 않고 좌표만 찍어서 격자를 점령할 수 있다 — upsertUserGrid 가
+	 * 검증이 없으면 파일을 올리지 않고 좌표만 찍어서 격자를 점령할 수 있다 — upsertUserGrid 가
 	 * 인코딩보다 먼저 돌고, 인코딩이 FAILED 가 돼도 점령은 남기 때문이다. FillMap 은 직접 가서 찍어야
 	 * 격자를 채우는 게임이라 이건 게임 자체를 무너뜨린다.
 	 *
-	 * prefix 검사만으론 부족하다 — 공격자는 자기 userId 를 알기에 videos/original/{내id}/아무거나.mp4 를
+	 * prefix 검사만으론 부족하다 — 공격자는 자기 userId 를 알기에 videos/pending/{내id}/아무거나.mp4 를
 	 * 지어낼 수 있다. S3 에 실제로 있는지(headObject) 봐야 막힌다.
 	 */
-	private void validateUploadedS3Key(long userId, String s3Key) {
-		String requiredPrefix = "videos/original/%d/".formatted(userId);
-		if (!s3Key.startsWith(requiredPrefix)) {
+	private String confirmUpload(long userId, String pendingKey) {
+		if (!pendingKey.startsWith("%s%d/".formatted(PENDING_PREFIX, userId))) {
 			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
 		}
+		String originalKey = ORIGINAL_PREFIX + pendingKey.substring(PENDING_PREFIX.length());
+
 		// 영상 1개로 좌표만 바꿔가며 무한 점령하는 걸 막는다. DB 의 UNIQUE 제약이 최종 방어선이고,
 		// 여기서 미리 걸러 500 대신 4xx 를 준다.
-		if (videoRepository.existsByOriginalS3Key(s3Key)) {
+		//
+		// 반드시 originalKey 로 조회해야 한다 — DB 에는 original 키만 저장되므로 클라이언트가 준
+		// pendingKey 로 조회하면 영영 매치되지 않아 중복 검사가 통째로 무력화된다.
+		if (videoRepository.existsByOriginalS3Key(originalKey)) {
 			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
 		}
-		requireObjectExists(s3Key);
+		requireObjectExists(pendingKey);
+		return originalKey;
+	}
+
+	/**
+	 * pending → original 서버측 복사. pending 원본은 지우지 않는다 — 라이프사이클이 어차피 쓸어가므로
+	 * (고아든 복사 완료본이든 똑같이) 삭제 호출 하나와 그 실패 경로를 없앤다. 대가는 하루치 중복 저장뿐.
+	 *
+	 * 호출부에서 videos INSERT 이후에 부르는 이유: 복사가 실패하면 트랜잭션이 롤백돼 row 가 안 남고
+	 * pending 은 만료된다. 반대 순서면 original 쪽에 라이프사이클이 못 잡는 고아가 생긴다.
+	 */
+	private void copyToOriginal(String pendingKey, String originalKey) {
+		s3Client.copyObject(CopyObjectRequest.builder()
+			.sourceBucket(awsProperties.s3().bucket())
+			.sourceKey(pendingKey)
+			.destinationBucket(awsProperties.s3().bucket())
+			.destinationKey(originalKey)
+			.build());
 	}
 
 	private void requireObjectExists(String s3Key) {
