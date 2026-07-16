@@ -119,4 +119,13 @@ public class Video {
 	public void markFailed() {
 		this.processingStatus = ProcessingStatus.FAILED;
 	}
+
+	/** soft delete (MSG-72 D2). S3 파일은 지우지 않는다 — 정리는 별도 배치. */
+	public void markDeleted() {
+		this.status = VideoStatus.DELETED;
+	}
+
+	public boolean isDeleted() {
+		return this.status == VideoStatus.DELETED;
+	}
 }

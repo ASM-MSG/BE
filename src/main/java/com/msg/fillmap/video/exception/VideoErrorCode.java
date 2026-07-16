@@ -10,13 +10,16 @@ import com.msg.fillmap.response.ErrorCodeIfs;
 
 /**
  * 영상 도메인 에러 코드 — developCode 3xxx 대역 (auth=2xxx 회피).
- * MSG-64(presigned)·71(교체)·72(삭제)에서 상수 확장 예정.
+ * 대역 규칙은 3{의미상 HTTP status} — AuthErrorCode(2401/2422) 와 같은 방식이다.
+ * MSG-71(교체)에서 GRID_MISMATCH(3422) 등 확장 예정.
  */
 @Getter
 @AllArgsConstructor
 public enum VideoErrorCode implements ErrorCodeIfs {
 
 	INVALID_COORDINATE(3400, HttpStatus.BAD_REQUEST, "서비스 지역 범위를 벗어난 좌표입니다"),
+	VIDEO_FORBIDDEN(3403, HttpStatus.FORBIDDEN, "본인의 영상만 처리할 수 있습니다"),
+	VIDEO_NOT_FOUND(3404, HttpStatus.NOT_FOUND, "영상을 찾을 수 없습니다"),
 	FILE_TOO_LARGE(3413, HttpStatus.BAD_REQUEST, "허용 크기를 초과한 영상입니다"),
 	UNSUPPORTED_EXTENSION(3415, HttpStatus.BAD_REQUEST, "지원하지 않는 영상 확장자입니다 (mp4, mov)"),
 	;
