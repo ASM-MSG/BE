@@ -120,6 +120,21 @@ public class Video {
 		this.processingStatus = ProcessingStatus.FAILED;
 	}
 
+	/**
+	 * 파일 교체 (MSG-71 D2 정책 B). row 를 유지하고 파일 참조만 갈아끼운다 —
+	 * id 가 그대로라 user_grids 의 video_count·cover_video_id 가 자연히 불변이다.
+	 *
+	 * 인코딩 결과는 새 파일 기준으로 다시 만들어야 하므로 비우고 UPLOADED 로 되돌린다(D6).
+	 * 그러지 않으면 재인코딩 전까지 옛 영상이 재생된다.
+	 */
+	public void replaceFile(String originalS3Key, Short durationSec) {
+		this.originalS3Key = originalS3Key;
+		this.durationSec = durationSec;
+		this.encodedUrl = null;
+		this.thumbnailUrl = null;
+		this.processingStatus = ProcessingStatus.UPLOADED;
+	}
+
 	/** soft delete (MSG-72 D2). S3 파일은 지우지 않는다 — 정리는 별도 배치. */
 	public void markDeleted() {
 		this.status = VideoStatus.DELETED;
