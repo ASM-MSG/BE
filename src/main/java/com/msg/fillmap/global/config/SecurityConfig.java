@@ -61,6 +61,8 @@ public class SecurityConfig {
 			.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.authorizeHttpRequests(auth -> auth
 				.requestMatchers("/auth/signup", "/auth/login", "/auth/oauth/**").permitAll()
+				// 관측(MSG-128) — 부하테스트 시 원격 Prometheus scrape. prod는 IP 제한 권장.
+				.requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
 				.anyRequest().authenticated()
 			)
 			.exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint))

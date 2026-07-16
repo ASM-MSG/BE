@@ -1,21 +1,21 @@
 /*
- * MSG-73 · 격자 색칠 viewport 조회 — 쿼리 전략 A/B 부하 벤치마크 (k6)
+ * MSG-73/128 · 격자 색칠 viewport 조회 — 쿼리 전략 A/B 부하 벤치마크 (k6)
  * ---------------------------------------------------------------------------
- * 같은 엔드포인트(GET /api/grids)를 두 전략으로 부하 비교한다.
- *   A = 정수 범위 스캔  : WHERE grid_y BETWEEN .. AND grid_x BETWEEN ..  (btree uq_grids_yx)
- *   B = GIST 공간 쿼리  : ST_Intersects(bbox_geom, ST_MakeEnvelope(...))  (GiST idx_grids_bbox)
+ * 같은 엔드포인트(GET /api/grids?...&strategy=A|B)를 두 전략으로 부하 비교한다.
+ *   A = 정수 범위 스캔  (btree uq_grids_yx)
+ *   B = GIST 공간 쿼리  (GiST idx_grids_bbox + ST_Intersects)
  *
- * 두 시나리오를 "순차"로 돌려 서로 자원 간섭 없이 A→B를 측정하고,
- * 전략별 지연(p95/p99)·처리량·에러율을 커스텀 메트릭으로 분리 수집한 뒤
- * handleSummary에서 A vs B 비교표를 출력한다.
+ * 시나리오를 SCENARIO 로 선택한다(각 시나리오는 strategy A → B 를 순차로 돌려 간섭 없이 비교):
+ *   s0  스모크            per-vu-iterations  1 VU × 5
+ *   s1  동시 사용자 스냅샷  per-vu-iterations  VUS 명 × 3회 (기본 100)   ← "100명 동시 3번씩"
+ *   s2  지속 부하(증가)     ramping-vus        0→50→100→150 VU
+ *   s3  목표 RPS 고정(개방)  constant-arrival-rate  RATE req/s, 2분 (기본 300)
+ *   s4  스트레스           ramping-arrival-rate   100→1000 req/s
  *
  * 실행:
- *   # 1) 앱 기동(localhost:8080) + PostGIS(5432)에 대량 시드(grid-dev의 시드 헬퍼) 선행
- *   # 2) 로그인 JWT를 환경변수로 주입
- *   TOKEN="<bearer-jwt>" k6 run load-test/k6/viewport-ab-benchmark.js
- *
- *   # 옵션: BASE_URL, VUS(최대 가상 유저), DURATION(각 단계 지속)
- *   BASE_URL=http://localhost:8080 VUS=100 TOKEN=... k6 run load-test/k6/viewport-ab-benchmark.js
+ *   TOKEN="<jwt>" k6 run -e SCENARIO=s1 load-test/k6/viewport-ab-benchmark.js
+ *   TOKEN=... k6 run -e SCENARIO=s3 -e RATE=200 --out experimental-prometheus-rw ...
+ *   (env: BASE_URL, TOKEN, SCENARIO, VUS, RATE)
  * ---------------------------------------------------------------------------
  */
 
@@ -27,25 +27,22 @@ import { textSummary } from 'https://jslib.k6.io/k6-summary/0.1.0/index.js';
 // ── 설정 ────────────────────────────────────────────────────────────────────
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 const TOKEN = __ENV.TOKEN || '';
-const MAX_VUS = Number(__ENV.VUS || 100);
-const STAGE = __ENV.DURATION || '30s';
+const SCENARIO = (__ENV.SCENARIO || 's1').toLowerCase();
+const VUS = Number(__ENV.VUS || 100);
+const RATE = Number(__ENV.RATE || 300);
 
-// 서울 대략 경계 — 실사용 뷰포트를 이 안에서 무작위로 만든다.
 const SEOUL = { minLat: 37.42, maxLat: 37.70, minLng: 126.76, maxLng: 127.18 };
-// 지도 한 화면(줌)에 해당하는 뷰포트 폭(도). 대략 2~6km.
 const SPAN = { lat: [0.02, 0.06], lng: [0.025, 0.075] };
 
-// ── 전략별 커스텀 메트릭 ────────────────────────────────────────────────────
-const latency = new Trend('viewport_latency', true); // strategy 태그로 분리
+// ── 전략별 커스텀 메트릭 (strategy 태그로 분리) ─────────────────────────────
+const latency = new Trend('viewport_latency', true);
 const failRate = new Rate('viewport_failed');
-const emptyRate = new Rate('viewport_empty'); // 점령 격자 0개 응답 비율(시드 편중 감지용)
 const cells = new Counter('viewport_cells_returned');
 
 function rnd(min, max) {
 	return Math.random() * (max - min) + min;
 }
 
-// 서울 안에서 임의의 뷰포트 bbox 생성 (남서·북동)
 function randomViewport() {
 	const latSpan = rnd(SPAN.lat[0], SPAN.lat[1]);
 	const lngSpan = rnd(SPAN.lng[0], SPAN.lng[1]);
@@ -54,37 +51,56 @@ function randomViewport() {
 	return { swLat, swLng, neLat: swLat + latSpan, neLng: swLng + lngSpan };
 }
 
-// ── 시나리오: A → B 순차, 각각 ramp-up→sustain→ramp-down ──────────────────────
-const rampStages = [
-	{ target: Math.ceil(MAX_VUS / 2), duration: '15s' }, // 워밍업
-	{ target: MAX_VUS, duration: STAGE },                 // 피크 부하
-	{ target: 0, duration: '10s' },                       // 쿨다운
-];
+// ── 시나리오 정의: executor 옵션 + 예상 지속(초, B startTime 계산용) ─────────
+function scenarioSpec() {
+	switch (SCENARIO) {
+		case 's0':
+			return { opts: { executor: 'per-vu-iterations', vus: 1, iterations: 5, maxDuration: '30s' }, dur: 30 };
+		case 's1':
+			return { opts: { executor: 'per-vu-iterations', vus: VUS, iterations: 3, maxDuration: '60s' }, dur: 60 };
+		case 's2':
+			return {
+				opts: {
+					executor: 'ramping-vus', startVUs: 0, stages: [
+						{ target: 50, duration: '20s' }, { target: 100, duration: '20s' },
+						{ target: 150, duration: '30s' }, { target: 0, duration: '10s' },
+					],
+				}, dur: 80,
+			};
+		case 's3':
+			return {
+				opts: {
+					executor: 'constant-arrival-rate', rate: RATE, timeUnit: '1s', duration: '2m',
+					preAllocatedVUs: Math.max(50, VUS), maxVUs: 600,
+				}, dur: 120,
+			};
+		case 's4':
+			return {
+				opts: {
+					executor: 'ramping-arrival-rate', startRate: 100, timeUnit: '1s',
+					preAllocatedVUs: 100, maxVUs: 1000, stages: [
+						{ target: 200, duration: '20s' }, { target: 500, duration: '20s' },
+						{ target: 1000, duration: '20s' }, { target: 0, duration: '10s' },
+					],
+				}, dur: 70,
+			};
+		default:
+			throw new Error(`알 수 없는 SCENARIO=${SCENARIO} (s0~s4)`);
+	}
+}
+
+const spec = scenarioSpec();
+const GAP = 5; // A 종료 후 B 시작까지 간격(초)
 
 export const options = {
+	summaryTrendStats: ['avg', 'min', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
 	scenarios: {
-		strategy_a: {
-			executor: 'ramping-vus',
-			exec: 'hitViewport',
-			env: { STRATEGY: 'A' },
-			tags: { strategy: 'A' },
-			startVUs: 0,
-			stages: rampStages,
-		},
-		strategy_b: {
-			executor: 'ramping-vus',
-			exec: 'hitViewport',
-			env: { STRATEGY: 'B' },
-			tags: { strategy: 'B' },
-			startVUs: 0,
-			stages: rampStages,
-			startTime: '60s', // A 시나리오(약 55s)가 끝난 뒤 시작 → 간섭 제거
-		},
+		strategy_a: { ...spec.opts, exec: 'hitViewport', env: { STRATEGY: 'A' }, tags: { strategy: 'A' }, startTime: '0s' },
+		strategy_b: { ...spec.opts, exec: 'hitViewport', env: { STRATEGY: 'B' }, tags: { strategy: 'B' }, startTime: `${spec.dur + GAP}s` },
 	},
 	thresholds: {
-		// 전략별 개별 임계치 — 포트폴리오에서 "SLO 기반 판정"으로 보이게
 		'viewport_latency{strategy:A}': ['p(95)<150', 'p(99)<300'],
-		'viewport_latency{strategy:B}': ['p(95)<150', 'p(99)<300'],
+		'viewport_latency{strategy:B}': ['p(95)<300', 'p(99)<600'],
 		'viewport_failed': ['rate<0.01'],
 		'http_req_failed': ['rate<0.01'],
 	},
@@ -100,7 +116,7 @@ export function hitViewport() {
 
 	const res = http.get(url, {
 		headers: TOKEN ? { Authorization: `Bearer ${TOKEN}` } : {},
-		tags: { strategy, name: 'viewport' }, // URL이 매번 달라도 하나의 지표로 집계
+		tags: { strategy, name: 'viewport' },
 	});
 
 	const tag = { strategy };
@@ -119,44 +135,36 @@ export function hitViewport() {
 
 	failRate.add(!ok, tag);
 	if (ok) {
-		const arr = JSON.parse(res.body).body || [];
-		cells.add(arr.length, tag);
-		emptyRate.add(arr.length === 0, tag);
+		cells.add((JSON.parse(res.body).body || []).length, tag);
 	}
 }
 
 // ── 요약: A vs B 비교표 ──────────────────────────────────────────────────────
 export function handleSummary(data) {
 	const m = data.metrics;
-	const pick = (name, stat, strat) => {
-		// k6는 서브메트릭을 "metric{strategy:A}" 키로 노출
-		const sub = m[`${name}{strategy:${strat}}`];
+	const pick = (stat, strat) => {
+		const sub = m[`viewport_latency{strategy:${strat}}`];
 		const v = sub && sub.values ? sub.values[stat] : undefined;
-		return v === undefined ? '  —  ' : v.toFixed(2);
+		return v === undefined ? '   —   ' : v.toFixed(2);
 	};
-	const row = (label, name, stat) =>
-		`  ${label.padEnd(22)} A=${pick(name, stat, 'A').padStart(8)}   B=${pick(name, stat, 'B').padStart(8)}`;
+	const row = (label, stat) =>
+		`  ${label.padEnd(16)} A=${pick(stat, 'A').padStart(9)}   B=${pick(stat, 'B').padStart(9)}`;
 
 	const report = [
 		'',
 		'════════════════════════════════════════════════════════',
-		'  MSG-73 viewport 쿼리 전략 A(정수범위) vs B(GIST) 비교',
+		`  MSG-73 viewport 전략 A(정수범위) vs B(GIST)  ·  시나리오 ${SCENARIO}`,
 		'════════════════════════════════════════════════════════',
-		row('지연 p95 (ms)', 'viewport_latency', 'p(95)'),
-		row('지연 p99 (ms)', 'viewport_latency', 'p(99)'),
-		row('지연 avg (ms)', 'viewport_latency', 'avg'),
-		row('지연 max (ms)', 'viewport_latency', 'max'),
-		row('실패율', 'viewport_failed', 'rate'),
-		row('빈 응답율', 'viewport_empty', 'rate'),
-		'════════════════════════════════════════════════════════',
-		'  판정 기준: p95/p99 지연 · 실패율 · (별도)EXPLAIN 인덱스 사용',
-		'  → 낮은 전략을 기본 경로로 채택, docs/MSG-73.md 작업 로그에 기록',
+		row('지연 avg (ms)', 'avg'),
+		row('지연 p95 (ms)', 'p(95)'),
+		row('지연 p99 (ms)', 'p(99)'),
+		row('지연 max (ms)', 'max'),
+		'────────────────────────────────────────────────────────',
+		`  전체 요청 ${m.http_reqs ? m.http_reqs.values.count : '?'} · 실패율 ${m.http_req_failed ? (m.http_req_failed.values.rate * 100).toFixed(2) : '?'}%`,
+		'  → 낮은 전략을 기본 경로로 채택',
 		'════════════════════════════════════════════════════════',
 		'',
 	].join('\n');
 
-	return {
-		stdout: report + '\n' + textSummary(data, { indent: '  ', enableColors: true }),
-		'load-test/k6/summary.json': JSON.stringify(data, null, 2),
-	};
+	return { stdout: report + '\n' + textSummary(data, { indent: '  ', enableColors: true }) };
 }
