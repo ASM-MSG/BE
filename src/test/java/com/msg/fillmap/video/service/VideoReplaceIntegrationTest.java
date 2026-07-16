@@ -72,7 +72,7 @@ class VideoReplaceIntegrationTest {
 	}
 
 	private String newKey() {
-		return "videos/original/" + userId + "/" + UUID.randomUUID() + ".mp4";
+		return "videos/pending/" + userId + "/" + UUID.randomUUID() + ".mp4";
 	}
 
 	private long upload() {
@@ -114,7 +114,8 @@ class VideoReplaceIntegrationTest {
 		em.flush();
 
 		Object[] row = videoRow(videoId);
-		assertThat(row[0]).as("새 파일로 교체").isEqualTo(newS3Key);
+		// 저장되는 건 클라이언트가 준 pending 키가 아니라 확정 시 옮겨진 original 키다 (MSG-133).
+		assertThat(row[0]).as("새 파일로 교체").isEqualTo(newS3Key.replace("videos/pending/", "videos/original/"));
 		assertThat(row[1]).as("재인코딩 대기").isEqualTo("UPLOADED");
 		assertThat(row[2]).as("옛 인코딩본은 비워야 한다").isNull();
 		assertThat(row[3]).as("옛 썸네일도 비워야 한다").isNull();

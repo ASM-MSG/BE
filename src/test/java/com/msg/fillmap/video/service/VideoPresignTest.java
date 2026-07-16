@@ -54,11 +54,11 @@ class VideoPresignTest {
 	}
 
 	@Test
-	void mp4_요청이면_s3Key가_videos_original_userId_uuid_mp4_형식이다() {
+	void mp4_요청이면_s3Key가_videos_pending_userId_uuid_mp4_형식이다() {
 		PresignedUrlResponseDto response = videoService.issuePresignedUrl(
 			USER_ID, new PresignedUrlRequestDto("mp4", "video/mp4", 8388608L));
 
-		assertThat(response.s3Key()).matches("videos/original/42/[0-9a-f-]{36}\\.mp4");
+		assertThat(response.s3Key()).matches("videos/pending/42/[0-9a-f-]{36}\\.mp4");
 		assertThat(response.uploadUrl()).contains("fillmap-video-dev");
 		assertThat(response.expiresInSec()).isEqualTo(600L);
 	}

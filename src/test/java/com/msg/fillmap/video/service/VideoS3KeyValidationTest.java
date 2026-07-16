@@ -24,6 +24,7 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
+import com.msg.fillmap.video.exception.VideoErrorCode;
 
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -74,7 +75,7 @@ class VideoS3KeyValidationTest {
 	}
 
 	private String myKey() {
-		return "videos/original/" + userId + "/" + java.util.UUID.randomUUID() + ".mp4";
+		return "videos/pending/" + userId + "/" + java.util.UUID.randomUUID() + ".mp4";
 	}
 
 	private long userGridCount() {
@@ -107,7 +108,7 @@ class VideoS3KeyValidationTest {
 
 	@Test
 	void 타인_경로의_s3Key는_거부된다() {
-		String othersKey = "videos/original/" + (userId + 999) + "/" + java.util.UUID.randomUUID() + ".mp4";
+		String othersKey = "videos/pending/" + (userId + 999) + "/" + java.util.UUID.randomUUID() + ".mp4";
 
 		assertThatThrownBy(() -> videoService.saveVideo(userId, request(othersKey)))
 			.isInstanceOf(ApiException.class);
@@ -121,8 +122,13 @@ class VideoS3KeyValidationTest {
 		videoService.saveVideo(userId, request(key));
 
 		// 영상 하나로 좌표만 바꿔가며 무한 점령하는 걸 막는다.
+		//
+		// 에러코드까지 못박는 이유(MSG-133): 확정 시 pending → original 로 키가 바뀌므로 중복 조회를
+		// original 키로 해야 한다. pending 키로 조회하면 DB 에 없어 영영 매치되지 않고, UNIQUE 제약이
+		// 4xx 대신 500 을 낸다. Exception 만 보면 그 퇴행을 놓친다.
 		assertThatThrownBy(() -> videoService.saveVideo(userId, request(key)))
-			.isInstanceOf(Exception.class);
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_S3_KEY);
 	}
 
 	@Test

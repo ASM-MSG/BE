@@ -135,7 +135,7 @@ public class Video {
 		this.processingStatus = ProcessingStatus.UPLOADED;
 	}
 
-	/** soft delete (MSG-72 D2). S3 파일은 지우지 않는다 — 정리는 별도 배치. */
+	/** soft delete (MSG-72 D2). row 만 표시하고, S3 파일은 서비스가 커밋 후 지운다 (MSG-133). */
 	public void markDeleted() {
 		this.status = VideoStatus.DELETED;
 	}

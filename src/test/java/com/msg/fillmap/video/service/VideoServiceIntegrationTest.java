@@ -65,7 +65,7 @@ class VideoServiceIntegrationTest {
 	/** s3Key 는 매번 새로 만든다 — presign 이 호출마다 새 UUID 를 발급하고, 재사용은 이제 거부된다(MSG-132). */
 	private VideoUploadRequestDto request(double lat, double lon) {
 		return new VideoUploadRequestDto(
-			"videos/original/" + userId + "/" + java.util.UUID.randomUUID() + ".mp4",
+			"videos/pending/" + userId + "/" + java.util.UUID.randomUUID() + ".mp4",
 			lat, lon, (short) 10, LocalDateTime.now());
 	}
 

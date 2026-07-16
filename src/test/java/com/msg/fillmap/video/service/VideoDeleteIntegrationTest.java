@@ -73,7 +73,7 @@ class VideoDeleteIntegrationTest {
 
 	private long upload() {
 		return videoService.saveVideo(userId, new VideoUploadRequestDto(
-			"videos/original/" + userId + "/" + System.nanoTime() + ".mp4",
+			"videos/pending/" + userId + "/" + System.nanoTime() + ".mp4",
 			여의도_LAT, 여의도_LON, (short) 10, LocalDateTime.now())).videoId();
 	}
 
