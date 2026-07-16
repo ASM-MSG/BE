@@ -21,6 +21,17 @@ spring:
     baseline-version: 0
     validate-on-migrate: true
 
+# 관측 (MSG-128) — Actuator/Micrometer Prometheus 엔드포인트.
+# 부하테스트 시 대상 밖 Prometheus 가 /actuator/prometheus 를 원격 scrape 한다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  metrics:
+    tags:
+      application: fillmap
+
 jwt:
   # secret 은 application-local.yml (로컬) / JWT_SECRET 환경변수 (운영) 로 주입한다.
   # 여기서는 만료시간만 관리.
