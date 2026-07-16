@@ -287,3 +287,17 @@ cursor는 `(grid_y, grid_x)` 결정적 정렬에서만 파생되며 요청 파�
    → 위 "기존 테스트 영향도" 4~5건의 삭제/이관 범위가 여기에 종속. **권고: (b)** (부하 재검증 여지 남김, 지오메트리 컬럼/인덱스는 유지). Owner A 판단 + reviewer 합의 필요.
 2. **`size` 기본값 1000 / 상한 5000의 적정성** — MSG-134 SLO(p95<300ms)·평균 응답 크기 기준으로 부하테스트 후 조정 가능. 우선 제안값으로 착수, MSG-89 캐시 도입 시 재검토.
 3. **B의 계약 소비 형태** — B가 페이지 메서드로 이행하는지, 2-arg 전체 리스트를 계속 쓰는지. 2-arg는 non-breaking으로 유지하되, B의 실제 사용처를 리뷰에서 확인해 불필요하면 후속 티켓에서 정리.
+
+## 작업 로그
+
+### 2026-07-16 — 구현 완료 (grid-developer Fable 5 · 리뷰 convention-reviewer Opus)
+
+- Open Questions 확정: **Q1=(b)** repo B 쿼리(`findOccupiedByIntersects`)·B 테스트·EXPLAIN 벤치마크 보존, 서비스 레벨 전략만 제거(`ViewportStrategy` enum은 참조 0건 고아가 되어 삭제) / **Q2** size 기본 1000·상한 5000 / **Q3** 2-arg 계약 유지(non-breaking)
+- 신규: `GridCursor`(Base64URL "{gridY}_{gridX}" 커서, grid 루트 — GridEncoder 계열 응집), `OccupiedGridPage`(서비스 내부 뷰, nextCursor는 인코딩된 String), `OccupiedGridPageResponseDto`
+- `GridErrorCode` `INVALID_CURSOR(4403)`·`INVALID_PAGE_SIZE(4404)` 추가
+- `GridRepository` keyset 쿼리 2개(첫 페이지 / `(grid_y, grid_x) > (:cursorY, :cursorX)` 행값 비교), `ORDER BY grid_y, grid_x` + `LIMIT`, OFFSET 미사용. `findOccupiedInRange`는 2-arg 오라클 경로용 유지
+- `GridQueryServiceImpl` lookahead(size+1)로 nextCursor 산출, 커서 디코드 실패 → 4403(원인 체이닝), `validateBounds` 선행 유지. `switch(strategy)` 제거(A 고정)
+- `GridController` `?strategy` 제거, `cursor`·`size(기본 1000)` 추가, 응답 `{grids, nextCursor}`
+- 테스트: 신규 17건(커서 왕복 — 스펙 예시 `NDE2NDNfMTEwNDYw` 고정, 행값 타이브레이크, 전체 순회 == 비페이지 오라클 정합, 4403/4404, MockMvc 4건) · 삭제 1건(`접근_A와_B는_동일한_격자_집합을_반환한다` — 서비스 레벨 전략 소멸) · `./gradlew test` 147건 전체 통과
+- 리뷰: **통과** (컨벤션·응답/예외 패턴·용어·스코프 위반 0건, 계약 경계 non-breaking — grid 밖 `ViewportStrategy`/`GridQueryService` 소비처 0건 확인, 스펙 정합 전 항목 일치)
+- 커밋: `MSG-90 feat` 코드 + `MSG-90 docs` 문서 2건으로 분리
