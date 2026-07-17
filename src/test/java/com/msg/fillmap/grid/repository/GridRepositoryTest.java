@@ -4,6 +4,7 @@ import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
 import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.persistence.EntityManager;
@@ -42,6 +43,9 @@ class GridRepositoryTest {
 	private long me;
 	private long other;
 
+	private long baseY;
+	private long baseX;
+
 	private String g00;
 	private String g11;
 	private String g22;
@@ -62,8 +66,8 @@ class GridRepositoryTest {
 		other = otherUser.getId();
 
 		GridIndex base = GridEncoder.decode(GridEncoder.encode(성수_LAT, 성수_LON));
-		long baseY = base.gridY();
-		long baseX = base.gridX();
+		baseY = base.gridY();
+		baseX = base.gridX();
 
 		// 3×3 블록 내 셀들 + 블록 밖 셀 하나를 시드한다.
 		g00 = GridFixtures.seedGrid(em, baseY, baseX);
@@ -99,6 +103,23 @@ class GridRepositoryTest {
 	private List<String> gistB() {
 		return gridRepository.findOccupiedByIntersects(me, swLng, swLat, neLng, neLat)
 			.stream().map(OccupiedGridProjection::getGridId).toList();
+	}
+
+	private List<OccupiedGridProjection> pageA(int limit) {
+		GridIndex sw = GridEncoder.decode(GridEncoder.encode(swLat, swLng));
+		GridIndex ne = GridEncoder.decode(GridEncoder.encode(neLat, neLng));
+		return gridRepository.findOccupiedPage(me, sw.gridY(), ne.gridY(), sw.gridX(), ne.gridX(), limit);
+	}
+
+	private List<OccupiedGridProjection> pageAAfter(long cursorY, long cursorX, int limit) {
+		GridIndex sw = GridEncoder.decode(GridEncoder.encode(swLat, swLng));
+		GridIndex ne = GridEncoder.decode(GridEncoder.encode(neLat, neLng));
+		return gridRepository.findOccupiedPageAfter(
+			me, sw.gridY(), ne.gridY(), sw.gridX(), ne.gridX(), cursorY, cursorX, limit);
+	}
+
+	private List<String> gridIds(List<OccupiedGridProjection> rows) {
+		return rows.stream().map(OccupiedGridProjection::getGridId).toList();
 	}
 
 	@Test
@@ -159,5 +180,60 @@ class GridRepositoryTest {
 		// 인자를 (lng, lat) 순서로 넘겨야 한국 좌표(lon≈127, lat≈37)에 envelope 가 생겨 결과가 나온다.
 		// swLng/swLat 가 뒤집히면 envelope 가 서비스 지역 밖으로 이동해 빈 결과가 된다.
 		assertThat(gistB()).isNotEmpty().containsExactlyInAnyOrder(g00, g11, g22);
+	}
+
+	@Test
+	@DisplayName("커서 없이 조회하면 정렬 첫 페이지를 size 만큼 반환한다 (MSG-90)")
+	void 커서없이_조회하면_정렬첫페이지를_size만큼_반환한다() {
+		// 블록 안 내 점령의 (grid_y, grid_x) 정렬: g00 → g11 → g22. 첫 페이지(limit 2)는 앞 2개다.
+		assertThat(gridIds(pageA(2))).containsExactly(g00, g11);
+	}
+
+	@Test
+	@DisplayName("커서 이후 조회하면 그 커서보다 큰 격자만 grid_y, grid_x 순으로 반환한다 (MSG-90)")
+	void 커서이후_조회하면_그_커서보다_큰_격자만_grid_y_grid_x_순으로_반환한다() {
+		// 같은 grid_y 에서 grid_x 만 큰 셀도 커서 뒤로 이어져야 한다(행 값 비교 검증).
+		String gMid = GridFixtures.seedGrid(em, baseY + 1, baseX + 2);
+		GridFixtures.seedUserGrid(em, me, gMid, 1);
+
+		List<String> result = gridIds(pageAAfter(baseY + 1, baseX + 1, 10));
+
+		assertThat(result).containsExactly(gMid, g22);
+		assertThat(result).doesNotContain(g00, g11);
+	}
+
+	@Test
+	@DisplayName("페이지를 끝까지 이어붙이면 비페이지 전체 결과와 동일 집합이다 (누락·중복 없음)")
+	void 페이지를_끝까지_이어붙이면_비페이지_전체결과와_동일_집합이다() {
+		List<String> collected = new ArrayList<>();
+		List<OccupiedGridProjection> page = pageA(2);
+		while (!page.isEmpty()) {
+			collected.addAll(gridIds(page));
+			OccupiedGridProjection last = page.get(page.size() - 1);
+			page = pageAAfter(last.getGridY(), last.getGridX(), 2);
+		}
+
+		assertThat(collected).doesNotHaveDuplicates();
+		assertThat(collected).containsExactlyInAnyOrderElementsOf(rangeScanA());
+	}
+
+	@Test
+	@DisplayName("결과는 항상 grid_y, grid_x 오름차순 정렬이다 (MSG-90)")
+	void 결과는_항상_grid_y_grid_x_오름차순_정렬이다() {
+		// 같은 grid_y 안의 x 타이브레이크까지 검증하도록 (y0, x1)·(y2, x0) 점령을 추가한다.
+		String gLowX = GridFixtures.seedGrid(em, baseY, baseX + 1);
+		GridFixtures.seedUserGrid(em, me, gLowX, 1);
+		GridFixtures.seedUserGrid(em, me, g20, 1);
+
+		// 기대 정렬: (y0,x0) → (y0,x1) → (y1,x1) → (y2,x0) → (y2,x2)
+		assertThat(gridIds(pageA(10))).containsExactly(g00, gLowX, g11, g20, g22);
+	}
+
+	@Test
+	@DisplayName("뷰포트 밖 격자와 타인 점령 격자는 페이지에 포함되지 않는다 (개인 도감 격리 유지)")
+	void 뷰포트_밖_격자와_타인_점령_격자는_페이지에_포함되지_않는다() {
+		assertThat(gridIds(pageA(10)))
+			.containsExactly(g00, g11, g22)
+			.doesNotContain(gOut, g02);
 	}
 }

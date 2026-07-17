@@ -12,7 +12,8 @@ import com.msg.fillmap.grid.entity.Grid;
 /**
  * 격자 조회 리포지토리 (MSG-73, read 전용). 색칠 판정은 언제나 로그인 사용자의 user_grids 로 제한한다
  * (개인 도감 — glossary). videos 테이블은 접근하지 않는다.
- * viewport 는 접근 A(정수 범위 스캔)·B(GIST 공간 쿼리)를 둘 다 제공한다 — 부하테스트로 채택 결정(보류).
+ * viewport 실경로는 접근 A(정수 범위 스캔)로 확정(MSG-90, k6 부하테스트 판정).
+ * 접근 B(GIST)는 벤치마크 이력 보존용으로만 남긴다(실경로 미사용 — MSG-90 Open Q1=b).
  */
 public interface GridRepository extends JpaRepository<Grid, String> {
 
@@ -44,6 +45,55 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 		@Param("maxY") long maxY,
 		@Param("minX") long minX,
 		@Param("maxX") long maxX
+	);
+
+	/**
+	 * 접근 A 페이지 — 첫 페이지 (MSG-90 keyset). ORDER BY (grid_y, grid_x) 가 uq_grids_yx(btree)
+	 * 정렬과 일치해 추가 정렬 비용이 없다. OFFSET 미사용, LIMIT 은 서비스의 lookahead(size + 1)다.
+	 */
+	@Query(value = """
+		SELECT g.grid_id AS "gridId", g.grid_y AS "gridY", g.grid_x AS "gridX"
+		FROM user_grids ug
+		JOIN grids g ON g.grid_id = ug.grid_id
+		WHERE ug.user_id = :userId
+			AND g.grid_y BETWEEN :minY AND :maxY
+			AND g.grid_x BETWEEN :minX AND :maxX
+		ORDER BY g.grid_y, g.grid_x
+		LIMIT :limit
+		""", nativeQuery = true)
+	List<OccupiedGridProjection> findOccupiedPage(
+		@Param("userId") long userId,
+		@Param("minY") long minY,
+		@Param("maxY") long maxY,
+		@Param("minX") long minX,
+		@Param("maxX") long maxX,
+		@Param("limit") int limit
+	);
+
+	/**
+	 * 접근 A 페이지 — 커서 이후 (MSG-90 keyset). PostgreSQL 행 값 비교(row-value comparison)로
+	 * (cursorY, cursorX) 보다 큰 격자만 grid_y, grid_x 순으로 이어서 반환한다.
+	 */
+	@Query(value = """
+		SELECT g.grid_id AS "gridId", g.grid_y AS "gridY", g.grid_x AS "gridX"
+		FROM user_grids ug
+		JOIN grids g ON g.grid_id = ug.grid_id
+		WHERE ug.user_id = :userId
+			AND g.grid_y BETWEEN :minY AND :maxY
+			AND g.grid_x BETWEEN :minX AND :maxX
+			AND (g.grid_y, g.grid_x) > (:cursorY, :cursorX)
+		ORDER BY g.grid_y, g.grid_x
+		LIMIT :limit
+		""", nativeQuery = true)
+	List<OccupiedGridProjection> findOccupiedPageAfter(
+		@Param("userId") long userId,
+		@Param("minY") long minY,
+		@Param("maxY") long maxY,
+		@Param("minX") long minX,
+		@Param("maxX") long maxX,
+		@Param("cursorY") long cursorY,
+		@Param("cursorX") long cursorX,
+		@Param("limit") int limit
 	);
 
 	/**
