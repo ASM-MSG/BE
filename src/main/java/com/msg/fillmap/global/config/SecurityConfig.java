@@ -63,6 +63,8 @@ public class SecurityConfig {
 				.requestMatchers("/auth/signup", "/auth/login", "/auth/oauth/**").permitAll()
 				// 관측(MSG-128) — 부하테스트 시 원격 Prometheus scrape. prod는 IP 제한 권장.
 				.requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
+				// API 문서(MSG-131) — Swagger UI · OpenAPI 스펙. prod 노출 정책은 별도 검토.
+				.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
 				.anyRequest().authenticated()
 			)
 			.exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint))

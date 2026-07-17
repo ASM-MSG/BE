@@ -28,6 +28,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 
+	// --- API 문서 (Swagger UI / OpenAPI 3.1, MSG-131) — v3.x가 Spring Boot 4 지원 ---
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
     // --- Flyway (마이그레이션) ---
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.flywaydb:flyway-database-postgresql'
