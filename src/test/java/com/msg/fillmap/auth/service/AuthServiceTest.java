@@ -27,6 +27,7 @@ import com.msg.fillmap.auth.dto.LoginResponseDto;
 import com.msg.fillmap.auth.dto.SignupRequestDto;
 import com.msg.fillmap.auth.dto.SignupResponseDto;
 import com.msg.fillmap.auth.exception.AuthErrorCode;
+import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.entity.AuthProvider;
@@ -47,6 +48,9 @@ class AuthServiceTest {
 
 	@Mock
 	private TokenProvider tokenProvider;
+
+	@Mock
+	private RefreshTokenService refreshTokenService;
 
 	@InjectMocks
 	private AuthService authService;
@@ -114,18 +118,21 @@ class AuthServiceTest {
 		private final LoginRequestDto request = new LoginRequestDto("test@example.com", "password123");
 
 		@Test
-		@DisplayName("성공: 이메일·비밀번호가 맞으면 access token 을 발급해 반환한다")
-		void login_success() {
+		@DisplayName("성공: 이메일·비밀번호가 맞으면 액세스와 리프레시를 함께 발급·저장해 반환한다 (MSG-135)")
+		void 로그인하면_액세스와_리프레시가_함께_발급되고_저장된다() {
 			User user = User.createLocalUser(request.email(), "encoded-hash", "테스터");
 			ReflectionTestUtils.setField(user, "id", 42L);
 
 			given(userRepository.findByEmail(request.email())).willReturn(Optional.of(user));
 			given(passwordEncoder.matches(request.password(), "encoded-hash")).willReturn(true);
 			given(tokenProvider.issueAccessToken(42L, UserRole.USER)).willReturn("jwt-token");
+			given(refreshTokenService.issue(42L, "device-1")).willReturn("refresh-token");
 
-			LoginResponseDto response = authService.login(request);
+			LoginResponseDto response = authService.login(request, "device-1");
 
 			assertThat(response.accessToken()).isEqualTo("jwt-token");
+			assertThat(response.refreshToken()).isEqualTo("refresh-token");
+			verify(refreshTokenService).issue(42L, "device-1");
 		}
 
 		@Test
@@ -133,13 +140,14 @@ class AuthServiceTest {
 		void login_emailNotFound() {
 			given(userRepository.findByEmail(request.email())).willReturn(Optional.empty());
 
-			assertThatThrownBy(() -> authService.login(request))
+			assertThatThrownBy(() -> authService.login(request, "device-1"))
 				.isInstanceOf(ApiException.class)
 				.satisfies(thrown -> assertThat(((ApiException) thrown).getErrorCode())
 					.isEqualTo(AuthErrorCode.INVALID_CREDENTIALS));
 
 			verify(passwordEncoder, never()).matches(any(), any());
 			verify(tokenProvider, never()).issueAccessToken(any(), any());
+			verify(refreshTokenService, never()).issue(any(), any());
 		}
 
 		@Test
@@ -151,12 +159,13 @@ class AuthServiceTest {
 			given(userRepository.findByEmail(request.email())).willReturn(Optional.of(user));
 			given(passwordEncoder.matches(request.password(), "encoded-hash")).willReturn(false);
 
-			assertThatThrownBy(() -> authService.login(request))
+			assertThatThrownBy(() -> authService.login(request, "device-1"))
 				.isInstanceOf(ApiException.class)
 				.satisfies(thrown -> assertThat(((ApiException) thrown).getErrorCode())
 					.isEqualTo(AuthErrorCode.INVALID_CREDENTIALS));
 
 			verify(tokenProvider, never()).issueAccessToken(any(), any());
+			verify(refreshTokenService, never()).issue(any(), any());
 		}
 	}
 
@@ -165,11 +174,27 @@ class AuthServiceTest {
 	class Logout {
 
 		@Test
-		@DisplayName("성공: access token 무효화를 TokenProvider 에 위임한다")
-		void logout_success() {
-			authService.logout("jwt-token");
+		@DisplayName("성공: 액세스를 블랙리스트에 올리고 해당 디바이스 리프레시를 삭제한다 (MSG-135)")
+		void 로그아웃하면_액세스가_블랙리스트에_오르고_해당_디바이스_리프레시가_삭제된다() {
+			given(tokenProvider.parseAccessToken("jwt-token")).willReturn(new AuthPrincipal(42L, UserRole.USER));
+
+			authService.logout("jwt-token", "device-1");
 
 			verify(tokenProvider).invalidateAccessToken("jwt-token");
+			verify(refreshTokenService).delete(42L, "device-1");
+			verify(refreshTokenService, never()).deleteAll(any());
+		}
+
+		@Test
+		@DisplayName("성공: X-Device-Id 가 없으면 모든 디바이스 리프레시를 삭제한다 — 로그아웃-올 폴백 (MSG-135 확정 결정 5)")
+		void 디바이스_id가_없으면_모든_디바이스_리프레시를_삭제한다() {
+			given(tokenProvider.parseAccessToken("jwt-token")).willReturn(new AuthPrincipal(42L, UserRole.USER));
+
+			authService.logout("jwt-token", null);
+
+			verify(tokenProvider).invalidateAccessToken("jwt-token");
+			verify(refreshTokenService).deleteAll(42L);
+			verify(refreshTokenService, never()).delete(any(), any());
 		}
 	}
 }

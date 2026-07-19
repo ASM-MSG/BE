@@ -18,6 +18,9 @@ public enum AuthErrorCode implements ErrorCodeIfs {
 	INVALID_ID_TOKEN(2421, HttpStatus.UNAUTHORIZED, "유효하지 않은 소셜 로그인 토큰입니다"),
 	UNSUPPORTED_PROVIDER(2422, HttpStatus.BAD_REQUEST, "지원하지 않는 소셜 로그인 provider 입니다"),
 	INVALID_CREDENTIALS(2411, HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다"),
+	INVALID_REFRESH_TOKEN(2431, HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다"),
+	EXPIRED_REFRESH_TOKEN(2432, HttpStatus.UNAUTHORIZED, "만료된 리프레시 토큰입니다"),
+	REFRESH_TOKEN_REUSE_DETECTED(2433, HttpStatus.UNAUTHORIZED, "재사용이 감지되어 세션이 폐기되었습니다. 다시 로그인해주세요"),
 	;
 
 	private final Integer errorCode;

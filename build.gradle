@@ -24,6 +24,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 
+	// --- Redis (리프레시 토큰 세션 · 액세스 토큰 블랙리스트, MSG-135) ---
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
 	// --- Observability (Actuator + Prometheus, MSG-128) ---
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
