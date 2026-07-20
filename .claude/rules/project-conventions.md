@@ -65,12 +65,25 @@ MSG-{번호} {타입}: {요약}
 
 ## 브랜치 명명
 
+git flow 브랜치 타입만 쓴다. **커밋 메시지 타입(`feat`·`fix`·`chore`·`docs`…)을
+브랜치 접두어로 가져다 쓰지 않는다** — `chore/`, `refactor/`, `docs/`는 git flow에 없다.
+
 ```text
-feature/MSG-{번호}/{짧은-설명}   # 기능
-fix/MSG-{번호}/{짧은-설명}       # 버그 수정
-refactor/MSG-{번호}/{짧은-설명}  # 리팩터링
-chore/MSG-{번호}/{짧은-설명}     # 설정/도구
+feature/MSG-{번호}-{짧은-설명}   # 일반 작업 전부 (기능·수정·리팩터링·문서·설정)
+hotfix/MSG-{번호}-{짧은-설명}    # 운영 긴급 수정
+release/{버전}                   # 릴리스 준비
 ```
+
+티켓 번호와 설명은 **하이픈**으로 잇는다(슬래시 아님).
+
+```text
+feature/MSG-142-bench                 (O)
+feature/MSG-142/bench                 (X)  슬래시
+chore/MSG-1-pr-template               (X)  git flow에 없는 타입
+```
+
+작업은 **항상 새 브랜치에서 시작한다.** `develop`·`main`에 직접 파일을 만들거나
+수정하지 않는다 — 문서(`docs/*.md`) 작업도 예외 없다.
 
 ## 테스트
 
