@@ -12,7 +12,8 @@ name: Claude PR Review
 # 등록 안 됐거나 만료되면 빈 문자열이 되어 SS0MAE 토큰으로 폴백된다 (CI가 죽는 것보다 낫다).
 #
 # synchronize 제외: 이 액션에는 CodeRabbit 같은 incremental 리뷰 개념이 없어
-# 커밋 푸시마다 PR 전체를 재리뷰한다. 커밋 4개짜리 PR이면 리뷰 4회분 한도가 나간다.
+# push 마다 PR 전체를 처음부터 재리뷰한다 (커밋 수가 아니라 push 횟수 기준).
+# 리뷰 -> 수정 push -> 재리뷰 루프가 돌면 한도 소모가 빠르게 쌓인다.
 # 수정분을 다시 보게 하려면 PR을 draft 로 내렸다 ready 로 올린다.
 on:
   pull_request:
