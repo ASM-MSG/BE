@@ -65,12 +65,17 @@ MSG-{번호} {타입}: {요약}
 
 ## 브랜치 명명
 
+`{타입}/MSG-{번호}-{짧은-설명}` — 티켓 번호와 설명은 **하이픈**으로 잇는다(슬래시 아님).
+
 ```text
-feature/MSG-{번호}/{짧은-설명}   # 기능
-fix/MSG-{번호}/{짧은-설명}       # 버그 수정
-refactor/MSG-{번호}/{짧은-설명}  # 리팩터링
-chore/MSG-{번호}/{짧은-설명}     # 설정/도구
+feature/MSG-142-bench      # 기능
+fix/MSG-86-gist-index      # 버그 수정
+refactor/MSG-90-pagination # 리팩터링
+chore/MSG-1-pr-template    # 설정/도구
 ```
+
+작업은 **항상 새 브랜치에서 시작한다.** `develop`·`main`에 직접 파일을 만들거나
+수정하지 않는다 — 문서(`docs/*.md`) 작업도 예외 없다.
 
 ## 테스트
 
