@@ -1,0 +1,45 @@
+name: Claude PR Review
+
+# PR 열림 -> Claude 자동 코드 리뷰.
+# 인증은 Anthropic API 키가 아니라 Claude Pro/Max 구독 OAuth 토큰을 쓴다.
+# API 크레딧과 구독은 별개 과금이라, 구독 토큰을 쓰면 추가 과금이 없다.
+# 토큰은 각자 로컬에서 `claude setup-token` 으로 발급한다.
+#
+# 토큰은 PR "작성자" 기준으로 분기한다 — 각자 자기 구독 한도를 쓰게 하려는 것.
+# github.actor 는 푸시한 사람이라 PR 작성자와 다를 수 있어 쓰지 않는다.
+# Settings > Secrets 에 아래 2개 등록 필요:
+#   CLAUDE_CODE_OAUTH_TOKEN_SS0MAE / CLAUDE_CODE_OAUTH_TOKEN_S13121312
+# 등록 안 됐거나 만료되면 빈 문자열이 되어 SS0MAE 토큰으로 폴백된다 (CI가 죽는 것보다 낫다).
+#
+# synchronize 제외: 이 액션에는 CodeRabbit 같은 incremental 리뷰 개념이 없어
+# 커밋 푸시마다 PR 전체를 재리뷰한다. 커밋 4개짜리 PR이면 리뷰 4회분 한도가 나간다.
+# 수정분을 다시 보게 하려면 PR을 draft 로 내렸다 ready 로 올린다.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    # 공개 레포라 외부인도 포크 PR을 열 수 있다. 포크 PR에는 시크릿이 전달되지 않아
+    # 토큰이 빈 문자열이 되고 401로 실패한다. 아예 돌지 않게 막는다.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ github.event.pull_request.user.login == 's13121312'
+            && secrets.CLAUDE_CODE_OAUTH_TOKEN_S13121312
+            || secrets.CLAUDE_CODE_OAUTH_TOKEN_SS0MAE }}
+          prompt: |
+            이 PR을 리뷰해줘. 한국어로 답변할 것.
+            .claude/rules/ 의 코딩 컨벤션(네이버 Java 컨벤션, DTO 네이밍, 공통 응답 패턴)을
+            먼저 읽고 그 기준으로 본다.
+            중점: 컨벤션 위반, Owner A/B 도메인 경계 침범, 버그, 누락된 테스트.
+            사소한 스타일 지적은 생략.
+          claude_args: |
+            --max-turns 10
+          track_progress: false
