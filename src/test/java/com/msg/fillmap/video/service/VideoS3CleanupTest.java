@@ -34,6 +34,7 @@ import software.amazon.awssdk.services.s3.model.S3Error;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.global.config.AwsProperties;
+import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
@@ -74,7 +75,8 @@ class VideoS3CleanupTest {
 			.willReturn(DeleteObjectsResponse.builder().build());
 		service = new VideoServiceImpl(repository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			mock(S3Presigner.class), s3Client,
-			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)));
+			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
+			mock(RegionStatsCommandService.class));
 	}
 
 	@AfterEach

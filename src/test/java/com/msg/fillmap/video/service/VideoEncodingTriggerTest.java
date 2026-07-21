@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.task.TaskRejectedException;
 
 import com.msg.fillmap.global.config.AwsProperties;
+import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.repository.VideoRepository;
@@ -47,7 +48,8 @@ class VideoEncodingTriggerTest {
 		// S3Client 목은 headObject 에서 예외를 던지지 않는다 = 객체가 존재하는 정상 업로드.
 		VideoService service = new VideoServiceImpl(repository, encodingService, statusWriter,
 			mock(S3Presigner.class), mock(software.amazon.awssdk.services.s3.S3Client.class),
-			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)));
+			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
+			mock(RegionStatsCommandService.class));
 
 		VideoUploadRequestDto request = new VideoUploadRequestDto(
 			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now());
