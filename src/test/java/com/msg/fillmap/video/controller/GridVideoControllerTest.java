@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.user.entity.UserRole;
+import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.service.VideoService;
 
@@ -32,6 +33,7 @@ class GridVideoControllerTest {
 	private static final long USER_ID = 42L;
 	private static final String GRID_ID = "41642_110458";
 	private static final String URL = "/api/grids/{gridId}/videos";
+	private static final String COVER_URL = "/api/grids/{gridId}/cover";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -83,6 +85,44 @@ class GridVideoControllerTest {
 	@DisplayName("인증없이 호출하면 401 이다")
 	void 인증없이_호출하면_401이다() throws Exception {
 		mockMvc.perform(get(URL, GRID_ID))
+			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	@DisplayName("격자 대표영상 조회는 200과 영상을 반환한다")
+	void 격자_대표영상_조회는_200과_영상을_반환한다() throws Exception {
+		given(videoService.getGridCover(eq(GRID_ID))).willReturn(
+			new GridCoverVideoResponseDto(1042L, "https://bucket.s3/thumb.jpg?X-Amz-Signature=abc",
+				(short) 12, 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11)));
+
+		mockMvc.perform(get(COVER_URL, GRID_ID)
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body.videoId").value(1042))
+			.andExpect(jsonPath("$.body.thumbnailUrl").value("https://bucket.s3/thumb.jpg?X-Amz-Signature=abc"))
+			.andExpect(jsonPath("$.body.durationSec").value(12))
+			.andExpect(jsonPath("$.body.viewCount").value(37))
+			.andExpect(jsonPath("$.body.recordedAt").value("2026-07-20T18:03:11"))
+			.andExpect(jsonPath("$.body.processingStatus").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("대표가 없으면 200과 body null 을 반환한다")
+	void 대표가_없으면_200과_body_null을_반환한다() throws Exception {
+		given(videoService.getGridCover(eq(GRID_ID))).willReturn(null);
+
+		mockMvc.perform(get(COVER_URL, GRID_ID)
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body").value(org.hamcrest.Matchers.nullValue()));
+	}
+
+	@Test
+	@DisplayName("대표영상 조회를 인증없이 호출하면 401 이다")
+	void 대표영상_조회를_인증없이_호출하면_401이다() throws Exception {
+		mockMvc.perform(get(COVER_URL, GRID_ID))
 			.andExpect(status().isUnauthorized());
 	}
 }

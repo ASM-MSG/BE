@@ -21,6 +21,21 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	List<Video> findByUserIdAndGridIdAndStatusOrderByCreatedAtDesc(Long userId, String gridId, VideoStatus status);
 
 	/**
+	 * 격자 전역 대표 영상 1건 (MSG-87). user_id 조건 없이 그 격자의 모든 공개·READY 영상 중 조회수 →
+	 * 최신 순으로 1건을 뽑는다 — MSG-127 의 개인 격리와 정반대 축(전역, 본인 포함)이다.
+	 * WHERE·ORDER BY 는 idx_videos_grid_popular 부분 인덱스(V1__init.sql:110)와 바이트 단위로 일치시켜
+	 * 플래너가 인덱스만으로 LIMIT 1 을 만족하게 한다 — 인덱스가 대표 선정 정책의 단일 진실 원천이다.
+	 */
+	@Query(value = """
+		SELECT * FROM videos
+		WHERE grid_id = :gridId
+		  AND status = 'ACTIVE' AND visibility = 'PUBLIC' AND processing_status = 'READY'
+		ORDER BY view_count DESC, created_at DESC
+		LIMIT 1
+		""", nativeQuery = true)
+	Optional<Video> findGlobalCover(@Param("gridId") String gridId);
+
+	/**
 	 * 격자 lazy insert (전역 격자 등록). 이미 있으면 no-op — 멱등.
 	 * center/bbox 는 GridEncoder 산출값을 PostGIS geography 로 변환해 저장한다.
 	 */

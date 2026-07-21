@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
+import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.service.VideoService;
 
@@ -41,5 +42,18 @@ public class GridVideoController {
 		@Parameter(description = "격자 ID", example = "41642_110458") @PathVariable String gridId
 	) {
 		return SuccessResponse.of(videoService.getGridVideos(principal.userId(), gridId));
+	}
+
+	@Operation(
+		summary = "격자 전역 대표 영상 조회",
+		description = "그 격자를 전역에서 대표하는 영상 1건을 반환한다. 공개(PUBLIC)·READY 영상 중 조회수(view_count) "
+			+ "→ 최신(createdAt) 순으로 뽑으며, 본인·타인 영상 모두 후보다. 비공개·삭제·인코딩 미완 영상은 제외한다. "
+			+ "후보가 없으면(미점령·비공개만·존재하지 않는 gridId) body 는 null 이다. 썸네일은 presigned GET URL 로 내려준다."
+	)
+	@GetMapping("/api/grids/{gridId}/cover")
+	public SuccessResponse<GridCoverVideoResponseDto> getGridCover(
+		@Parameter(description = "격자 ID", example = "41642_110458") @PathVariable String gridId
+	) {
+		return SuccessResponse.of(videoService.getGridCover(gridId));
 	}
 }
