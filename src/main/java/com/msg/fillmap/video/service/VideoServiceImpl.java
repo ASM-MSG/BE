@@ -38,6 +38,7 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
+import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
@@ -297,6 +298,14 @@ public class VideoServiceImpl implements VideoService {
 			.stream()
 			.map(video -> GridVideoResponseDto.of(video, presignThumbnailGet(video.getThumbnailUrl())))
 			.toList();
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public GridCoverVideoResponseDto getGridCover(String gridId) {
+		return videoRepository.findGlobalCover(gridId)
+			.map(video -> GridCoverVideoResponseDto.of(video, presignThumbnailGet(video.getThumbnailUrl())))
+			.orElse(null);
 	}
 
 	/**
