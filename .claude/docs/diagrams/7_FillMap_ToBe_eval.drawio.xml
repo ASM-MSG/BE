@@ -134,7 +134,7 @@
         </mxCell>
 
         <!-- AI pipeline note -->
-        <mxCell id="ainote" value="AI 파이프라인 (택1 · 보류)&#10;옵션A: S3 original/ → (S3 event) → Lambda → GPU → S3 redacted/&#10;옵션B: Spring → Kafka → FastAPI consume → S3 redacted/" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FBF7;strokeColor=#00A896;fontSize=10;fontStyle=0;fontColor=#00695C;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+        <mxCell id="ainote" value="AI 파이프라인 (MSG-143 확정)&#10;Spring → Kafka → FastAPI(상시, EC2 Docker) → S3 redacted/&#10;1080p 다운스케일 후 처리 · Lambda/GPU 미채택" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0FBF7;strokeColor=#00A896;fontSize=10;fontStyle=0;fontColor=#00695C;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
           <mxGeometry x="1380" y="700" width="420" height="80" as="geometry" />
         </mxCell>
 
