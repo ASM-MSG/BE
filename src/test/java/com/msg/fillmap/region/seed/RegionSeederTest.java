@@ -131,6 +131,19 @@ class RegionSeederTest {
 	}
 
 	@Test
+	@DisplayName("유효한 feature 가 0건이면 조용히 성공하지 않고 예외로 실패한다 (fail-fast)")
+	void 유효한_feature가_0건이면_예외로_실패한다() throws IOException {
+		Path file = tempDir.resolve("wrong-schema.geojson");
+		Files.writeString(file, """
+			{"type":"FeatureCollection","features":[
+				{"type":"Feature","properties":{"wrong_key":"9990000000"},"geometry":%s}]}""".formatted(POLYGON));
+
+		assertThatThrownBy(() -> newSeeder(true, file.toString()).seed(file))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("0건");
+	}
+
+	@Test
 	@DisplayName("GeoJSON 파일이 없으면 명확한 예외로 실패한다")
 	void GeoJSON파일이_없으면_명확한_예외로_실패한다() {
 		Path missing = tempDir.resolve("does-not-exist.geojson");

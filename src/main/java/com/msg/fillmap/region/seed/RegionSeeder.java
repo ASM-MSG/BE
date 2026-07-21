@@ -49,7 +49,8 @@ public class RegionSeeder implements ApplicationRunner {
 	}
 
 	/**
-	 * 지정 GeoJSON 을 파싱해 row 별 native UPSERT 로 적재한다. 파일이 없으면 명확한 예외로 조기 실패.
+	 * 지정 GeoJSON 을 파싱해 row 별 native UPSERT 로 적재한다.
+	 * 파일이 없거나 유효 feature 가 0건이면 명확한 예외로 조기 실패 — 잘못된 파일이 빈 regions 로 조용히 넘어가지 않게.
 	 * 트랜잭션은 호출자(run 또는 테스트)가 연다.
 	 */
 	public SeedResult seed(Path path) {
@@ -64,6 +65,12 @@ public class RegionSeeder implements ApplicationRunner {
 			parsed = reader.read(in);
 		} catch (IOException e) {
 			throw new IllegalStateException("행정동 GeoJSON 읽기에 실패했습니다: " + path.toAbsolutePath(), e);
+		}
+
+		if (parsed.features().isEmpty()) {
+			throw new IllegalStateException(
+				"행정동 GeoJSON 에서 유효한 feature 를 0건 파싱했습니다 (건너뜀 " + parsed.skipped() + " 건): "
+					+ path.toAbsolutePath() + " — 파일 내용과 속성 스키마(adm_cd2·adm_nm·geometry)를 확인하세요");
 		}
 
 		for (RegionFeature feature : parsed.features()) {
