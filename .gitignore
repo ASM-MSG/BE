@@ -39,3 +39,4 @@ out/
 
 ### 행정동 경계 GeoJSON (MSG-154) — 수십 MB, 커밋하지 않고 scripts/download-region-geojson.sh 로 확보 ###
 /data/region/*.geojson
+.DS_Store
