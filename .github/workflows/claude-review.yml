@@ -55,4 +55,8 @@ jobs:
           # 50은 규칙 읽기 + 중형 PR 리뷰에 충분한 값. 무제한으로 두지 않는 건 폭주 방지.
           claude_args: |
             --max-turns 50
-          track_progress: false
+          # true 필수: 커스텀 prompt 모드에서 리뷰 결과를 PR에 남기는 유일한 공식 통로다.
+          # 액션이 추적 코멘트를 만들고 Claude에게 그 코멘트 업데이트 도구를 열어준다.
+          # false면 리뷰가 성공해도 출력이 로그에만 남는다 — Bash(gh pr comment)는 기본
+          # 차단이라 Claude가 직접 코멘트를 달 수도 없다 (permission_denials 9건으로 확인).
+          track_progress: true
