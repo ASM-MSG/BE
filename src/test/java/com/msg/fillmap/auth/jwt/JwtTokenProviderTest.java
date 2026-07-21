@@ -19,13 +19,18 @@ class JwtTokenProviderTest {
 
 	private static final String SECRET = "test-only-secret-must-be-at-least-32-bytes-long-for-hs256";
 	private static final String OTHER_SECRET = "another-completely-different-secret-32-bytes-plus-long";
+	private static final String REFRESH_SECRET = "test-only-refresh-secret-must-be-at-least-32-bytes-long";
 
 	private JwtTokenProvider tokenProvider;
 
+	private static JwtProperties properties(String secret, Duration accessTokenTtl) {
+		return new JwtProperties(secret, accessTokenTtl, REFRESH_SECRET, Duration.ofDays(14));
+	}
+
 	@BeforeEach
 	void setUp() {
-		JwtProperties properties = new JwtProperties(SECRET, Duration.ofHours(1));
-		this.tokenProvider = new JwtTokenProvider(properties, new InMemoryInvalidatedTokenStore());
+		JwtProperties props = properties(SECRET, Duration.ofHours(1));
+		this.tokenProvider = new JwtTokenProvider(props, new InMemoryInvalidatedTokenStore());
 	}
 
 	@Nested
@@ -81,7 +86,7 @@ class JwtTokenProviderTest {
 		@Test
 		@DisplayName("만료된 토큰이면 EXPIRED_TOKEN")
 		void expired() {
-			JwtProperties expiredProps = new JwtProperties(SECRET, Duration.ofSeconds(-1));
+			JwtProperties expiredProps = properties(SECRET, Duration.ofSeconds(-1));
 			JwtTokenProvider expiredIssuer = new JwtTokenProvider(expiredProps, new InMemoryInvalidatedTokenStore());
 			String expiredToken = expiredIssuer.issueAccessToken(1L, UserRole.USER);
 
@@ -96,7 +101,7 @@ class JwtTokenProviderTest {
 		@Test
 		@DisplayName("다른 시크릿으로 발급된 토큰이면 INVALID_TOKEN")
 		void forgedSignature() {
-			JwtProperties otherProps = new JwtProperties(OTHER_SECRET, Duration.ofHours(1));
+			JwtProperties otherProps = properties(OTHER_SECRET, Duration.ofHours(1));
 			JwtTokenProvider forger = new JwtTokenProvider(otherProps, new InMemoryInvalidatedTokenStore());
 			String forgedToken = forger.issueAccessToken(1L, UserRole.USER);
 

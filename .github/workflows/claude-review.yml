@@ -50,6 +50,13 @@ jobs:
             먼저 읽고 그 기준으로 본다.
             중점: 컨벤션 위반, Owner A/B 도메인 경계 침범, 버그, 누락된 테스트.
             사소한 스타일 지적은 생략.
+          # max-turns: 파일 읽기 하나가 턴 하나다. 프롬프트가 규칙 문서 3~4개를 먼저 읽게
+          # 시키므로 10턴은 diff 보기 전에 소진된다 (error_max_turns로 전 PR 실패했던 원인).
+          # 50은 규칙 읽기 + 중형 PR 리뷰에 충분한 값. 무제한으로 두지 않는 건 폭주 방지.
           claude_args: |
-            --max-turns 10
-          track_progress: false
+            --max-turns 50
+          # true 필수: 커스텀 prompt 모드에서 리뷰 결과를 PR에 남기는 유일한 공식 통로다.
+          # 액션이 추적 코멘트를 만들고 Claude에게 그 코멘트 업데이트 도구를 열어준다.
+          # false면 리뷰가 성공해도 출력이 로그에만 남는다 — Bash(gh pr comment)는 기본
+          # 차단이라 Claude가 직접 코멘트를 달 수도 없다 (permission_denials 9건으로 확인).
+          track_progress: true

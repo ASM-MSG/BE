@@ -27,6 +27,18 @@ jobs:
           --health-timeout 3s
           --health-retries 10
 
+      # Redis(MSG-135) — 통합 테스트(local 프로파일)가 리프레시 세션·블랙리스트 스토어를 실제로 친다.
+      # 로컬 docker-compose.yml 의 fillmap-local-redis 와 동일 이미지.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
         with:

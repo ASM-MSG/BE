@@ -14,6 +14,12 @@ spring:
   jpa:
     show-sql: true                 # dev에서는 SQL 확인 허용 (운영은 false)
 
+  # Redis — dev 는 docker-compose.server.yml 의 fillmap-redis-dev 컨테이너 (MSG-135)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
 oauth:
   kakao:
     client-id: ${KAKAO_CLIENT_ID}
@@ -23,6 +29,7 @@ server:
 
 jwt:
   secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef}
+  refresh-secret: ${JWT_REFRESH_SECRET:dev-only-refresh-secret-change-me-0123456789abcdef-0123456789abcdef}
 
 logging:
   level:
