@@ -32,6 +32,11 @@ oauth:
   kakao:
     client-id: ${KAKAO_CLIENT_ID}
 
+jwt:
+  # kebab-case(refresh-secret)는 JWT_REFRESH_SECRET env 로 relaxed binding 이 되지 않아 명시적으로 매핑한다.
+  # 기본값을 두지 않는다 — 미설정 시 기동 실패로 즉시 드러나게 한다. (MSG-135)
+  refresh-secret: ${JWT_REFRESH_SECRET}
+
 aws:
   s3:
     # 기본값을 두지 않는다 — 미설정 시 application.yml 기본값(fillmap-video-dev)으로 흘러

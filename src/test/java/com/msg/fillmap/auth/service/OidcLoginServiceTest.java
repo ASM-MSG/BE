@@ -45,12 +45,15 @@ class OidcLoginServiceTest {
 	@Mock
 	private OidcIdTokenVerifier kakaoVerifier;
 
+	@Mock
+	private RefreshTokenService refreshTokenService;
+
 	private OidcLoginService oidcLoginService;
 
 	@BeforeEach
 	void setUp() {
 		given(kakaoVerifier.supports()).willReturn(AuthProvider.KAKAO);
-		oidcLoginService = new OidcLoginService(userRepository, tokenProvider, List.of(kakaoVerifier));
+		oidcLoginService = new OidcLoginService(userRepository, tokenProvider, refreshTokenService, List.of(kakaoVerifier));
 	}
 
 	@Nested
@@ -60,17 +63,19 @@ class OidcLoginServiceTest {
 		private final OidcUserInfo info = new OidcUserInfo("kakao-oid-1", "test@kakao.com", "카카오유저");
 
 		@Test
-		@DisplayName("성공: 기존에 연동된 유저면 재가입 없이 토큰만 발급한다")
-		void login_existingUser() {
+		@DisplayName("성공: 기존에 연동된 유저면 재가입 없이 액세스와 리프레시를 발급한다 (MSG-135)")
+		void 소셜_로그인도_리프레시를_발급한다() {
 			given(kakaoVerifier.verify("id-token")).willReturn(info);
 			User existing = User.createOAuthUser(AuthProvider.KAKAO, info.oid(), info.email(), info.nickname());
 			ReflectionTestUtils.setField(existing, "id", 10L);
 			given(userRepository.findByProviderAndOid(AuthProvider.KAKAO, info.oid())).willReturn(Optional.of(existing));
 			given(tokenProvider.issueAccessToken(10L, UserRole.USER)).willReturn("jwt-token");
+			given(refreshTokenService.issue(10L, "device-1")).willReturn("refresh-token");
 
-			LoginResponseDto response = oidcLoginService.login(AuthProvider.KAKAO, "id-token");
+			LoginResponseDto response = oidcLoginService.login(AuthProvider.KAKAO, "id-token", "device-1");
 
 			assertThat(response.accessToken()).isEqualTo("jwt-token");
+			assertThat(response.refreshToken()).isEqualTo("refresh-token");
 			verify(userRepository, never()).save(any());
 		}
 
@@ -86,8 +91,9 @@ class OidcLoginServiceTest {
 				return saved;
 			});
 			given(tokenProvider.issueAccessToken(20L, UserRole.USER)).willReturn("jwt-token");
+			given(refreshTokenService.issue(20L, "device-1")).willReturn("refresh-token");
 
-			LoginResponseDto response = oidcLoginService.login(AuthProvider.KAKAO, "id-token");
+			LoginResponseDto response = oidcLoginService.login(AuthProvider.KAKAO, "id-token", "device-1");
 
 			ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
 			verify(userRepository).save(captor.capture());
@@ -106,7 +112,7 @@ class OidcLoginServiceTest {
 			given(userRepository.findByProviderAndOid(AuthProvider.KAKAO, info.oid())).willReturn(Optional.empty());
 			given(userRepository.existsByEmail(info.email())).willReturn(true);
 
-			assertThatThrownBy(() -> oidcLoginService.login(AuthProvider.KAKAO, "id-token"))
+			assertThatThrownBy(() -> oidcLoginService.login(AuthProvider.KAKAO, "id-token", "device-1"))
 				.isInstanceOf(ApiException.class)
 				.satisfies(thrown -> {
 					ApiException api = (ApiException)thrown;
@@ -114,12 +120,13 @@ class OidcLoginServiceTest {
 				});
 
 			verify(userRepository, never()).save(any());
+			verify(refreshTokenService, never()).issue(any(), any());
 		}
 
 		@Test
 		@DisplayName("실패: 지원하지 않는 provider 면 UNSUPPORTED_PROVIDER ApiException 을 던지고 verify 를 호출하지 않는다")
 		void login_unsupportedProvider() {
-			assertThatThrownBy(() -> oidcLoginService.login(AuthProvider.LOCAL, "id-token"))
+			assertThatThrownBy(() -> oidcLoginService.login(AuthProvider.LOCAL, "id-token", "device-1"))
 				.isInstanceOf(ApiException.class)
 				.satisfies(thrown -> {
 					ApiException api = (ApiException)thrown;
@@ -127,6 +134,7 @@ class OidcLoginServiceTest {
 				});
 
 			verify(kakaoVerifier, never()).verify(any());
+			verify(refreshTokenService, never()).issue(any(), any());
 		}
 	}
 }
