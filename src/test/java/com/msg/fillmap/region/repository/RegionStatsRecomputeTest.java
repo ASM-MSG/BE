@@ -232,4 +232,22 @@ class RegionStatsRecomputeTest {
 
 		assertThat(collected(user1, a)).isEqualTo(2);
 	}
+
+	@Test
+	@DisplayName("중심점을 두 행정동이 동시에 덮으면 region_code 오름차순 첫 행정동에만 결정적으로 귀속된다")
+	void 중심점을_두_행정동이_동시에_덮으면_오름차순_첫_행정동에만_결정적으로_귀속된다() {
+		String first = syntheticCode("1");
+		String second = syntheticCode("2");
+		// 동일한 폴리곤을 두 행정동으로 등록 — 격자 중심점을 둘 다 덮는 다중매칭 상황을 강제한다.
+		seedRegion(first, GY0, GY0 + 3, GX0, GX0 + 3);
+		seedRegion(second, GY0, GY0 + 3, GX0, GX0 + 3);
+		String grid = occupy(user1, GY0, GX0);
+
+		regionRepository.refreshRegionStats(user1, grid);
+		regionRepository.refreshRegionStats(user1, grid);
+
+		assertThat(collected(user1, first)).isEqualTo(1);
+		assertThat(collected(user1, second)).isNull();
+		assertThat(statsRowCount(user1)).isEqualTo(1L);
+	}
 }
