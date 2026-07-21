@@ -1,5 +1,8 @@
 package com.msg.fillmap.video.service;
 
+import java.util.List;
+
+import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
@@ -8,6 +11,13 @@ import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 
 public interface VideoService {
+
+	/**
+	 * 격자별 내 영상 리스트 조회 (MSG-127). 로그인 사용자가 그 격자에 올린 ACTIVE 영상만 created_at DESC 로
+	 * 돌려준다. 썸네일 S3 key 는 presigned GET URL 로 변환하고, READY 이전이면 null 이다. 미점령·타인 격자·
+	 * 존재하지 않는 gridId 는 빈 리스트다(예외 아님).
+	 */
+	List<GridVideoResponseDto> getGridVideos(long userId, String gridId);
 
 	/**
 	 * 업로드 완료 메타데이터 저장. 좌표 → 격자 인코딩 → grids lazy insert → videos INSERT → 점령 UPSERT.

@@ -1,5 +1,6 @@
 package com.msg.fillmap.video.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,8 +9,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.VideoStatus;
 
 public interface VideoRepository extends JpaRepository<Video, Long> {
+
+	/**
+	 * 격자별 내 영상 리스트 (MSG-127). user_id 로 개인 도감을 격리하고, status=ACTIVE 로
+	 * 삭제(DELETED)·블라인드(BLINDED)를 제외한다. 최근 업로드(방문)가 먼저 오도록 created_at DESC.
+	 * visibility·processing_status 는 필터하지 않는다 — 내 도감이라 PRIVATE·인코딩 중 영상도 보여야 한다.
+	 */
+	List<Video> findByUserIdAndGridIdAndStatusOrderByCreatedAtDesc(Long userId, String gridId, VideoStatus status);
 
 	/**
 	 * 격자 lazy insert (전역 격자 등록). 이미 있으면 no-op — 멱등.
