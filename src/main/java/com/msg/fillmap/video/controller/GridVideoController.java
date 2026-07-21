@@ -36,7 +36,7 @@ public class GridVideoController {
 			+ "미점령·타인만 점령한 격자·존재하지 않는 gridId 는 빈 배열이다. 썸네일은 presigned GET URL 로 내려주며 "
 			+ "READY 이전이면 null 이다."
 	)
-	@GetMapping("/api/grids/{gridId}/videos")
+	@GetMapping("/api/grids/{gridId}/my-videos")
 	public SuccessResponse<List<GridVideoResponseDto>> getGridVideos(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "격자 ID", example = "41642_110458") @PathVariable String gridId

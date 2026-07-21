@@ -32,7 +32,7 @@ class GridVideoControllerTest {
 
 	private static final long USER_ID = 42L;
 	private static final String GRID_ID = "41642_110458";
-	private static final String URL = "/api/grids/{gridId}/videos";
+	private static final String URL = "/api/grids/{gridId}/my-videos";
 	private static final String COVER_URL = "/api/grids/{gridId}/cover";
 
 	@Autowired
