@@ -59,6 +59,15 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	Optional<RegionProjection> findContainingRegion(@Param("lat") double lat, @Param("lon") double lon);
 
 	/**
+	 * 사용자 단위 advisory 트랜잭션 잠금 (MSG-155). 같은 사용자의 점령/롤백 트랜잭션이 겹칠 때
+	 * recompute COUNT 가 서로의 미커밋 user_grids 를 못 봐 낮은 값으로 덮어쓰는 lost update 를 막는다 —
+	 * 잠금 대기 후 실행되는 recompute 문장은 새 스냅샷(READ COMMITTED)으로 커밋된 진값을 센다.
+	 * 트랜잭션 종료 시 자동 해제(xact lock). 키는 'region_stats:' 접두로 다른 advisory 사용처와 분리.
+	 */
+	@Query(value = "SELECT pg_advisory_xact_lock(hashtextextended('region_stats:' || :userId, 0))", nativeQuery = true)
+	Object acquireUserRegionStatsLock(@Param("userId") long userId);
+
+	/**
 	 * 수집률 캐시(region_stats) recompute UPSERT (MSG-155). gridId 격자의 중심점(center_geom)을 덮는
 	 * 행정동 1개를 ST_Covers 로 판정하고(경계선 위 다중매칭은 ORDER BY region_code LIMIT 1 로 결정적 단일화 —
 	 * findContainingRegion·분자 카운트와 동일 규칙이라 한 격자가 두 행정동에 겹으로 잡히지 않는다), 그 (user, region) 의

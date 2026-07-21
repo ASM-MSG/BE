@@ -22,6 +22,8 @@ public class RegionStatsCommandServiceImpl implements RegionStatsCommandService 
 	@Override
 	@Transactional
 	public void refresh(long userId, String gridId) {
+		// 같은 사용자의 동시 점령/롤백 recompute 를 직렬화 — lost update 방지 (트랜잭션 종료 시 자동 해제)
+		regionRepository.acquireUserRegionStatsLock(userId);
 		regionRepository.refreshRegionStats(userId, gridId);
 	}
 }
