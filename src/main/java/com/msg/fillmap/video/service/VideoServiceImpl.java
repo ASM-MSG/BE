@@ -35,6 +35,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.global.geo.KoreaCoordinates;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
@@ -57,12 +58,6 @@ import com.msg.fillmap.video.support.GeoSupport;
 @Service
 @RequiredArgsConstructor
 public class VideoServiceImpl implements VideoService {
-
-	// 서비스 범위(한국) plausibility 검증용 좌표 경계 — MSG-66 D7.
-	private static final double MIN_LAT = 33.0;
-	private static final double MAX_LAT = 39.0;
-	private static final double MIN_LON = 124.0;
-	private static final double MAX_LON = 132.0;
 
 	// 허용 확장자 → 정규 Content-Type — MSG-64 D2. 쌍으로 검증해 엇갈린 조합을 막는다.
 	private static final Map<String, String> ALLOWED_TYPES = Map.of(
@@ -329,7 +324,7 @@ public class VideoServiceImpl implements VideoService {
 	}
 
 	private void validateCoordinate(double lat, double lon) {
-		if (lat < MIN_LAT || lat > MAX_LAT || lon < MIN_LON || lon > MAX_LON) {
+		if (KoreaCoordinates.isOutOfService(lat, lon)) {
 			throw new ApiException(VideoErrorCode.INVALID_COORDINATE);
 		}
 	}
