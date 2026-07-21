@@ -16,7 +16,7 @@
 | `user` (Owner B) | 🟡 부분 | `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode` | `service`, `controller`, `dto` |
 | `grid` (Owner A) | 🟡 부분 | `GridEncoder`·`GridConstants`(순수 유틸), `entity/{UserGrid,UserGridId,Grid}`, `repository/GridRepository`, `service/GridQueryService`(+impl, read 계약 A→B), `controller/GridController`, `dto/*`, `exception/GridErrorCode`(4xxx) (MSG-73) · viewport cursor 페이지네이션(`GridCursor` Base64URL 커서, `OccupiedGridPage`, `OccupiedGridPageResponseDto`, keyset 행값비교+lookahead, `?strategy` 파라미터·`ViewportStrategy` 제거 — A 고정, repo B 쿼리는 보존) (MSG-90) | `GridOccupationService`(write는 MSG-66이 흡수), `HotZoneService` |
 | `usergrid` (Owner B) | ❌ 미생성 | — | 패키지 전체. `UserGridQueryService` 계약 포함 |
-| `region` (Owner A) | 🟡 부분 | `entity/Region`(boundary_geom 미매핑), `repository/RegionRepository`(native UPSERT + ST_Area 기반 total_grid_count), `seed/{RegionGeoJsonReader,RegionFeature,RegionSeeder}`(플래그 게이트 `fillmap.region.seed.enabled` 기본 off, 전국 3,558 행정동) (MSG-154) | `service`·`controller`·`dto` (MSG-93·155·156) |
+| `region` (Owner A) | 🟡 부분 | `entity/Region`(boundary_geom 미매핑), `repository/RegionRepository`(native UPSERT + ST_Area 기반 total_grid_count), `seed/{RegionGeoJsonReader,RegionFeature,RegionSeeder}`(플래그 게이트 `fillmap.region.seed.enabled` 기본 off, 전국 3,558 행정동) (MSG-154) · 역지오코딩(`GET /api/regions/reverse-geocode`, ST_Covers/GIST, `service/RegionQueryService`(+impl)·`controller/RegionController`·`dto/RegionResponseDto`·`exception/RegionErrorCode`(6400)) (MSG-93) | region_stats 조회·갱신 (MSG-155·156) |
 | `video` (Owner B) | 🟡 부분 | `entity`(Video·ProcessingStatus·Visibility·VideoStatus + 상태전이 도메인 메서드), `repository/VideoRepository`(grids·user_grids native UPSERT/롤백), 메타저장 `service`·`controller`(`POST /api/videos`)·`dto`, `support/GeoSupport`, `exception/VideoErrorCode`(3xxx) — MSG-66 · presigned URL 발급(`POST /api/videos/presigned-url`) — MSG-64 · 인코딩 워커(`VideoEncodingService`+`VideoStatusWriter`+`support/FfmpegRunner`+`config/AsyncConfig`, 커밋 후 `@Async` 트리거) — MSG-65 · 삭제+점령 롤백(`DELETE /api/videos/{videoId}`, cover 재선정) — MSG-72 · s3Key 검증(소유권·headObject 실존·UNIQUE 중복) — MSG-132 · 교체(`PUT /api/videos/{videoId}`, 같은 격자만, 도감 불변) — MSG-71 · S3 정리(presign은 `videos/pending/` 발급 → 확정 시 `videos/original/` 복사, 라이프사이클 1일 만료 / 삭제·교체 시 커밋 후 객체 제거) — MSG-133 | 재생 조회 API(presigned GET 발급) |
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
@@ -28,6 +28,7 @@
 |---|---|---|
 | `GridQueryService` | Owner A | ✅ built (MSG-73 — 격자 색칠 조회 read · MSG-90 — 4-arg cursor 페이지 시그니처 추가, 2-arg 유지·strategy 오버로드 제거) |
 | `HotZoneService` | Owner A | ❌ 미생성 |
+| `RegionQueryService` | Owner A | ✅ built (MSG-93 — `resolveByPoint(lat, lon)` 역지오코딩 read. 155/156 stats 메서드 추가 여부는 후속 조율) |
 | `UserGridQueryService` | Owner B | ❌ 미생성 |
 | `UserOidcCommandService` | Owner B | ❌ 미생성 |
 
