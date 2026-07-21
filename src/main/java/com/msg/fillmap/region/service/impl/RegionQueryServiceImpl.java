@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.global.geo.KoreaCoordinates;
 import com.msg.fillmap.region.exception.RegionErrorCode;
 import com.msg.fillmap.region.repository.RegionProjection;
 import com.msg.fillmap.region.repository.RegionRepository;
@@ -23,12 +24,6 @@ import com.msg.fillmap.region.service.RegionView;
 @Transactional(readOnly = true)
 public class RegionQueryServiceImpl implements RegionQueryService {
 
-	// 서비스 좌표 범위(한국 대략) — 이 밖이면 INVALID_COORDINATE. lat/lon 유효범위(±90/±180)를 포괄한다.
-	private static final double MIN_LAT = 33.0;
-	private static final double MAX_LAT = 39.0;
-	private static final double MIN_LON = 124.0;
-	private static final double MAX_LON = 132.0;
-
 	private final RegionRepository regionRepository;
 
 	@Override
@@ -38,8 +33,7 @@ public class RegionQueryServiceImpl implements RegionQueryService {
 	}
 
 	private void validateCoordinate(double lat, double lon) {
-		if (Double.isNaN(lat) || Double.isNaN(lon)
-			|| lat < MIN_LAT || lat > MAX_LAT || lon < MIN_LON || lon > MAX_LON) {
+		if (KoreaCoordinates.isOutOfService(lat, lon)) {
 			throw new ApiException(RegionErrorCode.INVALID_COORDINATE);
 		}
 	}
