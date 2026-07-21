@@ -23,12 +23,14 @@ import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import com.msg.fillmap.global.config.AwsProperties;
@@ -36,6 +38,7 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
+import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
@@ -43,6 +46,7 @@ import com.msg.fillmap.video.dto.VideoReplaceResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
@@ -65,6 +69,9 @@ public class VideoServiceImpl implements VideoService {
 		"mov", "video/quicktime");
 
 	private static final Duration PRESIGN_TTL = Duration.ofMinutes(10);
+
+	// 썸네일 열람용 GET presign TTL (MSG-127). 목록 열람 세션 내 유효하면 충분해 PUT 과 같은 값을 쓴다.
+	private static final Duration THUMBNAIL_PRESIGN_TTL = PRESIGN_TTL;
 
 	// 발급은 pending 으로, 확정되면 original 로 옮긴다 — pending 만 라이프사이클로 만료시키기 위해서다(MSG-133).
 	// 한 prefix 를 쓰면 고아와 정상 영상이 섞여 만료 규칙을 걸 수 없다.
@@ -280,6 +287,36 @@ public class VideoServiceImpl implements VideoService {
 			.build()).url().toString();
 
 		return new PresignedUrlResponseDto(uploadUrl, s3Key, PRESIGN_TTL.toSeconds());
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<GridVideoResponseDto> getGridVideos(long userId, String gridId) {
+		return videoRepository
+			.findByUserIdAndGridIdAndStatusOrderByCreatedAtDesc(userId, gridId, VideoStatus.ACTIVE)
+			.stream()
+			.map(video -> GridVideoResponseDto.of(video, presignThumbnailGet(video.getThumbnailUrl())))
+			.toList();
+	}
+
+	/**
+	 * 썸네일 S3 key → TTL 있는 presigned GET URL (MSG-127, 코드베이스 최초 GET presign).
+	 * 버킷이 private 이라 key 는 그대로 열람 불가라 요청 시점에 서명한다. key 가 null(READY 이전)이면
+	 * 발급 대상이 없어 null 을 반환한다 — FE 는 processingStatus 로 플레이스홀더를 그린다.
+	 * presign 은 로컬 서명 연산(S3 호출 아님)이라 항목마다 발급해도 N+1 우려가 없다.
+	 */
+	private String presignThumbnailGet(String thumbnailKey) {
+		if (thumbnailKey == null) {
+			return null;
+		}
+		GetObjectRequest objectRequest = GetObjectRequest.builder()
+			.bucket(awsProperties.s3().bucket())
+			.key(thumbnailKey)
+			.build();
+		return s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
+			.signatureDuration(THUMBNAIL_PRESIGN_TTL)
+			.getObjectRequest(objectRequest)
+			.build()).url().toString();
 	}
 
 	private void validateCoordinate(double lat, double lon) {
