@@ -1,6 +1,7 @@
 package com.msg.fillmap.auth.jwt;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -83,7 +84,10 @@ class JwtFilterIntegrationTest {
 		@Test
 		@DisplayName("만료된 토큰이면 401 EXPIRED_TOKEN (2402) 로 응답한다 - 필터→resolver→GlobalExceptionHandler 경로")
 		void expiredToken() throws Exception {
-			JwtProperties expiredProps = new JwtProperties(jwtProperties.secret(), Duration.ofSeconds(-1));
+			JwtProperties expiredProps = new JwtProperties(
+				jwtProperties.secret(), Duration.ofSeconds(-1),
+				jwtProperties.refreshSecret(), jwtProperties.refreshTokenTtl()
+			);
 			JwtTokenProvider expiredIssuer = new JwtTokenProvider(expiredProps, new InMemoryInvalidatedTokenStore());
 			String token = expiredIssuer.issueAccessToken(1L, UserRole.USER);
 
@@ -99,7 +103,8 @@ class JwtFilterIntegrationTest {
 		void forgedToken() throws Exception {
 			JwtProperties otherProps = new JwtProperties(
 				"another-completely-different-secret-32-bytes-plus-long",
-				Duration.ofHours(1)
+				Duration.ofHours(1),
+				jwtProperties.refreshSecret(), jwtProperties.refreshTokenTtl()
 			);
 			JwtTokenProvider forger = new JwtTokenProvider(otherProps, new InMemoryInvalidatedTokenStore());
 			String token = forger.issueAccessToken(1L, UserRole.USER);
@@ -109,6 +114,15 @@ class JwtFilterIntegrationTest {
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.developCode").value(2401))
 				.andExpect(jsonPath("$.message").value("유효하지 않은 토큰입니다"));
+		}
+
+		@Test
+		@DisplayName("reissue 는 permitAll — 토큰 없이 접근해도 2403(UNAUTHENTICATED)이 아니라 컨트롤러에 도달한다 (MSG-135)")
+		void reissue_엔드포인트는_인증없이_접근가능하다() throws Exception {
+			// 리프레시 토큰이 없으므로 2431 — 시큐리티가 막았다면 2403 이 나온다
+			mockMvc.perform(post("/api/auth/reissue"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2431));
 		}
 
 		@Test

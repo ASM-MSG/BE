@@ -12,7 +12,7 @@
 |---|---|---|---|
 | `response` | ✅ 완성 | `ApiResponseDto`, `SuccessResponse`, `ErrorCode`, `ErrorCodeIfs` | — |
 | `global` | ✅ 완성 | `ApiException`, `GlobalExceptionHandler`, `config/SecurityConfig`, `config/S3Config`(S3Presigner 빈)·`config/AwsProperties`(MSG-64) | — |
-| `auth` (Owner B) | ✅ 완성 | `controller`, `service`(AuthService·OidcLoginService), `dto`, `jwt`(TokenProvider·필터·JwtProperties), `oidc`(Kakao OIDC), `exception/AuthErrorCode` | — |
+| `auth` (Owner B) | ✅ 완성 | `controller`(+`/reissue`), `service`(AuthService·OidcLoginService·RefreshTokenService), `dto`(+Reissue*), `jwt`(TokenProvider·필터·JwtProperties·RefreshTokenProvider/Store·RedisInvalidatedTokenStore), `oidc`(Kakao OIDC), `support/RefreshTokenCookies`, `exception/AuthErrorCode` · 리프레시 토큰(디바이스별 Redis `refresh:{userId}:{deviceId}`, 2주 슬라이딩, 로테이션+재사용감지)·블랙리스트 Redis 이관·하이브리드 전송(웹 쿠키/앱 body) (MSG-135) | — |
 | `user` (Owner B) | 🟡 부분 | `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode` | `service`, `controller`, `dto` |
 | `grid` (Owner A) | 🟡 부분 | `GridEncoder`·`GridConstants`(순수 유틸), `entity/{UserGrid,UserGridId,Grid}`, `repository/GridRepository`, `service/GridQueryService`(+impl, read 계약 A→B), `controller/GridController`, `dto/*`, `exception/GridErrorCode`(4xxx) (MSG-73) · viewport cursor 페이지네이션(`GridCursor` Base64URL 커서, `OccupiedGridPage`, `OccupiedGridPageResponseDto`, keyset 행값비교+lookahead, `?strategy` 파라미터·`ViewportStrategy` 제거 — A 고정, repo B 쿼리는 보존) (MSG-90) | `GridOccupationService`(write는 MSG-66이 흡수), `HotZoneService`, `region` |
 | `usergrid` (Owner B) | ❌ 미생성 | — | 패키지 전체. `UserGridQueryService` 계약 포함 |

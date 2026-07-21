@@ -2,14 +2,21 @@
 # main application.yml(issuer·jwk-set-uri·flyway 등)은 그대로 살아있고, 여기서는
 # local 프로파일이 요구하는 datasource·jwt.secret·kakao client-id만 채운다.
 # CI는 이 datasource(localhost:5432)에 PostGIS 서비스 컨테이너를 붙인다.
+# Redis(MSG-135)도 동일 — 로컬 fillmap-local-redis / CI redis 서비스 컨테이너 (localhost:6379).
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/fillmap
     username: user
     password: user1234
 
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
 jwt:
   secret: test-secret-0123456789-0123456789-0123456789
+  refresh-secret: test-refresh-secret-0123456789-0123456789-0123456789
 
 oauth:
   kakao:
