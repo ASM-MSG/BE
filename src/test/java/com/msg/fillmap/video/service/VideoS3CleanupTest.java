@@ -199,4 +199,19 @@ class VideoS3CleanupTest {
 		// 자리를 헛되이 건드린다.
 		assertThat(deletedKeys()).containsExactly(OLD_ORIGINAL);
 	}
+
+	@Test
+	@DisplayName("교체하면 옛 블러본도 지운다 (MSG-145)")
+	void 교체하면_옛_블러본도_지운다() {
+		Video video = existingVideo();
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		video.applyBlurResult("videos/blurred/1/7.mp4", List.of(List.of(0.0, 3.33)));
+		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		service.replaceVideo(USER_ID, VIDEO_ID, new VideoReplaceRequestDto(
+			PENDING, null, null, (short) 7, LocalDateTime.now()));
+
+		// replaceFile 이 블러본 키를 null 로 밀기 전에 잡아둔 값이어야 한다 — 캡처 순서 회귀 방지.
+		assertThat(deletedKeys()).containsExactlyInAnyOrder(OLD_ORIGINAL, "videos/blurred/1/7.mp4");
+	}
 }
