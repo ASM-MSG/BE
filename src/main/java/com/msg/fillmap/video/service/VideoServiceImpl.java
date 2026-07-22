@@ -126,13 +126,14 @@ public class VideoServiceImpl implements VideoService {
 
 		// replaceFile 이 필드를 덮어쓰므로 그 전에 잡아둔다.
 		String replacedKey = video.getOriginalS3Key();
+		String replacedBlurredKey = video.getBlurredS3Key();
 
 		video.replaceFile(originalKey, request.durationSec());
 		copyToOriginal(request.s3Key(), originalKey);
 
 		// 교체된 원본은 참조를 잃는다. 인코딩본·썸네일은 키가 videoId 기반이라 재인코딩이 같은 자리에
-		// 덮어쓰므로 지울 게 없다 — 고아가 되는 건 옛 original 하나뿐이다.
-		afterCommit(() -> deleteQuietly(replacedKey));
+		// 덮어쓰므로 지울 게 없다 — 고아가 되는 건 옛 original 과 블러본(MSG-145)이다.
+		afterCommit(() -> deleteQuietly(replacedKey, replacedBlurredKey));
 		triggerEncodingAfterCommit(videoId);
 		return VideoReplaceResponseDto.from(video);
 	}
@@ -182,7 +183,8 @@ public class VideoServiceImpl implements VideoService {
 		// "정리는 별도 배치 백로그"라는 범위 유예였고, undelete 기능은 없다. 파일이 영원히 남는 쪽이
 		// 오히려 문제다. 시점에 지우면 배치·스케줄러가 통째로 필요 없다.
 		afterCommit(() -> deleteQuietly(
-			video.getOriginalS3Key(), video.getEncodedUrl(), video.getThumbnailUrl()));
+			video.getOriginalS3Key(), video.getEncodedUrl(), video.getThumbnailUrl(),
+			video.getBlurredS3Key()));
 
 		String gridId = video.getGridId();
 		videoRepository.decrementVideoCount(userId, gridId);
