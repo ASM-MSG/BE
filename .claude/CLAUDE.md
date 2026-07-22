@@ -25,6 +25,12 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 - `@.claude/docs/architecture.md` — 서비스 아키텍처(SA, 정본) · 8개 서비스 · AI Highlight-Blur
 - `@.claude/docs/ia.md` — 화면 구조(IA) · User Journey · 구현 갭
 
+## 팀 LLM 위키 (../fillmap-wiki)
+
+스펙·스키마·ADR 작업 전 `../fillmap-wiki`의 `03-specs`/`04-decisions`를 grep으로 대조한다
+(전체 탐색 금지, 타겟 조회만 — frontmatter의 keywords/aliases로 검색). 그 외에는 레포·Jira 우선,
+불확실할 때만 위키 참조. 진입점: `index.md` · `hot.md` · 운영 규칙은 `00-meta/SCHEMA.md`.
+
 ## Skills — 특정 워크플로우
 
 - **spec-writer** — 개발 스펙 문서 생성 (`docs/MSG-XXX.md`)
@@ -42,6 +48,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
 | 2026-07-05 | 초기 구성 (spec-writer, grid-developer, auth-developer, convention-reviewer 4개 에이전트 + spec-writer/spec-driven-dev 2개 스킬) | 전체 | Owner A/B 도메인 분리 협업 구조를 에이전트 팀으로 반영, 계약 인터페이스 경계면 검증 자동화 |
+| 2026-07-22 | Phase 4에 Codex 교차 리뷰 단계 추가 (명시적 `codex-companion review`) | spec-driven-dev | Codex 스톱 게이트는 턴 단위 판정이라 서브에이전트가 짠 코드를 못 봄 — MSG-145에서 명시 리뷰가 실제 결함 3건 적발, 구현 완료 시점 상시 편입 |
 
 ## Quick Commands
 
