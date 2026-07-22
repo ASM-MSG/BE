@@ -21,6 +21,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
 import com.msg.fillmap.video.exception.VideoErrorCode;
@@ -50,7 +51,8 @@ class VideoPresignTest {
 		// presign 경로는 DB 도 인코딩도 S3 조회도 타지 않는다.
 		videoService = new VideoServiceImpl(
 			mock(VideoRepository.class), mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
-			presigner, mock(software.amazon.awssdk.services.s3.S3Client.class), properties);
+			presigner, mock(software.amazon.awssdk.services.s3.S3Client.class), properties,
+			mock(RegionStatsCommandService.class));
 	}
 
 	@Test

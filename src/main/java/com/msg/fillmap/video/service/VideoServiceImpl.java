@@ -39,6 +39,7 @@ import com.msg.fillmap.global.geo.KoreaCoordinates;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
+import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
@@ -80,6 +81,7 @@ public class VideoServiceImpl implements VideoService {
 	private final S3Presigner s3Presigner;
 	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
+	private final RegionStatsCommandService regionStatsCommandService;
 
 	@Override
 	@Transactional
@@ -100,6 +102,10 @@ public class VideoServiceImpl implements VideoService {
 
 		copyToOriginal(request.s3Key(), originalKey);
 		videoRepository.upsertUserGrid(userId, gridId, video.getId());
+		if (!alreadyOccupied) {
+			// 첫 점령 — 그 격자 중심 행정동의 수집률 캐시를 같은 트랜잭션에서 갱신한다 (MSG-155).
+			regionStatsCommandService.refresh(userId, gridId);
+		}
 		triggerEncodingAfterCommit(video.getId());
 
 		return new VideoUploadResponseDto(
@@ -183,6 +189,9 @@ public class VideoServiceImpl implements VideoService {
 		if (videoRepository.deleteUserGridIfEmpty(userId, gridId) == 0) {
 			// 아직 그 격자에 내 영상이 남아 있다 — 점령은 유지하고 cover 만 정리한다.
 			videoRepository.reselectCover(userId, gridId, videoId);
+		} else {
+			// 점령 롤백 — 그 격자 중심 행정동의 수집률 캐시를 같은 트랜잭션에서 갱신한다 (MSG-155).
+			regionStatsCommandService.refresh(userId, gridId);
 		}
 	}
 

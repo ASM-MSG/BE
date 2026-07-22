@@ -19,6 +19,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.global.config.AwsProperties;
+import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
@@ -51,7 +52,8 @@ class VideoGridQueryServiceTest {
 
 		videoService = new VideoServiceImpl(
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
-			presigner, mock(S3Client.class), properties);
+			presigner, mock(S3Client.class), properties,
+			mock(RegionStatsCommandService.class));
 	}
 
 	private void givenVideos(Video... videos) {
