@@ -93,6 +93,13 @@ public class Video {
 	@Column(name = "ai_job_id", length = 64)
 	private String aiJobId;
 
+	/**
+	 * 이번 BLURRING 시도가 시작된 시각 (MSG-149 V4, D4). 타임아웃을 created_at 이 아니라 시도 시작으로 재
+	 * — 교체 후 재인코딩은 created_at 이 옛 시각이라 100% 오탐이 나므로, markEncoded 가 시도마다 갱신한다.
+	 */
+	@Column(name = "blurring_started_at")
+	private LocalDateTime blurringStartedAt;
+
 	@Column(name = "recorded_at", nullable = false)
 	private LocalDateTime recordedAt;
 
@@ -131,6 +138,34 @@ public class Video {
 		this.processingStatus = ProcessingStatus.READY;
 	}
 
+	/**
+	 * ENCODING → BLURRING (MSG-149). AI 활성 흐름에서 인코딩이 끝나면 READY 대신 여기로 온다.
+	 * **thumbnailUrl 은 세팅하지 않는다** — AI 활성 인코딩은 미블러 썸네일을 S3 에 올리지 않으므로(P1),
+	 * "thumbnailUrl non-null ⇔ S3 객체 실존" 불변식을 지키려면 BLURRING 동안 null 이어야 한다. 썸네일 키는
+	 * 폴러가 완료 시 블러본에서 뽑아 올린 뒤 markReadyFromBlurring 에서 기록한다.
+	 * 인자는 URL 이 아니라 S3 key 다 (encodedUrl 필드 주석 참조).
+	 */
+	public void markEncoded(String encodedKey) {
+		this.encodedUrl = encodedKey;
+		this.processingStatus = ProcessingStatus.BLURRING;
+		this.blurringStartedAt = LocalDateTime.now();
+	}
+
+	/**
+	 * BLURRING → READY (MSG-150). 블러본·하이라이트는 applyBlurResult 로 이미 채운 뒤 전이한다.
+	 * thumbnailUrl 은 폴러가 블러본 썸네일을 S3 에 올린 **직후** 여기서 기록한다 — "객체 업로드 완료 후에만
+	 * 키 기록" 순서로 불변식을 지킨다. encoded 키는 유지한다.
+	 */
+	public void markReadyFromBlurring(String thumbnailKey) {
+		this.thumbnailUrl = thumbnailKey;
+		this.processingStatus = ProcessingStatus.READY;
+	}
+
+	/** AI job_id 상관키 기록 (MSG-149). 폴러가 제출 직후 호출해 재시작 복구·폴링에 쓴다. */
+	public void recordAiJob(String jobId) {
+		this.aiJobId = jobId;
+	}
+
 	/** 변환 실패. 재시도는 없고 기록만 남긴다 (MSG-65 D8). */
 	public void markFailed() {
 		this.processingStatus = ProcessingStatus.FAILED;
@@ -152,6 +187,7 @@ public class Video {
 		this.blurredS3Key = null;
 		this.highlights = null;
 		this.aiJobId = null;
+		this.blurringStartedAt = null;
 		this.processingStatus = ProcessingStatus.UPLOADED;
 	}
 
