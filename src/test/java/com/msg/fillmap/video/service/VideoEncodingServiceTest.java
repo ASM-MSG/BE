@@ -1,5 +1,6 @@
 package com.msg.fillmap.video.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
@@ -7,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import java.nio.file.Files;
@@ -17,6 +19,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.video.entity.Video;
@@ -24,8 +28,10 @@ import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.FfmpegRunner;
 import com.msg.fillmap.video.support.GeoSupport;
 
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
  * ffmpeg·S3 를 목으로 대체해 파이프라인 분기만 검증한다 (CI 에 ffmpeg 가 없어도 돈다).
@@ -143,5 +149,21 @@ class VideoEncodingServiceTest {
 
 		verify(statusWriter).markFailed(VIDEO_ID);
 		verify(ffmpegRunner, never()).probeDurationSec(any());
+	}
+
+	@Test
+	void AI_활성이면_인코딩_단계에서_미블러_썸네일을_올리지_않는다() {
+		ReflectionTestUtils.setField(encodingService, "aiEnabled", true);
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+
+		encodingService.encode(VIDEO_ID);
+
+		// 인코딩본 하나만 올린다 — 미블러 썸네일은 추출도 업로드도 하지 않는다 (P1).
+		ArgumentCaptor<PutObjectRequest> captor = ArgumentCaptor.forClass(PutObjectRequest.class);
+		verify(s3Client, times(1)).putObject(captor.capture(), any(RequestBody.class));
+		assertThat(captor.getValue().key()).isEqualTo("videos/encoded/1/7.mp4");
+		verify(ffmpegRunner, never()).extractThumbnail(any(), any(), anyDouble());
+		verify(statusWriter).markEncoded(VIDEO_ID, "videos/encoded/1/7.mp4");   // thumbnail 키는 폴러가 완료 시 기록(R5)
 	}
 }

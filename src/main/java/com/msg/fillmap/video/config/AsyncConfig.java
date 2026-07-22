@@ -1,6 +1,5 @@
 package com.msg.fillmap.video.config;
 
-import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import org.springframework.context.annotation.Bean;
@@ -21,9 +20,13 @@ public class AsyncConfig {
 	 * 큐가 차면 CallerRuns 로 밀어내지 않고 예외를 던져 FAILED 로 기록되게 둔다.
 	 *
 	 * ponytail: 앱 내부 @Async + pool 1. 처리량이 부족하면 큐(SQS/Redis) + 별도 워커로 분리한다.
+	 *
+	 * 반환 타입을 구체 ThreadPoolTaskExecutor 로 노출한다 — AiBlurPoller 가 썸네일 재추출을 이 풀에 태워
+	 * 인코딩과 직렬화하는데(MSG-149 P2-a), @Scheduled 가 만드는 taskScheduler 도 Executor 라 by-type 주입이
+	 * 모호해지기 때문이다. 구체 타입이면 유일하게 매칭된다. @Async(name)·bean 이름은 그대로다.
 	 */
 	@Bean(ENCODING_EXECUTOR)
-	public Executor encodingExecutor() {
+	public ThreadPoolTaskExecutor encodingExecutor() {
 		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
 		executor.setCorePoolSize(1);
 		executor.setMaxPoolSize(1);

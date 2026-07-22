@@ -3,11 +3,15 @@ package com.msg.fillmap.video.repository;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
 
@@ -19,6 +23,23 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	 * visibility·processing_status 는 필터하지 않는다 — 내 도감이라 PRIVATE·인코딩 중 영상도 보여야 한다.
 	 */
 	List<Video> findByUserIdAndGridIdAndStatusOrderByCreatedAtDesc(Long userId, String gridId, VideoStatus status);
+
+	/**
+	 * AI 폴러가 처리할 대상 조회 (MSG-149 D3, P2). status=ACTIVE 로 한정해 삭제(DELETED)된 영상을 제외한다 —
+	 * 삭제 후에도 processing_status 는 BLURRING 으로 남으므로, 이 필터가 없으면 폴러가 삭제본을 계속 집어
+	 * 블러본을 S3 에 새로 올려 영구 고아를 만든다. 상태를 DB 에 두므로 서버 재시작 후에도 in-flight 영상이
+	 * 그대로 잡혀 이어 처리된다 — in-memory async 루프였다면 재시작 시 소실됐을 것이다.
+	 */
+	List<Video> findByStatusAndProcessingStatus(VideoStatus status, ProcessingStatus processingStatus);
+
+	/**
+	 * 행 잠금 조회 (MSG-149 P1-c). 폴러의 블러 결과/실패/제출 쓰기 가드가 읽기-후-쓰기 레이스(ms 창)를
+	 * 없애기 위해 SELECT ... FOR UPDATE 로 잠근다 — replaceVideo/deleteVideo 트랜잭션의 UPDATE 와 같은 행에서
+	 * 직렬화되어, 폴러가 잠금 후 재확인한 상태가 그 트랜잭션 커밋 이후 상태임을 보장한다.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select v from Video v where v.id = :id")
+	Optional<Video> findWithLockById(@Param("id") Long id);
 
 	/**
 	 * 격자 전역 대표 영상 1건 (MSG-87). user_id 조건 없이 그 격자의 모든 공개·READY 영상 중 조회수 →
