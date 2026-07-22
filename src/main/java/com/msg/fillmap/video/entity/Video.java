@@ -1,6 +1,7 @@
 package com.msg.fillmap.video.entity;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -12,6 +13,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.Point;
 
 import lombok.AccessLevel;
@@ -77,6 +80,19 @@ public class Video {
 	@Column(name = "view_count", nullable = false)
 	private Long viewCount;
 
+	/** 블러 처리본 S3 key (1:1). BE 가 AI 서버에서 받아 S3 에 올린 뒤 채운다 (MSG-150). */
+	@Column(name = "blurred_s3_key", length = 500)
+	private String blurredS3Key;
+
+	/** 하이라이트 구간 [[시작초, 끝초], ...] 최대 3. 초는 소수점(AI 가 round(x,2) 반환). 0구간이면 [] 또는 null (MSG-145). */
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "highlights", columnDefinition = "jsonb")
+	private List<List<Double>> highlights;
+
+	/** AI 서버 job_id 상관키. 폴링 복구용(MSG-149 폴링, MSG-150 결과반영). */
+	@Column(name = "ai_job_id", length = 64)
+	private String aiJobId;
+
 	@Column(name = "recorded_at", nullable = false)
 	private LocalDateTime recordedAt;
 
@@ -125,14 +141,27 @@ public class Video {
 	 * id 가 그대로라 user_grids 의 video_count·cover_video_id 가 자연히 불변이다.
 	 *
 	 * 인코딩 결과는 새 파일 기준으로 다시 만들어야 하므로 비우고 UPLOADED 로 되돌린다(D6).
-	 * 그러지 않으면 재인코딩 전까지 옛 영상이 재생된다.
+	 * 그러지 않으면 재인코딩 전까지 옛 영상이 재생된다. AI 블러 결과(블러본·하이라이트·job_id)도
+	 * 원본에서 파생된 값이라 원본이 바뀌면 전부 무효 → 함께 비운다 (MSG-145).
 	 */
 	public void replaceFile(String originalS3Key, Short durationSec) {
 		this.originalS3Key = originalS3Key;
 		this.durationSec = durationSec;
 		this.encodedUrl = null;
 		this.thumbnailUrl = null;
+		this.blurredS3Key = null;
+		this.highlights = null;
+		this.aiJobId = null;
 		this.processingStatus = ProcessingStatus.UPLOADED;
+	}
+
+	/**
+	 * AI 블러 결과 반영 (MSG-145). 블러본 S3 key 와 하이라이트 구간을 채운다.
+	 * 상태 전이(BLURRING → READY)는 하지 않는다 — 그 오케스트레이션은 MSG-150 소관이다.
+	 */
+	public void applyBlurResult(String blurredS3Key, List<List<Double>> highlights) {
+		this.blurredS3Key = blurredS3Key;
+		this.highlights = highlights;
 	}
 
 	/** soft delete (MSG-72 D2). row 만 표시하고, S3 파일은 서비스가 커밋 후 지운다 (MSG-133). */

@@ -3,6 +3,7 @@ package com.msg.fillmap.video.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,18 @@ class VideoStatusTransitionTest {
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
 		assertThat(video.getEncodedUrl()).isEqualTo("videos/encoded/1/7.mp4");
 		assertThat(video.getThumbnailUrl()).isEqualTo("videos/thumb/1/7.jpg");
+	}
+
+	@Test
+	void replaceFile_은_AI_블러_결과를_모두_비운다() {
+		Video video = newVideo();
+		video.applyBlurResult("videos/blurred/1/7.mp4", List.of(List.of(0.0, 3.33)));
+
+		video.replaceFile("videos/original/1/y.mp4", (short) 8);
+
+		assertThat(video.getBlurredS3Key()).isNull();
+		assertThat(video.getHighlights()).isNull();
+		assertThat(video.getAiJobId()).isNull();
 	}
 
 	@Test
