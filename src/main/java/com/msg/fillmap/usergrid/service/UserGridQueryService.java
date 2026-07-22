@@ -13,7 +13,8 @@ public interface UserGridQueryService {
 
 	/**
 	 * 갤러리 격자 목록: 내 점령 격자를 최근 수집순(first_collected_at DESC) 최대 30개 (MSG-153, B 내부 read).
-	 * 점령 0건이면 빈 리스트. cover 가 없거나 READY 이전이면 coverVideoId·coverThumbnailUrl 이 null.
+	 * 점령 0건이면 빈 리스트. coverVideoId 는 cover 없으면 null(readiness 무관 — 스펙 §API),
+	 * coverThumbnailUrl 만 READY 게이트 — cover 없거나 READY 이전·썸네일 미발급이면 null(§D4).
 	 */
 	List<CollectionGridView> getCollectionGrids(long userId);
 }
