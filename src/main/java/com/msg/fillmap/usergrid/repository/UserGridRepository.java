@@ -35,7 +35,9 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 
 	/**
 	 * 갤러리 격자 목록 — 내 점령 격자를 최근 수집순(first_collected_at DESC, 타이브레이크 grid_id DESC)
-	 * 최대 30개 (MSG-153 D3). cover 영상 썸네일 key 는 videos LEFT JOIN 으로 끌어온다(없으면 null).
+	 * 최대 30개 (MSG-153 D3). cover 는 READY 게이트를 건 videos LEFT JOIN 에서만 가져온다 — id 와 썸네일 key 를
+	 * 둘 다 v.* 에서 뽑아 "cover 없거나 READY 이전이면 둘 다 null"(D4·DTO 계약)이 쌍으로 보장된다.
+	 * ug.cover_video_id 를 직접 SELECT 하면 pre-READY 에 id 만 살아나와 계약 위반(Codex 커밋 리뷰 지적).
 	 * geospatial·grids 조인 없음(D5) — equi/LEFT JOIN + PK 조회뿐이라 조회 핫패스에 point-in-polygon 이 없다.
 	 * gridY/gridX 는 서비스가 GridEncoder.decode(gridId) 로 산출하고, coverThumbnailKey 는 서비스가 presign 한다.
 	 */
@@ -45,10 +47,10 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 			ug.first_collected_at AS "firstCollectedAt",
 			ug.last_uploaded_at   AS "lastUploadedAt",
 			ug.video_count        AS "videoCount",
-			ug.cover_video_id     AS "coverVideoId",
+			v.id                  AS "coverVideoId",
 			v.thumbnail_url       AS "coverThumbnailKey"
 		FROM user_grids ug
-		LEFT JOIN videos v ON v.id = ug.cover_video_id
+		LEFT JOIN videos v ON v.id = ug.cover_video_id AND v.processing_status = 'READY'
 		WHERE ug.user_id = :userId
 		ORDER BY ug.first_collected_at DESC, ug.grid_id DESC
 		LIMIT 30

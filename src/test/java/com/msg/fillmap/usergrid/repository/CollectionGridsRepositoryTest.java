@@ -112,16 +112,16 @@ class CollectionGridsRepositoryTest {
 	}
 
 	@Test
-	@DisplayName("cover영상 썸네일key가 null이면 coverThumbnailKey가 null이다")
-	void cover영상_썸네일key가_null이면_coverThumbnailKey가_null이다() {
+	@DisplayName("cover영상이 READY 이전이면 coverVideoId와 coverThumbnailKey가 둘 다 null이다")
+	void cover영상이_READY_이전이면_coverVideoId와_coverThumbnailKey가_둘_다_null이다() {
 		long me = newUser();
 		String gridId = grid(0, 0);
-		long coverId = seedVideo(me, gridId, null);   // READY 이전 — 썸네일 아직 없음
+		long coverId = seedVideo(me, gridId, null, "ENCODING");   // 인코딩 중 — READY 이전
 		occupy(me, gridId, BASE, BASE, 1, coverId);
 
 		CollectionGridProjection row = userGridRepository.getCollectionGrids(me).get(0);
 
-		assertThat(row.getCoverVideoId()).isEqualTo(coverId);
+		assertThat(row.getCoverVideoId()).isNull();
 		assertThat(row.getCoverThumbnailKey()).isNull();
 	}
 
@@ -204,10 +204,14 @@ class CollectionGridsRepositoryTest {
 	}
 
 	/**
-	 * cover 후보 영상 하나를 삽입하고 id 를 돌려준다. thumbnailKey null 은 READY 이전(썸네일 미발급) 재현.
+	 * cover 후보 영상 하나를 삽입하고 id 를 돌려준다 (기본 READY — cover 는 READY 게이트를 지나야 노출).
 	 * geom NOT NULL 이라 서해 공해상 좌표를 넣는다. 삽입 후 유니크한 original_s3_key 로 id 를 되읽는다.
 	 */
 	private long seedVideo(long userId, String gridId, String thumbnailKey) {
+		return seedVideo(userId, gridId, thumbnailKey, "READY");
+	}
+
+	private long seedVideo(long userId, String gridId, String thumbnailKey, String processingStatus) {
 		String originalKey = "videos/original/m153b-" + System.nanoTime() + ".mp4";
 		em.createNativeQuery("""
 			INSERT INTO videos (
@@ -216,13 +220,14 @@ class CollectionGridsRepositoryTest {
 			VALUES (
 				:userId, :gridId, :originalKey, CAST(:thumbKey AS text),
 				ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
-				10, now(), 'READY', 'ACTIVE'
+				10, now(), :processingStatus, 'ACTIVE'
 			)
 			""")
 			.setParameter("userId", userId)
 			.setParameter("gridId", gridId)
 			.setParameter("originalKey", originalKey)
 			.setParameter("thumbKey", thumbnailKey)
+			.setParameter("processingStatus", processingStatus)
 			.setParameter("lon", SEA_LON)
 			.setParameter("lat", SEA_LAT)
 			.executeUpdate();
