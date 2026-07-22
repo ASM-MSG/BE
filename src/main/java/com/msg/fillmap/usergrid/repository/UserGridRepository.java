@@ -1,5 +1,7 @@
 package com.msg.fillmap.usergrid.repository;
 
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -30,4 +32,26 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 				FROM videos WHERE user_id = :userId AND status <> 'DELETED') AS "visitedRegionCount"
 		""", nativeQuery = true)
 	CollectionSummaryProjection getCollectionSummary(@Param("userId") long userId);
+
+	/**
+	 * 갤러리 격자 목록 — 내 점령 격자를 최근 수집순(first_collected_at DESC, 타이브레이크 grid_id DESC)
+	 * 최대 30개 (MSG-153 D3). cover 영상 썸네일 key 는 videos LEFT JOIN 으로 끌어온다(없으면 null).
+	 * geospatial·grids 조인 없음(D5) — equi/LEFT JOIN + PK 조회뿐이라 조회 핫패스에 point-in-polygon 이 없다.
+	 * gridY/gridX 는 서비스가 GridEncoder.decode(gridId) 로 산출하고, coverThumbnailKey 는 서비스가 presign 한다.
+	 */
+	@Query(value = """
+		SELECT
+			ug.grid_id            AS "gridId",
+			ug.first_collected_at AS "firstCollectedAt",
+			ug.last_uploaded_at   AS "lastUploadedAt",
+			ug.video_count        AS "videoCount",
+			ug.cover_video_id     AS "coverVideoId",
+			v.thumbnail_url       AS "coverThumbnailKey"
+		FROM user_grids ug
+		LEFT JOIN videos v ON v.id = ug.cover_video_id
+		WHERE ug.user_id = :userId
+		ORDER BY ug.first_collected_at DESC, ug.grid_id DESC
+		LIMIT 30
+		""", nativeQuery = true)
+	List<CollectionGridProjection> getCollectionGrids(@Param("userId") long userId);
 }
