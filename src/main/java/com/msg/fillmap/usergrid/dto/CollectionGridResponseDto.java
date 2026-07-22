@@ -8,7 +8,9 @@ import com.msg.fillmap.usergrid.service.CollectionGridView;
 
 /**
  * 갤러리 격자 목록 항목 응답 (MSG-153). 개인 도감 갤러리 뷰의 셀 하나 — 최근 수집순 최대 30개로 내려간다.
- * coverVideoId·coverThumbnailUrl 은 cover 가 없거나 READY 이전이면 null 이다(D4).
+ * coverVideoId 는 user_grids.cover_video_id 그대로(cover 없으면 null, readiness 무관 — 스펙 §API),
+ * coverThumbnailUrl 은 cover 가 없거나 READY 이전·썸네일 미발급이면 null(§D4). 인코딩 중 cover 는
+ * id 만 있고 url 이 null 인 게 정상 상태다 — FE 는 url null 을 플레이스홀더로 처리한다.
  */
 @Schema(description = "갤러리 격자 항목 — 내가 수집한 격자 하나와 cover 썸네일.")
 public record CollectionGridResponseDto(

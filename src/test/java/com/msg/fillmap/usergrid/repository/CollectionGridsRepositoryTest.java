@@ -112,17 +112,18 @@ class CollectionGridsRepositoryTest {
 	}
 
 	@Test
-	@DisplayName("cover영상이 READY 이전이면 coverVideoId와 coverThumbnailKey가 둘 다 null이다")
-	void cover영상이_READY_이전이면_coverVideoId와_coverThumbnailKey가_둘_다_null이다() {
+	@DisplayName("cover영상이 READY 이전이면 썸네일이 남아있어도 key는 null이고 id는 유지된다")
+	void cover영상이_READY_이전이면_썸네일이_남아있어도_key는_null이고_id는_유지된다() {
 		long me = newUser();
 		String gridId = grid(0, 0);
-		long coverId = seedVideo(me, gridId, null, "ENCODING");   // 인코딩 중 — READY 이전
+		// 교체·재인코딩 경계 재현 — pre-READY 행에 stale 썸네일이 남아 있어도 READY 게이트가 막는다
+		long coverId = seedVideo(me, gridId, "thumbs/m153b-stale.jpg", "ENCODING");
 		occupy(me, gridId, BASE, BASE, 1, coverId);
 
 		CollectionGridProjection row = userGridRepository.getCollectionGrids(me).get(0);
 
-		assertThat(row.getCoverVideoId()).isNull();
-		assertThat(row.getCoverThumbnailKey()).isNull();
+		assertThat(row.getCoverVideoId()).isEqualTo(coverId);   // 스펙 §API — id 는 readiness 무관
+		assertThat(row.getCoverThumbnailKey()).isNull();        // §D4 — READY 이전 썸네일 미노출
 	}
 
 	@Test
