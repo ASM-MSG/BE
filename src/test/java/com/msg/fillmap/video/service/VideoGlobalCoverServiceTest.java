@@ -26,6 +26,7 @@ import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.repository.VideoRepository;
+import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
 /**
  * 전역 대표 조회 + 썸네일 presign (MSG-87). 정렬·필터는 repository 계약이라 VideoGlobalCoverQueryTest 가 실
@@ -54,7 +55,7 @@ class VideoGlobalCoverServiceTest {
 		videoService = new VideoServiceImpl(
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(S3Client.class), properties,
-			mock(RegionStatsCommandService.class));
+			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties));
 	}
 
 	private Video readyVideo(long id, String thumbKey, LocalDateTime recordedAt, long viewCount) {

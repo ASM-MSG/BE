@@ -24,6 +24,7 @@ import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.repository.VideoRepository;
+import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
 /**
  * 조회 + 썸네일 presign. presign 은 네트워크 없는 로컬 서명이라 더미 자격증명으로 실제 S3Presigner 를
@@ -53,7 +54,7 @@ class VideoGridQueryServiceTest {
 		videoService = new VideoServiceImpl(
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(S3Client.class), properties,
-			mock(RegionStatsCommandService.class));
+			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties));
 	}
 
 	private void givenVideos(Video... videos) {

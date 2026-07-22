@@ -23,14 +23,12 @@ import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
-import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import com.msg.fillmap.global.config.AwsProperties;
@@ -53,6 +51,7 @@ import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
+import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
 // ponytail: presign 을 VideoServiceImpl 에 합침. MSG-71 에서 S3 관심사가 2개째면 PresignedUrlService 로 분리.
 @Slf4j
@@ -67,9 +66,6 @@ public class VideoServiceImpl implements VideoService {
 
 	private static final Duration PRESIGN_TTL = Duration.ofMinutes(10);
 
-	// 썸네일 열람용 GET presign TTL (MSG-127). 목록 열람 세션 내 유효하면 충분해 PUT 과 같은 값을 쓴다.
-	private static final Duration THUMBNAIL_PRESIGN_TTL = PRESIGN_TTL;
-
 	// 발급은 pending 으로, 확정되면 original 로 옮긴다 — pending 만 라이프사이클로 만료시키기 위해서다(MSG-133).
 	// 한 prefix 를 쓰면 고아와 정상 영상이 섞여 만료 규칙을 걸 수 없다.
 	private static final String PENDING_PREFIX = "videos/pending/";
@@ -82,6 +78,7 @@ public class VideoServiceImpl implements VideoService {
 	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
 	private final RegionStatsCommandService regionStatsCommandService;
+	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
 
 	@Override
 	@Transactional
@@ -302,7 +299,7 @@ public class VideoServiceImpl implements VideoService {
 		return videoRepository
 			.findByUserIdAndGridIdAndStatusOrderByCreatedAtDesc(userId, gridId, VideoStatus.ACTIVE)
 			.stream()
-			.map(video -> GridVideoResponseDto.of(video, presignThumbnailGet(video.getThumbnailUrl())))
+			.map(video -> GridVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl())))
 			.toList();
 	}
 
@@ -310,28 +307,8 @@ public class VideoServiceImpl implements VideoService {
 	@Transactional(readOnly = true)
 	public GridCoverVideoResponseDto getGridCover(String gridId) {
 		return videoRepository.findGlobalCover(gridId)
-			.map(video -> GridCoverVideoResponseDto.of(video, presignThumbnailGet(video.getThumbnailUrl())))
+			.map(video -> GridCoverVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl())))
 			.orElse(null);
-	}
-
-	/**
-	 * 썸네일 S3 key → TTL 있는 presigned GET URL (MSG-127, 코드베이스 최초 GET presign).
-	 * 버킷이 private 이라 key 는 그대로 열람 불가라 요청 시점에 서명한다. key 가 null(READY 이전)이면
-	 * 발급 대상이 없어 null 을 반환한다 — FE 는 processingStatus 로 플레이스홀더를 그린다.
-	 * presign 은 로컬 서명 연산(S3 호출 아님)이라 항목마다 발급해도 N+1 우려가 없다.
-	 */
-	private String presignThumbnailGet(String thumbnailKey) {
-		if (thumbnailKey == null) {
-			return null;
-		}
-		GetObjectRequest objectRequest = GetObjectRequest.builder()
-			.bucket(awsProperties.s3().bucket())
-			.key(thumbnailKey)
-			.build();
-		return s3Presigner.presignGetObject(GetObjectPresignRequest.builder()
-			.signatureDuration(THUMBNAIL_PRESIGN_TTL)
-			.getObjectRequest(objectRequest)
-			.build()).url().toString();
 	}
 
 	private void validateCoordinate(double lat, double lon) {

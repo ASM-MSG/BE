@@ -39,6 +39,7 @@ import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.repository.VideoRepository;
+import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
 /**
  * S3 미사용 객체 정리 — 어떤 키가 복사·삭제되는지 (MSG-133).
@@ -76,7 +77,7 @@ class VideoS3CleanupTest {
 		service = new VideoServiceImpl(repository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			mock(S3Presigner.class), s3Client,
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
-			mock(RegionStatsCommandService.class));
+			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class));
 	}
 
 	@AfterEach
