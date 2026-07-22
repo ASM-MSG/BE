@@ -3,6 +3,9 @@ package com.msg.fillmap.usergrid.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -11,9 +14,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.msg.fillmap.grid.GridEncoder;
+import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
 import com.msg.fillmap.usergrid.repository.UserGridRepository;
 import com.msg.fillmap.usergrid.service.impl.UserGridQueryServiceImpl;
+import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("UserGridQueryServiceImpl")
@@ -21,6 +28,9 @@ class UserGridQueryServiceImplTest {
 
 	@Mock
 	private UserGridRepository userGridRepository;
+
+	@Mock
+	private ThumbnailUrlPresigner thumbnailUrlPresigner;
 
 	@InjectMocks
 	private UserGridQueryServiceImpl userGridQueryService;
@@ -52,6 +62,87 @@ class UserGridQueryServiceImplTest {
 
 			assertThat(view).isEqualTo(new CollectionSummaryView(0, 0L, 0));
 		}
+	}
+
+	@Nested
+	@DisplayName("getCollectionGrids")
+	class GetCollectionGrids {
+
+		@Test
+		@DisplayName("gridY gridX는 gridId를 디코드한 값이다")
+		void gridY_gridX는_gridId를_디코드한_값이다() {
+			String gridId = "41642_110458";
+			given(userGridRepository.getCollectionGrids(1L))
+				.willReturn(List.of(gridProjection(gridId, null, null)));
+
+			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
+
+			GridIndex decoded = GridEncoder.decode(gridId);
+			assertThat(view.gridId()).isEqualTo(gridId);
+			assertThat(view.gridY()).isEqualTo((int) decoded.gridY());
+			assertThat(view.gridX()).isEqualTo((int) decoded.gridX());
+		}
+
+		@Test
+		@DisplayName("coverThumbnailUrl은 썸네일key가 있으면 presigned GET URL이다")
+		void coverThumbnailUrl은_썸네일key가_있으면_presigned_GET_URL이다() {
+			String thumbKey = "videos/thumb/1042.jpg";
+			String signed = "https://s3.example/thumb.jpg?X-Amz-Signature=abc";
+			given(userGridRepository.getCollectionGrids(1L))
+				.willReturn(List.of(gridProjection("41642_110458", 1042L, thumbKey)));
+			given(thumbnailUrlPresigner.presign(thumbKey)).willReturn(signed);
+
+			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
+
+			assertThat(view.coverVideoId()).isEqualTo(1042L);
+			assertThat(view.coverThumbnailUrl()).isEqualTo(signed);
+		}
+
+		@Test
+		@DisplayName("coverThumbnailUrl은 cover가 null이면 null이다")
+		void coverThumbnailUrl은_cover가_null이면_null이다() {
+			given(userGridRepository.getCollectionGrids(1L))
+				.willReturn(List.of(gridProjection("41642_110458", null, null)));
+
+			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
+
+			assertThat(view.coverVideoId()).isNull();
+			assertThat(view.coverThumbnailUrl()).isNull();
+		}
+	}
+
+	private CollectionGridProjection gridProjection(String gridId, Long coverVideoId, String coverThumbnailKey) {
+		return new CollectionGridProjection() {
+			@Override
+			public String getGridId() {
+				return gridId;
+			}
+
+			@Override
+			public LocalDateTime getFirstCollectedAt() {
+				return LocalDateTime.of(2026, 7, 20, 18, 3, 11);
+			}
+
+			@Override
+			public LocalDateTime getLastUploadedAt() {
+				return LocalDateTime.of(2026, 7, 21, 9, 12, 0);
+			}
+
+			@Override
+			public Integer getVideoCount() {
+				return 3;
+			}
+
+			@Override
+			public Long getCoverVideoId() {
+				return coverVideoId;
+			}
+
+			@Override
+			public String getCoverThumbnailKey() {
+				return coverThumbnailKey;
+			}
+		};
 	}
 
 	private CollectionSummaryProjection projection(int totalGridCount, long totalVideoCount, int visitedRegionCount) {

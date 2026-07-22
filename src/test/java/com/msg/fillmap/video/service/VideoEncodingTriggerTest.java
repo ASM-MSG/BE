@@ -17,6 +17,7 @@ import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.repository.VideoRepository;
+import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
@@ -49,7 +50,7 @@ class VideoEncodingTriggerTest {
 		VideoService service = new VideoServiceImpl(repository, encodingService, statusWriter,
 			mock(S3Presigner.class), mock(software.amazon.awssdk.services.s3.S3Client.class),
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
-			mock(RegionStatsCommandService.class));
+			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class));
 
 		VideoUploadRequestDto request = new VideoUploadRequestDto(
 			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now());

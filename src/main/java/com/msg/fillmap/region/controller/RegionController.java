@@ -77,4 +77,43 @@ public class RegionController {
 			.toList();
 		return SuccessResponse.of(body);
 	}
+
+	@Operation(
+		summary = "현재 위치 행정동 탐험률 (좌표 → 수집률)",
+		description = "도감 갤러리 진입 초기값. 현재 위치 좌표가 속한 행정동 1건의 내 수집률을 반환한다. 그 행정동에 수집이 없어도 "
+			+ "0% 로 합성해 반환하고, 어떤 행정동에도 안 속하면(바다·국외) 404 가 아니라 200 + body null. 서비스 범위 밖 좌표는 400(6400)."
+	)
+	@GetMapping("/stats/by-point")
+	public SuccessResponse<RegionStatResponseDto> getStatByPoint(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "위도", example = "37.4979")
+		@RequestParam(required = false) Double lat,
+		@Parameter(description = "경도", example = "127.0276")
+		@RequestParam(required = false) Double lon
+	) {
+		if (lat == null || lon == null) {
+			throw new ApiException(RegionErrorCode.INVALID_COORDINATE);
+		}
+		RegionStatResponseDto body = regionStatsQueryService.findStatByPoint(principal.userId(), lat, lon)
+			.map(RegionStatResponseDto::from)
+			.orElse(null);
+		return SuccessResponse.of(body);
+	}
+
+	@Operation(
+		summary = "격자 중심 행정동 탐험률 (격자 클릭 → 수집률)",
+		description = "클릭한 격자의 중심점이 속한 행정동 1건의 내 수집률을 반환한다. 귀속 축이 수집률 집계(MSG-155)와 같아 탐험률·라벨이 "
+			+ "일치한다. 중심점이 어떤 행정동에도 안 속하거나 gridId 형식이 이상하면 200 + body null(별도 에러 코드 없음)."
+	)
+	@GetMapping("/stats/by-grid")
+	public SuccessResponse<RegionStatResponseDto> getStatByGrid(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "41642_110458")
+		@RequestParam(required = false) String gridId
+	) {
+		RegionStatResponseDto body = regionStatsQueryService.findStatByGrid(principal.userId(), gridId)
+			.map(RegionStatResponseDto::from)
+			.orElse(null);
+		return SuccessResponse.of(body);
+	}
 }
