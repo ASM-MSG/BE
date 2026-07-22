@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.stream.Stream;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -37,6 +38,11 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
 
+	// AI 활성이면 인코딩 완료가 READY 대신 BLURRING 으로 가서 폴러가 이어받는다 (MSG-149).
+	// RegionSeeder 게이트 관례처럼 @Value 로 읽어 기본 off — 비활성이면 오늘 흐름(READY) 그대로다.
+	@Value("${ai.enabled:false}")
+	private boolean aiEnabled;
+
 	@Override
 	@Async(AsyncConfig.ENCODING_EXECUTOR)
 	public void encode(Long videoId) {
@@ -64,7 +70,10 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			Path encoded = workDir.resolve("encoded.mp4");
 			Path thumbnail = workDir.resolve("thumb.jpg");
 			ffmpegRunner.encode720p(original, encoded);
-			ffmpegRunner.extractThumbnail(original, thumbnail, duration);
+			// AI 활성이면 썸네일은 블러 후에 폴러가 뽑는다 — 여기선 만들지도 올리지도 않는다(P1, 미블러 노출 차단).
+			if (!aiEnabled) {
+				ffmpegRunner.extractThumbnail(original, thumbnail, duration);
+			}
 
 			// ffmpeg 가 도는 동안 삭제됐으면 결과를 올려봐야 아무도 참조하지 않는 고아가 된다 —
 			// 삭제 시점 정리(MSG-133)는 아직 없던 객체를 지울 수 없기 때문이다.
@@ -77,10 +86,16 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			String encodedKey = "videos/encoded/%d/%d.mp4".formatted(video.getUserId(), videoId);
 			String thumbnailKey = "videos/thumb/%d/%d.jpg".formatted(video.getUserId(), videoId);
 			upload(encodedKey, "video/mp4", encoded);
-			upload(thumbnailKey, "image/jpeg", thumbnail);
 
-			statusWriter.markReady(videoId, encodedKey, thumbnailKey);
-			log.info("인코딩 완료: videoId={} duration={}s", videoId, duration);
+			if (aiEnabled) {
+				// 미블러 썸네일을 S3 에 올리지 않고 thumbnailUrl 도 기록하지 않는다(P1/R5 불변식) — 폴러가 완료 시
+				// 블러본에서 뽑아 결정적 키에 올린 뒤 그때 thumbnailUrl 을 기록한다. 교체돼도 미블러본이 공개 키에 안 닿는다.
+				statusWriter.markEncoded(videoId, encodedKey);
+			} else {
+				upload(thumbnailKey, "image/jpeg", thumbnail);
+				statusWriter.markReady(videoId, encodedKey, thumbnailKey);
+			}
+			log.info("인코딩 완료: videoId={} duration={}s aiEnabled={}", videoId, duration, aiEnabled);
 		} catch (Exception e) {
 			// 비동기라 던져봐야 받을 곳이 없다. 기록만 남기고 재시도하지 않는다 (MSG-65 D8).
 			log.error("인코딩 실패: videoId={}", videoId, e);
