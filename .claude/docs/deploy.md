@@ -49,6 +49,16 @@ SPRING_PROFILES_ACTIVE=prod java -jar build/libs/msgbe-0.0.1-SNAPSHOT.jar
 - `jpa.show-sql=false`, 로깅 `root=INFO`, `hibernate.SQL=WARN`.
 - HikariCP 풀: max 20 / idle 5.
 
+## S3 presign — AWS 측 전제 (콘솔 설정, 저장소 밖)
+
+앱 설정(`AwsProperties`·`S3Config`)은 자격증명·버킷명만 안다. 아래는 **AWS 콘솔에만 존재하는 전제**라 여기 기록한다.
+
+- **IAM (서명자 자격증명)**: presigned URL은 만든 자격증명의 권한으로 동작한다 — 권한 검사는 URL 사용 시점.
+  필요 권한: `s3:PutObject`(업로드 presign, MSG-64) · `s3:GetObject`(썸네일 GET presign MSG-127/153 + headObject 실존 검증 MSG-132) · `s3:CopyObject`/`s3:DeleteObject`(pending→original 확정 복사·삭제 정리, MSG-133).
+- **버킷 CORS**: 브라우저 직접 PUT(64)은 CORS 필수(이미 설정됨). 썸네일 GET은 `<img src>` 로드라 **CORS 불요** —
+  FE가 fetch()/canvas로 다루게 되면 그때 GET 메서드 허용을 추가해야 한다.
+- **Block Public Access**: 켜둔 채로 무관 — presigned URL은 서명된 인증 요청이지 익명 공개 접근이 아니다.
+
 ## DB 마이그레이션 (Flyway)
 
 `application.yml`에 활성화돼 있어 앱 기동 시 자동 적용된다.
