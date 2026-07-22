@@ -10,6 +10,8 @@ import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoReplaceResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
+import com.msg.fillmap.video.dto.VideoVisibilityRequestDto;
+import com.msg.fillmap.video.dto.VideoVisibilityResponseDto;
 
 public interface VideoService {
 
@@ -48,4 +50,11 @@ public interface VideoService {
 	 * 변하지 않는다. 같은 격자 안에서만 가능하고, 교체 후 재인코딩이 돈다.
 	 */
 	VideoReplaceResponseDto replaceVideo(long userId, long videoId, VideoReplaceRequestDto request);
+
+	/**
+	 * 본인 영상의 공개 범위(visibility) 를 PUBLIC↔PRIVATE 로 전환한다 (MSG-162). 소유권은 replace·delete 와
+	 * 같은 경로로 검증하고, 삭제된 영상은 되살리지 않는다(VIDEO_NOT_FOUND). processing_status 와 무관하게
+	 * 전환을 허용하며, 실제 노출은 read 경로가 READY 로 게이트한다. 같은 값 재전환은 멱등하게 성공한다.
+	 */
+	VideoVisibilityResponseDto setVisibility(long userId, long videoId, VideoVisibilityRequestDto request);
 }

@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -25,6 +26,8 @@ import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoReplaceResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
+import com.msg.fillmap.video.dto.VideoVisibilityRequestDto;
+import com.msg.fillmap.video.dto.VideoVisibilityResponseDto;
 import com.msg.fillmap.video.service.VideoService;
 
 @Tag(name = "영상 (Video)", description = "영상 업로드·교체·삭제 API. 업로드는 presigned URL 발급 → S3 직접 업로드 → 메타데이터 저장 순서다.")
@@ -72,6 +75,19 @@ public class VideoController {
 		@Valid @RequestBody VideoReplaceRequestDto request
 	) {
 		return SuccessResponse.of(videoService.replaceVideo(principal.userId(), videoId, request));
+	}
+
+	@Operation(
+		summary = "영상 공개 범위 전환",
+		description = "본인 영상의 공개 범위를 PUBLIC↔PRIVATE로 전환한다. 전환된 상태를 반환하며, 같은 값 재전환은 멱등하게 성공한다."
+	)
+	@PatchMapping("/{videoId}/visibility")
+	public SuccessResponse<VideoVisibilityResponseDto> setVisibility(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "공개 범위를 전환할 영상 ID", example = "1042") @PathVariable Long videoId,
+		@Valid @RequestBody VideoVisibilityRequestDto request
+	) {
+		return SuccessResponse.of(videoService.setVisibility(principal.userId(), videoId, request));
 	}
 
 	@Operation(
