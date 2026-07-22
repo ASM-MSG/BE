@@ -80,7 +80,8 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	 * regionName·parentCode 를 채운다 — geospatial 연산 0(성공 기준 8), 155 가 쓰기 시 물질화한 값을 그대로 읽는다.
 	 * parentCode 가 null 이면 전국, 아니면 그 시군구 산하만(§D1). collectedOnly=true 면 collected_count>0 행만,
 	 * false 면 손댄 행 전부(롤백 0-row 포함, 전체 regions outer-join 아님 — §D1). progress_rate 는 표시 100 clamp(§D4).
-	 * nullable/boolean 파라미터는 PostgreSQL 타입 추론이 흔들리지 않도록 CAST 로 명시한다. LIMIT 1000 안전 상한(§D2).
+	 * nullable/boolean 파라미터는 PostgreSQL 타입 추론이 흔들리지 않도록 CAST 로 명시한다. LIMIT 없음 —
+	 * 결과는 구조적으로 사용자당 최대 regions 행 수(3,558)로 유한해서, 인위적 상한은 조용한 절단만 만든다(§D2 정정).
 	 */
 	@Query(value = """
 		SELECT
@@ -97,7 +98,6 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 		  AND (CAST(:parentCode AS varchar) IS NULL OR r.parent_code = CAST(:parentCode AS varchar))
 		  AND (CAST(:collectedOnly AS boolean) = FALSE OR rs.collected_count > 0)
 		ORDER BY r.parent_code, r.region_name
-		LIMIT 1000
 		""", nativeQuery = true)
 	List<RegionStatProjection> findStats(
 		@Param("userId") long userId,
