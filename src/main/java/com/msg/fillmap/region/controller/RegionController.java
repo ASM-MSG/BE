@@ -1,9 +1,12 @@
 package com.msg.fillmap.region.controller;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -11,10 +14,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
+import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.region.dto.RegionResponseDto;
+import com.msg.fillmap.region.dto.RegionStatResponseDto;
 import com.msg.fillmap.region.exception.RegionErrorCode;
 import com.msg.fillmap.region.service.RegionQueryService;
+import com.msg.fillmap.region.service.RegionStatsQueryService;
 import com.msg.fillmap.response.SuccessResponse;
 
 /**
@@ -28,6 +34,7 @@ import com.msg.fillmap.response.SuccessResponse;
 public class RegionController {
 
 	private final RegionQueryService regionQueryService;
+	private final RegionStatsQueryService regionStatsQueryService;
 
 	@Operation(
 		summary = "역지오코딩 (좌표 → 행정동)",
@@ -47,6 +54,27 @@ public class RegionController {
 		RegionResponseDto body = regionQueryService.resolveByPoint(lat, lon)
 			.map(RegionResponseDto::from)
 			.orElse(null);
+		return SuccessResponse.of(body);
+	}
+
+	@Operation(
+		summary = "내 행정동별 수집률 조회",
+		description = "로그인 사용자가 점령(수집)한 격자를 행정동별로 집계한 수집률 리스트를 반환한다. "
+			+ "parentCode 로 시군구를 좁힐 수 있고(실존하지 않는 코드면 404/6404), collectedOnly=false 면 "
+			+ "롤백으로 0이 된 행정동도 포함한다. 수집이 없으면 404 가 아니라 200 + 빈 배열."
+	)
+	@GetMapping("/stats")
+	public SuccessResponse<List<RegionStatResponseDto>> getStats(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "상위 시군구 코드. 생략하면 전국. 실존하지 않으면 6404", example = "11680")
+		@RequestParam(required = false) String parentCode,
+		@Parameter(description = "true=수집한 행정동만, false=손댄 행정동 전부(롤백 0-row 포함)", example = "true")
+		@RequestParam(required = false, defaultValue = "true") boolean collectedOnly
+	) {
+		List<RegionStatResponseDto> body = regionStatsQueryService.findStats(principal.userId(), parentCode, collectedOnly)
+			.stream()
+			.map(RegionStatResponseDto::from)
+			.toList();
 		return SuccessResponse.of(body);
 	}
 }

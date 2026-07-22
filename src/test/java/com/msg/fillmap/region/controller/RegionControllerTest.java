@@ -1,11 +1,17 @@
 package com.msg.fillmap.region.controller;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +27,8 @@ import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.region.exception.RegionErrorCode;
 import com.msg.fillmap.region.service.RegionQueryService;
+import com.msg.fillmap.region.service.RegionStatView;
+import com.msg.fillmap.region.service.RegionStatsQueryService;
 import com.msg.fillmap.region.service.RegionView;
 import com.msg.fillmap.user.entity.UserRole;
 
@@ -43,8 +51,17 @@ class RegionControllerTest {
 	@MockitoBean
 	private RegionQueryService regionQueryService;
 
+	@MockitoBean
+	private RegionStatsQueryService regionStatsQueryService;
+
 	private String bearer() {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
+	}
+
+	private RegionStatView statView() {
+		return new RegionStatView(
+			"1168051500", "서울특별시 강남구 역삼1동", "11680",
+			5, 20, new BigDecimal("25.00"), LocalDateTime.of(2026, 7, 20, 10, 0, 0));
 	}
 
 	@Test
@@ -100,5 +117,68 @@ class RegionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.developCode").value(6400));
+	}
+
+	@Test
+	@DisplayName("인증된 요청은 200 과 수집률 리스트를 반환한다")
+	void 인증된_요청은_200과_수집률_리스트를_반환한다() throws Exception {
+		given(regionStatsQueryService.findStats(eq(USER_ID), isNull(), eq(true)))
+			.willReturn(List.of(statView()));
+
+		mockMvc.perform(get("/api/regions/stats")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body", hasSize(1)))
+			.andExpect(jsonPath("$.body[0].regionCode").value("1168051500"))
+			.andExpect(jsonPath("$.body[0].regionName").value("서울특별시 강남구 역삼1동"))
+			.andExpect(jsonPath("$.body[0].parentCode").value("11680"))
+			.andExpect(jsonPath("$.body[0].collectedCount").value(5))
+			.andExpect(jsonPath("$.body[0].totalCount").value(20));
+	}
+
+	@Test
+	@DisplayName("collectedOnly 를 생략하면 기본값 true 로 동작한다")
+	void collectedOnly를_생략하면_기본값_true로_동작한다() throws Exception {
+		given(regionStatsQueryService.findStats(eq(USER_ID), isNull(), eq(true)))
+			.willReturn(List.of(statView()));
+
+		mockMvc.perform(get("/api/regions/stats")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.body", hasSize(1)));
+	}
+
+	@Test
+	@DisplayName("빈 결과는 200 과 빈 배열로 응답한다")
+	void 빈_결과는_200과_빈_배열로_응답한다() throws Exception {
+		given(regionStatsQueryService.findStats(eq(USER_ID), isNull(), eq(true)))
+			.willReturn(List.of());
+
+		mockMvc.perform(get("/api/regions/stats")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body", hasSize(0)));
+	}
+
+	@Test
+	@DisplayName("실존하지 않는 parentCode 는 6404 를 응답한다")
+	void 실존하지_않는_parentCode는_6404를_응답한다() throws Exception {
+		given(regionStatsQueryService.findStats(eq(USER_ID), eq("99999"), eq(true)))
+			.willThrow(new ApiException(RegionErrorCode.REGION_NOT_FOUND));
+
+		mockMvc.perform(get("/api/regions/stats")
+				.param("parentCode", "99999")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.developCode").value(6404));
+	}
+
+	@Test
+	@DisplayName("미인증 요청은 401 이다")
+	void 미인증_요청은_401이다() throws Exception {
+		mockMvc.perform(get("/api/regions/stats"))
+			.andExpect(status().isUnauthorized());
 	}
 }
