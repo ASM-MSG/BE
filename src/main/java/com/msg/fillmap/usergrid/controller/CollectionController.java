@@ -1,5 +1,7 @@
 package com.msg.fillmap.usergrid.controller;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,7 +15,9 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
+import com.msg.fillmap.usergrid.dto.CollectionGridResponseDto;
 import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
+import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
 
@@ -40,5 +44,19 @@ public class CollectionController {
 	) {
 		CollectionSummaryView view = userGridQueryService.getCollectionSummary(principal.userId());
 		return SuccessResponse.of(CollectionSummaryResponseDto.from(view));
+	}
+
+	@Operation(
+		summary = "갤러리 격자 목록 조회",
+		description = "로그인 사용자가 최근 수집한 격자를 first_collected_at 내림차순 최대 30개로 반환한다(무커서). "
+			+ "각 항목은 gridId·gridY/gridX·수집/방문 시각·영상 수·cover 영상 ID·cover 썸네일 URL 을 담는다. "
+			+ "점령 0건 사용자는 에러 없이 빈 배열을 받는다."
+	)
+	@GetMapping("/grids")
+	public SuccessResponse<List<CollectionGridResponseDto>> getCollectionGrids(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal
+	) {
+		List<CollectionGridView> views = userGridQueryService.getCollectionGrids(principal.userId());
+		return SuccessResponse.of(views.stream().map(CollectionGridResponseDto::from).toList());
 	}
 }

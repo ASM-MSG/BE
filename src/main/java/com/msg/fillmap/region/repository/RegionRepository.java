@@ -106,6 +106,32 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	);
 
 	/**
+	 * 한 행정동의 내 수집률 단건 조회 (MSG-153 §도메인 로직 ②③). regionCode 는 resolveByPoint 가 판정한 실존 행정동이라
+	 * regions 행이 반드시 있고, region_stats 를 LEFT JOIN 해 아직 수집이 없는(155 미실행) 행정동은 0% 로 합성한다 —
+	 * collected_count 는 0, total_count 는 regions.total_grid_count 폴백, progress_rate 는 0.00, updated_at 은 null(§D6).
+	 * region_stats 행이 있으면 그 값(progress_rate 는 156 D4 표시 100 clamp). geospatial 0 — 순수 equi 조회다.
+	 * progress_rate 는 COALESCE 를 LEAST 안에 둔다 — PostgreSQL LEAST 는 NULL 인자를 건너뛰어 LEAST(NULL,100)=100 이 되므로,
+	 * 미수집 행(rs.progress_rate NULL)을 먼저 0.00 으로 채운 뒤 100 clamp 해야 0% 합성이 100 으로 새지 않는다.
+	 */
+	@Query(value = """
+		SELECT
+			r.region_code                                   AS "regionCode",
+			r.region_name                                   AS "regionName",
+			r.parent_code                                   AS "parentCode",
+			COALESCE(rs.collected_count, 0)                 AS "collectedCount",
+			COALESCE(rs.total_count, r.total_grid_count)    AS "totalCount",
+			LEAST(COALESCE(rs.progress_rate, 0.00), 100.00) AS "progressRate",
+			rs.updated_at                                   AS "updatedAt"
+		FROM regions r
+		LEFT JOIN region_stats rs ON rs.region_code = r.region_code AND rs.user_id = :userId
+		WHERE r.region_code = :regionCode
+		""", nativeQuery = true)
+	Optional<RegionStatProjection> findStatByRegion(
+		@Param("userId") long userId,
+		@Param("regionCode") String regionCode
+	);
+
+	/**
 	 * 수집률 캐시(region_stats) recompute UPSERT (MSG-155). gridId 격자의 중심점(center_geom)을 덮는
 	 * 행정동 1개를 ST_Covers 로 판정하고(경계선 위 다중매칭은 ORDER BY region_code LIMIT 1 로 결정적 단일화 —
 	 * findContainingRegion·분자 카운트와 동일 규칙이라 한 격자가 두 행정동에 겹으로 잡히지 않는다), 그 (user, region) 의

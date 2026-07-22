@@ -1,5 +1,7 @@
 package com.msg.fillmap.usergrid.repository;
 
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -30,4 +32,30 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 				FROM videos WHERE user_id = :userId AND status <> 'DELETED') AS "visitedRegionCount"
 		""", nativeQuery = true)
 	CollectionSummaryProjection getCollectionSummary(@Param("userId") long userId);
+
+	/**
+	 * 갤러리 격자 목록 — 내 점령 격자를 최근 수집순(first_collected_at DESC, 타이브레이크 grid_id DESC)
+	 * 최대 30개 (MSG-153 D3). coverVideoId 는 스펙 §API 정본대로 user_grids.cover_video_id 그대로(cover 없으면 null,
+	 * readiness 무관), 썸네일 key 만 READY 게이트를 건 LEFT JOIN 에서 가져온다 — "READY 이전이면 썸네일 null"(§D4)을
+	 * 조인 조건으로 강제해 교체·재인코딩 경계에서 pre-READY 행에 남은 stale 썸네일이 새지 않는다. READY 여도 썸네일이
+	 * null 일 수 있어(markReady 가 null thumbnailKey 허용) "id·썸네일 둘 다 null 쌍"은 계약이 아니다 —
+	 * 인코딩 중 cover 는 id 만 있고 key 가 null 인 게 정상 상태.
+	 * geospatial·grids 조인 없음(D5) — equi/LEFT JOIN + PK 조회뿐이라 조회 핫패스에 point-in-polygon 이 없다.
+	 * gridY/gridX 는 서비스가 GridEncoder.decode(gridId) 로 산출하고, coverThumbnailKey 는 서비스가 presign 한다.
+	 */
+	@Query(value = """
+		SELECT
+			ug.grid_id            AS "gridId",
+			ug.first_collected_at AS "firstCollectedAt",
+			ug.last_uploaded_at   AS "lastUploadedAt",
+			ug.video_count        AS "videoCount",
+			ug.cover_video_id     AS "coverVideoId",
+			v.thumbnail_url       AS "coverThumbnailKey"
+		FROM user_grids ug
+		LEFT JOIN videos v ON v.id = ug.cover_video_id AND v.processing_status = 'READY'
+		WHERE ug.user_id = :userId
+		ORDER BY ug.first_collected_at DESC, ug.grid_id DESC
+		LIMIT 30
+		""", nativeQuery = true)
+	List<CollectionGridProjection> getCollectionGrids(@Param("userId") long userId);
 }

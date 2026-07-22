@@ -176,6 +176,91 @@ class RegionControllerTest {
 	}
 
 	@Test
+	@DisplayName("by-point 는 200 과 현재 위치 행정동 수집률을 반환한다")
+	void by_point는_200과_현재위치_행정동_수집률을_반환한다() throws Exception {
+		given(regionStatsQueryService.findStatByPoint(eq(USER_ID), eq(37.4979), eq(127.0276)))
+			.willReturn(Optional.of(statView()));
+
+		mockMvc.perform(get("/api/regions/stats/by-point")
+				.param("lat", "37.4979")
+				.param("lon", "127.0276")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body.regionCode").value("1168051500"))
+			.andExpect(jsonPath("$.body.collectedCount").value(5))
+			.andExpect(jsonPath("$.body.totalCount").value(20));
+	}
+
+	@Test
+	@DisplayName("by-point 는 행정동이 없으면 200 과 null body 를 반환한다")
+	void by_point는_행정동이_없으면_200과_null_body를_반환한다() throws Exception {
+		given(regionStatsQueryService.findStatByPoint(eq(USER_ID), eq(38.0), eq(130.0)))
+			.willReturn(Optional.empty());
+
+		mockMvc.perform(get("/api/regions/stats/by-point")
+				.param("lat", "38.0")
+				.param("lon", "130.0")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body").value(nullValue()));
+	}
+
+	@Test
+	@DisplayName("by-point 는 lat 이나 lon 이 없으면 6400 이다")
+	void by_point는_lat이나_lon이_없으면_6400이다() throws Exception {
+		mockMvc.perform(get("/api/regions/stats/by-point")
+				.param("lat", "37.4979")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(6400));
+	}
+
+	@Test
+	@DisplayName("by-point 는 서비스범위 밖 좌표면 6400 이다")
+	void by_point는_서비스범위_밖_좌표면_6400이다() throws Exception {
+		given(regionStatsQueryService.findStatByPoint(eq(USER_ID), eq(10.0), eq(100.0)))
+			.willThrow(new ApiException(RegionErrorCode.INVALID_COORDINATE));
+
+		mockMvc.perform(get("/api/regions/stats/by-point")
+				.param("lat", "10.0")
+				.param("lon", "100.0")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(6400));
+	}
+
+	@Test
+	@DisplayName("by-grid 는 200 과 격자 중심 행정동 수집률을 반환한다")
+	void by_grid는_200과_격자_중심_행정동_수집률을_반환한다() throws Exception {
+		given(regionStatsQueryService.findStatByGrid(USER_ID, "41642_110458"))
+			.willReturn(Optional.of(statView()));
+
+		mockMvc.perform(get("/api/regions/stats/by-grid")
+				.param("gridId", "41642_110458")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body.regionCode").value("1168051500"))
+			.andExpect(jsonPath("$.body.collectedCount").value(5));
+	}
+
+	@Test
+	@DisplayName("by-grid 는 중심점이 무귀속이면 200 과 null body 를 반환한다")
+	void by_grid는_중심점이_무귀속이면_200과_null_body를_반환한다() throws Exception {
+		given(regionStatsQueryService.findStatByGrid(USER_ID, "1_1"))
+			.willReturn(Optional.empty());
+
+		mockMvc.perform(get("/api/regions/stats/by-grid")
+				.param("gridId", "1_1")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body").value(nullValue()));
+	}
+
+	@Test
 	@DisplayName("미인증 요청은 401 이다")
 	void 미인증_요청은_401이다() throws Exception {
 		mockMvc.perform(get("/api/regions/stats"))
