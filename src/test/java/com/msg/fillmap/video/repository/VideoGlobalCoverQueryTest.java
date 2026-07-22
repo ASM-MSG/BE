@@ -149,6 +149,22 @@ class VideoGlobalCoverQueryTest {
 	}
 
 	@Test
+	@DisplayName("블러 처리중(BLURRING) 영상은 대표가 되지 않는다")
+	void 블러_처리중_BLURRING_영상은_대표가_되지_않는다() {
+		saveVideo(userId, 성수_GRID, "PUBLIC", "BLURRING", VideoStatus.ACTIVE, 99L, at(10));
+
+		assertThat(cover(성수_GRID)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("FAILED 영상은 전역 대표 조회에서 제외된다")
+	void FAILED_영상은_전역_대표_조회에서_제외된다() {
+		saveVideo(userId, 성수_GRID, "PUBLIC", "FAILED", VideoStatus.ACTIVE, 99L, at(10));
+
+		assertThat(cover(성수_GRID)).isEmpty();
+	}
+
+	@Test
 	@DisplayName("다른 사용자의 공개 영상도 대표가 될 수 있다")
 	void 다른_사용자의_공개_영상도_대표가_될_수_있다() {
 		Long otherUserId = userRepository.save(User.createLocalUser("other-cover@example.com", "hash", "타인")).getId();

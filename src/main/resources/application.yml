@@ -59,6 +59,14 @@ aws:
     bucket: ${S3_BUCKET_VIDEO:fillmap-video-dev}
     max-upload-bytes: ${S3_MAX_UPLOAD_BYTES:104857600}   # 100MB
 
+# AI Highlight-Blur 서버 연동 (MSG-149). 기본 off — AI 서버가 붙는 환경에서만 AI_ENABLED=true 로 켠다.
+# 켜지면 인코딩 완료가 BLURRING 으로 가고 폴러가 base-url 서버에 제출·폴링한다. 꺼져 있으면 인코딩이 READY 로 끝난다.
+ai:
+  enabled: ${AI_ENABLED:false}
+  base-url: ${AI_BASE_URL:http://localhost:8000}
+  timeout: ${AI_TIMEOUT:PT30M}          # 이 시간을 넘겨도 DONE/FAILED 가 안 오면 FAILED 로 수렴
+  poll-interval-ms: ${AI_POLL_INTERVAL_MS:30000}
+
 server:
   port: 8080
 

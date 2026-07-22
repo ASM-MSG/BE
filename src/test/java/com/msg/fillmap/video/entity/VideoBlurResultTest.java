@@ -79,6 +79,24 @@ class VideoBlurResultTest {
 		return videoRepository.findById(id).orElseThrow();
 	}
 
+	@Test
+	@DisplayName("삭제된 영상은 reconcile 조회(ACTIVE·BLURRING)에서 제외된다")
+	void 삭제된_영상은_reconcile_조회에서_제외된다() {
+		Long activeId = videoRepository.save(newVideo()).getId();
+		Long deletedId = videoRepository.save(newVideo()).getId();
+		em.createNativeQuery("UPDATE videos SET processing_status = 'BLURRING' WHERE id IN (:a, :d)")
+			.setParameter("a", activeId).setParameter("d", deletedId).executeUpdate();
+		em.createNativeQuery("UPDATE videos SET status = 'DELETED' WHERE id = :d")
+			.setParameter("d", deletedId).executeUpdate();
+		em.flush();
+		em.clear();
+
+		List<Video> targets = videoRepository.findByStatusAndProcessingStatus(
+			VideoStatus.ACTIVE, ProcessingStatus.BLURRING);
+
+		assertThat(targets).extracting(Video::getId).contains(activeId).doesNotContain(deletedId);
+	}
+
 	@Nested
 	@DisplayName("Flyway 마이그레이션 적용")
 	class FlywayMigration {
