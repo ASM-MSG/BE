@@ -4,7 +4,7 @@
 > **목표 설계**를 present tense로 서술한다 — 거기 나온 패키지·서비스·인터페이스가 코드에
 > 존재한다고 가정하지 말 것. 여기서 ✅로 표시된 것만 실제로 import·호출할 수 있다.
 >
-> 상태 기준: `develop` (2026-07-22).
+> 상태 기준: `develop` 최신 (머지되는 PR이 자기 티켓 줄을 함께 갱신하므로 별도 날짜 관리 없음).
 
 ## 도메인 패키지
 
@@ -85,7 +85,15 @@
 | `videos` | `video/entity/Video` | ✅ (MSG-66) |
 | `grids` | `grid/entity/Grid` | ✅ (MSG-73 — 조회 전용 최소 매핑: grid_id/grid_y/grid_x, geom 미매핑) |
 | `regions` | `region/entity/Region` | ✅ (MSG-154 — region_code/region_name/parent_code/total_grid_count 매핑, boundary_geom 미매핑 — native write 전용) |
-| `region_stats` · `badges` · `user_badges` · `friendships` · `likes` · `push_tokens` · `reports` · `sponsor_ads` · `streaks` | — | ❌ 엔티티 없음 |
+| `region_stats` | — | ❌ 엔티티 없음 (native 쿼리로만 접근 — MSG-155/156) |
+| `badges` | — | ❌ 엔티티 없음 |
+| `user_badges` | — | ❌ 엔티티 없음 |
+| `friendships` | — | ❌ 엔티티 없음 |
+| `likes` | — | ❌ 엔티티 없음 |
+| `push_tokens` | — | ❌ 엔티티 없음 |
+| `reports` | — | ❌ 엔티티 없음 |
+| `sponsor_ads` | — | ❌ 엔티티 없음 |
+| `streaks` | — | ❌ 엔티티 없음 |
 
 ## 로드맵 / 백로그
 
