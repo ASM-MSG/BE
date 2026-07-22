@@ -1,5 +1,6 @@
 package com.msg.fillmap.region.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -66,6 +67,43 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	 */
 	@Query(value = "SELECT pg_advisory_xact_lock(hashtextextended('region_stats:' || :userId, 0))", nativeQuery = true)
 	Object acquireUserRegionStatsLock(@Param("userId") long userId);
+
+	/**
+	 * parentCode 실존 검증 (MSG-156 §D3). regions.parent_code 에 그 시군구가 하나라도 있으면 true.
+	 * 파생 쿼리라 idx_regions_parent 를 태운다 — geospatial 이 아니라 인덱스 equality 검사다.
+	 * "데이터 없음"(유효 코드인데 수집 0)이 아니라 "존재하지 않는 코드"(오타·없는 시군구)만 6404 로 가른다.
+	 */
+	boolean existsByParentCode(String parentCode);
+
+	/**
+	 * 내 행정동별 수집률 조회 (MSG-156 §도메인 로직). region_stats 를 regions 와 PK equi-join 해
+	 * regionName·parentCode 를 채운다 — geospatial 연산 0(성공 기준 8), 155 가 쓰기 시 물질화한 값을 그대로 읽는다.
+	 * parentCode 가 null 이면 전국, 아니면 그 시군구 산하만(§D1). collectedOnly=true 면 collected_count>0 행만,
+	 * false 면 손댄 행 전부(롤백 0-row 포함, 전체 regions outer-join 아님 — §D1). progress_rate 는 표시 100 clamp(§D4).
+	 * nullable/boolean 파라미터는 PostgreSQL 타입 추론이 흔들리지 않도록 CAST 로 명시한다. LIMIT 없음 —
+	 * 결과는 구조적으로 사용자당 최대 regions 행 수(3,558)로 유한해서, 인위적 상한은 조용한 절단만 만든다(§D2 정정).
+	 */
+	@Query(value = """
+		SELECT
+			rs.region_code     AS "regionCode",
+			r.region_name      AS "regionName",
+			r.parent_code      AS "parentCode",
+			rs.collected_count AS "collectedCount",
+			rs.total_count     AS "totalCount",
+			LEAST(rs.progress_rate, 100.00) AS "progressRate",
+			rs.updated_at      AS "updatedAt"
+		FROM region_stats rs
+		JOIN regions r ON r.region_code = rs.region_code
+		WHERE rs.user_id = :userId
+		  AND (CAST(:parentCode AS varchar) IS NULL OR r.parent_code = CAST(:parentCode AS varchar))
+		  AND (CAST(:collectedOnly AS boolean) = FALSE OR rs.collected_count > 0)
+		ORDER BY r.parent_code, r.region_name
+		""", nativeQuery = true)
+	List<RegionStatProjection> findStats(
+		@Param("userId") long userId,
+		@Param("parentCode") String parentCode,
+		@Param("collectedOnly") boolean collectedOnly
+	);
 
 	/**
 	 * 수집률 캐시(region_stats) recompute UPSERT (MSG-155). gridId 격자의 중심점(center_geom)을 덮는
