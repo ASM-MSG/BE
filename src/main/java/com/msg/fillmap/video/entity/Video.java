@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.Point;
@@ -25,8 +26,11 @@ import lombok.NoArgsConstructor;
  * 방문 이벤트 = 업로드 1건 (videos). 첫 방문이면 점령(user_grids row 생성).
  * grid_id 는 업로드 좌표를 GridEncoder 로 인코딩한 값, region_code 는 별도 판정 티켓 전까지 null.
  */
+// @DynamicUpdate: 동시 쓰기 축이 여럿(visibility 사용자 쓰기 / 삭제 / 인코딩·AI 폴러)이라 각 트랜잭션이
+// 자기 dirty 컬럼만 쓰게 해 낡은 스냅샷이 다른 축의 컬럼을 되돌리는 교차 컬럼 클로버링을 막는다 (MSG-162).
 @Entity
 @Table(name = "videos")
+@DynamicUpdate
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Video {
@@ -198,6 +202,11 @@ public class Video {
 	public void applyBlurResult(String blurredS3Key, List<List<Double>> highlights) {
 		this.blurredS3Key = blurredS3Key;
 		this.highlights = highlights;
+	}
+
+	/** 공개 범위 전환 (MSG-162). 노출 조건(READY)은 read 경로가 게이트하므로 여기선 값만 바꾼다. */
+	public void changeVisibility(Visibility visibility) {
+		this.visibility = visibility;
 	}
 
 	/** soft delete (MSG-72 D2). row 만 표시하고, S3 파일은 서비스가 커밋 후 지운다 (MSG-133). */

@@ -3,6 +3,7 @@ package com.msg.fillmap.video.service;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -46,8 +47,11 @@ import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoReplaceResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
+import com.msg.fillmap.video.dto.VideoVisibilityRequestDto;
+import com.msg.fillmap.video.dto.VideoVisibilityResponseDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
@@ -133,6 +137,30 @@ public class VideoServiceImpl implements VideoService {
 		afterCommit(() -> deleteQuietly(replacedKey, replacedBlurredKey));
 		triggerEncodingAfterCommit(videoId);
 		return VideoReplaceResponseDto.from(video);
+	}
+
+	@Override
+	@Transactional
+	public VideoVisibilityResponseDto setVisibility(long userId, long videoId, VideoVisibilityRequestDto request) {
+		Video video = findOwnedVideo(userId, videoId);
+		if (video.isDeleted()) {
+			throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);   // 지운 영상은 공개로 되살리지 않는다
+		}
+		video.changeVisibility(parseVisibility(request.visibility()));
+		return VideoVisibilityResponseDto.from(video);
+	}
+
+	/**
+	 * 클라이언트 문자열 → Visibility. AuthController.parseProvider 선례처럼 valueOf 실패를 잡아 4xx 로 준다 —
+	 * request 를 enum 으로 받았다면 역직렬화 실패가 500 이 됐을 자리다 (MSG-162).
+	 */
+	private Visibility parseVisibility(String visibility) {
+		try {
+			// Locale.ROOT: 터키어 로케일 JVM에서 "private"→"PRİVATE"가 되는 배포 로케일 의존 차단
+			return Visibility.valueOf(visibility.toUpperCase(Locale.ROOT));
+		} catch (IllegalArgumentException e) {
+			throw new ApiException(VideoErrorCode.INVALID_VISIBILITY);
+		}
 	}
 
 	/**
