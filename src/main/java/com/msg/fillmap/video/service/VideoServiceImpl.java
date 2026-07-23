@@ -43,12 +43,14 @@ import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
+import com.msg.fillmap.video.dto.VideoPlaybackResponseDto;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoReplaceResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 import com.msg.fillmap.video.dto.VideoVisibilityRequestDto;
 import com.msg.fillmap.video.dto.VideoVisibilityResponseDto;
+import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.entity.Visibility;
@@ -337,6 +339,56 @@ public class VideoServiceImpl implements VideoService {
 		return videoRepository.findGlobalCover(gridId)
 			.map(video -> GridCoverVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl())))
 			.orElse(null);
+	}
+
+	/**
+	 * 단건 영상 재생 조회 (MSG-206). @Transactional 은 readOnly 가 아니다 — 조회수 증가 UPDATE 때문이다.
+	 * 접근 제어는 §도메인 2 순서(존재/DELETED → BLINDED → visibility → processing_status)로 first-match 판정한다.
+	 */
+	@Override
+	@Transactional
+	public VideoPlaybackResponseDto getVideoPlayback(Long videoId, Long userId) {
+		Video video = videoRepository.findById(videoId)
+			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
+		// findOwnedVideo 의 primitive 비교와 동일 관용 — getUserId()(Long) 를 long 으로 언박싱해 값 비교한다.
+		long callerId = userId;
+		boolean owner = video.getUserId() == callerId;
+
+		// 1. 존재/DELETED — 지운 영상은 소유자 포함 전원에게 존재 자체를 숨긴다.
+		if (video.isDeleted()) {
+			throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);
+		}
+		// 2. BLINDED — 타인이면 존재 은닉(404), 소유자면 통과하되 재생 불가로 처리(status!=ACTIVE 라 아래서 발급 안 됨).
+		if (video.getStatus() == VideoStatus.BLINDED) {
+			if (!owner) {
+				throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);
+			}
+		} else if (video.getVisibility() == Visibility.PRIVATE && !owner) {
+			// 3. visibility — PRIVATE 는 존재는 노출하되 접근만 막는다(404 아니라 403, 티켓 확정).
+			throw new ApiException(VideoErrorCode.VIDEO_FORBIDDEN);
+		}
+
+		// 4. 재생 소스 선택 & presign — ACTIVE·READY 만 발급. 블러본이 있으면 우선, 없으면 인코딩본.
+		String playbackUrl = null;
+		Long expiresInSec = null;
+		if (video.getStatus() == VideoStatus.ACTIVE && video.getProcessingStatus() == ProcessingStatus.READY) {
+			String playbackKey = video.getBlurredS3Key() != null ? video.getBlurredS3Key() : video.getEncodedUrl();
+			playbackUrl = thumbnailUrlPresigner.presign(playbackKey);
+			// key 가 null 인 기형 READY 행(정상 markReady 경로엔 불가)이면 presign 이 null 이라 TTL 도 비운다 —
+			// playbackUrl=null 인데 expiresInSec 만 남는 걸 막는다(성공기준 8).
+			if (playbackUrl != null) {
+				expiresInSec = thumbnailUrlPresigner.ttlSeconds();
+			}
+		}
+		String thumbnailUrl = thumbnailUrlPresigner.presign(video.getThumbnailUrl());
+
+		// 5. 조회수 증가 — 재생 URL 을 실제로 발급했고 타인일 때만 원자적 +1(소유자 본인 조회는 제외).
+		if (playbackUrl != null && !owner) {
+			videoRepository.incrementViewCount(video.getId());
+		}
+
+		// viewCount 는 증가 전 스냅샷 — native UPDATE 는 로드된 엔티티 필드를 건드리지 않는다(§설계 M7).
+		return VideoPlaybackResponseDto.of(video, playbackUrl, thumbnailUrl, expiresInSec);
 	}
 
 	private void validateCoordinate(double lat, double lon) {

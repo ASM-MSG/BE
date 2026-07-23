@@ -6,6 +6,7 @@ import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
+import com.msg.fillmap.video.dto.VideoPlaybackResponseDto;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoReplaceResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
@@ -28,6 +29,16 @@ public interface VideoService {
 	 * 중만·타인 없음·존재하지 않는 gridId) null 이다(예외 아님). user_grids.cover_video_id 와 무관하다.
 	 */
 	GridCoverVideoResponseDto getGridCover(String gridId);
+
+	/**
+	 * 단건 영상 재생 조회 (MSG-206). 접근 제어를 존재/DELETED → BLINDED → visibility → processing_status
+	 * 순서로 판정한다(first-match, 순서가 곧 정보 노출 정책이다). DELETED·BLINDED(타인)는 VIDEO_NOT_FOUND 로
+	 * 존재를 숨기고, PRIVATE(타인)는 VIDEO_FORBIDDEN 으로 존재는 노출하되 접근만 막는다. 허용된 조회는
+	 * READY 면 재생본(blurred 우선, 없으면 encoded) presigned GET URL 을, 아니면 playbackUrl=null 을 반환한다.
+	 * 재생 URL 을 실제로 발급했고 소유자가 아닐 때만 view_count 를 원자적으로 +1 하며, 응답 viewCount 는
+	 * 증가 전 스냅샷이다.
+	 */
+	VideoPlaybackResponseDto getVideoPlayback(Long videoId, Long userId);
 
 	/**
 	 * 업로드 완료 메타데이터 저장. 좌표 → 격자 인코딩 → grids lazy insert → videos INSERT → 점령 UPSERT.
