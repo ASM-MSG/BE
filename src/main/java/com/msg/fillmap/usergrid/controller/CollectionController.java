@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
@@ -17,8 +18,10 @@ import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.usergrid.dto.CollectionGridResponseDto;
 import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
+import com.msg.fillmap.usergrid.dto.RegionVideoResponseDto;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
+import com.msg.fillmap.usergrid.service.RegionVideoView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
 
 /**
@@ -58,5 +61,22 @@ public class CollectionController {
 	) {
 		List<CollectionGridView> views = userGridQueryService.getCollectionGrids(principal.userId());
 		return SuccessResponse.of(views.stream().map(CollectionGridResponseDto::from).toList());
+	}
+
+	@Operation(
+		summary = "동 단위 내 영상 조회",
+		description = "행정동(regionCode) 격자들에 올린 로그인 사용자의 영상을 created_at 내림차순으로 반환한다(무커서). "
+			+ "regionCode 는 by-grid 응답의 regionCode 를 그대로 넘긴다. 귀속은 격자 축이라 영상 좌표가 옆 동이어도 "
+			+ "격자 소속 행정동 기준으로 포함된다. 내 도감이라 PRIVATE·인코딩 중 영상도 포함하며(status ACTIVE 만), "
+			+ "그 행정동에 내 영상이 없거나 미존재 regionCode 면 에러 없이 빈 배열을 받는다."
+	)
+	@GetMapping("/videos")
+	public SuccessResponse<List<RegionVideoResponseDto>> getRegionVideos(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "행정동 코드 — by-grid 응답의 regionCode 를 그대로 전달", example = "1168051500")
+		@RequestParam String regionCode
+	) {
+		List<RegionVideoView> views = userGridQueryService.getRegionVideos(principal.userId(), regionCode);
+		return SuccessResponse.of(views.stream().map(RegionVideoResponseDto::from).toList());
 	}
 }

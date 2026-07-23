@@ -63,4 +63,32 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 		LIMIT 30
 		""", nativeQuery = true)
 	List<CollectionGridProjection> getCollectionGrids(@Param("userId") long userId);
+
+	/**
+	 * 동 단위 내 영상 — 그 행정동(grids.region_code) 격자들에 올린 내 ACTIVE 영상을 created_at 내림차순으로
+	 * 반환한다 (MSG-167 §D3, B-내부 read). 귀속은 격자 축(g.region_code) — 영상 좌표(videos.region_code,
+	 * 66 라벨러 유예로 전부 NULL)가 아니라 격자 소속 행정동 기준이라, 영상 좌표가 옆 동이어도 격자 소속 동으로
+	 * 잡힌다(DoD). 저장된 라벨을 equi 로 소비해 geospatial 0(성공 기준 8) — point-in-polygon 은 쓰기 경로
+	 * (upsertGrid)·백필에서만 돈다. 내 도감 관례(127): status='ACTIVE' 만(DELETED/BLINDED 제외),
+	 * visibility·processing_status 무필터(PRIVATE·인코딩 중도 내겐 보여야 한다). READY 이전은 thumbnail_url
+	 * NULL → 서비스 presign 이 thumbnailUrl NULL 로 흡수. 미존재/이상 regionCode 는 매치 0 → 빈 리스트
+	 * (§D3, 신규 에러 코드 없음). no-LIMIT(전부 반환 — 조용한 절단 금지, §D3). 구동은 idx_videos_user_created
+	 * (user 몰기) → grids PK 조인 → region_code 필터(§D5, region_code 인덱스 불요).
+	 */
+	@Query(value = """
+		SELECT
+			v.id                AS "videoId",
+			v.grid_id           AS "gridId",
+			v.thumbnail_url     AS "thumbnailKey",
+			v.processing_status AS "processingStatus",
+			v.duration_sec      AS "durationSec",
+			v.created_at        AS "createdAt"
+		FROM videos v
+		JOIN grids g ON g.grid_id = v.grid_id
+		WHERE g.region_code = :regionCode
+			AND v.user_id = :userId
+			AND v.status = 'ACTIVE'
+		ORDER BY v.created_at DESC, v.id DESC
+		""", nativeQuery = true)
+	List<RegionVideoProjection> getRegionVideos(@Param("userId") long userId, @Param("regionCode") String regionCode);
 }

@@ -17,4 +17,13 @@ public interface UserGridQueryService {
 	 * coverThumbnailUrl 만 READY 게이트 — cover 없거나 READY 이전·썸네일 미발급이면 null(§D4).
 	 */
 	List<CollectionGridView> getCollectionGrids(long userId);
+
+	/**
+	 * 동 단위 내 영상: 그 행정동(regionCode) 격자들에 올린 내 ACTIVE 영상을 created_at 내림차순으로 반환한다
+	 * (MSG-167 §D3, B-내부 read — CollectionController 만 소비, Owner A 미소비라 non-breaking).
+	 * 귀속은 격자 축(grids.region_code) — 영상 좌표가 옆 동이어도 격자 소속 동으로 포함된다. 내 도감이라
+	 * PRIVATE·인코딩 중 영상도 포함하며(status='ACTIVE' 만), 내 영상 없음/미존재 regionCode 면 빈 리스트.
+	 * READY 이전은 thumbnailUrl null(presign 이 null key 흡수).
+	 */
+	List<RegionVideoView> getRegionVideos(long userId, String regionCode);
 }
