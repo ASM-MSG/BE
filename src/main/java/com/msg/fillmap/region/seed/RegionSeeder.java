@@ -46,6 +46,11 @@ public class RegionSeeder implements ApplicationRunner {
 		}
 		SeedResult result = seed(Path.of(geojsonPath));
 		log.info("region 시딩 완료 — 적재 {} 건, 건너뜀 {} 건", result.loaded(), result.skipped());
+
+		// MSG-167: regions 가 격자보다 늦게 도착한 환경 보정 — V5 백필(Flyway, 시더 이전)이 빈 regions 로
+		// no-op 이었고 upsertGrid 는 기존 격자를 건너뛰므로, 시딩 직후 같은 멱등 백필을 1회 돌려 영구 NULL 을 막는다.
+		int labeled = regionRepository.backfillGridRegionCodes();
+		log.info("grids.region_code 보정 백필 — {} 건 라벨", labeled);
 	}
 
 	/**

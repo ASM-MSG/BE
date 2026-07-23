@@ -170,6 +170,20 @@ class GridRegionCodeBackfillTest {
 	}
 
 	@Test
+	@DisplayName("regions 가 격자보다 늦게 시딩돼도 시딩 직후 보정 백필이 기존 NULL 격자를 라벨한다")
+	void regions가_격자보다_늦게_시딩돼도_보정_백필이_기존_NULL_격자를_라벨한다() {
+		// V5 시점 regions 가 비어 백필이 no-op 이었던 환경 재현 — 격자가 라벨 없이 먼저 존재한다.
+		String grid = GridFixtures.seedGrid(em, GY0, GX0);
+		assertThat(regionCodeOf(grid)).isNull();
+		// 이후 시딩으로 행정동이 도착 → RegionSeeder.run 이 시딩 직후 호출하는 보정 백필(전체 스코프).
+		seedRegion(REGION_A, GY0, GY0 + 3, GX0, GX0 + 3);
+
+		regionRepository.backfillGridRegionCodes();
+
+		assertThat(regionCodeOf(grid)).isEqualTo(REGION_A).isEqualTo(byGridLabel(GY0, GX0));
+	}
+
+	@Test
 	@DisplayName("중심점이 어느 행정동에도 안 속하는 해안 격자는 백필 후에도 region_code 가 null 이다")
 	void 중심점이_어느_행정동에도_안속하는_해안_격자는_백필_후에도_region_code가_null이다() {
 		seedRegion(REGION_A, GY0, GY0 + 3, GX0, GX0 + 3);
