@@ -1,5 +1,6 @@
 package com.msg.fillmap.video.controller;
 
+import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -83,6 +84,7 @@ public class VideoController {
 	// 접근 제어 없이 200만 반환(전 id 동일 응답이라 존재 오라클 아님).
 	// 브라우저 cross-origin HEAD는 CORS allowedMethods에 HEAD가 없어 선차단된다 — 의도된 이중 방어,
 	// FE에 HEAD 사용처 없음(Codex R3 수용).
+	@Hidden // API 표면이 아닌 내부 심 — OpenAPI 스펙 노출 제외 (MSG-208)
 	@RequestMapping(value = "/{videoId}", method = RequestMethod.HEAD)
 	public SuccessResponse<Void> headPlayback() {
 		return new SuccessResponse<>(null);   // body 없는 성공 — delete 핸들러와 같은 방식
