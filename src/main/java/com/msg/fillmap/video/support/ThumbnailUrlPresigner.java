@@ -29,6 +29,11 @@ public class ThumbnailUrlPresigner {
 	private final S3Presigner s3Presigner;
 	private final AwsProperties awsProperties;
 
+	/** presign 이 발급하는 URL 의 TTL(초). 재생 조회(MSG-206)가 expiresInSec 로 노출한다. */
+	public long ttlSeconds() {
+		return TTL.toSeconds();
+	}
+
 	public String presign(String thumbnailKey) {
 		if (thumbnailKey == null) {
 			return null;

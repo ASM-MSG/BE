@@ -8,12 +8,14 @@ import jakarta.validation.Valid;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,7 @@ import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
+import com.msg.fillmap.video.dto.VideoPlaybackResponseDto;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoReplaceResponseDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
@@ -61,6 +64,28 @@ public class VideoController {
 		@Valid @RequestBody PresignedUrlRequestDto request
 	) {
 		return SuccessResponse.of(videoService.issuePresignedUrl(principal.userId(), request));
+	}
+
+	@Operation(
+		summary = "단건 영상 재생 조회",
+		description = "영상 하나의 표시용 메타와 재생본 presigned GET URL을 발급한다. 소유자·타인 모두 조회할 수 있으나 "
+			+ "삭제·블라인드(타인)는 404, 비공개(타인)는 403이다. READY가 아니면 playbackUrl은 null이다."
+	)
+	@GetMapping("/{videoId}")
+	public SuccessResponse<VideoPlaybackResponseDto> getPlayback(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "재생할 영상 ID", example = "1042") @PathVariable Long videoId
+	) {
+		return SuccessResponse.of(videoService.getVideoPlayback(principal.userId(), videoId));
+	}
+
+	// 명시 HEAD 매핑 — 없으면 Spring이 GET 핸들러로 폴백해 view_count가 오른다(Codex R2).
+	// 접근 제어 없이 200만 반환(전 id 동일 응답이라 존재 오라클 아님).
+	// 브라우저 cross-origin HEAD는 CORS allowedMethods에 HEAD가 없어 선차단된다 — 의도된 이중 방어,
+	// FE에 HEAD 사용처 없음(Codex R3 수용).
+	@RequestMapping(value = "/{videoId}", method = RequestMethod.HEAD)
+	public SuccessResponse<Void> headPlayback() {
+		return new SuccessResponse<>(null);   // body 없는 성공 — delete 핸들러와 같은 방식
 	}
 
 	@Operation(
