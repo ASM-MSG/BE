@@ -16,6 +16,7 @@
 
 ### `global` — ✅ 완성
 - `ApiException`, `GlobalExceptionHandler`, `config/SecurityConfig`, `config/S3Config`(S3Presigner 빈)·`config/AwsProperties` (MSG-64)
+- MSG-167: `GlobalExceptionHandler`에 `MissingServletRequestParameterException → 400 BAD_REQUEST` 전역 매핑 (필수 파라미터 누락이 catch-all에 삼켜져 500이던 결함 정정)
 
 ### `auth` (Owner B) — ✅ 완성
 - 기본 골격: `controller`(+`/reissue`), `service`(AuthService·OidcLoginService·RefreshTokenService), `dto`(+Reissue*), `jwt`(TokenProvider·필터·JwtProperties·RefreshTokenProvider/Store·RedisInvalidatedTokenStore), `oidc`(Kakao OIDC), `support/RefreshTokenCookies`, `exception/AuthErrorCode`
@@ -34,7 +35,7 @@
 ### `usergrid` (Owner B) — 🟡 부분
 - MSG-152: `repository/{UserGridRepository,CollectionSummaryProjection}`(user_grids·videos 네이티브 집계), `service/UserGridQueryService`(+impl, read 계약 B→A)·`CollectionSummaryView`, `controller/CollectionController`(`GET /api/collections/summary`), `dto/CollectionSummaryResponseDto`
 - MSG-153: 갤러리 격자 목록(`GET /api/collections/grids` — `first_collected_at DESC` 30 고정·무커서, `GridEncoder.decode`로 grids 미조인, `ThumbnailUrlPresigner` 소비, `CollectionGridProjection`/`CollectionGridView`/`CollectionGridResponseDto`·`getCollectionGrids` B-내부 read)
-- MSG-167: 갤러리 목록에 `regionName` 추가(`grids`·`regions` LEFT JOIN equi, geospatial 0 — 153 "grids 미조인"을 라벨 위해 뒤집음, 정렬·30상한 등 나머지 계약 불변), `CollectionGridProjection`/`View`/`ResponseDto`에 regionName 1필드. (동 단위 내 영상 조회 `GET /api/collections/videos?regionCode=`는 후속 분리 — 미구현)
+- MSG-167: 갤러리 목록에 `regionName` 추가(`grids`·`regions` LEFT JOIN equi, geospatial 0 — 153 "grids 미조인"을 라벨 위해 뒤집음, 정렬·30상한 등 나머지 계약 불변), `CollectionGridProjection`/`View`/`ResponseDto`에 regionName 1필드. 동 단위 내 영상 조회(`GET /api/collections/videos?regionCode=` — `videos⨝grids` 격자 축 귀속·ACTIVE만·`created_at DESC, id DESC`·no-LIMIT·빈 배열 200, `RegionVideoProjection`/`View`/`RegionVideoResponseDto`(gridId 포함)·`getRegionVideos` B-내부 read)
 - **없는 것**: — (155/156 소비용 프리미티브 구상은 불필요해져 폐기 — 155 자기완결·156 별도 서비스로 종결)
 
 ### `region` (Owner A) — 🟡 부분
@@ -62,7 +63,6 @@
 - MSG-153: 썸네일 GET presign 공용화(`support/ThumbnailUrlPresigner` 추출 — MSG-127 로직 이동, usergrid 갤러리와 공유)
 - MSG-162: 공개 범위 전환(`PATCH /api/videos/{videoId}/visibility`, `INVALID_VISIBILITY` 3420, `@DynamicUpdate`로 교차 컬럼 lost-update 차단, 노출 게이트는 read 경계 READY 강제 원칙)
 - MSG-167: `upsertGrid`(lazy insert)에 `region_code` 중심점 판정 인라인 — 격자 생애 1회(`SELECT … WHERE NOT EXISTS`, 무귀속 NULL). 판정 규칙은 Owner A 자산(93/155 동일), B 레포 호스팅(신설 공유 컬럼 `grids.region_code`)
-- **없는 것**: 재생 조회 API(영상 스트리밍 presigned GET + viewCount) · 전역 영상 목록 API(READY 필터 MUST — MSG-162 스펙 §도메인 3)
 - MSG-206: 영상 재생 조회(`GET /api/videos/{videoId}` — `VideoPlaybackResponseDto`, 재생 소스 blurred ?? encoded presign, 접근 제어 DELETED→BLINDED→visibility→READY first-match, `incrementViewCount` 원자적 +1 타인·발급 시만, 명시 HEAD no-op 핸들러)
 - **없는 것**: 전역 영상 목록 API(READY 필터 MUST — MSG-162 스펙 §도메인 3)
 
