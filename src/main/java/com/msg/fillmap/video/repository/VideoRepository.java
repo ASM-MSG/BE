@@ -59,15 +59,26 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	/**
 	 * 격자 lazy insert (전역 격자 등록). 이미 있으면 no-op — 멱등.
 	 * center/bbox 는 GridEncoder 산출값을 PostGIS geography 로 변환해 저장한다.
+	 *
+	 * region_code (MSG-167 §D1): 격자 중심점이 속한 행정동을 신규 격자 INSERT 시 1회 판정해 함께 채운다.
+	 * 판정 규칙은 RegionRepository.findContainingRegion(93)·refreshRegionStats(155)·V5 백필과 동일하다
+	 * (ST_Covers(boundary_geom, 중심점) ORDER BY region_code LIMIT 1) — 저장 라벨이 by-grid 귀속·recompute
+	 * 귀속과 항상 같은 행정동이다. VALUES 대신 SELECT … WHERE NOT EXISTS 로 두어 재방문(격자 존재) 시엔
+	 * 서브쿼리가 평가되지 않게 한다 — 판정은 격자 생애 1회, 무귀속(해안)이면 NULL. ON CONFLICT 는 동시 삽입
+	 * 레이스 방어로 유지한다.
 	 */
 	@Modifying
 	@Query(value = """
-		INSERT INTO grids (grid_id, grid_y, grid_x, center_geom, bbox_geom)
-		VALUES (
+		INSERT INTO grids (grid_id, grid_y, grid_x, center_geom, bbox_geom, region_code)
+		SELECT
 			:gridId, :gridY, :gridX,
 			ST_SetSRID(ST_MakePoint(:centerLon, :centerLat), 4326)::geography,
-			ST_SetSRID(ST_GeomFromText(:bboxWkt), 4326)::geography
-		)
+			ST_SetSRID(ST_GeomFromText(:bboxWkt), 4326)::geography,
+			(SELECT r.region_code FROM regions r
+				WHERE ST_Covers(r.boundary_geom, ST_SetSRID(ST_MakePoint(:centerLon, :centerLat), 4326)::geography)
+				ORDER BY r.region_code
+				LIMIT 1)
+		WHERE NOT EXISTS (SELECT 1 FROM grids WHERE grid_id = :gridId)
 		ON CONFLICT (grid_id) DO NOTHING
 		""", nativeQuery = true)
 	void upsertGrid(
