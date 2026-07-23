@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -67,5 +68,12 @@ class VideoControllerTest {
 			.andExpect(status().isBadRequest());
 
 		verify(videoService, never()).issuePresignedUrl(anyLong(), any());
+	}
+
+	@Test
+	@DisplayName("경로변수 타입이 맞지 않으면(비숫자 videoId) 500 이 아니라 400 을 반환한다 — MSG-167 전역 매핑")
+	void 경로변수_타입_불일치는_400() throws Exception {
+		mockMvc.perform(delete("/api/videos/abc"))
+			.andExpect(status().isBadRequest());
 	}
 }

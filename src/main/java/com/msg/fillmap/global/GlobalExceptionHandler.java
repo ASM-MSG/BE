@@ -7,6 +7,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.response.ApiResponseDto;
@@ -51,6 +52,18 @@ public class GlobalExceptionHandler {
 						.developCode(ErrorCode.BAD_REQUEST.getErrorCode())
 						.httpStatus(ErrorCode.BAD_REQUEST.getHttpStatus())
 						.message("필수 파라미터 누락: " + e.getParameterName())
+						.build());
+	}
+
+	// 경로변수/파라미터 타입 불일치(예: /api/videos/abc 의 videoId)도 클라이언트 잘못이라 400 이다 — 누락(위)과 동일 계열.
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ResponseEntity<ApiResponseDto<Object>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+		return ResponseEntity
+				.status(ErrorCode.BAD_REQUEST.getHttpStatus())
+				.body(ApiResponseDto.builder()
+						.developCode(ErrorCode.BAD_REQUEST.getErrorCode())
+						.httpStatus(ErrorCode.BAD_REQUEST.getHttpStatus())
+						.message("파라미터 타입 불일치: " + e.getName())
 						.build());
 	}
 
