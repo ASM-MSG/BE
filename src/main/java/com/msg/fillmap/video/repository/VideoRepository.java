@@ -170,4 +170,14 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		@Param("gridId") String gridId,
 		@Param("deletedVideoId") long deletedVideoId
 	);
+
+	/* ---------- MSG-206 재생 조회수 증가 ---------- */
+
+	/**
+	 * 재생 조회수 원자적 증가 (MSG-206 D5). 읽고 계산해서 쓰지 않으므로 동시 재생에도 lost update 가 없다
+	 * (decrementVideoCount 관용과 동일). chk_videos_view_count(view_count >= 0) 는 증가라 항상 만족한다.
+	 */
+	@Modifying
+	@Query(value = "UPDATE videos SET view_count = view_count + 1 WHERE id = :id", nativeQuery = true)
+	void incrementViewCount(@Param("id") long id);
 }
