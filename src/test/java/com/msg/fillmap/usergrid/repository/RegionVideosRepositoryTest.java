@@ -155,6 +155,24 @@ class RegionVideosRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("같은_created_at_영상들은_id_내림차순_타이브레이크로_결정적으로_정렬된다")
+	void 같은_created_at_영상들은_id_내림차순_타이브레이크로_결정적으로_정렬된다() {
+		long me = newUser();
+		seedRegionA();
+		String grid = seedGridA();
+		// 동일 초 업로드 3건 — created_at 이 전부 같아 타이브레이크(v.id DESC)만이 순서를 결정한다.
+		long first = seedReadyVideo(me, grid, "thumbs/tie1.jpg", BASE);
+		long second = seedReadyVideo(me, grid, "thumbs/tie2.jpg", BASE);
+		long third = seedReadyVideo(me, grid, "thumbs/tie3.jpg", BASE);
+
+		List<RegionVideoProjection> result = userGridRepository.getRegionVideos(me, REGION_A);
+
+		// id 는 시퀀스라 나중 삽입이 항상 크다 — id DESC = 최근 삽입 우선, 요청마다 동일한 순서.
+		assertThat(result).extracting(RegionVideoProjection::getVideoId)
+			.containsExactly(third, second, first);
+	}
+
+	@Test
 	@DisplayName("영상_좌표가_옆_행정동이어도_격자_소속_행정동_기준으로_포함된다")
 	void 영상_좌표가_옆_행정동이어도_격자_소속_행정동_기준으로_포함된다() {
 		long me = newUser();
