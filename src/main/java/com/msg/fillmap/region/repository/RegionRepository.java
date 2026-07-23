@@ -60,6 +60,28 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	Optional<RegionProjection> findContainingRegion(@Param("lat") double lat, @Param("lon") double lon);
 
 	/**
+	 * grids.region_code 멱등 보정 백필 (MSG-167 §D2 보정). V5 백필과 같은 판정·같은 IS NULL 가드다.
+	 * V5 는 Flyway 시점(RegionSeeder 이전)에 돌아, "격자는 있는데 regions 가 빈" 환경에선 no-op 으로 끝나고
+	 * upsertGrid 는 기존 격자를 건너뛰므로 라벨이 영구 NULL 로 남는다 — 시딩 직후 이 보정을 1회 돌려 닫는다.
+	 * EXISTS 가드로 실제 라벨될 행만 갱신한다 — 무귀속(해안) 격자를 IS NULL 만으로 잡으면 PostgreSQL 이
+	 * NULL→NULL 재기록(행 잠금·dead tuple·허위 카운트)을 만들어, 시딩 켠 기동마다 같은 행을 다시 쓴다.
+	 * 라벨 완비 환경에선 진짜 0행 no-op. 실제 라벨된 행 수 반환.
+	 */
+	@Modifying
+	@Query(value = """
+		UPDATE grids g SET region_code = (
+			SELECT r.region_code FROM regions r
+			WHERE ST_Covers(r.boundary_geom, g.center_geom)
+			ORDER BY r.region_code
+			LIMIT 1)
+		WHERE g.region_code IS NULL
+		  AND EXISTS (
+			SELECT 1 FROM regions r
+			WHERE ST_Covers(r.boundary_geom, g.center_geom))
+		""", nativeQuery = true)
+	int backfillGridRegionCodes();
+
+	/**
 	 * 사용자 단위 advisory 트랜잭션 잠금 (MSG-155). 같은 사용자의 점령/롤백 트랜잭션이 겹칠 때
 	 * recompute COUNT 가 서로의 미커밋 user_grids 를 못 봐 낮은 값으로 덮어쓰는 lost update 를 막는다 —
 	 * 잠금 대기 후 실행되는 recompute 문장은 새 스냅샷(READ COMMITTED)으로 커밋된 진값을 센다.

@@ -40,7 +40,9 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 	 * 조인 조건으로 강제해 교체·재인코딩 경계에서 pre-READY 행에 남은 stale 썸네일이 새지 않는다. READY 여도 썸네일이
 	 * null 일 수 있어(markReady 가 null thumbnailKey 허용) "id·썸네일 둘 다 null 쌍"은 계약이 아니다 —
 	 * 인코딩 중 cover 는 id 만 있고 key 가 null 인 게 정상 상태.
-	 * geospatial·grids 조인 없음(D5) — equi/LEFT JOIN + PK 조회뿐이라 조회 핫패스에 point-in-polygon 이 없다.
+	 * regionName 은 격자 중심점 행정동 이름 — grids·regions LEFT JOIN(PK/equi)으로 붙인다(MSG-167 §D4).
+	 * 저장된 라벨(grids.region_code)을 equi 로 소비하므로 조인이 늘어도 여전히 geospatial 0(성공 기준 8) —
+	 * point-in-polygon 판정은 쓰기 경로(upsertGrid)·백필에서만 돈다. region_code NULL(해안/미판정)이면 regionName null.
 	 * gridY/gridX 는 서비스가 GridEncoder.decode(gridId) 로 산출하고, coverThumbnailKey 는 서비스가 presign 한다.
 	 */
 	@Query(value = """
@@ -50,9 +52,12 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 			ug.last_uploaded_at   AS "lastUploadedAt",
 			ug.video_count        AS "videoCount",
 			ug.cover_video_id     AS "coverVideoId",
-			v.thumbnail_url       AS "coverThumbnailKey"
+			v.thumbnail_url       AS "coverThumbnailKey",
+			r.region_name         AS "regionName"
 		FROM user_grids ug
 		LEFT JOIN videos v ON v.id = ug.cover_video_id AND v.processing_status = 'READY'
+		LEFT JOIN grids g ON g.grid_id = ug.grid_id
+		LEFT JOIN regions r ON r.region_code = g.region_code
 		WHERE ug.user_id = :userId
 		ORDER BY ug.first_collected_at DESC, ug.grid_id DESC
 		LIMIT 30

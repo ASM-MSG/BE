@@ -46,6 +46,7 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 	 * gridY/gridX 는 gridId 를 GridEncoder.decode 로 산출한다(grids 조인 회피, D5). 격자 인덱스는
 	 * 한국·전지구를 통틀어 int 범위에 넉넉히 들어가므로 int 로 좁혀 응답 DTO(Integer)에 맞춘다.
 	 * cover 썸네일 key 는 presigned GET URL 로 바꾼다 — key 가 null(cover 없음·READY 이전)이면 null(D4).
+	 * regionName 은 쿼리가 grids·regions 조인으로 이미 채운 값을 그대로 통과시킨다(무귀속이면 null, MSG-167 §D4).
 	 */
 	private CollectionGridView toView(CollectionGridProjection projection) {
 		GridIndex index = GridEncoder.decode(projection.getGridId());
@@ -57,7 +58,8 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 			projection.getLastUploadedAt(),
 			projection.getVideoCount(),
 			projection.getCoverVideoId(),
-			thumbnailUrlPresigner.presign(projection.getCoverThumbnailKey())
+			thumbnailUrlPresigner.presign(projection.getCoverThumbnailKey()),
+			projection.getRegionName()
 		);
 	}
 }
