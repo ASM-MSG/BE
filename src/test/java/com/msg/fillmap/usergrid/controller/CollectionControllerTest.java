@@ -88,7 +88,7 @@ class CollectionControllerTest {
 		CollectionGridView view = new CollectionGridView(
 			"41642_110458", 41642, 110458,
 			LocalDateTime.of(2026, 7, 20, 18, 3, 11), LocalDateTime.of(2026, 7, 21, 9, 12, 0),
-			3, 1042L, "https://s3.example/thumb.jpg?X-Amz-Signature=abc");
+			3, 1042L, "https://s3.example/thumb.jpg?X-Amz-Signature=abc", "서울특별시 강남구 역삼1동");
 		given(userGridQueryService.getCollectionGrids(anyLong())).willReturn(List.of(view));
 
 		mockMvc.perform(get("/api/collections/grids")
@@ -102,7 +102,8 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.body[0].videoCount").value(3))
 			.andExpect(jsonPath("$.body[0].coverVideoId").value(1042))
 			.andExpect(jsonPath("$.body[0].coverThumbnailUrl")
-				.value("https://s3.example/thumb.jpg?X-Amz-Signature=abc"));
+				.value("https://s3.example/thumb.jpg?X-Amz-Signature=abc"))
+			.andExpect(jsonPath("$.body[0].regionName").value("서울특별시 강남구 역삼1동"));
 	}
 
 	@Test

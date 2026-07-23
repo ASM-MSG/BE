@@ -36,7 +36,11 @@ public record CollectionGridResponseDto(
 	Long coverVideoId,
 
 	@Schema(description = "cover 썸네일 presigned GET URL(없거나 READY 이전이면 null)", nullable = true)
-	String coverThumbnailUrl
+	String coverThumbnailUrl,
+
+	@Schema(description = "격자 중심점 행정동 이름(무귀속/미판정이면 null)",
+		example = "서울특별시 강남구 역삼1동", nullable = true)
+	String regionName
 ) {
 
 	public static CollectionGridResponseDto from(CollectionGridView view) {
@@ -48,7 +52,8 @@ public record CollectionGridResponseDto(
 			view.lastUploadedAt(),
 			view.videoCount(),
 			view.coverVideoId(),
-			view.coverThumbnailUrl()
+			view.coverThumbnailUrl(),
+			view.regionName()
 		);
 	}
 }

@@ -142,6 +142,11 @@ class UserGridQueryServiceImplTest {
 			public String getCoverThumbnailKey() {
 				return coverThumbnailKey;
 			}
+
+			@Override
+			public String getRegionName() {
+				return "역삼1동";
+			}
 		};
 	}
 
