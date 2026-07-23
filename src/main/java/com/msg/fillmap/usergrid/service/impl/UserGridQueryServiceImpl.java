@@ -11,9 +11,11 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
+import com.msg.fillmap.usergrid.repository.RegionVideoProjection;
 import com.msg.fillmap.usergrid.repository.UserGridRepository;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
+import com.msg.fillmap.usergrid.service.RegionVideoView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
@@ -60,6 +62,28 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 			projection.getCoverVideoId(),
 			thumbnailUrlPresigner.presign(projection.getCoverThumbnailKey()),
 			projection.getRegionName()
+		);
+	}
+
+	@Override
+	public List<RegionVideoView> getRegionVideos(long userId, String regionCode) {
+		return userGridRepository.getRegionVideos(userId, regionCode).stream()
+			.map(this::toView)
+			.toList();
+	}
+
+	/**
+	 * thumbnailKey 를 presigned GET URL 로 바꾼다 — key 가 null(READY 이전)이면 null(§D3). gridId 는
+	 * 항목별 격자 라벨용으로 그대로 통과시킨다(Open Q2). 나머지 필드는 projection 값을 옮긴다.
+	 */
+	private RegionVideoView toView(RegionVideoProjection projection) {
+		return new RegionVideoView(
+			projection.getVideoId(),
+			projection.getGridId(),
+			thumbnailUrlPresigner.presign(projection.getThumbnailKey()),
+			projection.getProcessingStatus(),
+			projection.getDurationSec(),
+			projection.getCreatedAt()
 		);
 	}
 }

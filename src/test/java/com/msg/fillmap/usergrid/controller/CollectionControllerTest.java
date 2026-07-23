@@ -1,6 +1,7 @@
 package com.msg.fillmap.usergrid.controller;
 
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -22,6 +23,7 @@ import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.user.entity.UserRole;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
+import com.msg.fillmap.usergrid.service.RegionVideoView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
 
 @SpringBootTest
@@ -122,6 +124,59 @@ class CollectionControllerTest {
 	@DisplayName("인증 없이 갤러리 목록을 조회하면 401 이다")
 	void 인증_없이_갤러리_목록을_조회하면_401이다() throws Exception {
 		mockMvc.perform(get("/api/collections/grids"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.developCode").value(2403));
+	}
+
+	@Test
+	@DisplayName("동 단위 영상 조회는 200 과 gridId 포함 영상 리스트를 반환한다")
+	void 동_단위_영상_조회는_200과_gridId_포함_영상_리스트를_반환한다() throws Exception {
+		RegionVideoView view = new RegionVideoView(
+			1042L, "41642_110458", "https://s3.example/thumb.jpg?X-Amz-Signature=abc",
+			"READY", 12, LocalDateTime.of(2026, 7, 20, 18, 3, 11));
+		given(userGridQueryService.getRegionVideos(anyLong(), anyString())).willReturn(List.of(view));
+
+		mockMvc.perform(get("/api/collections/videos")
+				.param("regionCode", "1168051500")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body.length()").value(1))
+			.andExpect(jsonPath("$.body[0].videoId").value(1042))
+			.andExpect(jsonPath("$.body[0].gridId").value("41642_110458"))
+			.andExpect(jsonPath("$.body[0].thumbnailUrl")
+				.value("https://s3.example/thumb.jpg?X-Amz-Signature=abc"))
+			.andExpect(jsonPath("$.body[0].processingStatus").value("READY"))
+			.andExpect(jsonPath("$.body[0].durationSec").value(12));
+	}
+
+	@Test
+	@DisplayName("그 행정동에 내 영상이 없으면 200 과 빈 배열이다")
+	void 그_행정동에_내_영상이_없으면_200과_빈_배열이다() throws Exception {
+		given(userGridQueryService.getRegionVideos(anyLong(), anyString())).willReturn(List.of());
+
+		mockMvc.perform(get("/api/collections/videos")
+				.param("regionCode", "9995399999")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body.length()").value(0));
+	}
+
+	@Test
+	@DisplayName("regionCode 파라미터가 없으면 400 이다")
+	void regionCode_파라미터가_없으면_400이다() throws Exception {
+		mockMvc.perform(get("/api/collections/videos")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(400));
+	}
+
+	@Test
+	@DisplayName("인증 없이 동 단위 영상을 조회하면 401 이다")
+	void 인증_없이_동_단위_영상을_조회하면_401이다() throws Exception {
+		mockMvc.perform(get("/api/collections/videos")
+				.param("regionCode", "1168051500"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.developCode").value(2403));
 	}

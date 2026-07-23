@@ -18,6 +18,7 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
+import com.msg.fillmap.usergrid.repository.RegionVideoProjection;
 import com.msg.fillmap.usergrid.repository.UserGridRepository;
 import com.msg.fillmap.usergrid.service.impl.UserGridQueryServiceImpl;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
@@ -109,6 +110,75 @@ class UserGridQueryServiceImplTest {
 			assertThat(view.coverVideoId()).isNull();
 			assertThat(view.coverThumbnailUrl()).isNull();
 		}
+	}
+
+	@Nested
+	@DisplayName("getRegionVideos")
+	class GetRegionVideos {
+
+		@Test
+		@DisplayName("thumbnailKey가 있으면 presigned GET URL로 바꾸고 gridId를 그대로 통과시킨다")
+		void thumbnailKey가_있으면_presigned_GET_URL로_바꾸고_gridId를_그대로_통과시킨다() {
+			String thumbKey = "videos/thumb/1042.jpg";
+			String signed = "https://s3.example/thumb.jpg?X-Amz-Signature=abc";
+			given(userGridRepository.getRegionVideos(1L, "1168051500"))
+				.willReturn(List.of(regionVideoProjection(1042L, "41642_110458", thumbKey, "READY")));
+			given(thumbnailUrlPresigner.presign(thumbKey)).willReturn(signed);
+
+			RegionVideoView view = userGridQueryService.getRegionVideos(1L, "1168051500").get(0);
+
+			assertThat(view.videoId()).isEqualTo(1042L);
+			assertThat(view.gridId()).isEqualTo("41642_110458");
+			assertThat(view.thumbnailUrl()).isEqualTo(signed);
+			assertThat(view.durationSec()).isEqualTo(12);
+		}
+
+		@Test
+		@DisplayName("thumbnailKey가 null이면 thumbnailUrl이 null이다")
+		void thumbnailKey가_null이면_thumbnailUrl이_null이다() {
+			given(userGridRepository.getRegionVideos(1L, "1168051500"))
+				.willReturn(List.of(regionVideoProjection(1041L, "41642_110458", null, "ENCODING")));
+
+			RegionVideoView view = userGridQueryService.getRegionVideos(1L, "1168051500").get(0);
+
+			assertThat(view.processingStatus()).isEqualTo("ENCODING");
+			assertThat(view.thumbnailUrl()).isNull();
+		}
+	}
+
+	private RegionVideoProjection regionVideoProjection(
+		Long videoId, String gridId, String thumbnailKey, String processingStatus) {
+		return new RegionVideoProjection() {
+			@Override
+			public Long getVideoId() {
+				return videoId;
+			}
+
+			@Override
+			public String getGridId() {
+				return gridId;
+			}
+
+			@Override
+			public String getThumbnailKey() {
+				return thumbnailKey;
+			}
+
+			@Override
+			public String getProcessingStatus() {
+				return processingStatus;
+			}
+
+			@Override
+			public Integer getDurationSec() {
+				return 12;
+			}
+
+			@Override
+			public LocalDateTime getCreatedAt() {
+				return LocalDateTime.of(2026, 7, 20, 18, 3, 11);
+			}
+		};
 	}
 
 	private CollectionGridProjection gridProjection(String gridId, Long coverVideoId, String coverThumbnailKey) {
