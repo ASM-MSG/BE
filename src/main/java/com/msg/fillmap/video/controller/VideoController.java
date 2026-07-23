@@ -76,7 +76,7 @@ public class VideoController {
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "재생할 영상 ID", example = "1042") @PathVariable Long videoId
 	) {
-		return SuccessResponse.of(videoService.getVideoPlayback(videoId, principal.userId()));
+		return SuccessResponse.of(videoService.getVideoPlayback(principal.userId(), videoId));
 	}
 
 	// 명시 HEAD 매핑 — 없으면 Spring이 GET 핸들러로 폴백해 view_count가 오른다(Codex R2).

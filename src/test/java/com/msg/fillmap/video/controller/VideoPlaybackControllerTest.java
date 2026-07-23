@@ -1,6 +1,6 @@
 package com.msg.fillmap.video.controller;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -52,7 +52,7 @@ class VideoPlaybackControllerTest {
 	@Test
 	@DisplayName("단건 조회는 200과 재생메타를 반환한다")
 	void 단건_조회는_200과_재생메타를_반환한다() throws Exception {
-		given(videoService.getVideoPlayback(any(), any())).willReturn(new VideoPlaybackResponseDto(
+		given(videoService.getVideoPlayback(anyLong(), anyLong())).willReturn(new VideoPlaybackResponseDto(
 			VIDEO_ID, "https://bucket.s3/play.mp4?X-Amz-Signature=abc",
 			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "41642_110458", (short) 12,
 			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L));
@@ -72,7 +72,7 @@ class VideoPlaybackControllerTest {
 	@Test
 	@DisplayName("타인 비공개 영상 조회는 403이다")
 	void 타인_비공개_영상_조회는_403이다() throws Exception {
-		given(videoService.getVideoPlayback(any(), any()))
+		given(videoService.getVideoPlayback(anyLong(), anyLong()))
 			.willThrow(new ApiException(VideoErrorCode.VIDEO_FORBIDDEN));
 
 		mockMvc.perform(get(URL, VIDEO_ID)
@@ -83,7 +83,7 @@ class VideoPlaybackControllerTest {
 	@Test
 	@DisplayName("없는 영상 조회는 404다")
 	void 없는_영상_조회는_404다() throws Exception {
-		given(videoService.getVideoPlayback(any(), any()))
+		given(videoService.getVideoPlayback(anyLong(), anyLong()))
 			.willThrow(new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
 
 		mockMvc.perform(get(URL, VIDEO_ID)
@@ -106,6 +106,6 @@ class VideoPlaybackControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk());
 
-		verify(videoService, never()).getVideoPlayback(any(), any());
+		verify(videoService, never()).getVideoPlayback(anyLong(), anyLong());
 	}
 }

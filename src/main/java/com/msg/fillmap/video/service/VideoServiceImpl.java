@@ -347,12 +347,10 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	@Transactional
-	public VideoPlaybackResponseDto getVideoPlayback(Long videoId, Long userId) {
+	public VideoPlaybackResponseDto getVideoPlayback(long userId, long videoId) {
 		Video video = videoRepository.findById(videoId)
 			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
-		// findOwnedVideo 의 primitive 비교와 동일 관용 — getUserId()(Long) 를 long 으로 언박싱해 값 비교한다.
-		long callerId = userId;
-		boolean owner = video.getUserId() == callerId;
+		boolean owner = video.getUserId() == userId;
 
 		// 1. 존재/DELETED — 지운 영상은 소유자 포함 전원에게 존재 자체를 숨긴다.
 		if (video.isDeleted()) {
@@ -365,7 +363,8 @@ public class VideoServiceImpl implements VideoService {
 			}
 		} else if (video.getVisibility() == Visibility.PRIVATE && !owner) {
 			// 3. visibility — PRIVATE 는 존재는 노출하되 접근만 막는다(404 아니라 403, 티켓 확정).
-			throw new ApiException(VideoErrorCode.VIDEO_FORBIDDEN);
+			// 공유 상수의 기본 메시지("본인의 영상만 처리...")는 수정 거부 뉘앙스라 조회 맥락 문구로 override.
+			throw new ApiException(VideoErrorCode.VIDEO_FORBIDDEN, "비공개 영상입니다");
 		}
 
 		// 4. 재생 소스 선택 & presign — ACTIVE·READY 만 발급. 블러본이 있으면 우선, 없으면 인코딩본.

@@ -114,7 +114,7 @@ class VideoPlaybackViewCountIntegrationTest {
 		assertThat(coverId()).isEqualTo(videoB);
 
 		// 타인이 A 를 재생 → view_count 5 → 6 (원자적 UPDATE)
-		videoService.getVideoPlayback(videoA, otherCaller);
+		videoService.getVideoPlayback(otherCaller, videoA);
 
 		// A(6) > B(5) → 대표가 A 로 뒤집힌다. findGlobalCover 의 view_count DESC 가 증가를 본다.
 		assertThat(coverId()).isEqualTo(videoA);

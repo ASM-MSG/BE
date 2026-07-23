@@ -96,7 +96,7 @@ class VideoPlaybackServiceTest {
 	void 없는_영상을_조회하면_VIDEO_NOT_FOUND다() {
 		given(videoRepository.findById(VIDEO_ID)).willReturn(Optional.empty());
 
-		assertThatThrownBy(() -> videoService.getVideoPlayback(VIDEO_ID, OWNER_ID))
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OWNER_ID, VIDEO_ID))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
@@ -107,7 +107,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.DELETED, Visibility.PUBLIC, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 0L));
 
-		assertThatThrownBy(() -> videoService.getVideoPlayback(VIDEO_ID, OWNER_ID))
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OWNER_ID, VIDEO_ID))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
@@ -118,7 +118,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.BLINDED, Visibility.PUBLIC, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 0L));
 
-		assertThatThrownBy(() -> videoService.getVideoPlayback(VIDEO_ID, OTHER_ID))
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
@@ -129,7 +129,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.BLINDED, Visibility.PUBLIC, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 0L));
 
-		VideoPlaybackResponseDto result = videoService.getVideoPlayback(VIDEO_ID, OWNER_ID);
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
 
 		assertThat(result.playbackUrl()).isNull();
 		assertThat(result.status()).isEqualTo("BLINDED");
@@ -143,7 +143,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PRIVATE, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 0L));
 
-		assertThatThrownBy(() -> videoService.getVideoPlayback(VIDEO_ID, OTHER_ID))
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_FORBIDDEN);
 	}
@@ -154,7 +154,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PRIVATE, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 0L));
 
-		VideoPlaybackResponseDto result = videoService.getVideoPlayback(VIDEO_ID, OWNER_ID);
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
 
 		assertThat(result.playbackUrl()).startsWith("https://").contains(ENCODED_KEY);
 		assertThat(result.visibility()).isEqualTo("PRIVATE");
@@ -167,7 +167,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 0L));
 
-		VideoPlaybackResponseDto result = videoService.getVideoPlayback(VIDEO_ID, OTHER_ID);
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
 
 		assertThat(result.playbackUrl()).startsWith("https://").contains(ENCODED_KEY);
 		assertThat(result.thumbnailUrl()).contains(THUMB_KEY);
@@ -179,7 +179,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.ENCODING,
 			null, null, null, 0L));
 
-		VideoPlaybackResponseDto result = videoService.getVideoPlayback(VIDEO_ID, OTHER_ID);
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
 
 		assertThat(result.playbackUrl()).isNull();
 		assertThat(result.thumbnailUrl()).isNull();
@@ -192,7 +192,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
 			ENCODED_KEY, BLURRED_KEY, THUMB_KEY, 0L));
 
-		VideoPlaybackResponseDto result = videoService.getVideoPlayback(VIDEO_ID, OWNER_ID);
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
 
 		assertThat(result.playbackUrl()).contains(BLURRED_KEY).doesNotContain(ENCODED_KEY);
 	}
@@ -203,7 +203,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 0L));
 
-		VideoPlaybackResponseDto result = videoService.getVideoPlayback(VIDEO_ID, OWNER_ID);
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
 
 		assertThat(result.playbackUrl()).contains(ENCODED_KEY);
 	}
@@ -214,7 +214,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 37L));
 
-		VideoPlaybackResponseDto result = videoService.getVideoPlayback(VIDEO_ID, OTHER_ID);
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
 
 		verify(videoRepository).incrementViewCount(VIDEO_ID);
 		// 응답 viewCount 는 증가 전 스냅샷이다(§설계 M7).
@@ -227,7 +227,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 37L));
 
-		videoService.getVideoPlayback(VIDEO_ID, OWNER_ID);
+		videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
 
 		verify(videoRepository, never()).incrementViewCount(anyLong());
 	}
@@ -238,7 +238,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.ENCODING,
 			null, null, null, 0L));
 
-		VideoPlaybackResponseDto result = videoService.getVideoPlayback(VIDEO_ID, OTHER_ID);
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
 
 		assertThat(result.playbackUrl()).isNull();
 		verify(videoRepository, never()).incrementViewCount(anyLong());
@@ -251,7 +251,7 @@ class VideoPlaybackServiceTest {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
 			null, null, null, 0L));
 
-		VideoPlaybackResponseDto result = videoService.getVideoPlayback(VIDEO_ID, OTHER_ID);
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
 
 		assertThat(result.playbackUrl()).isNull();
 		assertThat(result.expiresInSec()).isNull();
@@ -263,13 +263,13 @@ class VideoPlaybackServiceTest {
 	void expiresInSec는_playbackUrl_발급시_presign_TTL과_같고_null이면_null이다() {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 0L));
-		VideoPlaybackResponseDto issued = videoService.getVideoPlayback(VIDEO_ID, OWNER_ID);
+		VideoPlaybackResponseDto issued = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
 		assertThat(issued.playbackUrl()).isNotNull();
 		assertThat(issued.expiresInSec()).isEqualTo(thumbnailUrlPresigner.ttlSeconds());
 
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.ENCODING,
 			null, null, null, 0L));
-		VideoPlaybackResponseDto notIssued = videoService.getVideoPlayback(VIDEO_ID, OWNER_ID);
+		VideoPlaybackResponseDto notIssued = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
 		assertThat(notIssued.playbackUrl()).isNull();
 		assertThat(notIssued.expiresInSec()).isNull();
 	}

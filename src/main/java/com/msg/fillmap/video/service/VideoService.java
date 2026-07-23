@@ -38,7 +38,7 @@ public interface VideoService {
 	 * 재생 URL 을 실제로 발급했고 소유자가 아닐 때만 view_count 를 원자적으로 +1 하며, 응답 viewCount 는
 	 * 증가 전 스냅샷이다.
 	 */
-	VideoPlaybackResponseDto getVideoPlayback(Long videoId, Long userId);
+	VideoPlaybackResponseDto getVideoPlayback(long userId, long videoId);
 
 	/**
 	 * 업로드 완료 메타데이터 저장. 좌표 → 격자 인코딩 → grids lazy insert → videos INSERT → 점령 UPSERT.
