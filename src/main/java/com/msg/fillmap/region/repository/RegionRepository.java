@@ -63,7 +63,9 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	 * grids.region_code 멱등 보정 백필 (MSG-167 §D2 보정). V5 백필과 같은 판정·같은 IS NULL 가드다.
 	 * V5 는 Flyway 시점(RegionSeeder 이전)에 돌아, "격자는 있는데 regions 가 빈" 환경에선 no-op 으로 끝나고
 	 * upsertGrid 는 기존 격자를 건너뛰므로 라벨이 영구 NULL 로 남는다 — 시딩 직후 이 보정을 1회 돌려 닫는다.
-	 * 정상(라벨 완비) 환경에선 IS NULL 가드로 0행 no-op. 갱신 행 수 반환.
+	 * EXISTS 가드로 실제 라벨될 행만 갱신한다 — 무귀속(해안) 격자를 IS NULL 만으로 잡으면 PostgreSQL 이
+	 * NULL→NULL 재기록(행 잠금·dead tuple·허위 카운트)을 만들어, 시딩 켠 기동마다 같은 행을 다시 쓴다.
+	 * 라벨 완비 환경에선 진짜 0행 no-op. 실제 라벨된 행 수 반환.
 	 */
 	@Modifying
 	@Query(value = """
@@ -73,6 +75,9 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 			ORDER BY r.region_code
 			LIMIT 1)
 		WHERE g.region_code IS NULL
+		  AND EXISTS (
+			SELECT 1 FROM regions r
+			WHERE ST_Covers(r.boundary_geom, g.center_geom))
 		""", nativeQuery = true)
 	int backfillGridRegionCodes();
 

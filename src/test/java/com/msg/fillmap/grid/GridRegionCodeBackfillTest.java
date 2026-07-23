@@ -184,6 +184,27 @@ class GridRegionCodeBackfillTest {
 	}
 
 	@Test
+	@DisplayName("보정 백필은 무귀속 해안 격자를 NULL→NULL 로 재기록하지 않는다 (EXISTS 가드)")
+	void 보정_백필은_무귀속_해안_격자를_재기록하지_않는다() {
+		seedRegion(REGION_A, GY0, GY0 + 3, GX0, GX0 + 3);
+		// 행정동 밖(북쪽 100칸) 해안 격자 — EXISTS 가드가 없으면 IS NULL 만으로 잡혀 NULL→NULL 재기록된다.
+		long coastalGy = GY0 + 100;
+		String coastal = GridFixtures.seedGrid(em, coastalGy, GX0);
+		String ctidBefore = ctidOf(coastal);
+
+		regionRepository.backfillGridRegionCodes();
+
+		// UPDATE 는 튜플을 새 버전으로 다시 써 ctid 가 바뀐다 — 동일 ctid = 이 행을 건드리지 않았다는 증거.
+		assertThat(regionCodeOf(coastal)).isNull();
+		assertThat(ctidOf(coastal)).isEqualTo(ctidBefore);
+	}
+
+	private String ctidOf(String gridId) {
+		return (String) em.createNativeQuery("SELECT ctid::text FROM grids WHERE grid_id = :g")
+			.setParameter("g", gridId).getSingleResult();
+	}
+
+	@Test
 	@DisplayName("중심점이 어느 행정동에도 안 속하는 해안 격자는 백필 후에도 region_code 가 null 이다")
 	void 중심점이_어느_행정동에도_안속하는_해안_격자는_백필_후에도_region_code가_null이다() {
 		seedRegion(REGION_A, GY0, GY0 + 3, GX0, GX0 + 3);
