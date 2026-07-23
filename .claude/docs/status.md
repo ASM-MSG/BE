@@ -58,7 +58,8 @@
 - MSG-149/150: AI 서버 연동(`AiProperties`/`AiConfig`(RestClient.Builder 빈+타임아웃)/`AiClient`/`AiBlurPoller` — `ai.enabled` 기본 off 게이트, 활성 시 ENCODING→BLURRING→READY, 30s reconcile 폴러·타임아웃/가드(시도 넌스·행 잠금)→FAILED 수렴, 블러본 `videos/blurred/`+블러 썸네일 재추출 업로드, 단일 인스턴스 전제)
 - MSG-153: 썸네일 GET presign 공용화(`support/ThumbnailUrlPresigner` 추출 — MSG-127 로직 이동, usergrid 갤러리와 공유)
 - MSG-162: 공개 범위 전환(`PATCH /api/videos/{videoId}/visibility`, `INVALID_VISIBILITY` 3420, `@DynamicUpdate`로 교차 컬럼 lost-update 차단, 노출 게이트는 read 경계 READY 강제 원칙)
-- **없는 것**: 재생 조회 API(영상 스트리밍 presigned GET + viewCount) · 전역 영상 목록 API(READY 필터 MUST — MSG-162 스펙 §도메인 3)
+- MSG-206: 영상 재생 조회(`GET /api/videos/{videoId}` — `VideoPlaybackResponseDto`, 재생 소스 blurred ?? encoded presign, 접근 제어 DELETED→BLINDED→visibility→READY first-match, `incrementViewCount` 원자적 +1 타인·발급 시만, 명시 HEAD no-op 핸들러)
+- **없는 것**: 전역 영상 목록 API(READY 필터 MUST — MSG-162 스펙 §도메인 3)
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
