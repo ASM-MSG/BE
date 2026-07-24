@@ -86,7 +86,7 @@ class VideoReplaceIntegrationTest {
 
 	private Object[] videoRow(long videoId) {
 		return (Object[]) em.createNativeQuery(
-				"SELECT original_s3_key, processing_status, encoded_url, thumbnail_url, duration_sec"
+				"SELECT original_s3_key, processing_status, encoded_url, thumbnail_url, duration_sec, recorded_at"
 					+ " FROM videos WHERE id = :i")
 			.setParameter("i", videoId)
 			.getSingleResult();
@@ -120,6 +120,21 @@ class VideoReplaceIntegrationTest {
 		assertThat(row[2]).as("옛 인코딩본은 비워야 한다").isNull();
 		assertThat(row[3]).as("옛 썸네일도 비워야 한다").isNull();
 		assertThat(((Number) row[4]).shortValue()).as("길이 갱신").isEqualTo((short) 7);
+	}
+
+	@Test
+	@DisplayName("교체하면 recorded_at 이 요청의 새 촬영 시각으로 갱신된다")
+	void 교체하면_recordedAt이_요청_값으로_갱신된다() {
+		LocalDateTime 옛시각 = LocalDateTime.of(2026, 6, 1, 10, 0);
+		LocalDateTime 새시각 = LocalDateTime.of(2026, 7, 24, 18, 0);
+		long videoId = videoService.saveVideo(userId, new VideoUploadRequestDto(
+			newKey(), 잠실_LAT, 잠실_LON, (short) 10, 옛시각)).videoId();
+
+		videoService.replaceVideo(userId, videoId, new VideoReplaceRequestDto(newKey(), null, null, (short) 7, 새시각));
+		em.flush();
+
+		assertThat((LocalDateTime) videoRow(videoId)[5])
+			.as("옛 촬영 시각이 아니라 교체 요청의 새 촬영 시각").isEqualTo(새시각);
 	}
 
 	@Test
