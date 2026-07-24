@@ -183,9 +183,10 @@ public class Video {
 	 * 그러지 않으면 재인코딩 전까지 옛 영상이 재생된다. AI 블러 결과(블러본·하이라이트·job_id)도
 	 * 원본에서 파생된 값이라 원본이 바뀌면 전부 무효 → 함께 비운다 (MSG-145).
 	 */
-	public void replaceFile(String originalS3Key, Short durationSec) {
+	public void replaceFile(String originalS3Key, Short durationSec, LocalDateTime recordedAt) {
 		this.originalS3Key = originalS3Key;
 		this.durationSec = durationSec;
+		this.recordedAt = recordedAt;
 		this.encodedUrl = null;
 		this.thumbnailUrl = null;
 		this.blurredS3Key = null;

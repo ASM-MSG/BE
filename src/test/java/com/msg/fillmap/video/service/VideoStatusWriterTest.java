@@ -72,7 +72,7 @@ class VideoStatusWriterTest {
 	void 교체로_잡이_바뀌면_옛_잡_결과를_적용하지_않는다() {
 		Video video = blurring("job-1");
 		// 폴러가 다운로드/업로드하는 사이 사용자가 교체 → replaceFile 이 AI 필드를 비우고 UPLOADED 로 되돌림
-		video.replaceFile("videos/original/1/y.mp4", (short) 8);
+		video.replaceFile("videos/original/1/y.mp4", (short) 8, LocalDateTime.now());
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		boolean applied = statusWriter.markBlurReady(VIDEO_ID, "job-1", "videos/blurred/1/7.mp4",
@@ -122,7 +122,7 @@ class VideoStatusWriterTest {
 		Video video = attempt();
 		LocalDateTime oldStartedAt = video.getBlurringStartedAt();   // 폴러가 목록 로드 시점에 잡은 시도 넌스
 		// 제출 왕복 사이 사용자가 교체 → replaceFile 이 blurringStartedAt·aiJobId 를 비우고 UPLOADED 로 되돌림
-		video.replaceFile("videos/original/1/y.mp4", (short) 8);
+		video.replaceFile("videos/original/1/y.mp4", (short) 8, LocalDateTime.now());
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		statusWriter.recordAiJob(VIDEO_ID, "job-1", oldStartedAt);

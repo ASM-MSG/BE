@@ -131,7 +131,7 @@ public class VideoServiceImpl implements VideoService {
 		String replacedKey = video.getOriginalS3Key();
 		String replacedBlurredKey = video.getBlurredS3Key();
 
-		video.replaceFile(originalKey, request.durationSec());
+		video.replaceFile(originalKey, request.durationSec(), request.recordedAt());
 		copyToOriginal(request.s3Key(), originalKey);
 
 		// 교체된 원본은 참조를 잃는다. 인코딩본·썸네일은 키가 videoId 기반이라 재인코딩이 같은 자리에
