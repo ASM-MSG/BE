@@ -53,6 +53,46 @@ public final class GridFixtures {
 	}
 
 	/**
+	 * seedGrid 와 같되 region_code 를 중심점 판정으로 라벨해 삽입한다(upsertGrid·V5 백필과 동일 규칙 인라인).
+	 * 라벨이 붙으려면 중심점을 덮는 regions 가 먼저 시드돼 있어야 한다 — 무귀속(해안)이면 서브쿼리가 NULL 이다.
+	 * 저장 라벨을 equi 로 읽는 경로(refreshRegionStats 등)의 픽스처가 프로덕션 "탄생 시 라벨"을 재현한다. 이미 있으면 no-op.
+	 */
+	public static String seedLabeledGrid(EntityManager em, long gridY, long gridX) {
+		String gridId = gridId(gridY, gridX);
+		double south = gridY * GRID_LAT_STEP;
+		double north = (gridY + 1) * GRID_LAT_STEP;
+		double west = gridX * GRID_LNG_STEP;
+		double east = (gridX + 1) * GRID_LNG_STEP;
+		double centerLat = (gridY + 0.5) * GRID_LAT_STEP;
+		double centerLng = (gridX + 0.5) * GRID_LNG_STEP;
+
+		em.createNativeQuery("""
+			INSERT INTO grids (grid_id, grid_y, grid_x, center_geom, bbox_geom, region_code)
+			VALUES (
+				:gridId, :gridY, :gridX,
+				ST_SetSRID(ST_MakePoint(:centerLng, :centerLat), 4326)::geography,
+				ST_MakeEnvelope(:west, :south, :east, :north, 4326)::geography,
+				(SELECT r.region_code FROM regions r
+					WHERE ST_Covers(r.boundary_geom, ST_SetSRID(ST_MakePoint(:centerLng, :centerLat), 4326)::geography)
+					ORDER BY r.region_code
+					LIMIT 1)
+			)
+			ON CONFLICT (grid_id) DO NOTHING
+			""")
+			.setParameter("gridId", gridId)
+			.setParameter("gridY", gridY)
+			.setParameter("gridX", gridX)
+			.setParameter("centerLng", centerLng)
+			.setParameter("centerLat", centerLat)
+			.setParameter("west", west)
+			.setParameter("south", south)
+			.setParameter("east", east)
+			.setParameter("north", north)
+			.executeUpdate();
+		return gridId;
+	}
+
+	/**
 	 * (userId, gridId) 점령 row 를 user_grids 에 삽입한다(video_count 지정).
 	 */
 	public static void seedUserGrid(EntityManager em, long userId, String gridId, int videoCount) {
