@@ -154,14 +154,15 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	);
 
 	/**
-	 * 수집률 캐시(region_stats) recompute UPSERT (MSG-155). gridId 격자의 중심점(center_geom)을 덮는
-	 * 행정동 1개를 ST_Covers 로 판정하고(경계선 위 다중매칭은 ORDER BY region_code LIMIT 1 로 결정적 단일화 —
-	 * findContainingRegion·분자 카운트와 동일 규칙이라 한 격자가 두 행정동에 겹으로 잡히지 않는다), 그 (user, region) 의
-	 * collected_count 를 "그 사용자가 그 행정동에서 점령(user_grids)한 격자 중 중심점이 그 행정동에 속하는 수"로
-	 * 재계산한다. 분자는 videos 가 아니라 user_grids(격자 1 row) 라 경계 격자 이중 카운트가 없다(§D2).
-	 * total_count 는 regions.total_grid_count 사본, progress_rate 는 ROUND(collected*100/total, 2) 물질화(§D4).
-	 * 중심점을 덮는 행정동이 없으면(해안·무귀속) LATERAL 이 비어 SELECT 가 통째로 empty → 무변경 no-op(§D2).
-	 * recompute 라 방향 무관·멱등 — 첫 점령/롤백 둘 다 이 한 문장(§D1·D5, 롤백 마지막 격자는 0 으로 UPSERT).
+	 * 수집률 캐시(region_stats) recompute UPSERT (MSG-155, MSG-236 equi 치환). gridId 격자의 저장 라벨
+	 * (grids.region_code — 167 이 쓰기 시 중심점 판정으로 1회 저장)을 regions 와 PK equi-join 해 귀속 행정동을 얻고,
+	 * 그 (user, region) 의 collected_count 를 "그 사용자가 점령(user_grids)한 격자 중 저장 라벨이 그 행정동인 수"로
+	 * 재계산한다. 두 판정 모두 저장 라벨 equi 라 ST_Covers 가 없다 — 167 이 라벨=라이브 판정을 고정해 등가다(§D1·D2).
+	 * 다중매칭 타이브레이크(ORDER BY region_code)는 라벨 저장 시 이미 결정적으로 단일화돼 승계된다.
+	 * 분자는 videos 가 아니라 user_grids(격자 1 row) 라 경계 격자 이중 카운트가 없다. total_count 는
+	 * regions.total_grid_count 사본, progress_rate 는 ROUND(collected*100/total, 2) 물질화(§D4). 대상 격자가
+	 * 무라벨(region_code IS NULL — 해안·무귀속)이면 가드로 SELECT 가 empty → 무변경 no-op(equi JOIN 도 NULL 을
+	 * 탈락시키나 no-op 의도를 명시한다). recompute 라 방향 무관·멱등 — 첫 점령/롤백 둘 다 이 한 문장(롤백 마지막 격자는 0 으로 UPSERT).
 	 */
 	@Modifying
 	@Query(value = """
@@ -174,26 +175,16 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 			COALESCE(ROUND(cnt.collected * 100.0 / NULLIF(tr.total_grid_count, 0), 2), 0.00),
 			now()
 		FROM grids g
-		JOIN LATERAL (
-			SELECT r0.region_code, r0.total_grid_count
-			FROM regions r0
-			WHERE ST_Covers(r0.boundary_geom, g.center_geom)
-			ORDER BY r0.region_code
-			LIMIT 1
-		) tr ON TRUE
+		JOIN regions tr ON tr.region_code = g.region_code
 		JOIN LATERAL (
 			SELECT COUNT(*) AS collected
 			FROM user_grids ug
 			JOIN grids g2 ON g2.grid_id = ug.grid_id
-			WHERE ug.user_id = :userId AND tr.region_code = (
-				SELECT r2.region_code
-				FROM regions r2
-				WHERE ST_Covers(r2.boundary_geom, g2.center_geom)
-				ORDER BY r2.region_code
-				LIMIT 1
-			)
+			WHERE ug.user_id = :userId
+			  AND g2.region_code = tr.region_code
 		) cnt ON TRUE
 		WHERE g.grid_id = :gridId
+		  AND g.region_code IS NOT NULL
 		ON CONFLICT (user_id, region_code) DO UPDATE SET
 			collected_count = EXCLUDED.collected_count,
 			total_count     = EXCLUDED.total_count,

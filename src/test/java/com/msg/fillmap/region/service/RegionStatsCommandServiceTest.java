@@ -70,8 +70,8 @@ class RegionStatsCommandServiceTest {
 	@DisplayName("해안 격자 gridId 로 refresh 하면 아무것도 바꾸지 않는다 (no-op)")
 	void 해안_격자_gridId로_refresh하면_아무것도_바꾸지_않는다() {
 		seedRegion(syntheticCode("1"));
-		// 행정동 밖(공해상) 격자 — 중심점을 덮는 행정동이 없다.
-		String coastal = GridFixtures.seedGrid(em, GY0 + 100, GX0);
+		// 행정동 밖(공해상) 격자 — 중심점을 덮는 행정동이 없어 seedLabeledGrid 라벨도 NULL(equi 가드로 no-op).
+		String coastal = GridFixtures.seedLabeledGrid(em, GY0 + 100, GX0);
 		GridFixtures.seedUserGrid(em, user1, coastal, 1);
 
 		regionStatsCommandService.refresh(user1, coastal);
@@ -84,7 +84,8 @@ class RegionStatsCommandServiceTest {
 	void refresh는_격자_중심_행정동의_region_stats를_recompute한다() {
 		String a = syntheticCode("1");
 		seedRegion(a);
-		String grid = GridFixtures.seedGrid(em, GY0, GX0);
+		// region 을 먼저 시드했으므로 seedLabeledGrid 가 grids.region_code 를 A 로 라벨 → equi refresh 가 이를 읽는다.
+		String grid = GridFixtures.seedLabeledGrid(em, GY0, GX0);
 		GridFixtures.seedUserGrid(em, user1, grid, 1);
 
 		regionStatsCommandService.refresh(user1, grid);

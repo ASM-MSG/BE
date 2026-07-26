@@ -102,9 +102,10 @@ class RegionStatsConcurrencyTest {
 				GX0 * GRID_LNG_STEP, GY0 * GRID_LAT_STEP,
 				(GX0 + 3) * GRID_LNG_STEP, (GY0 + 3) * GRID_LAT_STEP);
 			regionRepository.upsert(REGION_CODE, "m165합성동", REGION_CODE.substring(0, 5), polygon, CELL_AREA_M2);
-			// 같은 행정동 안의 서로 다른 두 격자 — 중심점이 둘 다 폴리곤 내부라 같은 REGION_CODE 로 매핑된다.
-			gridA = GridFixtures.seedGrid(em, GY0, GX0);
-			gridB = GridFixtures.seedGrid(em, GY0, GX0 + 1);
+			// 같은 행정동 안의 서로 다른 두 격자 — region 을 먼저 upsert 했으므로 seedLabeledGrid 가 둘 다 REGION_CODE 로 라벨한다
+			// (equi refreshRegionStats 가 이 저장 라벨을 읽는다).
+			gridA = GridFixtures.seedLabeledGrid(em, GY0, GX0);
+			gridB = GridFixtures.seedLabeledGrid(em, GY0, GX0 + 1);
 		});
 	}
 
