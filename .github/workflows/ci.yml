@@ -80,11 +80,13 @@ jobs:
 
       # 커버리지 측정은 위 build의 test가 JaCoCo로 수행(finalizedBy jacocoTestReport).
       # 이 스텝은 그 XML을 읽어 PR에 전체 % + 변경 파일별 % 코멘트만 단다. (MSG-249)
-      # 포크발 PR은 GITHUB_TOKEN 이 읽기 전용이라 코멘트 쓰기가 실패한다 — 같은 repo 브랜치 PR에서만 실행.
+      # 포크발 PR·Dependabot 트리거는 GITHUB_TOKEN 이 읽기 전용이라 코멘트 쓰기가 실패한다 —
+      # 같은 repo 브랜치의 사람 PR에서만 실행. (Dependabot 은 현재 미사용이지만 켜지면 원인 불명 red CI 가 됨)
       - name: 커버리지 PR 코멘트
         if: >-
           github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.actor != 'dependabot[bot]'
         uses: madrapps/jacoco-report@v1.7.1
         with:
           paths: build/reports/jacoco/test/jacocoTestReport.xml
