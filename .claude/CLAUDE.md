@@ -25,9 +25,9 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 - `@.claude/docs/architecture.md` — 서비스 아키텍처(SA, 정본) · 8개 서비스 · AI Highlight-Blur
 - `@.claude/docs/ia.md` — 화면 구조(IA) · User Journey · 구현 갭
 
-## 팀 LLM 위키 (../fillmap-wiki)
+## 팀 LLM 위키 (../LLM-WIKI)
 
-스펙·스키마·ADR 작업 전 `../fillmap-wiki`의 `03-specs`/`04-decisions`를 grep으로 대조한다
+스펙·스키마·ADR 작업 전 `../LLM-WIKI`의 `03-specs`/`04-decisions`를 grep으로 대조한다
 (전체 탐색 금지, 타겟 조회만 — frontmatter의 keywords/aliases로 검색). 그 외에는 레포·Jira 우선,
 불확실할 때만 위키 참조. 진입점: `index.md` · `hot.md` · 운영 규칙은 `00-meta/SCHEMA.md`.
 
