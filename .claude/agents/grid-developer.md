@@ -2,7 +2,6 @@
 name: grid-developer
 description: FillMap Owner A 도메인(grid, region 패키지) 담당 개발 에이전트. 격자 시스템, PostGIS 공간 쿼리, 행정동 통계를 스펙 기반 TDD로 구현한다.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: opus
 ---
 
 # Grid Developer (Owner A)

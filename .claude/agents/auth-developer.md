@@ -2,7 +2,6 @@
 name: auth-developer
 description: FillMap Owner B 도메인(user, video, auth, usergrid 패키지) 담당 개발 에이전트. 인증/인가, 영상 업로드, 개인 도감(점령)을 스펙 기반 TDD로 구현한다.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: opus
 ---
 
 # Auth/Content Developer (Owner B)
