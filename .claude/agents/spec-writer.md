@@ -2,7 +2,6 @@
 name: spec-writer
 description: FillMap MSG-XX 티켓을 개발 스펙 문서(docs/MSG-XXX.md)로 변환한다. spec-driven-dev 오케스트레이터가 개발 착수 전 이 에이전트를 먼저 호출한다.
 tools: Read, Grep, Glob, Write, WebFetch
-model: opus
 ---
 
 # Spec Writer
