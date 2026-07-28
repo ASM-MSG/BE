@@ -46,7 +46,12 @@
 - MSG-156: 수집률 조회(`GET /api/regions/stats` — collectedOnly 기본 true·무LIMIT(구조적 상한 3,558 — Codex 리뷰로 LIMIT 1000 제거)·LEAST 100 clamp·`6404 REGION_NOT_FOUND`, `service/RegionStatsQueryService`(+impl)·`dto/RegionStatResponseDto`)
 - MSG-153: 단건 탐험률(`GET /api/regions/stats/by-point`·`/by-grid` — 격자 중심점 축 `resolveByPoint` 재사용, `findStatByRegion` LEFT JOIN 0% 합성·`LEAST(COALESCE)` clamp, no-match 200+null)
 - MSG-167: 시딩 직후 `grids.region_code` 멱등 보정 백필(`RegionRepository.backfillGridRegionCodes`, `RegionSeeder.run`에서 호출 — regions 후착 환경의 영구 NULL 라벨 방지, `EXISTS` 가드로 무귀속 격자 NULL→NULL 재기록 차단, Codex 리뷰 P1·2차)
+- MSG-234: 장소 검색 regions 폴백(`RegionRepository.searchByName` — region_name ILIKE + `ST_Envelope` bbox(폴백 branch 한정), `RegionSearchProjection`; 1차 zone 매치는 zone 패키지 소관)
 - **없는 것**: 시/도 상위 레벨 집계 (MVP 이후 별도 티켓)
+
+### `zone` (Owner A) — 🟡 부분
+- MSG-234: 격자 표시명 구역 — `entity/Zone`(V8 `zones` 전 컬럼 매핑)·`repository/ZoneRepository`, `GET /api/zones` 전체 목록(`service/ZoneQueryService`(+impl)·`controller/ZoneController`·`dto/ZoneResponseDto`), `GET /api/search?q=` zones→regions 2단 폴백(`controller/SearchController`·`dto/SearchResultResponseDto` — zone branch bbox는 GridConstants 정수 산술, geospatial 0), `seed/{ZoneSeed,ZoneSeeder}`(플래그 게이트 `fillmap.zone.seed.enabled` 기본 off, `resources/seed/zones.json` `zone_key` UPSERT 멱등). 표시명("서면 A-14") 계산은 FE-local(§D3) — 서버는 데이터·검색만
+- **없는 것**: zones 실데이터(상권 검수 후 주입 — 작도 해법 cf-26181633), glossary "구역/표시명" 등재(별도 PR)
 
 ### `video` (Owner B) — 🟡 부분
 - MSG-66: `entity`(Video·ProcessingStatus·Visibility·VideoStatus + 상태전이 도메인 메서드), `repository/VideoRepository`(grids·user_grids native UPSERT/롤백), 메타저장 `service`·`controller`(`POST /api/videos`)·`dto`, `support/GeoSupport`, `exception/VideoErrorCode`(3xxx)
@@ -86,7 +91,7 @@
 
 ## 스키마 vs JPA 엔티티
 
-`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을 추가했다.
+`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점).
 
 | 테이블 | 엔티티 | 상태 |
 |---|---|---|
@@ -96,6 +101,7 @@
 | `grids` | `grid/entity/Grid` | ✅ (MSG-73 — 조회 전용 최소 매핑: grid_id/grid_y/grid_x, geom 미매핑; MSG-167 — `region_code`(V5) 추가·미매핑, native 접근) |
 | `regions` | `region/entity/Region` | ✅ (MSG-154 — region_code/region_name/parent_code/total_grid_count 매핑, boundary_geom 미매핑 — native write 전용) |
 | `region_stats` | — | ❌ 엔티티 없음 (native 쿼리로만 접근 — MSG-155/156) |
+| `zones` | `zone/entity/Zone` | ✅ (MSG-234 — 전 컬럼 매핑, 정수 사각형·PostGIS 컬럼 없음, V8) |
 | `badges` | — | ❌ 엔티티 없음 |
 | `user_badges` | — | ❌ 엔티티 없음 |
 | `friendships` | — | ❌ 엔티티 없음 |
