@@ -77,6 +77,14 @@ class ZoneSeederTest {
 	}
 
 	@Test
+	@DisplayName("seed_enabled 가 on 이면 run 이 클래스패스 데이터 파일을 읽는다 (기본 zones.json = 빈 배열, 0건 무예외 §D7)")
+	void seed_enabled가_on이면_run이_클래스패스_데이터_파일을_읽는다() {
+		ZoneSeeder on = newSeeder(true, "seed/zones.json"); // 실제 동봉 파일 — 빈 배열이라 DB 무접점
+
+		assertThatCode(() -> on.run(new DefaultApplicationArguments())).doesNotThrowAnyException();
+	}
+
+	@Test
 	@DisplayName("seed_enabled 가 on 이면 데이터 파일의 zone 을 적재한다 (JSON 로드)")
 	void seed_enabled가_on이면_데이터_파일의_zone을_적재한다() {
 		ZoneSeeder seeder = newSeeder(true, "unused");
