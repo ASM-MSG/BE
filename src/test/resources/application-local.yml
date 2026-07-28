@@ -8,6 +8,11 @@ spring:
     url: jdbc:postgresql://localhost:5432/fillmap
     username: user
     password: user1234
+    # 스위트가 캐시하는 스프링 컨텍스트마다 풀이 하나씩 살아있어, 기본 풀 10 × 컨텍스트 수가
+    # postgres max_connections(100, 로컬·CI 동일)를 넘는다 — zone 컨텍스트 추가로 실제 초과
+    # ("too many clients already"). 테스트는 컨텍스트당 동시 쿼리가 적어 2로 충분하다.
+    hikari:
+      maximum-pool-size: 2
 
   # 공유 로컬 DB는 여러 브랜치가 함께 쓴다 — 다른 브랜치 세션이 적용한 미머지 마이그레이션이
   # 이 브랜치에 파일로 없으면 validate가 "applied but not resolved"로 죽는다(V7=MSG-238 선점 사례).
