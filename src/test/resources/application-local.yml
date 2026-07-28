@@ -9,6 +9,12 @@ spring:
     username: user
     password: user1234
 
+  # 공유 로컬 DB는 여러 브랜치가 함께 쓴다 — 다른 브랜치 세션이 적용한 미머지 마이그레이션이
+  # 이 브랜치에 파일로 없으면 validate가 "applied but not resolved"로 죽는다(V7=MSG-238 선점 사례).
+  # 테스트에서만 missing을 허용한다. CI는 매번 새 DB라 이 패턴이 발동할 일 없고, dev/prod는 무영향.
+  flyway:
+    ignore-migration-patterns: "*:missing"
+
   data:
     redis:
       host: localhost
