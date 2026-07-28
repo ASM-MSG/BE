@@ -10,6 +10,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      pull-requests: write   # 커버리지 PR 코멘트 (MSG-249)
+
     # @SpringBootTest 컨텍스트 로드가 DB를 필요로 한다 (local 프로파일: localhost:5432/fillmap).
     # 로컬 docker-compose.yml과 동일한 PostGIS 이미지로 맞춘다.
     services:
@@ -73,3 +77,19 @@ jobs:
 
       - name: Build & Test
         run: ./gradlew build
+
+      # 커버리지 측정은 위 build의 test가 JaCoCo로 수행(finalizedBy jacocoTestReport).
+      # 이 스텝은 그 XML을 읽어 PR에 전체 % + 변경 파일별 % 코멘트만 단다. (MSG-249)
+      # 포크발 PR·Dependabot PR 은 GITHUB_TOKEN 이 읽기 전용이라 코멘트 쓰기가 실패한다 —
+      # 같은 repo 브랜치의 사람 PR에서만 실행. (Dependabot 은 현재 미사용이지만 켜지면 원인 불명 red CI 가 됨)
+      # 판정은 트리거 액터가 아니라 PR 작성자 기준 — 재실행은 최초 트리거 액터의 권한을 쓰므로 actor 로는 못 잡는다.
+      - name: 커버리지 PR 코멘트
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]'
+        uses: madrapps/jacoco-report@v1.7.1
+        with:
+          paths: build/reports/jacoco/test/jacocoTestReport.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: 테스트 커버리지
