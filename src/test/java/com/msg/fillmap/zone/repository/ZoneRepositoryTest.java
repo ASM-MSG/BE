@@ -98,8 +98,8 @@ class ZoneRepositoryTest {
 		zoneRepository.saveAndFlush(zone("list1", "리스트일", 45100, 45105, 112200, 112210, 3));
 		em.clear(); // 영속성 컨텍스트 비워 DB 에서 순수 컬럼 재로드
 
-		Zone loaded = zoneRepository.findByNameContainingIgnoreCaseOrderByPriorityDescZoneKeyAsc("m234리스트일")
-			.get(0);
+		Zone loaded = zoneRepository.findAll().stream()
+			.filter(z -> z.getZoneKey().equals("m234-list1")).findFirst().orElseThrow();
 
 		// geometry 없이 정수 컬럼 전부 그대로 로드된다
 		assertThat(loaded.getMinGridY()).isEqualTo(45100);
@@ -109,16 +109,4 @@ class ZoneRepositoryTest {
 		assertThat(loaded.getPriority()).isEqualTo(3);
 	}
 
-	@Test
-	@DisplayName("이름 부분일치 검색은 priority DESC, zone_key ASC 로 정렬된다 (§D5)")
-	void 이름_부분일치_검색은_priority_DESC_zone_key_ASC로_정렬된다() {
-		zoneRepository.saveAndFlush(zone("sort-c", "정렬대상", 5));  // priority 5
-		zoneRepository.saveAndFlush(zone("sort-a", "정렬대상", 10)); // priority 10 (최상)
-		zoneRepository.saveAndFlush(zone("sort-b", "정렬대상", 10)); // priority 10, zone_key ASC 로 a 뒤
-
-		var hits = zoneRepository.findByNameContainingIgnoreCaseOrderByPriorityDescZoneKeyAsc("m234정렬대상");
-
-		assertThat(hits).extracting(Zone::getZoneKey)
-			.containsExactly("m234-sort-a", "m234-sort-b", "m234-sort-c");
-	}
 }

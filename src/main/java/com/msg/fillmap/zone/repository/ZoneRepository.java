@@ -16,12 +16,6 @@ import com.msg.fillmap.zone.entity.Zone;
 public interface ZoneRepository extends JpaRepository<Zone, Long> {
 
 	/**
-	 * 이름 부분일치 검색 (MSG-234 §D6). 겹침 타이브레이크와 같은 정렬(priority DESC, zone_key ASC)로
-	 * 결과 순서를 결정적으로 고정한다(§D5) — DB 생성 id 는 환경마다 달라 정렬 기준으로 쓰지 않는다.
-	 */
-	List<Zone> findByNameContainingIgnoreCaseOrderByPriorityDescZoneKeyAsc(String name);
-
-	/**
 	 * 구역 한 건 멱등 UPSERT (MSG-234 §D7). zone_key 가 자연키라 재실행 시 이름/사각형/priority 가 수렴한다.
 	 * 시더만 호출한다(운영 중 CRUD 는 후속). ON CONFLICT (zone_key) DO UPDATE.
 	 */
