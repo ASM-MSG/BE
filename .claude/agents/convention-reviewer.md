@@ -2,7 +2,6 @@
 name: convention-reviewer
 description: FillMap 컨벤션 준수 + Owner A/B 경계면 계약 검증 전담 QA 에이전트. grid-developer/auth-developer가 모듈을 완성할 때마다 호출되어 빌드·테스트·컨벤션·계약 일치 여부를 점검한다.
 tools: Read, Grep, Glob, Bash
-model: opus
 ---
 
 # Convention Reviewer (QA)

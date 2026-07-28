@@ -49,7 +49,7 @@ class VideoStatusTransitionTest {
 		Video video = newVideo();
 		video.applyBlurResult("videos/blurred/1/7.mp4", List.of(List.of(0.0, 3.33)));
 
-		video.replaceFile("videos/original/1/y.mp4", (short) 8);
+		video.replaceFile("videos/original/1/y.mp4", (short) 8, LocalDateTime.now());
 
 		assertThat(video.getBlurredS3Key()).isNull();
 		assertThat(video.getHighlights()).isNull();

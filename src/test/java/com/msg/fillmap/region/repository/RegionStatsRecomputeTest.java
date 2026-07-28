@@ -65,7 +65,9 @@ class RegionStatsRecomputeTest {
 	}
 
 	private String occupy(long userId, long gy, long gx) {
-		String gridId = GridFixtures.seedGrid(em, gy, gx);
+		// seedLabeledGrid: region 을 먼저 시드한 뒤 호출하면 grids.region_code 가 탄생 시 라벨된다(프로덕션 upsertGrid 재현).
+		// equi refreshRegionStats 가 이 저장 라벨을 읽는다 — 무라벨(해안)이면 서브쿼리가 NULL 이라 가드로 no-op.
+		String gridId = GridFixtures.seedLabeledGrid(em, gy, gx);
 		GridFixtures.seedUserGrid(em, userId, gridId, 1);
 		return gridId;
 	}
@@ -249,5 +251,29 @@ class RegionStatsRecomputeTest {
 		assertThat(collected(user1, first)).isEqualTo(1);
 		assertThat(collected(user1, second)).isNull();
 		assertThat(statsRowCount(user1)).isEqualTo(1L);
+	}
+
+	@Test
+	@DisplayName("무라벨 격자는 같은 행정동 recompute 집계에서 제외되고 백필 후 다시 포함된다")
+	void 무라벨_격자는_같은_행정동_recompute_집계에서_제외되고_백필_후_다시_포함된다() {
+		String a = syntheticCode("1");
+		// g1 을 region 시드 전에 seedGrid → region_code NULL (시더 이전에 태어난 격자 재현).
+		String g1 = GridFixtures.seedGrid(em, GY0, GX0);
+		seedRegion(a, GY0, GY0 + 3, GX0, GX0 + 3);
+		// g2 는 region 시드 후 seedLabeledGrid → 탄생 시 라벨 A.
+		String g2 = GridFixtures.seedLabeledGrid(em, GY0 + 1, GX0);
+		GridFixtures.seedUserGrid(em, user1, g1, 1);
+		GridFixtures.seedUserGrid(em, user1, g2, 1);
+
+		regionRepository.refreshRegionStats(user1, g2);
+
+		// 라벨된 g2 만 집계 — NULL 인 g1 은 equi 가 해안 취급해 제외(§D2 ②③).
+		assertThat(collected(user1, a)).isEqualTo(1);
+
+		// 시더 보정 백필이 g1 을 라벨 A → 등가 복원(발산 창이 닫힘을 증명, §D2 결론).
+		regionRepository.backfillGridRegionCodes();
+		regionRepository.refreshRegionStats(user1, g2);
+
+		assertThat(collected(user1, a)).isEqualTo(2);
 	}
 }

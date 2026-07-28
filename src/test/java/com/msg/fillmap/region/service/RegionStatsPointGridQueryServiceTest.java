@@ -178,8 +178,9 @@ class RegionStatsPointGridQueryServiceTest {
 	@DisplayName("중심점 귀속은 155 refreshRegionStats와 같은 행정동을 고른다")
 	void 중심점_귀속은_155_refreshRegionStats와_같은_행정동을_고른다() {
 		seedRegion(REGION_A, GY, GY + 3, GX, GX + 3);
-		// 155 경로로 점령 → refreshRegionStats 가 중심점 행정동(REGION_A)에 region_stats(collected=1)를 쓴다.
-		String gridId = GridFixtures.seedGrid(em, GY, GX);
+		// 155 경로로 점령 → seedLabeledGrid 가 grids.region_code 를 REGION_A 로 라벨하고, equi refreshRegionStats 가
+		// 그 저장 라벨을 읽어 중심점 행정동(REGION_A)에 region_stats(collected=1)를 쓴다.
+		String gridId = GridFixtures.seedLabeledGrid(em, GY, GX);
 		GridFixtures.seedUserGrid(em, user1, gridId, 1);
 		regionRepository.refreshRegionStats(user1, gridId);
 

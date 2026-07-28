@@ -24,7 +24,8 @@ convention-reviewer 팀을 조율해 실제 코드와 테스트를 완성하는 
 | `auth-dev` | `auth-developer` | Owner B: user/video/auth/usergrid 구현 | `src/main/java/com/msg/fillmap/{user,video,auth,usergrid}/**`, 테스트 |
 | `reviewer` | `convention-reviewer` | 컨벤션·계약·빌드 검증 | 리뷰 결과(위반 목록 또는 통과) |
 
-모든 `Agent` 호출에 `model: "opus"`를 명시한다.
+`Agent` 호출에 `model`을 지정하지 않는다 — 세션 모델을 그대로 상속한다
+(2026-07-24: Opus 강제 제거, 스펙·구현 모두 Fable 5 가능 확인에 따름).
 
 ## 워크플로우
 
@@ -54,14 +55,14 @@ convention-reviewer 팀을 조율해 실제 코드와 테스트를 완성하는 
 ### Phase 2: 스폰 및 작업 등록
 
 ```
-Agent(name: "grid-dev", subagent_type: "grid-developer", model: "opus",
+Agent(name: "grid-dev", subagent_type: "grid-developer",
       run_in_background: true,
       prompt: "docs/MSG-{번호}.md 스펙을 읽고 Owner A 범위를 구현하라. ...")
 
-Agent(name: "auth-dev", subagent_type: "auth-developer", model: "opus",
+Agent(name: "auth-dev", subagent_type: "auth-developer",
       run_in_background: true, prompt: "...") // Owner B/공동일 때만
 
-Agent(name: "reviewer", subagent_type: "convention-reviewer", model: "opus",
+Agent(name: "reviewer", subagent_type: "convention-reviewer",
       run_in_background: true,
       prompt: "grid-dev/auth-dev가 모듈을 완성할 때마다 SendMessage로 리뷰 요청이 온다.
                .claude/rules/project-conventions.md, glossary.md 기준으로 검증하고 ./gradlew로

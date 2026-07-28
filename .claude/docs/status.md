@@ -64,6 +64,7 @@
 - MSG-162: 공개 범위 전환(`PATCH /api/videos/{videoId}/visibility`, `INVALID_VISIBILITY` 3420, `@DynamicUpdate`로 교차 컬럼 lost-update 차단, 노출 게이트는 read 경계 READY 강제 원칙)
 - MSG-167: `upsertGrid`(lazy insert)에 `region_code` 중심점 판정 인라인 — 격자 생애 1회(`SELECT … WHERE NOT EXISTS`, 무귀속 NULL). 판정 규칙은 Owner A 자산(93/155 동일), B 레포 호스팅(신설 공유 컬럼 `grids.region_code`)
 - MSG-206: 영상 재생 조회(`GET /api/videos/{videoId}` — `VideoPlaybackResponseDto`, 재생 소스 blurred ?? encoded presign, 접근 제어 DELETED→BLINDED→visibility→READY first-match, `incrementViewCount` 원자적 +1 타인·발급 시만, 명시 HEAD no-op 핸들러)
+- MSG-242: 교체 시 `recordedAt` 엔티티 반영(`Video.replaceFile` 3-arg — MSG-71의 반영 누락 정정, 미션 기간 판정(MSG-223) 선행)
 - **없는 것**: 전역 영상 목록 API(READY 필터 MUST — MSG-162 스펙 §도메인 3)
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
@@ -82,7 +83,7 @@
 
 ## 스키마 vs JPA 엔티티
 
-`V1__init.sql`은 14개 테이블을 정의하지만, JPA 엔티티는 2개만 존재한다.
+`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을 추가했다.
 
 | 테이블 | 엔티티 | 상태 |
 |---|---|---|
@@ -100,6 +101,9 @@
 | `reports` | — | ❌ 엔티티 없음 |
 | `sponsor_ads` | — | ❌ 엔티티 없음 |
 | `streaks` | — | ❌ 엔티티 없음 |
+| `missions` | — | ❌ 엔티티 없음 (V6/MSG-166 스키마 선반영 — path JSONB, 엔티티·API는 MSG-222/223) |
+| `mission_grids` | — | ❌ 엔티티 없음 (grids FK 없는 논리 참조 — lazy insert 때문, MSG-166 §D2) |
+| `user_missions` | — | ❌ 엔티티 없음 (스탬프 영속 — user_badges 패턴, 비회수) |
 
 ## 로드맵 / 백로그
 
