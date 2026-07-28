@@ -12,7 +12,7 @@ import com.msg.fillmap.grid.GridEncoder;
 
 /**
  * 명명 산술 계약 (MSG-234 §D2 정본 · 순수 함수 픽스처).
- * 서버 ZoneNamer 는 MVP 미구현이라(§D2, 라벨=FE·검색=zone名 매치) 이 테스트가 명명 규칙의 실행형 정본이다 —
+ * 서버 ZoneNamer 는 MVP 미구현이라(§D2, 라벨=FE-local 산술) 이 테스트가 명명 규칙의 실행형 정본이다 —
  * FE/모바일 포팅과 후속 ZoneNamer 이식이 이 표에 맞아야 한다. 순수 격자 인덱스 산술이라 DB 불요.
  * 규칙: 행 = max_grid_y − gridY 를 A(0)…Z(25), 열 = gridX − min_grid_x + 1, 표시명 = "{name} {행}-{열}".
  * 겹침은 priority DESC, zone_key ASC 로 하나(§D5), 매칭 없으면 행정동 이름 폴백(번호 없음 §D4).
