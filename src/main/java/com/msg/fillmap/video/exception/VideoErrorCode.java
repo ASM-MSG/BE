@@ -26,6 +26,7 @@ public enum VideoErrorCode implements ErrorCodeIfs {
 	UNSUPPORTED_EXTENSION(3415, HttpStatus.BAD_REQUEST, "지원하지 않는 영상 확장자입니다 (mp4, mov)"),
 	INVALID_VISIBILITY(3420, HttpStatus.BAD_REQUEST, "visibility 는 PUBLIC 또는 PRIVATE 여야 합니다"),
 	GRID_MISMATCH(3422, HttpStatus.BAD_REQUEST, "같은 격자 안에서만 교체할 수 있습니다"),
+	INVALID_CURSOR(3423, HttpStatus.BAD_REQUEST, "유효하지 않은 커서입니다"),
 	;
 
 	private final Integer errorCode;

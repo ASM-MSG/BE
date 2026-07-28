@@ -1,5 +1,6 @@
 package com.msg.fillmap.video.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -55,6 +56,45 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		LIMIT 1
 		""", nativeQuery = true)
 	Optional<Video> findGlobalCover(@Param("gridId") String gridId);
+
+	/**
+	 * 격자 전역 영상 목록 첫 페이지 (MSG-237). findGlobalCover 와 같은 후보 집합(전역·PUBLIC·READY·ACTIVE,
+	 * 본인 포함)을 LIMIT 1 → 페이지 윈도우로 넓힌 것이다. WHERE·ORDER BY 앞 두 키는 idx_videos_grid_popular
+	 * 부분 인덱스(V1__init.sql:110)와 바이트 단위로 일치시켜 인덱스 range scan 으로 페이지를 만족하게 한다.
+	 * id DESC 는 인덱스에 없는 동률 타이브레이크 — (view_count, created_at) 까지 같은 행의 페이지 간 순서를
+	 * 결정적으로 만들며, 동률 그룹 국소 정렬이라 단일 격자 소량 규모에 무해하다(§D2).
+	 * limit 은 서비스가 size+1 lookahead 로 넘기고 hasNext 판정도 서비스 소관이다.
+	 */
+	@Query(value = """
+		SELECT * FROM videos
+		WHERE grid_id = :gridId
+		  AND status = 'ACTIVE' AND visibility = 'PUBLIC' AND processing_status = 'READY'
+		ORDER BY view_count DESC, created_at DESC, id DESC
+		LIMIT :limit
+		""", nativeQuery = true)
+	List<Video> findGlobalVideos(@Param("gridId") String gridId, @Param("limit") int limit);
+
+	/**
+	 * 전역 목록 커서 이후 페이지 (MSG-237 §D2 keyset). 직전 페이지 마지막 항목의 경계값
+	 * (view_count, created_at, id) 보다 정렬상 뒤인 행만 PostgreSQL row-value 비교(DESC 등가 <)로 이어서
+	 * 반환한다 — GridRepository.findOccupiedPageAfter(MSG-90) 와 같은 패턴이다. 커서 유무로 메서드를
+	 * 나눈 것도 같은 이유다(null 가드 단일 쿼리의 native 파라미터 타입 추론 문제 회피).
+	 */
+	@Query(value = """
+		SELECT * FROM videos
+		WHERE grid_id = :gridId
+		  AND status = 'ACTIVE' AND visibility = 'PUBLIC' AND processing_status = 'READY'
+		  AND (view_count, created_at, id) < (:cursorViewCount, :cursorCreatedAt, :cursorId)
+		ORDER BY view_count DESC, created_at DESC, id DESC
+		LIMIT :limit
+		""", nativeQuery = true)
+	List<Video> findGlobalVideosAfter(
+		@Param("gridId") String gridId,
+		@Param("cursorViewCount") long cursorViewCount,
+		@Param("cursorCreatedAt") LocalDateTime cursorCreatedAt,
+		@Param("cursorId") long cursorId,
+		@Param("limit") int limit
+	);
 
 	/**
 	 * 격자 lazy insert (전역 격자 등록). 이미 있으면 no-op — 멱등.
