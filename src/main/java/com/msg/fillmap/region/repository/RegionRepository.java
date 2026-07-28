@@ -91,6 +91,31 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	Object acquireUserRegionStatsLock(@Param("userId") long userId);
 
 	/**
+	 * 지역 검색 폴백 (MSG-234 §D6). zones.name 이 안 잡혔을 때만 도는 regions 이름 검색이다.
+	 * region_name ILIKE 로 후보를 뽑고 각 경계의 ST_Envelope(GEOGRAPHY→geometry 캐스트) 로 bbox 를 낸다 —
+	 * geospatial 이 여기서만 도는데 zone 미매치 branch + LIMIT 로 결과가 유한하고 사용자 타이핑 단발이라
+	 * "조회/핫패스(뷰포트 루프) geospatial 금지" 취지에 어긋나지 않는다(MSG-93 저빈도 단발류 예외). 동명 행정동은
+	 * parent_code 로 FE 가 구분한다. ORDER BY region_code 로 결과를 결정적으로 고정한다.
+	 * q 의 %·_·\ 는 SQL 안에서 이스케이프해 리터럴로만 매치한다(백슬래시 먼저) — native 는 파생 쿼리와 달리
+	 * 자동 이스케이프가 없어, q='%' 가 서비스의 빈 검색 가드를 우회해 전건 반환하는 것을 막는다.
+	 */
+	@Query(value = """
+		SELECT region_code AS "regionCode", region_name AS "regionName", parent_code AS "parentCode",
+		       ST_YMin(env) AS "minLat", ST_XMin(env) AS "minLon",
+		       ST_YMax(env) AS "maxLat", ST_XMax(env) AS "maxLon"
+		FROM (
+			SELECT region_code, region_name, parent_code,
+			       ST_Envelope(boundary_geom::geometry) AS env
+			FROM regions
+			WHERE region_name ILIKE
+			      '%' || replace(replace(replace(:q, '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%' ESCAPE '\\'
+			ORDER BY region_code
+			LIMIT :limit
+		) t
+		""", nativeQuery = true)
+	List<RegionSearchProjection> searchByName(@Param("q") String q, @Param("limit") int limit);
+
+	/**
 	 * parentCode 실존 검증 (MSG-156 §D3). regions.parent_code 에 그 시군구가 하나라도 있으면 true.
 	 * 파생 쿼리라 idx_regions_parent 를 태운다 — geospatial 이 아니라 인덱스 equality 검사다.
 	 * "데이터 없음"(유효 코드인데 수집 0)이 아니라 "존재하지 않는 코드"(오타·없는 시군구)만 6404 로 가른다.
