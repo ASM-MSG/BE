@@ -21,7 +21,6 @@ MSG-XX 티켓을 `docs/MSG-XXX.md` 스펙 문서로 만드는 단일 작업 스�
 ```
 Agent(
   subagent_type: "spec-writer",
-  model: "opus",
   prompt: "{MSG-XX 티켓 설명 또는 Jira 조회 결과 전체}를 바탕으로 docs/MSG-{번호}.md 스펙 문서를 작성하라.
            .claude/rules/glossary.md 용어를 기준으로 쓰고, .claude/docs/infrastructure.md 패키지
            구조를 참고해 Owner A/B/공동을 판정하라."
