@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
@@ -23,10 +24,13 @@ import com.msg.fillmap.zone.repository.ZoneRepository;
  * 구역(zone) 시더 (MSG-234 §D7 — MSG-154 RegionSeeder 모방). 기본 off —
  * {@code fillmap.zone.seed.enabled=true} 일 때만 앱 기동 시 1회 zones.json 을 멱등 UPSERT(zone_key 자연키) 한다.
  * 빈 배열은 정상(성공 기준 8 — zones 0행이어도 전 시스템이 행정동 폴백으로 동작)이라 fail-fast 하지 않는다.
+ * {@code @Order(20)}: zones.region_code 가 regions FK 라 신선한 DB 에서 두 시더를 함께 켜면
+ * RegionSeeder(10) 커밋 이후에 돌아야 한다 — 무순서면 기동 실패가 비결정적으로 난다.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@Order(20)
 public class ZoneSeeder implements ApplicationRunner {
 
 	private final ZoneRepository zoneRepository;
