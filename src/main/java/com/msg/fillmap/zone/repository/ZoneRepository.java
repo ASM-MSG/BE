@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param;
 import com.msg.fillmap.zone.entity.Zone;
 
 /**
- * 구역(zone) 리포지토리 (MSG-234). geospatial 0 — 목록은 findAll, 검색은 파생 name ILIKE.
+ * 구역(zone) 리포지토리 (MSG-234). geospatial 0 — 조회는 findAll 목록뿐(검색은 MSG-251 카카오 프록시 이관).
  * 쓰기는 시더의 멱등 UPSERT(zone_key 자연키) 하나뿐이라 native 로 둔다.
  */
 public interface ZoneRepository extends JpaRepository<Zone, Long> {
