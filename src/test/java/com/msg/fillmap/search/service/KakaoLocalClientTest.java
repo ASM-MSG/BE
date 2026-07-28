@@ -136,6 +136,23 @@ class KakaoLocalClientTest {
 	}
 
 	@Test
+	void documents_배열이_없는_2xx_응답은_5502로_수렴한다() {
+		// {} 같은 기형 성공 응답 — 빈 결과 200 으로 위장되면 스키마 변경을 못 잡는다(§D3, Codex P2)
+		server.expect(requestTo(KEYWORD_URL))
+			.andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+		assertUpstreamError();
+	}
+
+	@Test
+	void documents가_배열이_아니면_5502로_수렴한다() {
+		server.expect(requestTo(KEYWORD_URL))
+			.andRespond(withSuccess("{\"documents\":null}", MediaType.APPLICATION_JSON));
+
+		assertUpstreamError();
+	}
+
+	@Test
 	void 본문이_JSON이_아니면_5502로_수렴한다() {
 		// 게이트웨이 장애 페이지(HTML) 등 — 파싱 실패도 업스트림 실패다(§D3)
 		server.expect(requestTo(KEYWORD_URL))

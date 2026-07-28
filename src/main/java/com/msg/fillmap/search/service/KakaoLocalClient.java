@@ -54,8 +54,14 @@ public class KakaoLocalClient {
 	}
 
 	private List<KakaoPlace> parse(JsonNode response) {
+		JsonNode documents = response == null ? null : response.get("documents");
+		if (documents == null || !documents.isArray()) {
+			// 2xx 인데 documents 배열이 없거나 형식이 다르면 스키마 변경/절단 응답 — 빈 결과로 위장시키지 않고
+			// 파싱 실패로 취급한다(§D3 "파싱 실패 전부 5502"). path() MissingNode 순회는 조용히 [] 가 되므로 금지.
+			throw new IllegalStateException("카카오 응답에 documents 배열이 없거나 형식이 다릅니다");
+		}
 		List<KakaoPlace> places = new ArrayList<>();
-		for (JsonNode document : response.path("documents")) {
+		for (JsonNode document : documents) {
 			places.add(new KakaoPlace(
 				document.path("place_name").asString(""),
 				document.path("address_name").asString(""),
