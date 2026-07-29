@@ -71,4 +71,4 @@ FillMap의 핵심 공간 모델. 용어 정의는 `.claude/rules/glossary.md`가
 
 - **핫구역(Hot Zone)**: 최근 업로드/좋아요 급증 격자 (Redis Sorted Set, 1h/24h/1w 윈도우)
 - **스폰서 격자(Sponsor Grid)**: 광고 입찰로 최상단 노출되는 격자 (`sponsor_ads`)
-- **스트릭(Streak)**: 매일 새 격자를 개인 점령한 연속 일수
+- **스트릭(Streak)**: 매일 영상을 업로드한(재방문 포함) 연속 일수 — 신규 점령 불요 (2026-07-29 확정, MSG-200·239)
