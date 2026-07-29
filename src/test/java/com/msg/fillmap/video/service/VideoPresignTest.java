@@ -23,6 +23,7 @@ import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
+import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
 import com.msg.fillmap.video.exception.VideoErrorCode;
@@ -54,7 +55,8 @@ class VideoPresignTest {
 		videoService = new VideoServiceImpl(
 			mock(VideoRepository.class), mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(software.amazon.awssdk.services.s3.S3Client.class), properties,
-			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class));
+			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
+			mock(StreakCommandService.class));
 	}
 
 	@Test

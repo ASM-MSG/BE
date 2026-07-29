@@ -27,6 +27,7 @@ import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
+import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.entity.Video;
@@ -63,7 +64,7 @@ class VideoGlobalListServiceTest {
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
-			mock(BadgeAwardService.class));
+			mock(BadgeAwardService.class), mock(StreakCommandService.class));
 	}
 
 	/** 목록 후보 조건(PUBLIC 는 repository 필터 소관)·READY·썸네일 key 를 갖춘 픽스처 — 정상 경로 기준. */
