@@ -1,9 +1,14 @@
 package com.msg.fillmap.video.dto;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.media.Schema;
+
+import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
 
 /**
  * 메타데이터 저장 응답. occupied = 이 업로드로 격자를 처음 점령했는지(첫 방문) 여부.
+ * newBadges = 이 업로드로 새로 획득한 뱃지(MSG-239 FR-9) — 없으면 빈 배열.
  */
 @Schema(description = "영상 메타데이터 저장 응답")
 public record VideoUploadResponseDto(
@@ -17,6 +22,9 @@ public record VideoUploadResponseDto(
 	String processingStatus,
 
 	@Schema(description = "이 업로드로 격자를 처음 점령(첫 방문)했는지 여부", example = "true")
-	boolean occupied
+	boolean occupied,
+
+	@Schema(description = "이 업로드로 새로 획득한 뱃지 목록 — 없으면 빈 배열")
+	List<EarnedBadgeResponseDto> newBadges
 ) {
 }
