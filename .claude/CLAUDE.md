@@ -14,6 +14,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 - `@.claude/rules/coding-principles.md` — 코딩 행동 원칙 (Karpathy 4원칙)
 - `@.claude/rules/project-conventions.md` — 네이버 Java 컨벤션 · DTO 네이밍
 - `@.claude/rules/response-pattern.md` — 공통 응답 · 예외 처리 패턴
+- `@.claude/rules/subagent-orchestration.md` — 서브에이전트 팀 운영 원칙 (에이전트 팀 스킬 실행 시)
 
 ## Reference — 필요 시 참조 (문서)
 
@@ -55,6 +56,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 | 2026-07-24 | Agent 호출의 `model: "opus"` 강제 제거 (세션 모델 상속) | spec-driven-dev | 2026-07-21 Opus 스펙 분리 폐지 — 스펙·구현 모두 Fable 5 가능 확인, 낡은 강제 조항 정리 |
 | 2026-07-26 | 에이전트 정의 4종 프런트매터의 `model: opus` 제거 | 전체 에이전트 | 호출부 제거(07-24)만으론 미완 — 정의 쪽 `model`이 남아 있으면 호출부 생략 시 정의 값이 적용돼 Opus 고정이 유지됨 (PR #61 리뷰 지적). 정의·호출부 모두 생략해야 세션 모델 상속 |
 | 2026-07-28 | prd-writer 스킬 신설 (PRD 템플릿 포함), spec-writer가 PRD를 선행 입력으로 사용 | prd-writer, spec-writer | 멘토링 피드백 — 개발 착수 전 PRD(목적·기능·비기능·다이어그램·변경 파일) 단계 표준화 (MSG-256) |
+| 2026-07-28 | spec-driven-dev 분해 — SKILL.md는 라우팅만, 커밋 게이트·Codex 리뷰·마무리는 references/ 3종으로, 팀 운영 원칙은 rules/subagent-orchestration.md로 승격. spec-writer 예시의 `model: "opus"` 잔재 제거 | spec-driven-dev, spec-writer, rules | 멘토링 피드백(07-28) — 스킬은 작게 쪼개고 서브에이전트 오케스트레이션은 규칙으로 명문화 (MSG-257) |
 
 ## Quick Commands
 
