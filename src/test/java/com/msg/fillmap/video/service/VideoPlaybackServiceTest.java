@@ -22,6 +22,8 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
+import com.msg.fillmap.badge.repository.UserBadgeRepository;
+import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
@@ -69,7 +71,8 @@ class VideoPlaybackServiceTest {
 		videoService = new VideoServiceImpl(
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(S3Client.class), properties,
-			mock(RegionStatsCommandService.class), thumbnailUrlPresigner);
+			mock(RegionStatsCommandService.class), thumbnailUrlPresigner,
+			mock(BadgeAwardService.class), mock(UserBadgeRepository.class));
 	}
 
 	/** 모든 상태 축을 명시 지정하는 코어 빌더 — 엔티티에 세터가 없어 리플렉션으로 벌린다. */

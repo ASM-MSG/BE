@@ -18,6 +18,8 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
+import com.msg.fillmap.badge.repository.UserBadgeRepository;
+import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
@@ -54,7 +56,8 @@ class VideoGridQueryServiceTest {
 		videoService = new VideoServiceImpl(
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(S3Client.class), properties,
-			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties));
+			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
+			mock(BadgeAwardService.class), mock(UserBadgeRepository.class));
 	}
 
 	private void givenVideos(Video... videos) {

@@ -19,6 +19,8 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
+import com.msg.fillmap.badge.repository.UserBadgeRepository;
+import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
@@ -53,7 +55,8 @@ class VideoPresignTest {
 		videoService = new VideoServiceImpl(
 			mock(VideoRepository.class), mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(software.amazon.awssdk.services.s3.S3Client.class), properties,
-			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class));
+			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class),
+			mock(BadgeAwardService.class), mock(UserBadgeRepository.class));
 	}
 
 	@Test
