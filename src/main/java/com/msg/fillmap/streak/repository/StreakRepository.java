@@ -22,25 +22,29 @@ public interface StreakRepository extends JpaRepository<Streak, Long> {
 	@Query(value = """
 		-- upsertOnUpload — 3분기 CASE 를 한 문장에: user_id PK 단일 행이라 ON CONFLICT 행 잠금이
 		-- 동시 업로드를 직렬화한다 (§D5). 날짜는 KST 변환 후 비교 (§D3 — DB TIMESTAMP 는 UTC 저장).
+		-- statement_timestamp() 인 이유: now()는 트랜잭션 시작 시각 고정이라 자정(KST) 직전 시작된
+		-- 트랜잭션이 자정 이후 이 문장을 실행하면 전날로 오판정한다. 한 문장 안에서는
+		-- statement_timestamp() 도 고정값이라 CASE 분기·SET 절 간 일관성은 유지된다.
 		INSERT INTO streaks (user_id, current_count, max_count, last_recorded_date, updated_at)
-		VALUES (:userId, 1, 1, (now() AT TIME ZONE 'Asia/Seoul')::date, now() AT TIME ZONE 'UTC')
+		VALUES (:userId, 1, 1, (statement_timestamp() AT TIME ZONE 'Asia/Seoul')::date,
+			statement_timestamp() AT TIME ZONE 'UTC')
 		ON CONFLICT (user_id) DO UPDATE SET
 			current_count = CASE
-				WHEN streaks.last_recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date
+				WHEN streaks.last_recorded_date = (statement_timestamp() AT TIME ZONE 'Asia/Seoul')::date
 					THEN streaks.current_count                                  -- 같은 날: 카운트 no-op (updated_at 은 아래에서 갱신)
-				WHEN streaks.last_recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date - 1
+				WHEN streaks.last_recorded_date = (statement_timestamp() AT TIME ZONE 'Asia/Seoul')::date - 1
 					THEN streaks.current_count + 1                              -- 어제: 연속 +1
 				ELSE 1                                                          -- 끊김·첫 기록(NULL): 1 리셋
 			END,
 			max_count = GREATEST(streaks.max_count, CASE
-				WHEN streaks.last_recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date
+				WHEN streaks.last_recorded_date = (statement_timestamp() AT TIME ZONE 'Asia/Seoul')::date
 					THEN streaks.current_count
-				WHEN streaks.last_recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date - 1
+				WHEN streaks.last_recorded_date = (statement_timestamp() AT TIME ZONE 'Asia/Seoul')::date - 1
 					THEN streaks.current_count + 1
 				ELSE 1
 			END),
-			last_recorded_date = (now() AT TIME ZONE 'Asia/Seoul')::date,   -- 같은 날엔 동일값 재기록
-			updated_at = now() AT TIME ZONE 'UTC'                           -- 같은 날에도 갱신 — 마지막 이벤트 시각 추적
+			last_recorded_date = (statement_timestamp() AT TIME ZONE 'Asia/Seoul')::date,   -- 같은 날엔 동일값 재기록
+			updated_at = statement_timestamp() AT TIME ZONE 'UTC'                           -- 같은 날에도 갱신 — 마지막 이벤트 시각 추적
 		""", nativeQuery = true)
 	int upsertOnUpload(@Param("userId") long userId);
 
