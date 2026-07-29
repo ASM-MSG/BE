@@ -73,6 +73,7 @@
 - MSG-237: 격자 전역 영상 목록(`GET /api/grids/{gridId}/videos` — `idx_videos_grid_popular` 일치 ACTIVE·PUBLIC·READY 필터, 조회수 인기순 keyset opaque 커서(gridId 바인딩·UTC epoch micros), `GridGlobalVideoResponseDto`/`GridVideoPageResponseDto`, `INVALID_CURSOR` 3423)
 - MSG-238: 전역 탐색 API 2종(`GET /api/regions/{regionCode}/grids` 카드+헤더 카운트·`GET /api/regions/explore` — `RegionExploreController`/`Service`, 게이트=ACTIVE·PUBLIC·READY 단일 정의, 커버 87 규칙 3키 정합(`findGlobalCover` id DESC 추가), DTO 3종·프로젝션 3종, sort 대문자 enum·limit null=전부, 신규 에러코드 0)
 - MSG-239: 업로드 뱃지 훅(`saveVideo` 2지점 — 항상 UPLOAD_COUNT(생애 카운트·status 무관), 첫 점령 시 TOTAL_GRIDS+refresh 직후 REGION_PERCENT 물질화 값 소비, 같은 트랜잭션)·`VideoUploadResponseDto.newBadges` 동봉(FR-9). 삭제·교체 경로 무변경(비회수 FR-5)
+- MSG-200: 업로드 스트릭 훅(`saveVideo` — `!alreadyOccupied` 분기 바깥 1줄, `StreakCommandService.recordUpload` 획득분 `newBadges` 합류. 삭제·교체 무변경 — 소급 차감 없음 §D4)
 - **없는 것**: —
 
 ### `search` (Owner A) — ✅ 완성 (MVP 범위)
@@ -80,7 +81,11 @@
 
 ### `badge` (Owner B) — 🟡 부분
 - MSG-239: 뱃지 시스템 MVP — V9(`chk_badges_condition`에 MISSION_COUNT 확장·`user_badges.notified_at/featured_rank`+partial UNIQUE·활성 3축 11종 시딩·set-based 소급), `entity/{Badge(conditionValue 미매핑),BadgeConditionType,UserBadge,UserBadgeId}`, `repository/{BadgeRepository.findEligible,UserBadgeRepository(지급 ON CONFLICT·metric 3종·featured lock/clear/set)}`, `service/BadgeAwardService`(+impl, 후보 SELECT+INSERT 2단 — B 내부)·`BadgeFeaturedService`(+impl), `PUT /api/badges/featured`(`BadgeController`·집합 교체 멱등), `dto/{EarnedBadge,FeaturedBadgeRequest,FeaturedBadgeResponse}ResponseDto`, `exception/BadgeErrorCode`(7xxx — 7400·7403)
-- **없는 것**: 조회 API·미확인 해제(MSG-201), STREAK_DAYS 훅·시딩(MSG-200), MISSION_COUNT 훅·시딩(미션 엔진 티켓), SPECIAL 시딩(오픈 준비 티켓)
+- MSG-200: V10 꾸준함 뱃지 시딩(STREAK_3/7/30 — DDL 0·소급 블록 없음, §D6 예외 주석. 판정 훅은 streak 도메인이 `award(STREAK_DAYS)` 호출)
+- **없는 것**: 조회 API·미확인 해제(MSG-201), MISSION_COUNT 훅·시딩(미션 엔진 티켓), SPECIAL 시딩(오픈 준비 티켓)
+
+### `streak` (Owner B) — ✅ 완성 (MVP 범위)
+- MSG-200: 스트릭 집계 — `entity/Streak`(전 컬럼 매핑·Setter 없음, 쓰기는 native 전용), `repository/StreakRepository`(`upsertOnUpload` — 3분기 CASE 한 문장 UPSERT·KST 자정 경계·ON CONFLICT 행 잠금 직렬화 + `findCurrentCount`), `service/StreakCommandService`(+impl — 갱신 직후 `BadgeAwardService.award(STREAK_DAYS)` 배선·획득분 반환, B 내부). 조회 API 없음(currentStreak·maxStreak 노출은 도감 summary 티켓 소관 §D8), freeze 미도입·소급 차감 없음 확정
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
@@ -98,7 +103,7 @@
 
 ## 스키마 vs JPA 엔티티
 
-`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다.
+`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다. `V10__streak_badges_seed.sql`(MSG-200)은 STREAK_3/7/30 시딩만 담는다(DDL 0·소급 없음).
 
 | 테이블 | 엔티티 | 상태 |
 |---|---|---|
@@ -116,7 +121,7 @@
 | `push_tokens` | — | ❌ 엔티티 없음 |
 | `reports` | — | ❌ 엔티티 없음 |
 | `sponsor_ads` | — | ❌ 엔티티 없음 |
-| `streaks` | — | ❌ 엔티티 없음 |
+| `streaks` | `streak/entity/Streak` | ✅ (MSG-200 — 전 컬럼 매핑, 쓰기는 native UPSERT 전용) |
 | `missions` | — | ❌ 엔티티 없음 (V6/MSG-166 스키마 선반영 — path JSONB, 엔티티·API는 MSG-222/223) |
 | `mission_grids` | — | ❌ 엔티티 없음 (grids FK 없는 논리 참조 — lazy insert 때문, MSG-166 §D2) |
 | `user_missions` | — | ❌ 엔티티 없음 (스탬프 영속 — user_badges 패턴, 비회수) |

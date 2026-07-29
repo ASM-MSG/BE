@@ -3,6 +3,8 @@ package com.msg.fillmap.badge.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import jakarta.persistence.EntityManager;
@@ -23,13 +25,14 @@ import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 
 /**
- * V9 스키마·시딩·소급 검증 (실 PostGIS, MSG-239 모듈 1). 공유 로컬 DB — 합성 유저만 만들고
- * @Transactional 롤백, badges 마스터(V9 시딩분)는 불가침·code 기준 단언만 한다. 소급 블록은 V9 가
- * 이미 적용된 DB 에선 재현 불가라 같은 SQL 을 테스트에서 재실행해 검증한다(ON CONFLICT 멱등 — §D9).
+ * V9·V10 스키마·시딩·소급 검증 (실 PostGIS, MSG-239 모듈 1 + MSG-200 모듈 1). 공유 로컬 DB —
+ * 합성 유저만 만들고 @Transactional 롤백, badges 마스터(V9·V10 시딩분)는 불가침·code 기준 단언만
+ * 한다. 소급 블록은 V9 가 이미 적용된 DB 에선 재현 불가라 같은 SQL 을 테스트에서 재실행해
+ * 검증한다(ON CONFLICT 멱등 — §D9). V10(스트릭 3종)은 시딩만·소급 없음(MSG-200 §D6).
  */
 @SpringBootTest
 @Transactional
-@DisplayName("V9 뱃지 스키마·시딩·소급 (실 PostGIS)")
+@DisplayName("V9·V10 뱃지 스키마·시딩·소급 (실 PostGIS)")
 class BadgeSchemaSeedTest {
 
 	// 다른 테스트와 겹치지 않는 임의 기준점. 실제 grid_y/grid_x 는 GridEncoder 로 산출한다.
@@ -97,9 +100,31 @@ class BadgeSchemaSeedTest {
 		}
 
 		@Test
-		@DisplayName("스트릭과 미션 뱃지는 시딩되어 있지 않다 — 훅 없는 시딩은 획득 불가 뱃지 노출(§D2)")
-		void 스트릭과_미션_뱃지는_시딩되어_있지_않다() {
-			assertThat(seededCodes("STREAK_DAYS", "MISSION_COUNT", "SPECIAL")).isEmpty();
+		@DisplayName("스트릭 뱃지 3종이 시딩되어 있다 — V10 훅과 한 세트(MSG-200)")
+		void 스트릭_뱃지_3종이_시딩되어_있다() {
+			assertThat(seededCodes("STREAK_DAYS"))
+				.containsExactlyInAnyOrder("STREAK_3", "STREAK_7", "STREAK_30");
+		}
+
+		@Test
+		@DisplayName("미션과 스페셜 뱃지는 시딩되어 있지 않다 — 훅 없는 시딩은 획득 불가 뱃지 노출(§D2)")
+		void 미션과_스페셜_뱃지는_시딩되어_있지_않다() {
+			assertThat(seededCodes("MISSION_COUNT", "SPECIAL")).isEmpty();
+		}
+
+		@Test
+		@DisplayName("스트릭 뱃지 소급 지급분이 없다 — 전원 0부터(MSG-200 §D6)")
+		void 스트릭_뱃지_소급_지급분이_없다() throws IOException {
+			// 전역 카운트 단언은 공유 DB 에서 상태 의존(실사용·DoD 수동 검증분이 남으면 영구 red)이라
+			// 파일 정적 검증으로 대체(Codex 리뷰 반영) — 실제 주장은 "V10 에 소급 INSERT 블록이 없다"다.
+			String v10 = new String(
+				getClass().getClassLoader()
+					.getResourceAsStream("db/migration/V10__streak_badges_seed.sql")
+					.readAllBytes(),
+				StandardCharsets.UTF_8);
+
+			assertThat(v10).contains("INSERT INTO badges");
+			assertThat(v10).doesNotContain("INSERT INTO user_badges");
 		}
 
 		@SuppressWarnings("unchecked")

@@ -42,6 +42,7 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
+import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
@@ -96,6 +97,7 @@ public class VideoServiceImpl implements VideoService {
 	private final RegionStatsCommandService regionStatsCommandService;
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
 	private final BadgeAwardService badgeAwardService;
+	private final StreakCommandService streakCommandService;
 
 	@Override
 	@Transactional
@@ -128,6 +130,9 @@ public class VideoServiceImpl implements VideoService {
 			regionStatsCommandService.refresh(userId, gridId);
 			newBadges.addAll(badgeAwardService.awardCollectionBadges(userId, gridId));
 		}
+		// 스트릭 (MSG-200): 아무 업로드(재방문 포함)가 인정 이벤트라 분기 바깥. 갱신·꾸준함 뱃지 판정은
+		// 스트릭 도메인 몫 — 여기서는 획득분을 응답에 합류시키기만 한다.
+		newBadges.addAll(streakCommandService.recordUpload(userId));
 		triggerEncodingAfterCommit(video.getId());
 
 		return new VideoUploadResponseDto(
