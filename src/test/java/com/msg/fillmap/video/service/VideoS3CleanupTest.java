@@ -33,7 +33,6 @@ import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.S3Error;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
-import com.msg.fillmap.badge.repository.UserBadgeRepository;
 import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
@@ -79,8 +78,7 @@ class VideoS3CleanupTest {
 		service = new VideoServiceImpl(repository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			mock(S3Presigner.class), s3Client,
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
-			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class),
-			mock(BadgeAwardService.class), mock(UserBadgeRepository.class));
+			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class));
 	}
 
 	@AfterEach

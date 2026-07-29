@@ -32,6 +32,23 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
 
 	@Override
 	@Transactional
+	public List<EarnedBadgeResponseDto> awardUploadBadges(long userId) {
+		return award(userId, BadgeConditionType.UPLOAD_COUNT, userBadgeRepository.countMyVideos(userId));
+	}
+
+	@Override
+	@Transactional
+	public List<EarnedBadgeResponseDto> awardCollectionBadges(long userId, String gridId) {
+		List<EarnedBadgeResponseDto> earned = new ArrayList<>(
+			award(userId, BadgeConditionType.TOTAL_GRIDS, userBadgeRepository.countMyGrids(userId)));
+		// 행정동 없는 격자(바다 등)는 region_stats 에 저장 행이 없어 empty → 수집률 판정 자체를 건너뛴다.
+		userBadgeRepository.findMyRegionProgress(userId, gridId)
+			.ifPresent(rate -> earned.addAll(award(userId, BadgeConditionType.REGION_PERCENT, rate)));
+		return earned;
+	}
+
+	@Override
+	@Transactional
 	public List<EarnedBadgeResponseDto> award(long userId, BadgeConditionType type, BigDecimal metric) {
 		List<EligibleBadgeProjection> candidates = badgeRepository.findEligible(type.name(), metric, userId);
 		if (candidates.isEmpty()) {

@@ -34,8 +34,6 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
-import com.msg.fillmap.badge.entity.BadgeConditionType;
-import com.msg.fillmap.badge.repository.UserBadgeRepository;
 import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
@@ -98,7 +96,6 @@ public class VideoServiceImpl implements VideoService {
 	private final RegionStatsCommandService regionStatsCommandService;
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
 	private final BadgeAwardService badgeAwardService;
-	private final UserBadgeRepository userBadgeRepository;
 
 	@Override
 	@Transactional
@@ -122,20 +119,14 @@ public class VideoServiceImpl implements VideoService {
 
 		// 뱃지 지급 훅 (MSG-239): 업로드와 같은 트랜잭션에서 동기 판정하고, 새로 획득한 뱃지를 응답에 실어
 		// FE 가 획득 연출을 하게 한다. 전 종류를 훑지 않고 "이 행동으로 딸 수 있는 종류"만 판정한다 —
-		// 업로드는 항상 업로드 수 뱃지 하나(삭제된 영상 포함 생애 카운트), 처음 수집한 격자면 총 격자 수와
-		// 행정동 수집률 뱃지를 추가 판정. 수집률은 바로 위 refresh 가 재계산해 저장한 값을 읽기만 하고,
-		// 행정동이 없는 격자(바다 등)는 저장된 행이 없어 자동으로 건너뛴다. 상세 결정: docs/MSG-239.md §D3~D5.
-		List<EarnedBadgeResponseDto> newBadges = new ArrayList<>(
-			badgeAwardService.award(userId, BadgeConditionType.UPLOAD_COUNT,
-				userBadgeRepository.countMyVideos(userId)));
+		// 업로드는 항상 업로드 수 뱃지, 처음 수집한 격자면 총 격자 수·행정동 수집률 뱃지를 추가 판정.
+		// metric 계산은 뱃지 도메인 몫이라 여기서는 행동 단위 호출만 한다. 상세 결정: docs/MSG-239.md §D3~D5.
+		List<EarnedBadgeResponseDto> newBadges = new ArrayList<>(badgeAwardService.awardUploadBadges(userId));
 		if (!alreadyOccupied) {
 			// 첫 점령 — 그 격자 중심 행정동의 수집률 캐시를 같은 트랜잭션에서 갱신한다 (MSG-155).
+			// 순서 중요: awardCollectionBadges 의 수집률 판정이 refresh 가 방금 저장한 값을 읽는다.
 			regionStatsCommandService.refresh(userId, gridId);
-			newBadges.addAll(badgeAwardService.award(userId, BadgeConditionType.TOTAL_GRIDS,
-				userBadgeRepository.countMyGrids(userId)));
-			userBadgeRepository.findMyRegionProgress(userId, gridId)
-				.ifPresent(rate -> newBadges.addAll(
-					badgeAwardService.award(userId, BadgeConditionType.REGION_PERCENT, rate)));
+			newBadges.addAll(badgeAwardService.awardCollectionBadges(userId, gridId));
 		}
 		triggerEncodingAfterCommit(video.getId());
 

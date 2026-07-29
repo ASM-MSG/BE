@@ -176,12 +176,9 @@ class BadgeAwardServiceIntegrationTest {
 
 			videoService.saveVideo(userId, request(육지_LAT, 육지_LON));
 
-			then(badgeAwardService).should()
-				.award(eq(userId), eq(BadgeConditionType.UPLOAD_COUNT), any());
-			then(badgeAwardService).should(never())
-				.award(eq(userId), eq(BadgeConditionType.TOTAL_GRIDS), any());
-			then(badgeAwardService).should(never())
-				.award(eq(userId), eq(BadgeConditionType.REGION_PERCENT), any());
+			// 훅은 행동 단위 호출 — 재방문은 업로드 축만 호출되고 수집 축(총 격자·수집률)은 호출 자체가 없다.
+			then(badgeAwardService).should().awardUploadBadges(userId);
+			then(badgeAwardService).should(never()).awardCollectionBadges(eq(userId), any());
 		}
 
 		@Test
@@ -202,11 +199,10 @@ class BadgeAwardServiceIntegrationTest {
 		void 무라벨_격자_수집은_지역_뱃지_판정을_건너뛴다() {
 			VideoUploadResponseDto response = videoService.saveVideo(userId, request(무라벨_LAT, 무라벨_LON));
 
-			// refresh no-op → region_stats 행 없음 → REGION_PERCENT 판정 자체가 없다(에러 아님).
+			// refresh no-op → region_stats 행 없음 → 수집률 판정 자체가 건너뛰어져(에러 아님) 지역 뱃지가 없다.
+			// (skip 분기 자체의 단위 검증은 BadgeAwardServiceTest 쪽 — 여기서는 응답으로 관찰한다.)
 			assertThat(response.newBadges()).extracting(EarnedBadgeResponseDto::code)
 				.containsExactly("EXPLORER_1");
-			then(badgeAwardService).should(never())
-				.award(eq(userId), eq(BadgeConditionType.REGION_PERCENT), any());
 		}
 
 		@Test

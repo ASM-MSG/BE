@@ -12,7 +12,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.task.TaskRejectedException;
 
-import com.msg.fillmap.badge.repository.UserBadgeRepository;
 import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
@@ -52,8 +51,7 @@ class VideoEncodingTriggerTest {
 		VideoService service = new VideoServiceImpl(repository, encodingService, statusWriter,
 			mock(S3Presigner.class), mock(software.amazon.awssdk.services.s3.S3Client.class),
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
-			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class),
-			mock(BadgeAwardService.class), mock(UserBadgeRepository.class));
+			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class));
 
 		VideoUploadRequestDto request = new VideoUploadRequestDto(
 			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now());
