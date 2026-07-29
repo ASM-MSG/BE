@@ -30,6 +30,7 @@
 - MSG-73: `GridEncoder`·`GridConstants`(순수 유틸), `entity/{UserGrid,UserGridId,Grid}`, `repository/GridRepository`, `service/GridQueryService`(+impl, read 계약 A→B), `controller/GridController`, `dto/*`, `exception/GridErrorCode`(4xxx)
 - MSG-90: viewport cursor 페이지네이션(`GridCursor` Base64URL 커서, `OccupiedGridPage`, `OccupiedGridPageResponseDto`, keyset 행값비교+lookahead, `?strategy` 파라미터·`ViewportStrategy` 제거 — A 고정, repo B 쿼리는 보존)
 - MSG-167: 격자 중심점 행정동 라벨 저장 — V5 `grids.region_code`(nullable FK→regions, 쓰기 시 1회 판정·조회는 equi) + 멱등 백필(`region_code IS NULL`만, regions 미시딩 no-op). 판정 규칙 = 93/155 중심점 축(`ST_Covers … ORDER BY region_code LIMIT 1`). 인덱스 미추가·Grid 엔티티 미매핑(native)
+- MSG-238: V7 `idx_grids_region_code`(단순 btree — 167 §D5 예약 발동, region_code 주도 조회 최초 등장의 물리 기반. partial 기각)
 - **없는 것**: `GridOccupationService`(write는 MSG-66이 흡수), `HotZoneService`
 
 ### `usergrid` (Owner B) — 🟡 부분
@@ -46,6 +47,10 @@
 - MSG-153: 단건 탐험률(`GET /api/regions/stats/by-point`·`/by-grid` — 격자 중심점 축 `resolveByPoint` 재사용, `findStatByRegion` LEFT JOIN 0% 합성·`LEAST(COALESCE)` clamp, no-match 200+null)
 - MSG-167: 시딩 직후 `grids.region_code` 멱등 보정 백필(`RegionRepository.backfillGridRegionCodes`, `RegionSeeder.run`에서 호출 — regions 후착 환경의 영구 NULL 라벨 방지, `EXISTS` 가드로 무귀속 격자 NULL→NULL 재기록 차단, Codex 리뷰 P1·2차)
 - **없는 것**: 시/도 상위 레벨 집계 (MVP 이후 별도 티켓)
+
+### `zone` (Owner A) — 🟡 부분
+- MSG-234: 격자 표시명 구역 — `entity/Zone`(V8 `zones` 전 컬럼 매핑)·`repository/ZoneRepository`, `GET /api/zones` 전체 목록(`service/ZoneQueryService`(+impl)·`controller/ZoneController`·`dto/ZoneResponseDto`), `seed/{ZoneSeed,ZoneSeeder}`(플래그 게이트 `fillmap.zone.seed.enabled` 기본 off, `resources/seed/zones.json` `zone_key` UPSERT 멱등). 표시명("서면 A-14") 계산은 FE-local(§D3) — 서버는 데이터만. 장소 검색은 카카오 프록시 MSG-251 이관(2단 폴백 구현분 제거, §D6)
+- **없는 것**: zones 실데이터(상권 검수 후 주입 — 작도 해법 cf-26181633), glossary "구역/표시명" 등재(별도 PR), 장소 검색(MSG-251 카카오 프록시)
 
 ### `video` (Owner B) — 🟡 부분
 - MSG-66: `entity`(Video·ProcessingStatus·Visibility·VideoStatus + 상태전이 도메인 메서드), `repository/VideoRepository`(grids·user_grids native UPSERT/롤백), 메타저장 `service`·`controller`(`POST /api/videos`)·`dto`, `support/GeoSupport`, `exception/VideoErrorCode`(3xxx)
@@ -66,7 +71,11 @@
 - MSG-206: 영상 재생 조회(`GET /api/videos/{videoId}` — `VideoPlaybackResponseDto`, 재생 소스 blurred ?? encoded presign, 접근 제어 DELETED→BLINDED→visibility→READY first-match, `incrementViewCount` 원자적 +1 타인·발급 시만, 명시 HEAD no-op 핸들러)
 - MSG-242: 교체 시 `recordedAt` 엔티티 반영(`Video.replaceFile` 3-arg — MSG-71의 반영 누락 정정, 미션 기간 판정(MSG-223) 선행)
 - MSG-237: 격자 전역 영상 목록(`GET /api/grids/{gridId}/videos` — `idx_videos_grid_popular` 일치 ACTIVE·PUBLIC·READY 필터, 조회수 인기순 keyset opaque 커서(gridId 바인딩·UTC epoch micros), `GridGlobalVideoResponseDto`/`GridVideoPageResponseDto`, `INVALID_CURSOR` 3423)
+- MSG-238: 전역 탐색 API 2종(`GET /api/regions/{regionCode}/grids` 카드+헤더 카운트·`GET /api/regions/explore` — `RegionExploreController`/`Service`, 게이트=ACTIVE·PUBLIC·READY 단일 정의, 커버 87 규칙 3키 정합(`findGlobalCover` id DESC 추가), DTO 3종·프로젝션 3종, sort 대문자 enum·limit null=전부, 신규 에러코드 0)
 - **없는 것**: —
+
+### `search` (Owner A) — ✅ 완성 (MVP 범위)
+- MSG-251: 장소 검색 카카오 프록시(`GET /api/search/places?q=` — keyword.json 실시간 패스스루(약관: 캐시·저장 금지), `PlaceSearchController`/`Service`(+impl)/`KakaoLocalClient`/`SearchConfig`(완성 RestClient 빈, connect 1s/read 3s)/`KakaoLocalProperties`, gridId=`GridEncoder.encode` 즉석 합성, `SearchErrorCode` 5xxx 신설 `SEARCH_UPSTREAM_ERROR(5502)` 단일 수렴, 키=`${oauth.kakao.client-id:}` 재사용)
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
@@ -84,7 +93,7 @@
 
 ## 스키마 vs JPA 엔티티
 
-`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을 추가했다.
+`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점).
 
 | 테이블 | 엔티티 | 상태 |
 |---|---|---|
@@ -94,6 +103,7 @@
 | `grids` | `grid/entity/Grid` | ✅ (MSG-73 — 조회 전용 최소 매핑: grid_id/grid_y/grid_x, geom 미매핑; MSG-167 — `region_code`(V5) 추가·미매핑, native 접근) |
 | `regions` | `region/entity/Region` | ✅ (MSG-154 — region_code/region_name/parent_code/total_grid_count 매핑, boundary_geom 미매핑 — native write 전용) |
 | `region_stats` | — | ❌ 엔티티 없음 (native 쿼리로만 접근 — MSG-155/156) |
+| `zones` | `zone/entity/Zone` | ✅ (MSG-234 — 전 컬럼 매핑, 정수 사각형·PostGIS 컬럼 없음, V8) |
 | `badges` | — | ❌ 엔티티 없음 |
 | `user_badges` | — | ❌ 엔티티 없음 |
 | `friendships` | — | ❌ 엔티티 없음 |

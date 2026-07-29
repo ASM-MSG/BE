@@ -34,6 +34,8 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 
 ## Skills — 특정 워크플로우
 
+- **prd-writer** — PRD(제품 요구사항 문서) 생성 (`docs/prd/*.md`), 티켓·스펙보다 선행
+  트리거: "PRD 만들어줘", "요구사항 문서 정리해줘", "개발 전에 문서부터"
 - **spec-writer** — 개발 스펙 문서 생성 (`docs/MSG-XXX.md`)
   트리거: "MSG-XX 스펙 만들어줘", "스펙 문서 정리해줘"
 - **spec-driven-dev** — 스펙 기반 TDD 개발 (grid-developer/auth-developer/convention-reviewer 팀 조율)
@@ -53,6 +55,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 | 2026-07-23 | Phase 3에 커밋 포인트 스톱 게이트 추가 (사용자 커밋 응답까지 새 단계 보류) | spec-driven-dev | 오토모드에선 백그라운드 알림이 턴을 이어가 커밋 포인트가 쌓임 — MSG-206에서 4개 유실, 커밋 타이밍 보존 위해 명문화 |
 | 2026-07-24 | Agent 호출의 `model: "opus"` 강제 제거 (세션 모델 상속) | spec-driven-dev | 2026-07-21 Opus 스펙 분리 폐지 — 스펙·구현 모두 Fable 5 가능 확인, 낡은 강제 조항 정리 |
 | 2026-07-26 | 에이전트 정의 4종 프런트매터의 `model: opus` 제거 | 전체 에이전트 | 호출부 제거(07-24)만으론 미완 — 정의 쪽 `model`이 남아 있으면 호출부 생략 시 정의 값이 적용돼 Opus 고정이 유지됨 (PR #61 리뷰 지적). 정의·호출부 모두 생략해야 세션 모델 상속 |
+| 2026-07-28 | prd-writer 스킬 신설 (PRD 템플릿 포함), spec-writer가 PRD를 선행 입력으로 사용 | prd-writer, spec-writer | 멘토링 피드백 — 개발 착수 전 PRD(목적·기능·비기능·다이어그램·변경 파일) 단계 표준화 (MSG-256) |
 | 2026-07-28 | spec-driven-dev 분해 — SKILL.md는 라우팅만, 커밋 게이트·Codex 리뷰·마무리는 references/ 3종으로, 팀 운영 원칙은 rules/subagent-orchestration.md로 승격. spec-writer 예시의 `model: "opus"` 잔재 제거 | spec-driven-dev, spec-writer, rules | 멘토링 피드백(07-28) — 스킬은 작게 쪼개고 서브에이전트 오케스트레이션은 규칙으로 명문화 (MSG-257) |
 
 ## Quick Commands
@@ -66,7 +69,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 
 ## 협업 원칙 (요약)
 
-- **Owner A**: 지도 인프라 도메인 (`com.msg.fillmap.grid.*`, `com.msg.fillmap.region.*`)
+- **Owner A**: 지도 인프라 도메인 (`com.msg.fillmap.grid.*`, `com.msg.fillmap.region.*`, `com.msg.fillmap.search.*` — MSG-251 §D1)
 + **Owner B**: 콘텐츠/인증 도메인 (`com.msg.fillmap.user.*`, `com.msg.fillmap.video.*`, `com.msg.fillmap.auth.*`, `com.msg.fillmap.usergrid.*`)
 - 두 도메인의 접점은 인터페이스로만 (`GridQueryService`, `UserGridQueryService` 등)
 - 상세: `@.claude/docs/infrastructure.md`

@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ import com.msg.fillmap.region.repository.RegionRepository;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@Order(10)
 public class RegionSeeder implements ApplicationRunner {
 
 	// ponytail: 명목 100×100m 근사(서울 +1.5%~부산 +4.7% 과대). 보정 필요 시 위도별 실측 면적으로 교체

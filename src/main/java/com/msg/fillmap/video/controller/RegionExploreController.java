@@ -1,0 +1,68 @@
+package com.msg.fillmap.video.controller;
+
+import java.util.List;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import com.msg.fillmap.response.SuccessResponse;
+import com.msg.fillmap.video.dto.ExploreSort;
+import com.msg.fillmap.video.dto.RegionExploreResponseDto;
+import com.msg.fillmap.video.dto.RegionGridCountResponseDto;
+import com.msg.fillmap.video.service.RegionExploreService;
+
+/**
+ * 전역 탐색 = 행정동 축 전역 공개 콘텐츠 조회 (MSG-238). 경로 접두사는 /api/regions 지만 게이트·커버·
+ * presigner 등 videos 자산을 다루는 Owner B 코드라 video 패키지에 둔다(§D5 — 127/87 "경로 접두사가
+ * 소유권을 강제하지 않음" 선례). RegionController(A)의 리터럴 경로들과 충돌 없음. 전역 축이라 결과가
+ * userId 무관 — @AuthenticationPrincipal 을 두지 않는다(인증 자체는 SecurityConfig 가 강제, 87 선례).
+ */
+@Tag(name = "전역 탐색 (Region Explore)", description = "행정동 축으로 전역 공개 콘텐츠를 탐색하는 API — "
+	+ "지도 홈 패널·전체 보기 격자 썸네일 뷰·검색 무입력 전체 지역 리스트.")
+@RestController
+@RequiredArgsConstructor
+public class RegionExploreController {
+
+	private final RegionExploreService regionExploreService;
+
+	@Operation(
+		summary = "행정동 격자 카드 리스트 + 헤더 카운트 조회",
+		description = "그 행정동 격자들 중 전역 공개 콘텐츠(공개·인코딩 완료·타인 영상 포함)가 있는 격자를 카드로 "
+			+ "반환한다. 헤더 카운트(gridCount·videoCount)는 limit 무관 전체 기준이라 지도 홈 패널(limit=3)과 "
+			+ "전체 보기(limit 생략)가 같은 숫자를 본다. 카드 커버는 격자 대표(cover)와 같은 영상이고 썸네일은 "
+			+ "presigned GET URL 이다. 미존재·무콘텐츠 regionCode 는 404 가 아니라 200 + 카운트 0·빈 배열이다."
+	)
+	@GetMapping("/api/regions/{regionCode}/grids")
+	public SuccessResponse<RegionExploreResponseDto> getRegionGrids(
+		@Parameter(description = "행정동 코드 — reverse-geocode·전체 지역 리스트의 regionCode 를 그대로 전달",
+			example = "2644056000")
+		@PathVariable String regionCode,
+		@Parameter(description = "정렬 — POPULAR(조회수 합)·LATEST(최신 공개 영상). 대문자 전용이며 "
+			+ "소문자 포함 무효 값은 400 이다", example = "POPULAR")
+		@RequestParam(defaultValue = "POPULAR") ExploreSort sort,
+		@Parameter(description = "카드 수 상한 — 지도 홈 패널은 3. 생략하면 전부, 1 미만은 1 로 보정한다",
+			example = "3")
+		@RequestParam(required = false) Integer limit
+	) {
+		return SuccessResponse.of(regionExploreService.getRegionGrids(regionCode, sort, limit));
+	}
+
+	@Operation(
+		summary = "전체 지역 리스트 조회",
+		description = "전역 공개 콘텐츠가 있는 행정동만 격자 수 내림차순으로 반환한다(검색 무입력 드롭다운). "
+			+ "각 항목의 gridCount 는 그 행정동 격자 카드 조회의 gridCount 와 같은 정의다. "
+			+ "전역 공개 콘텐츠가 하나도 없으면 빈 배열이다."
+	)
+	@GetMapping("/api/regions/explore")
+	public SuccessResponse<List<RegionGridCountResponseDto>> getExploreRegions() {
+		return SuccessResponse.of(regionExploreService.getExploreRegions());
+	}
+}
