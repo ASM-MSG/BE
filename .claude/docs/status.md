@@ -72,10 +72,15 @@
 - MSG-242: 교체 시 `recordedAt` 엔티티 반영(`Video.replaceFile` 3-arg — MSG-71의 반영 누락 정정, 미션 기간 판정(MSG-223) 선행)
 - MSG-237: 격자 전역 영상 목록(`GET /api/grids/{gridId}/videos` — `idx_videos_grid_popular` 일치 ACTIVE·PUBLIC·READY 필터, 조회수 인기순 keyset opaque 커서(gridId 바인딩·UTC epoch micros), `GridGlobalVideoResponseDto`/`GridVideoPageResponseDto`, `INVALID_CURSOR` 3423)
 - MSG-238: 전역 탐색 API 2종(`GET /api/regions/{regionCode}/grids` 카드+헤더 카운트·`GET /api/regions/explore` — `RegionExploreController`/`Service`, 게이트=ACTIVE·PUBLIC·READY 단일 정의, 커버 87 규칙 3키 정합(`findGlobalCover` id DESC 추가), DTO 3종·프로젝션 3종, sort 대문자 enum·limit null=전부, 신규 에러코드 0)
+- MSG-239: 업로드 뱃지 훅(`saveVideo` 2지점 — 항상 UPLOAD_COUNT(생애 카운트·status 무관), 첫 점령 시 TOTAL_GRIDS+refresh 직후 REGION_PERCENT 물질화 값 소비, 같은 트랜잭션)·`VideoUploadResponseDto.newBadges` 동봉(FR-9). 삭제·교체 경로 무변경(비회수 FR-5)
 - **없는 것**: —
 
 ### `search` (Owner A) — ✅ 완성 (MVP 범위)
 - MSG-251: 장소 검색 카카오 프록시(`GET /api/search/places?q=` — keyword.json 실시간 패스스루(약관: 캐시·저장 금지), `PlaceSearchController`/`Service`(+impl)/`KakaoLocalClient`/`SearchConfig`(완성 RestClient 빈, connect 1s/read 3s)/`KakaoLocalProperties`, gridId=`GridEncoder.encode` 즉석 합성, `SearchErrorCode` 5xxx 신설 `SEARCH_UPSTREAM_ERROR(5502)` 단일 수렴, 키=`${oauth.kakao.client-id:}` 재사용)
+
+### `badge` (Owner B) — 🟡 부분
+- MSG-239: 뱃지 시스템 MVP — V9(`chk_badges_condition`에 MISSION_COUNT 확장·`user_badges.notified_at/featured_rank`+partial UNIQUE·활성 3축 11종 시딩·set-based 소급), `entity/{Badge(conditionValue 미매핑),BadgeConditionType,UserBadge,UserBadgeId}`, `repository/{BadgeRepository.findEligible,UserBadgeRepository(지급 ON CONFLICT·metric 3종·featured lock/clear/set)}`, `service/BadgeAwardService`(+impl, 후보 SELECT+INSERT 2단 — B 내부)·`BadgeFeaturedService`(+impl), `PUT /api/badges/featured`(`BadgeController`·집합 교체 멱등), `dto/{EarnedBadge,FeaturedBadgeRequest,FeaturedBadgeResponse}ResponseDto`, `exception/BadgeErrorCode`(7xxx — 7400·7403)
+- **없는 것**: 조회 API·미확인 해제(MSG-201), STREAK_DAYS 훅·시딩(MSG-200), MISSION_COUNT 훅·시딩(미션 엔진 티켓), SPECIAL 시딩(오픈 준비 티켓)
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
@@ -93,7 +98,7 @@
 
 ## 스키마 vs JPA 엔티티
 
-`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점).
+`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다.
 
 | 테이블 | 엔티티 | 상태 |
 |---|---|---|
@@ -104,8 +109,8 @@
 | `regions` | `region/entity/Region` | ✅ (MSG-154 — region_code/region_name/parent_code/total_grid_count 매핑, boundary_geom 미매핑 — native write 전용) |
 | `region_stats` | — | ❌ 엔티티 없음 (native 쿼리로만 접근 — MSG-155/156) |
 | `zones` | `zone/entity/Zone` | ✅ (MSG-234 — 전 컬럼 매핑, 정수 사각형·PostGIS 컬럼 없음, V8) |
-| `badges` | — | ❌ 엔티티 없음 |
-| `user_badges` | — | ❌ 엔티티 없음 |
+| `badges` | `badge/entity/Badge` | ✅ (MSG-239 — condition_value JSONB 미매핑, 판정은 native. V9 시딩 11종) |
+| `user_badges` | `badge/entity/UserBadge` | ✅ (MSG-239 — 복합 PK `UserBadgeId`, V9 notified_at·featured_rank 추가. 지급은 native ON CONFLICT) |
 | `friendships` | — | ❌ 엔티티 없음 |
 | `likes` | — | ❌ 엔티티 없음 |
 | `push_tokens` | — | ❌ 엔티티 없음 |
