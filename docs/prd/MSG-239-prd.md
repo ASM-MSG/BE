@@ -58,7 +58,7 @@
 | FR-7 | 스트릭 갱신 시점에 꾸준함 뱃지가 판정된다 (선행: MSG-200) | Must |
 | FR-8 | 사용자는 보유 뱃지 중 최대 2개를 대표 뱃지로 선택/해제할 수 있다 — 닉네임 옆 표시용. 진열장(뱃지 탭 상단 4개)은 이와 별개로 최근 획득 4개 자동 | Must |
 | FR-9 | 사용자는 뱃지 획득을 인지할 수 있다 — 행동 직후에는 해당 요청의 응답으로, 비동기 지급분(소급)은 다음 조회 시 미확인 표시로 | Must |
-| FR-10 | 새 뱃지가 추가(시딩)되는 시점에 이미 조건을 충족한 사용자에게 일괄 지급된다 (소급) — 1회성 아닌 상시 규칙이며, 반복 가능한 소급 절차의 형태(마이그레이션 동반 vs 재실행 가능 잡)는 스펙에서 결정 | Must |
+| FR-10 | 새 뱃지가 추가(시딩)되는 시점에 이미 조건을 충족한 사용자에게 일괄 지급된다 (소급) — 1회성 아닌 상시 규칙이며, 반복 가능한 소급 절차의 형태(마이그레이션 동반 vs 재실행 가능 잡)는 스펙에서 결정. 조건이 기존 데이터로 판정 가능한 축(user_grids·videos·streaks·user_missions·region_stats)에 한하며, `SPECIAL`은 정의상 뱃지별 지급 규칙을 개별 명시 | Must |
 
 ## 4. 비기능 요구사항
 
@@ -80,7 +80,7 @@ sequenceDiagram
 
     C->>V: POST /api/videos (영상 업로드)
     V->>DB: videos INSERT · 수집(user_grids) UPSERT
-    Note over V: 기존 배선: 첫 수집 시 RegionStatsCommandService.refresh<br/>(MSG-200 스트릭 갱신도 같은 자리 예정)
+    Note over V: RegionStatsCommandService.refresh는 첫 수집 시에만(기존 배선).<br/>스트릭 갱신(MSG-200)은 모든 업로드 경로 — 재방문 포함(07-29 확정)
     V->>B: 행동 이벤트 (업로드 / 첫 수집 / 지역 수집률 변동)
     B->>DB: 해당 축 뱃지 조건 조회 · 충족분 user_badges INSERT
     DB-->>C: 업로드 응답 + 신규 획득 뱃지 목록 동봉 (FR-9)
