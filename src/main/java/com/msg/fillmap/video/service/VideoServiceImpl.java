@@ -133,7 +133,7 @@ public class VideoServiceImpl implements VideoService {
 		// 스트릭 (MSG-200): 아무 업로드(재방문 포함)가 인정 이벤트라 분기 바깥. 갱신·꾸준함 뱃지 판정은
 		// 스트릭 도메인 몫 — 여기서는 획득분을 응답에 합류시키기만 한다.
 		newBadges.addAll(streakCommandService.recordUpload(userId));
-		triggerEncodingAfterCommit(video.getId());
+		triggerEncodingAfterCommit(video.getId(), originalKey);
 
 		return new VideoUploadResponseDto(
 			video.getId(), gridId, video.getProcessingStatus().name(), !alreadyOccupied, newBadges);
@@ -161,7 +161,7 @@ public class VideoServiceImpl implements VideoService {
 		// 교체된 원본은 참조를 잃는다. 인코딩본·썸네일은 키가 videoId 기반이라 재인코딩이 같은 자리에
 		// 덮어쓰므로 지울 게 없다 — 고아가 되는 건 옛 original 과 블러본(MSG-145)이다.
 		afterCommit(() -> deleteQuietly(replacedKey, replacedBlurredKey));
-		triggerEncodingAfterCommit(videoId);
+		triggerEncodingAfterCommit(videoId, originalKey);
 		return VideoReplaceResponseDto.from(video);
 	}
 
@@ -293,8 +293,8 @@ public class VideoServiceImpl implements VideoService {
 	 * 인코딩은 커밋 이후에 띄운다. @Async 는 별도 스레드라 여기서 바로 호출하면 아직 커밋되지 않은
 	 * videos row 를 조회해 "영상 없음"으로 실패할 수 있다 (MSG-65 트리거 타이밍).
 	 */
-	private void triggerEncodingAfterCommit(Long videoId) {
-		afterCommit(() -> submitEncoding(videoId));
+	private void triggerEncodingAfterCommit(Long videoId, String originalKey) {
+		afterCommit(() -> submitEncoding(videoId, originalKey));
 	}
 
 	/** 트랜잭션이 없으면(테스트 등) 그냥 지금 실행한다. */
@@ -317,12 +317,12 @@ public class VideoServiceImpl implements VideoService {
 	 * 500 으로 응답되고(클라이언트는 재시도 → 중복 업로드), 인코딩 쪽 catch 는 실행조차 되지 않아
 	 * 영상이 UPLOADED 로 남는다. 그래서 여기서 삼키고 FAILED 로 기록한다.
 	 */
-	private void submitEncoding(Long videoId) {
+	private void submitEncoding(Long videoId, String originalKey) {
 		try {
-			videoEncodingService.encode(videoId);
+			videoEncodingService.encode(videoId, originalKey);
 		} catch (TaskRejectedException e) {
 			log.error("인코딩 큐 포화로 작업이 거부됨: videoId={}", videoId, e);
-			videoStatusWriter.markFailed(videoId);
+			videoStatusWriter.markFailed(videoId, originalKey);
 		}
 	}
 

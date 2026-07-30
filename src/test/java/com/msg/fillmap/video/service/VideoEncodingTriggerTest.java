@@ -2,6 +2,7 @@ package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -46,7 +47,7 @@ class VideoEncodingTriggerTest {
 			.willReturn(saved);
 
 		// 큐 포화 상황 재현
-		willThrow(new TaskRejectedException("queue full")).given(encodingService).encode(anyLong());
+		willThrow(new TaskRejectedException("queue full")).given(encodingService).encode(anyLong(), anyString());
 
 		// S3Client 목은 headObject 에서 예외를 던지지 않는다 = 객체가 존재하는 정상 업로드.
 		VideoService service = new VideoServiceImpl(repository, encodingService, statusWriter,
@@ -61,6 +62,7 @@ class VideoEncodingTriggerTest {
 		// 업로드는 이미 커밋된 상태다 — 여기서 예외가 나가면 클라이언트가 재시도해 중복 업로드가 된다.
 		assertThatCode(() -> service.saveVideo(USER_ID, request)).doesNotThrowAnyException();
 
-		verify(statusWriter).markFailed(7L);
+		// 이 경로도 현재 시도의 원본 키를 안다 — 가드 라이터 시그니처를 그대로 따른다 (MSG-241).
+		verify(statusWriter).markFailed(7L, "videos/original/1/x.mp4");
 	}
 }

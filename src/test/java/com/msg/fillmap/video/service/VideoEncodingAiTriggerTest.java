@@ -34,6 +34,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 class VideoEncodingAiTriggerTest {
 
 	private static final long VIDEO_ID = 7L;
+	private static final String ORIGINAL_KEY = "videos/original/1/x.mp4";
 
 	private VideoRepository videoRepository;
 	private VideoStatusWriter statusWriter;
@@ -52,9 +53,10 @@ class VideoEncodingAiTriggerTest {
 		encodingService = new VideoEncodingServiceImpl(
 			videoRepository, statusWriter, ffmpegRunner, s3Client, properties);
 
-		Video video = Video.create(1L, "41716_110483", "videos/original/1/x.mp4",
+		Video video = Video.create(1L, "41716_110483", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now());
 		given(videoRepository.findById(VIDEO_ID)).willReturn(Optional.of(video));
+		given(statusWriter.markEncoding(VIDEO_ID, ORIGINAL_KEY)).willReturn(true);
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
@@ -64,20 +66,21 @@ class VideoEncodingAiTriggerTest {
 	void AI_활성이면_인코딩_완료_시_BLURRING으로_전이하고_encoded_키가_저장된다() {
 		ReflectionTestUtils.setField(encodingService, "aiEnabled", true);
 
-		encodingService.encode(VIDEO_ID);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markEncoded(VIDEO_ID, "videos/encoded/1/7.mp4");   // thumbnail 은 폴러가 완료 시 기록(R5)
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any());
+		// thumbnail 은 폴러가 완료 시 기록(R5)
+		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4");
+		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any());
 	}
 
 	@Test
 	void AI_비활성이면_인코딩_완료_시_READY로_끝난다() {
 		ReflectionTestUtils.setField(encodingService, "aiEnabled", false);
 
-		encodingService.encode(VIDEO_ID);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markReady(VIDEO_ID, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
-		verify(statusWriter, never()).markEncoded(eq(VIDEO_ID), any());
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		verify(statusWriter, never()).markEncoded(eq(VIDEO_ID), any(), any());
 	}
 
 	/** 목 호출 시 출력 경로(두 번째 인자)에 빈 파일을 만들어 준다 (VideoEncodingServiceTest 관례). */
