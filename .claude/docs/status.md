@@ -67,6 +67,7 @@
 - MSG-243: 삭제 동시성 정합(`deleteVideo` 도입부 `findWithLockById` 행 잠금 — 동시 삭제 이중 감소·점령 오롤백 차단, 패자 멱등 200 유지, `VideoDeleteConcurrencyTest` pg_blocking_pids 결정적 재현)
 - MSG-241: 인코딩 stale completion 차단(`encode(videoId, originalKey)` 시그니처 + 인코딩 라이터 4종 `findWithLockById`·`isCurrentEncodingAttempt`(ACTIVE·originalS3Key 일치) 가드 — 교체 후 옛 태스크의 READY/BLURRING/FAILED 오염·ai_job_id 잔존 차단. 폴러 라이터 3종 무변경, 마이그레이션 불요)
 - MSG-247: 확정 롤백 S3 보상(`copyToOriginal` 복사 직후 `deleteOnRollback` — STATUS_ROLLED_BACK만·비활성 no-op·`deleteQuietly` 재사용) + 시도별 유니크 original 키(`{pendingStem}-{attemptUuid}`, `pg_advisory_xact_lock` 확정 직렬화·prefix 중복 검사 — 동시 확정 레이스 근절, 패자 4xx 수렴. prefix 인덱스는 MSG-262)
+- MSG-262: 확정 경로 prefix 조회 인덱스(V11 `idx_videos_original_s3_key_pattern` — `original_s3_key varchar_pattern_ops`, 비-C 콜레이션 풀 스캔 방지. EXPLAIN 실증: 인덱스 有 Index Only Scan / 無 Seq Scan)
 - MSG-132: s3Key 검증(소유권·headObject 실존·UNIQUE 중복)
 - MSG-71: 교체(`PUT /api/videos/{videoId}`, 같은 격자만, 도감 불변)
 - MSG-133: S3 정리(presign은 `videos/pending/` 발급 → 확정 시 `videos/original/` 복사, 라이프사이클 1일 만료 / 삭제·교체 시 커밋 후 객체 제거)
