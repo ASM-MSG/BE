@@ -43,7 +43,8 @@ class VideoEncodingTriggerTest {
 		Video saved = Video.create(USER_ID, "41716_110483", "videos/original/1/x.mp4", null, (short) 10,
 			LocalDateTime.now());
 		org.springframework.test.util.ReflectionTestUtils.setField(saved, "id", 7L);
-		org.mockito.BDDMockito.given(repository.save(org.mockito.ArgumentMatchers.any(Video.class)))
+		// 확정은 클레임 선행 직렬화로 saveAndFlush 를 쓴다 (MSG-247 P1) — 스텁도 따라간다.
+		org.mockito.BDDMockito.given(repository.saveAndFlush(org.mockito.ArgumentMatchers.any(Video.class)))
 			.willReturn(saved);
 
 		// 큐 포화 상황 재현
@@ -63,6 +64,8 @@ class VideoEncodingTriggerTest {
 		assertThatCode(() -> service.saveVideo(USER_ID, request)).doesNotThrowAnyException();
 
 		// 이 경로도 현재 시도의 원본 키를 안다 — 가드 라이터 시그니처를 그대로 따른다 (MSG-241).
-		verify(statusWriter).markFailed(7L, "videos/original/1/x.mp4");
+		// 키는 시도별 발급이라(MSG-247 2R) 정확값 대신 pendingStem 파생 prefix 로 검증한다.
+		verify(statusWriter).markFailed(
+			org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.startsWith("videos/original/1/x-"));
 	}
 }

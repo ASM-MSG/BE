@@ -58,7 +58,8 @@ class VideoS3CleanupTest {
 	private static final long VIDEO_ID = 7L;
 	private static final String GRID_ID = "41716_110483";
 	private static final String PENDING = "videos/pending/1/new.mp4";
-	private static final String ORIGINAL = "videos/original/1/new.mp4";
+	// original 키는 확정 시도마다 새 UUID 라(MSG-247 2R) 정확값 대신 파생 prefix 로 단언한다.
+	private static final String ORIGINAL_CLAIM_PREFIX = "videos/original/1/new-";
 	private static final String OLD_ORIGINAL = "videos/original/1/old.mp4";
 
 	private VideoRepository repository;
@@ -105,7 +106,8 @@ class VideoS3CleanupTest {
 	@DisplayName("확정하면 pending 을 original 로 복사하고 DB 에는 original 키를 남긴다")
 	void 확정하면_original_로_복사된다() {
 		Video saved = existingVideo();
-		given(repository.save(any(Video.class))).willReturn(saved);
+		// 확정은 클레임 선행 직렬화로 saveAndFlush 를 쓴다 (MSG-247 P1) — 스텁도 따라간다.
+		given(repository.saveAndFlush(any(Video.class))).willReturn(saved);
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(PENDING, 37.5445, 127.0560, (short) 10,
 			LocalDateTime.now()));
@@ -113,18 +115,21 @@ class VideoS3CleanupTest {
 		ArgumentCaptor<CopyObjectRequest> copy = ArgumentCaptor.forClass(CopyObjectRequest.class);
 		then(s3Client).should().copyObject(copy.capture());
 		assertThat(copy.getValue().sourceKey()).as("원본은 pending").isEqualTo(PENDING);
-		assertThat(copy.getValue().destinationKey()).as("사본은 original").isEqualTo(ORIGINAL);
+		assertThat(copy.getValue().destinationKey())
+			.as("사본은 original — pendingStem 을 보존한 시도별 키 (MSG-247 2R)")
+			.startsWith(ORIGINAL_CLAIM_PREFIX).endsWith(".mp4");
 
 		ArgumentCaptor<Video> persisted = ArgumentCaptor.forClass(Video.class);
-		then(repository).should().save(persisted.capture());
+		then(repository).should().saveAndFlush(persisted.capture());
 		assertThat(persisted.getValue().getOriginalS3Key())
-			.as("DB 에는 클라이언트가 준 pending 이 아니라 original 키가 남아야 한다").isEqualTo(ORIGINAL);
+			.as("DB 에는 클라이언트가 준 pending 이 아니라 복사된 그 original 키가 남아야 한다")
+			.isEqualTo(copy.getValue().destinationKey());
 	}
 
 	@Test
 	@DisplayName("확정해도 pending 은 지우지 않는다 — 라이프사이클이 쓸어간다")
 	void 확정해도_pending_은_안_지운다() {
-		given(repository.save(any(Video.class))).willReturn(existingVideo());
+		given(repository.saveAndFlush(any(Video.class))).willReturn(existingVideo());
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(PENDING, 37.5445, 127.0560, (short) 10,
 			LocalDateTime.now()));
