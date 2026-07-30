@@ -126,6 +126,21 @@ class MissionQueryServiceImplTest {
 	}
 
 	@Test
+	@DisplayName("path가 NULL인 COURSE도 PATH shape로 line=null 그대로 스팟마커만 반환한다")
+	void path가_NULL인_COURSE도_PATH_shape로_line_null_그대로_스팟마커만_반환한다() {
+		// chk_missions_path 는 COURSE 의 path NOT NULL 을 강제하지 않는다 — NULL path 미션이 들어와도
+		// 크래시 없이 line=null passthrough 가 계약이다 (PR #58 리뷰 반영).
+		long mission = insertMission("COURSE", null, null);
+		String only = gid(GY0, GX0);
+		insertMissionGrid(mission, only, 1);
+
+		PathShape shape = (PathShape) findMission(mission).shape();
+
+		assertThat(shape.line()).isNull();
+		assertThat(shape.spots()).extracting(Spot::gridId).containsExactly(only);
+	}
+
+	@Test
 	@DisplayName("EVENT는 BOX shape로 mission_grids를 감싸는 경계사각형을 합성한다")
 	void EVENT는_BOX_shape로_mission_grids를_감싸는_경계사각형을_합성한다() {
 		long mission = insertMission("EVENT", null, null);
