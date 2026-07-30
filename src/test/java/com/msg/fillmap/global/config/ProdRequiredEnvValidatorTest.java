@@ -4,20 +4,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisProperties;
-import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.mock.env.MockEnvironment;
 
 import com.msg.fillmap.auth.jwt.JwtProperties;
-import com.msg.fillmap.auth.oidc.KakaoOidcProperties;
+import com.msg.fillmap.auth.jwt.JwtRefreshTokenProvider;
 
 /**
  * MSG-260: prod 필수 env 일괄 기동 검증 (MSG-244 {@code ProdRedisPasswordValidator} 테스트 이전·확장).
@@ -51,36 +53,43 @@ class ProdRequiredEnvValidatorTest {
 		assertThat(properties.getPassword()).isEqualTo("${REDIS_PASSWORD}");
 	}
 
+	@Test
+	void resolvePlaceholders는_미주입_변수를_예외_없이_원문_그대로_반환한다() {
+		// Environment.getProperty 와 달리 관용 버전 — 검증기가 이 계약에 의존한다 (Codex 1R 수정 전제 확증)
+		MockEnvironment environment = new MockEnvironment();
+
+		String resolved = environment.resolvePlaceholders("${JWT_REFRESH_SECRET}");
+
+		assertThat(resolved).isEqualTo("${JWT_REFRESH_SECRET}");
+	}
+
 	@ParameterizedTest
 	@ValueSource(strings = {
 		"DB_URL", "DB_USERNAME", "DB_PASSWORD", "REDIS_HOST",
 		"REDIS_PASSWORD", "KAKAO_CLIENT_ID", "JWT_SECRET", "JWT_REFRESH_SECRET"
 	})
-	void 필수_env가_리터럴_플레이스홀더면_기동_실패하고_메시지에_변수명이_있다(String envVar) {
-		ProdRequiredEnvValidator validator = validator(Map.of(envVar, "${" + envVar + "}"));
+	void 필수_env가_미주입이면_기동_실패하고_메시지에_변수명이_있다(String envVar) {
+		DefaultListableBeanFactory beanFactory = beanFactoryWithout(envVar);
 
-		assertThatThrownBy(validator::afterPropertiesSet)
+		assertThatThrownBy(() -> new ProdRequiredEnvValidator().postProcessBeanFactory(beanFactory))
 			.isInstanceOf(IllegalStateException.class)
 			.hasMessageContaining(envVar);
 	}
 
 	@Test
 	void 공백_값도_기동_실패시킨다() {
-		ProdRequiredEnvValidator validator = validator(Map.of("REDIS_PASSWORD", " "));
+		DefaultListableBeanFactory beanFactory = beanFactoryWith(Map.of("REDIS_PASSWORD", " "));
 
-		assertThatThrownBy(validator::afterPropertiesSet)
+		assertThatThrownBy(() -> new ProdRequiredEnvValidator().postProcessBeanFactory(beanFactory))
 			.isInstanceOf(IllegalStateException.class)
 			.hasMessageContaining("REDIS_PASSWORD");
 	}
 
 	@Test
 	void 복수_누락_시_메시지에_전부_나열된다() {
-		ProdRequiredEnvValidator validator = validator(Map.of(
-			"JWT_SECRET", "${JWT_SECRET}",
-			"JWT_REFRESH_SECRET", "${JWT_REFRESH_SECRET}"
-		));
+		DefaultListableBeanFactory beanFactory = beanFactoryWithout("JWT_SECRET", "JWT_REFRESH_SECRET");
 
-		assertThatThrownBy(validator::afterPropertiesSet)
+		assertThatThrownBy(() -> new ProdRequiredEnvValidator().postProcessBeanFactory(beanFactory))
 			.isInstanceOf(IllegalStateException.class)
 			.hasMessageContaining("JWT_SECRET")
 			.hasMessageContaining("JWT_REFRESH_SECRET");
@@ -88,9 +97,9 @@ class ProdRequiredEnvValidatorTest {
 
 	@Test
 	void 실패_메시지에_정상_주입된_시크릿_값은_없다() {
-		ProdRequiredEnvValidator validator = validator(Map.of("DB_URL", "${DB_URL}"));
+		DefaultListableBeanFactory beanFactory = beanFactoryWithout("DB_URL");
 
-		assertThatThrownBy(validator::afterPropertiesSet)
+		assertThatThrownBy(() -> new ProdRequiredEnvValidator().postProcessBeanFactory(beanFactory))
 			.isInstanceOf(IllegalStateException.class)
 			.hasMessageNotContaining(NORMAL_VALUES.get("DB_PASSWORD"))
 			.hasMessageNotContaining(NORMAL_VALUES.get("REDIS_PASSWORD"))
@@ -100,46 +109,85 @@ class ProdRequiredEnvValidatorTest {
 
 	@Test
 	void 전부_정상이면_통과한다() {
-		ProdRequiredEnvValidator validator = validator(Map.of());
+		DefaultListableBeanFactory beanFactory = beanFactoryWith(Map.of());
 
-		assertThatCode(validator::afterPropertiesSet)
+		assertThatCode(() -> new ProdRequiredEnvValidator().postProcessBeanFactory(beanFactory))
 			.doesNotThrowAnyException();
 	}
 
 	@Test
 	void 플레이스홀더_시퀀스를_포함한_정상_값은_통과한다() {
 		// 완전 일치만 거부 — 정상 값에 "${" 시퀀스가 있을 수 있다 (MSG-244 Codex 2R P2 회귀 방지)
-		ProdRequiredEnvValidator validator = validator(Map.of("REDIS_PASSWORD", "abc${def"));
+		DefaultListableBeanFactory beanFactory = beanFactoryWith(Map.of("REDIS_PASSWORD", "abc${def"));
 
-		assertThatCode(validator::afterPropertiesSet)
+		assertThatCode(() -> new ProdRequiredEnvValidator().postProcessBeanFactory(beanFactory))
 			.doesNotThrowAnyException();
 	}
 
+	@Test
+	void JWT_REFRESH_SECRET_미주입_시_WeakKeyException이_아니라_검증기_집계_메시지로_실패한다() {
+		// Codex 1R P2: JwtRefreshTokenProvider 생성자가 Keys.hmacShaKeyFor()를 즉시 호출하므로
+		// 검증기가 일반 싱글턴 단계에 있으면 리터럴 21바이트가 WeakKeyException으로 선점한다.
+		// 검증기는 모든 싱글턴 생성 전(BFPP 단계)에 집계 메시지로 실패해야 한다.
+		new ApplicationContextRunner()
+			.withPropertyValues(
+				"spring.profiles.active=prod",
+				"jwt.refresh-secret=${JWT_REFRESH_SECRET}",
+				"jwt.access-token-ttl=30m",
+				"jwt.refresh-token-ttl=14d",
+				"DB_URL=" + NORMAL_VALUES.get("DB_URL"),
+				"DB_USERNAME=" + NORMAL_VALUES.get("DB_USERNAME"),
+				"DB_PASSWORD=" + NORMAL_VALUES.get("DB_PASSWORD"),
+				"REDIS_HOST=" + NORMAL_VALUES.get("REDIS_HOST"),
+				"REDIS_PASSWORD=" + NORMAL_VALUES.get("REDIS_PASSWORD"),
+				"KAKAO_CLIENT_ID=" + NORMAL_VALUES.get("KAKAO_CLIENT_ID"),
+				"JWT_SECRET=" + NORMAL_VALUES.get("JWT_SECRET"),
+				"jwt.secret=" + NORMAL_VALUES.get("JWT_SECRET"))
+			.withUserConfiguration(JwtPropertiesConfig.class, JwtRefreshTokenProvider.class,
+				ProdRequiredEnvValidator.class)
+			.run(context -> {
+				assertThat(context).hasFailed();
+				Throwable root = context.getStartupFailure();
+				while (root.getCause() != null) {
+					root = root.getCause();
+				}
+				assertThat(root)
+					.isInstanceOf(IllegalStateException.class)
+					.hasMessageContaining("JWT_REFRESH_SECRET");
+			});
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	@EnableConfigurationProperties(JwtProperties.class)
+	static class JwtPropertiesConfig {
+	}
+
 	/**
-	 * 전부-정상 픽스처에서 {@code overrides} 항목만 오염시킨 검증기를 만든다.
+	 * 전부-정상 픽스처에서 {@code overrides} 항목만 오염시킨 environment 를 담은 BeanFactory 를 만든다.
 	 */
-	private ProdRequiredEnvValidator validator(Map<String, String> overrides) {
+	private DefaultListableBeanFactory beanFactoryWith(Map<String, String> overrides) {
 		Map<String, String> values = new HashMap<>(NORMAL_VALUES);
 		values.putAll(overrides);
+		return beanFactoryOf(values);
+	}
 
-		DataSourceProperties dataSourceProperties = new DataSourceProperties();
-		dataSourceProperties.setUrl(values.get("DB_URL"));
-		dataSourceProperties.setUsername(values.get("DB_USERNAME"));
-		dataSourceProperties.setPassword(values.get("DB_PASSWORD"));
+	/**
+	 * 전부-정상 픽스처에서 {@code missingEnvVars} 만 미주입(부재) 상태로 만든 BeanFactory 를 만든다.
+	 */
+	private DefaultListableBeanFactory beanFactoryWithout(String... missingEnvVars) {
+		Map<String, String> values = new HashMap<>(NORMAL_VALUES);
+		for (String envVar : missingEnvVars) {
+			values.remove(envVar);
+		}
+		return beanFactoryOf(values);
+	}
 
-		DataRedisProperties redisProperties = new DataRedisProperties();
-		redisProperties.setHost(values.get("REDIS_HOST"));
-		redisProperties.setPassword(values.get("REDIS_PASSWORD"));
-
-		JwtProperties jwtProperties = new JwtProperties(
-			values.get("JWT_SECRET"), Duration.ofMinutes(30),
-			values.get("JWT_REFRESH_SECRET"), Duration.ofDays(14));
-
-		KakaoOidcProperties kakaoOidcProperties = new KakaoOidcProperties(
-			"https://kauth.kakao.com", "https://kauth.kakao.com/.well-known/jwks.json",
-			values.get("KAKAO_CLIENT_ID"));
-
-		return new ProdRequiredEnvValidator(
-			dataSourceProperties, redisProperties, jwtProperties, kakaoOidcProperties);
+	private DefaultListableBeanFactory beanFactoryOf(Map<String, String> values) {
+		MockEnvironment environment = new MockEnvironment();
+		values.forEach(environment::setProperty);
+		DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+		// prepareBeanFactory 가 BFPP 실행 전에 등록하는 environment 싱글턴을 재현
+		beanFactory.registerSingleton("environment", environment);
+		return beanFactory;
 	}
 }
