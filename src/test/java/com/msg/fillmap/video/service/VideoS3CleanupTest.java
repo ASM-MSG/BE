@@ -105,7 +105,8 @@ class VideoS3CleanupTest {
 	@DisplayName("확정하면 pending 을 original 로 복사하고 DB 에는 original 키를 남긴다")
 	void 확정하면_original_로_복사된다() {
 		Video saved = existingVideo();
-		given(repository.save(any(Video.class))).willReturn(saved);
+		// 확정은 클레임 선행 직렬화로 saveAndFlush 를 쓴다 (MSG-247 P1) — 스텁도 따라간다.
+		given(repository.saveAndFlush(any(Video.class))).willReturn(saved);
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(PENDING, 37.5445, 127.0560, (short) 10,
 			LocalDateTime.now()));
@@ -116,7 +117,7 @@ class VideoS3CleanupTest {
 		assertThat(copy.getValue().destinationKey()).as("사본은 original").isEqualTo(ORIGINAL);
 
 		ArgumentCaptor<Video> persisted = ArgumentCaptor.forClass(Video.class);
-		then(repository).should().save(persisted.capture());
+		then(repository).should().saveAndFlush(persisted.capture());
 		assertThat(persisted.getValue().getOriginalS3Key())
 			.as("DB 에는 클라이언트가 준 pending 이 아니라 original 키가 남아야 한다").isEqualTo(ORIGINAL);
 	}
@@ -124,7 +125,7 @@ class VideoS3CleanupTest {
 	@Test
 	@DisplayName("확정해도 pending 은 지우지 않는다 — 라이프사이클이 쓸어간다")
 	void 확정해도_pending_은_안_지운다() {
-		given(repository.save(any(Video.class))).willReturn(existingVideo());
+		given(repository.saveAndFlush(any(Video.class))).willReturn(existingVideo());
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(PENDING, 37.5445, 127.0560, (short) 10,
 			LocalDateTime.now()));

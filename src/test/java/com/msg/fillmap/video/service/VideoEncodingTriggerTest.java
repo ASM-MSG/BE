@@ -43,7 +43,8 @@ class VideoEncodingTriggerTest {
 		Video saved = Video.create(USER_ID, "41716_110483", "videos/original/1/x.mp4", null, (short) 10,
 			LocalDateTime.now());
 		org.springframework.test.util.ReflectionTestUtils.setField(saved, "id", 7L);
-		org.mockito.BDDMockito.given(repository.save(org.mockito.ArgumentMatchers.any(Video.class)))
+		// 확정은 클레임 선행 직렬화로 saveAndFlush 를 쓴다 (MSG-247 P1) — 스텁도 따라간다.
+		org.mockito.BDDMockito.given(repository.saveAndFlush(org.mockito.ArgumentMatchers.any(Video.class)))
 			.willReturn(saved);
 
 		// 큐 포화 상황 재현

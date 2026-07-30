@@ -113,7 +113,9 @@ public class VideoServiceImpl implements VideoService {
 		boolean alreadyOccupied = videoRepository.existsUserGrid(userId, gridId);
 
 		Point geom = GeoSupport.toPoint(lat, lon);
-		Video video = videoRepository.save(
+		// saveAndFlush: original_s3_key 클레임(INSERT)을 S3 복사보다 먼저 확정한다 — 클레임 선행 직렬화
+		// (MSG-247 P1). IDENTITY 라 save 도 즉시 INSERT 지만, ID 전략이 바뀌어도 순서가 유지되게 명시한다.
+		Video video = videoRepository.saveAndFlush(
 			Video.create(userId, gridId, originalKey, geom, request.durationSec(), request.recordedAt()));
 
 		copyToOriginal(request.s3Key(), originalKey);
@@ -156,6 +158,10 @@ public class VideoServiceImpl implements VideoService {
 		String replacedBlurredKey = video.getBlurredS3Key();
 
 		video.replaceFile(originalKey, request.durationSec(), request.recordedAt());
+		// 클레임 선행 직렬화 (MSG-247 P1): original_s3_key 클레임(UPDATE)을 S3 복사보다 먼저 flush 해
+		// 유니크 인덱스가 같은 키의 동시 확정을 직렬화한다. 패자는 여기서 승자 커밋까지 블록됐다 위반
+		// 롤백돼 복사 자체를 안 하므로, 패자의 롤백 보상이 승자가 참조하는 객체를 지울 수 없다.
+		videoRepository.flush();
 		copyToOriginal(request.s3Key(), originalKey);
 
 		// 교체된 원본은 참조를 잃는다. 인코딩본·썸네일은 키가 videoId 기반이라 재인코딩이 같은 자리에
@@ -533,6 +539,10 @@ public class VideoServiceImpl implements VideoService {
 	 * STATUS_ROLLED_BACK 에만 지운다 — STATUS_UNKNOWN(커밋 결과 불명)은 커밋됐을 수 있는 영상의 원본이라
 	 * 지우면 데이터 유실(재생 불가)이고, 고아는 비용 문제일 뿐이다. 불명확하면 남기는 쪽이 안전.
 	 * 삭제는 deleteQuietly 베스트 에포트 — 롤백 응답을 보상 실패로 다시 오염시키지 않는다.
+	 *
+	 * 불변식(클레임 선행 직렬화 — Codex 1R P1): original_s3_key DB 클레임이 복사보다 먼저 flush 되고
+	 * 유니크 제약이 동시 클레임을 직렬화하므로, 롤백된 트랜잭션의 키를 참조하는 타 커밋은 존재할 수 없다 —
+	 * 이 보상이 지우는 객체는 항상 자기 트랜잭션만 참조하던 것이다.
 	 */
 	private void deleteOnRollback(String originalKey) {
 		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
