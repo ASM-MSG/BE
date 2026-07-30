@@ -64,6 +64,8 @@ class VideoEncodingTriggerTest {
 		assertThatCode(() -> service.saveVideo(USER_ID, request)).doesNotThrowAnyException();
 
 		// 이 경로도 현재 시도의 원본 키를 안다 — 가드 라이터 시그니처를 그대로 따른다 (MSG-241).
-		verify(statusWriter).markFailed(7L, "videos/original/1/x.mp4");
+		// 키는 시도별 발급이라(MSG-247 2R) 정확값 대신 pendingStem 파생 prefix 로 검증한다.
+		verify(statusWriter).markFailed(
+			org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.startsWith("videos/original/1/x-"));
 	}
 }

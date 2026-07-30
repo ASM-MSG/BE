@@ -158,10 +158,26 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	);
 
 	/**
-	 * 같은 원본을 두 번 확정하는 걸 막는다 (MSG-132). DB 의 UNIQUE 제약이 최종 방어선이고,
-	 * 이 조회는 그 전에 걸러 500 대신 4xx 를 주기 위한 것이다.
+	 * 같은 원본을 두 번 확정하는 걸 막는다 (MSG-132). MSG-247 2R 부터 original 키는 시도별 발급이라
+	 * 이 정확 매치는 구형(pending 결정 파생) 키의 재확정 차단용으로만 남는다 — 신형은 아래 prefix 매치.
 	 */
 	boolean existsByOriginalS3Key(String originalS3Key);
+
+	/**
+	 * 이 pending 에서 파생된 확정이 이미 있는지 — 시도별 키(pendingStem + "-" + 시도 UUID) 대응 (MSG-247 2R).
+	 * original 키가 시도마다 달라 정확 매치·UNIQUE 로는 이중 확정을 못 잡으므로 pendingStem prefix 로 판정한다.
+	 */
+	boolean existsByOriginalS3KeyStartingWith(String originalS3KeyPrefix);
+
+	/**
+	 * 확정을 pending 키 단위로 직렬화한다 (MSG-247 2R). 시도별 original 키는 UNIQUE 제약의 동시 이중 확정
+	 * 직렬화를 무력화하므로, 같은 pending 의 동시 확정 2건이 둘 다 exists 검사를 통과(미커밋 불가시)해
+	 * 영상 2개가 되는 걸 이 락이 막는다 — 락 획득자는 앞 확정의 커밋/롤백 이후에만 진입해 커밋을 본다.
+	 * 트랜잭션 종료 시 자동 해제(xact lock). 키는 'video_confirm:' 접두로 다른 advisory 사용처와 분리.
+	 */
+	@Query(value = "SELECT pg_advisory_xact_lock(hashtextextended('video_confirm:' || :pendingKey, 0))",
+		nativeQuery = true)
+	Object acquirePendingKeyConfirmLock(@Param("pendingKey") String pendingKey);
 
 	/* ---------- MSG-72 삭제 · 점령 롤백 ---------- */
 

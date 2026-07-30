@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
@@ -34,6 +35,7 @@ import ch.qos.logback.core.read.ListAppender;
 
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
@@ -131,10 +133,6 @@ class VideoUploadRollbackCompensationTest {
 		return "videos/pending/" + userId + "/" + UUID.randomUUID() + ".mp4";
 	}
 
-	private static String toOriginalKey(String pendingKey) {
-		return pendingKey.replace("videos/pending/", "videos/original/");
-	}
-
 	private VideoUploadRequestDto uploadRequest(String s3Key) {
 		return new VideoUploadRequestDto(s3Key, LAT, LON, (short) 10, LocalDateTime.now());
 	}
@@ -145,9 +143,24 @@ class VideoUploadRollbackCompensationTest {
 		return captor.getValue().delete().objects().stream().map(ObjectIdentifier::key).toList();
 	}
 
+	/**
+	 * 실제 복사된 목적지 키들 — original 키가 확정 시도마다 새 UUID 로 발급되므로(MSG-247 2R)
+	 * 테스트는 키를 예측하지 않고 copyObject 캡처에서 얻어 삭제 캡처와 대조한다.
+	 */
+	private List<String> copiedDestinations() {
+		ArgumentCaptor<CopyObjectRequest> captor = ArgumentCaptor.forClass(CopyObjectRequest.class);
+		then(s3Client).should(atLeast(1)).copyObject(captor.capture());
+		return captor.getAllValues().stream().map(CopyObjectRequest::destinationKey).toList();
+	}
+
 	private long rowCount(String table) {
 		return ((Number) em.createNativeQuery("SELECT count(*) FROM " + table + " WHERE user_id = :u")
 			.setParameter("u", userId).getSingleResult()).longValue();
+	}
+
+	private String committedOriginalKey() {
+		return (String) em.createNativeQuery("SELECT original_s3_key FROM videos WHERE user_id = :u")
+			.setParameter("u", userId).getSingleResult();
 	}
 
 	@Test
@@ -160,8 +173,11 @@ class VideoUploadRollbackCompensationTest {
 			status.setRollbackOnly();   // 복사 이후 단계(점령·뱃지·flush) 실패와 같은 롤백 경로
 		});
 
+		List<String> copied = copiedDestinations();
+		assertThat(copied).hasSize(1);
+		assertThat(copied.get(0)).startsWith("videos/original/" + userId + "/");
 		assertThat(deletedKeys()).as("롤백 보상이 복사해 둔 original 키를 지워야 한다")
-			.containsExactly(toOriginalKey(pending));
+			.containsExactly(copied.get(0));
 		tx.executeWithoutResult(status -> {
 			assertThat(rowCount("videos")).as("DB 는 롤백돼 row 가 없다").isZero();
 			assertThat(rowCount("user_grids")).isZero();
@@ -192,8 +208,36 @@ class VideoUploadRollbackCompensationTest {
 			status.setRollbackOnly();
 		});
 
+		// 복사는 2회다: 업로드 확정(커밋) + 교체(롤백). 삭제 대상은 교체가 복사한 새 original 뿐이어야 한다.
+		List<String> copied = copiedDestinations();
+		assertThat(copied).hasSize(2);
 		// 롤백된 row 는 옛 파일을 그대로 가리킨다 — 옛 original·블러본이 지워지면 데이터 유실이다.
-		assertThat(deletedKeys()).containsExactly(toOriginalKey(newPending));
+		assertThat(deletedKeys()).containsExactly(copied.get(1));
+	}
+
+	@Test
+	@DisplayName("롤백 후 같은 pending 재확정 — 첫 시도의 보상이 재시도의 객체를 지우지 않는다")
+	void 롤백_후_같은_pending_재확정시_보상이_재시도_객체를_지우지_않는다() {
+		// Codex 2R P1: 롤백으로 유니크 락이 풀린 뒤 afterCompletion 이 돌므로, 후속 클레이머의 복사·커밋과
+		// 패자의 보상 삭제는 S3 호출 순서가 미보장이다. original 키가 시도마다 새로 발급되면 목적지 공유
+		// 자체가 불가능해 순서와 무관하게 안전하다 — 그 유일성을 고정한다.
+		String pending = pendingKey();
+		tx.executeWithoutResult(status -> {
+			videoService.saveVideo(userId, uploadRequest(pending));
+			status.setRollbackOnly();
+		});
+
+		// 재시도 — 롤백된 확정은 같은 pending 으로 다시 확정할 수 있어야 한다(이중 확정 차단과 별개).
+		tx.executeWithoutResult(status -> videoService.saveVideo(userId, uploadRequest(pending)));
+
+		List<String> copied = copiedDestinations();
+		assertThat(copied).hasSize(2);
+		assertThat(copied.get(1)).as("시도별 키 — 같은 pending 이라도 목적지가 달라야 한다")
+			.isNotEqualTo(copied.get(0));
+		assertThat(deletedKeys()).as("첫 시도의 보상은 자기 키만 지운다")
+			.containsExactly(copied.get(0)).doesNotContain(copied.get(1));
+		assertThat(committedOriginalKey()).as("재시도가 커밋한 row 는 삭제되지 않은 키를 가리킨다")
+			.isEqualTo(copied.get(1));
 	}
 
 	@Test

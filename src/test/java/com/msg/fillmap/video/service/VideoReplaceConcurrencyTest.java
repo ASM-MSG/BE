@@ -38,29 +38,30 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 
+import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridConstants;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 
 /**
- * 같은 pending 키 동시 교체 — 클레임 선행 직렬화 회귀 (MSG-247 Codex 1R P1, 실 PostGIS).
+ * 같은 pending 키 동시 교체 — 이중 확정 차단 회귀 (MSG-247 Codex 1R·2R P1, 실 PostGIS).
  *
- * 복사가 클레임 flush 보다 앞서면 두 교체가 모두 existsByOriginalS3Key 를 통과(미커밋 row 불가시)하고
- * 같은 original 키로 복사한다 — 유니크 제약이 한쪽만 커밋시키고, 패자의 롤백 보상이 승자가 참조하는
- * S3 객체를 지운다(보상이 데이터 유실을 만드는 역전). original_s3_key 클레임을 복사보다 먼저 flush 하면
- * 유니크 인덱스가 동시 클레임을 직렬화해 패자가 복사 자체를 못 하는지 검증한다.
+ * original 키가 확정 시도마다 새 UUID 라(2R) 목적지 공유 레이스는 구조적으로 없다. 대신 유니크 제약의
+ * 동시 직렬화도 함께 사라지므로, 같은 pending 의 동시 확정 2건이 둘 다 exists 검사를 통과해 영상 2개가
+ * 되면 안 된다 — confirmUpload 의 pending 키 advisory lock 이 확정을 직렬화하고, 락 획득 후의
+ * pendingStem prefix 검사가 앞 확정의 커밋을 봐서 패자를 복사 전에 4xx 로 거부하는지 검증한다.
  *
  * <p>결정적 인터리빙 프로토콜(VideoDeleteConcurrencyTest/MSG-243 재사용): 승자 워커가 트랜잭션 안에서
- * replaceVideo 를 실행(유니크 인덱스 엔트리 보유)한 뒤 커밋을 보류하고 플래그를 올린다 → 패자 워커가
- * 같은 pending 키로 replaceVideo 에 진입해 승자의 인덱스 엔트리에 블록된다(수정 전엔 커밋 flush 에서 —
- * 이미 복사한 뒤, 수정 후엔 클레임 flush 에서 — 복사 전) → 승자는 제3의 커넥션으로 pg_blocking_pids 를
- * 관측한 뒤에야 커밋 → 패자는 유니크 위반으로 롤백. 같은 프로토콜이 수정 전엔 승자 객체 삭제(red)를,
- * 수정 후엔 패자 복사 부재(green)를 결정적으로 재현한다.
+ * replaceVideo 를 실행(pending 키 advisory lock 보유)한 뒤 커밋을 보류하고 플래그를 올린다 → 패자
+ * 워커가 같은 pending 키로 replaceVideo 에 진입해 confirmUpload 의 advisory lock 에서 블록된다(복사 전)
+ * → 승자는 제3의 커넥션으로 pg_blocking_pids 를 관측한 뒤에야 커밋 → 패자는 락 획득 후 prefix 검사에서
+ * 승자 커밋을 보고 INVALID_S3_KEY 거부. 복사는 승자 1회뿐이고 승자의 객체는 지워지지 않는다.
  *
  * <p>격리: 서해 공해상 합성 격자(40247 대역 — m243 의 40243 대역과 분리). 두 워커가 각자 커밋하므로
  * @Transactional 롤백을 못 쓴다 — @AfterEach 에서 자기 행만 FK 역순 대상 지정 삭제.
@@ -109,7 +110,7 @@ class VideoReplaceConcurrencyTest {
 	private long videoBId;
 	private String oldOriginalB;
 	private String sharedPendingKey;
-	private String sharedOriginalKey;
+	private String sharedClaimPrefix;
 
 	@BeforeEach
 	void setUp() {
@@ -129,7 +130,8 @@ class VideoReplaceConcurrencyTest {
 		});
 		oldOriginalB = "videos/original/%d/m247-b.mp4".formatted(userId);
 		sharedPendingKey = "videos/pending/%d/m247-shared.mp4".formatted(userId);
-		sharedOriginalKey = "videos/original/%d/m247-shared.mp4".formatted(userId);
+		// original 키는 시도별 발급이라(MSG-247 2R) 정확값 대신 pendingStem 파생 prefix 로 대조한다.
+		sharedClaimPrefix = "videos/original/%d/m247-shared-".formatted(userId);
 	}
 
 	@AfterEach
@@ -144,13 +146,13 @@ class VideoReplaceConcurrencyTest {
 	}
 
 	@Test
-	@DisplayName("같은 pending 키 동시 교체면 패자는 복사 전에 롤백되고 승자의 객체는 지워지지 않는다")
-	void 같은_pending_키_동시_교체면_패자는_복사_전에_롤백되고_승자의_객체는_안_지워진다() throws Exception {
+	@DisplayName("같은 pending 키 동시 교체면 패자는 복사 전에 거부되고 승자의 객체는 지워지지 않는다")
+	void 같은_pending_키_동시_교체면_패자는_복사_전에_거부되고_승자의_객체는_안_지워진다() throws Exception {
 		List<Throwable> loserErrors = new CopyOnWriteArrayList<>();
 		AtomicBoolean winnerClaimed = new AtomicBoolean(false);
 		ExecutorService pool = Executors.newFixedThreadPool(2);
 		try {
-			// 승자: A 교체 실행(유니크 인덱스 엔트리 보유) → 패자가 내 엔트리에 블록된 것을 관측 → 커밋.
+			// 승자: A 교체 실행(pending 키 advisory lock 보유) → 패자가 내 락에 블록된 것을 관측 → 커밋.
 			Future<?> winner = pool.submit(() -> tx.executeWithoutResult(status -> {
 				em.createNativeQuery("SET LOCAL lock_timeout = '20s'").executeUpdate();
 				videoService.replaceVideo(userId, videoAId, replaceRequest());
@@ -158,7 +160,7 @@ class VideoReplaceConcurrencyTest {
 				winnerClaimed.set(true);
 				awaitBlocking(myPid);
 			}));
-			// 패자: 승자가 클레임을 보유한 뒤에야 같은 pending 키로 B 교체 진입 — 블록됐다 유니크 위반.
+			// 패자: 승자가 락을 보유한 뒤에야 같은 pending 키로 B 교체 진입 — 블록됐다 4xx 거부.
 			Future<?> loser = pool.submit(() -> {
 				awaitWinnerClaimed(winnerClaimed);
 				try {
@@ -179,18 +181,19 @@ class VideoReplaceConcurrencyTest {
 			}
 		}
 
-		// 패자는 클레임 flush 의 유니크 위반으로 실패한다 — 같은 키를 둘 다 확정하면 그게 더 큰 결함이다.
-		assertThat(loserErrors).as("패자는 유니크 위반으로 롤백돼야 한다").isNotEmpty();
-		// 복사는 승자 1회뿐 — 패자는 클레임에서 막혀 복사 자체를 안 한다 (수정 전엔 2회라 여기서 실패).
+		// 패자는 이중 확정 차단(INVALID_S3_KEY 4xx)으로 거부된다 — 같은 업로드 1건이 영상 2개가 되면 안 된다.
+		assertThat(loserErrors).as("패자는 이중 확정 차단으로 거부돼야 한다").hasSize(1);
+		assertThat(loserErrors.get(0)).isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_S3_KEY);
+		// 복사는 승자 1회뿐 — 패자는 advisory lock 획득 후 prefix 검사에서 막혀 복사 자체를 안 한다.
 		ArgumentCaptor<CopyObjectRequest> copies = ArgumentCaptor.forClass(CopyObjectRequest.class);
 		then(s3Client).should(times(1)).copyObject(copies.capture());
-		assertThat(copies.getValue().destinationKey()).isEqualTo(sharedOriginalKey);
-		// 승자가 참조하는 객체는 안 지워진다 — 수정 전엔 패자의 롤백 보상이 여기서 승자 키를 지웠다(P1).
-		// 지워지는 건 승자 교체의 옛 original(afterCommit 소관)뿐이다.
-		assertThat(allDeletedKeys()).as("패자의 보상이 승자의 객체를 지우면 안 된다")
-			.doesNotContain(sharedOriginalKey);
-		// DB: 승자(A)만 새 키를 클레임했고, 패자(B)는 롤백돼 옛 키 그대로다.
-		assertThat(originalKeyOf(videoAId)).isEqualTo(sharedOriginalKey);
+		String winnerKey = copies.getValue().destinationKey();
+		assertThat(winnerKey).startsWith(sharedClaimPrefix);
+		// 승자가 참조하는 객체는 안 지워진다 — 지워지는 건 승자 교체의 옛 original(afterCommit 소관)뿐이다.
+		assertThat(allDeletedKeys()).as("승자의 객체를 지우면 안 된다").doesNotContain(winnerKey);
+		// DB: 승자(A)만 새 키를 클레임했고, 패자(B)는 거부돼 옛 키 그대로다.
+		assertThat(originalKeyOf(videoAId)).isEqualTo(winnerKey);
 		assertThat(originalKeyOf(videoBId)).isEqualTo(oldOriginalB);
 	}
 
@@ -235,7 +238,7 @@ class VideoReplaceConcurrencyTest {
 			}
 		}
 		throw new IllegalStateException("커밋 신호 대기 타임아웃(" + PROTOCOL_TIMEOUT_SEC + "s): pid=" + myPid
-			+ " 가 아무 세션도 막지 못함 — 패자가 유니크 인덱스 엔트리에 블록되는 경합 구도가 형성되지 않았다");
+			+ " 가 아무 세션도 막지 못함 — 패자가 pending 키 advisory lock 에 블록되는 경합 구도가 형성되지 않았다");
 	}
 
 	/** 내 백엔드 pid 가 (다른) 어떤 세션의 blocker 인지 — pg_blocking_pids 로 내 pid 스코프 정밀 판정. */

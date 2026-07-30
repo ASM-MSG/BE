@@ -113,8 +113,8 @@ public class VideoServiceImpl implements VideoService {
 		boolean alreadyOccupied = videoRepository.existsUserGrid(userId, gridId);
 
 		Point geom = GeoSupport.toPoint(lat, lon);
-		// saveAndFlush: original_s3_key 클레임(INSERT)을 S3 복사보다 먼저 확정한다 — 클레임 선행 직렬화
-		// (MSG-247 P1). IDENTITY 라 save 도 즉시 INSERT 지만, ID 전략이 바뀌어도 순서가 유지되게 명시한다.
+		// saveAndFlush: original_s3_key 클레임(INSERT)을 S3 복사보다 먼저 확정한다 (MSG-247 1R 클레임 선행).
+		// IDENTITY 라 save 도 즉시 INSERT 지만, ID 전략이 바뀌어도 순서가 유지되게 명시한다.
 		Video video = videoRepository.saveAndFlush(
 			Video.create(userId, gridId, originalKey, geom, request.durationSec(), request.recordedAt()));
 
@@ -158,9 +158,9 @@ public class VideoServiceImpl implements VideoService {
 		String replacedBlurredKey = video.getBlurredS3Key();
 
 		video.replaceFile(originalKey, request.durationSec(), request.recordedAt());
-		// 클레임 선행 직렬화 (MSG-247 P1): original_s3_key 클레임(UPDATE)을 S3 복사보다 먼저 flush 해
-		// 유니크 인덱스가 같은 키의 동시 확정을 직렬화한다. 패자는 여기서 승자 커밋까지 블록됐다 위반
-		// 롤백돼 복사 자체를 안 하므로, 패자의 롤백 보상이 승자가 참조하는 객체를 지울 수 없다.
+		// 클레임 선행 (MSG-247 1R): original_s3_key 클레임(UPDATE)을 S3 복사보다 먼저 flush 한다.
+		// 동시 이중 확정 직렬화는 2R 부터 confirmUpload 의 advisory lock 몫이고, 이 flush 는
+		// "DB 클레임 없이 복사된 객체가 없다"는 순서 보장으로 남는다(무해 — 2R 에서 유지 결정).
 		videoRepository.flush();
 		copyToOriginal(request.s3Key(), originalKey);
 
@@ -483,7 +483,7 @@ public class VideoServiceImpl implements VideoService {
 
 	/**
 	 * 확정 요청의 pending 키가 "내가 실제로 올린, 아직 안 쓴 파일"인지 확인하고(MSG-132)
-	 * original 로 옮긴 뒤 그 키를 돌려준다(MSG-133).
+	 * 이번 시도의 original 키를 발급해 돌려준다(MSG-133 · MSG-247 2R).
 	 *
 	 * 검증이 없으면 파일을 올리지 않고 좌표만 찍어서 격자를 점령할 수 있다 — upsertUserGrid 가
 	 * 인코딩보다 먼저 돌고, 인코딩이 FAILED 가 돼도 점령은 남기 때문이다. FillMap 은 직접 가서 찍어야
@@ -491,23 +491,35 @@ public class VideoServiceImpl implements VideoService {
 	 *
 	 * prefix 검사만으론 부족하다 — 공격자는 자기 userId 를 알기에 videos/pending/{내id}/아무거나.mp4 를
 	 * 지어낼 수 있다. S3 에 실제로 있는지(headObject) 봐야 막힌다.
+	 *
+	 * original 키는 pending 결정 파생이 아니라 확정 시도마다 새 UUID 다(Codex 2R P1): 목적지가 결정적이면
+	 * 롤백된 시도의 보상 삭제와 후속 시도의 복사·커밋이 같은 키를 두고 순서 경쟁한다(각각 S3 호출 1회,
+	 * 순서 미보장). 시도별 키는 목적지 공유 자체를 없애 그 레이스 클래스를 근절한다. 대신 이중 확정
+	 * 차단은 UNIQUE 직렬화가 아니라 pending 키 advisory lock + pendingStem prefix 존재 검사로 유지한다 —
+	 * 락이 같은 pending 의 확정을 직렬화하므로 락 획득 후의 검사는 앞 확정의 커밋을 반드시 본다.
+	 * (구형 결정 파생 키로 이미 확정된 pending 은 정확 매치가 마저 걸러낸다 — 배포 전 데이터 호환.)
 	 */
 	private String confirmUpload(long userId, String pendingKey) {
 		if (!pendingKey.startsWith("%s%d/".formatted(PENDING_PREFIX, userId))) {
 			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
 		}
-		String originalKey = ORIGINAL_PREFIX + pendingKey.substring(PENDING_PREFIX.length());
+		String stem = pendingKey.substring(PENDING_PREFIX.length());   // "{userId}/{uuid}.{ext}"
+		int extAt = stem.lastIndexOf('.');
+		if (extAt < 0) {
+			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);   // presign 발급 키는 항상 확장자를 가진다
+		}
+		String claimPrefix = ORIGINAL_PREFIX + stem.substring(0, extAt) + "-";
 
-		// 영상 1개로 좌표만 바꿔가며 무한 점령하는 걸 막는다. DB 의 UNIQUE 제약이 최종 방어선이고,
-		// 여기서 미리 걸러 500 대신 4xx 를 준다.
-		//
-		// 반드시 originalKey 로 조회해야 한다 — DB 에는 original 키만 저장되므로 클라이언트가 준
-		// pendingKey 로 조회하면 영영 매치되지 않아 중복 검사가 통째로 무력화된다.
-		if (videoRepository.existsByOriginalS3Key(originalKey)) {
+		videoRepository.acquirePendingKeyConfirmLock(pendingKey);
+		// 영상 1개로 좌표만 바꿔가며 무한 점령하는 걸 막는다(이중 확정 차단). prefix 매치가 시도별 키를,
+		// 정확 매치가 구형 결정 키를 잡는다. StartingWith 의 LIKE 와일드카드는 매치를 넓힐 뿐이라
+		// 거부 방향으로만 오작동 가능 — 이중 확정 우회로는 악용될 수 없다.
+		if (videoRepository.existsByOriginalS3KeyStartingWith(claimPrefix)
+			|| videoRepository.existsByOriginalS3Key(ORIGINAL_PREFIX + stem)) {
 			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
 		}
 		requireObjectExists(pendingKey);
-		return originalKey;
+		return claimPrefix + UUID.randomUUID() + stem.substring(extAt);
 	}
 
 	/**
@@ -540,9 +552,9 @@ public class VideoServiceImpl implements VideoService {
 	 * 지우면 데이터 유실(재생 불가)이고, 고아는 비용 문제일 뿐이다. 불명확하면 남기는 쪽이 안전.
 	 * 삭제는 deleteQuietly 베스트 에포트 — 롤백 응답을 보상 실패로 다시 오염시키지 않는다.
 	 *
-	 * 불변식(클레임 선행 직렬화 — Codex 1R P1): original_s3_key DB 클레임이 복사보다 먼저 flush 되고
-	 * 유니크 제약이 동시 클레임을 직렬화하므로, 롤백된 트랜잭션의 키를 참조하는 타 커밋은 존재할 수 없다 —
-	 * 이 보상이 지우는 객체는 항상 자기 트랜잭션만 참조하던 것이다.
+	 * 불변식(시도별 유니크 키 — Codex 2R P1): original 키는 확정 시도마다 새 UUID 로 발급되므로
+	 * 목적지 공유 자체가 불가능하다. 이 보상이 지우는 객체는 언제나 자기 시도만 참조하던 것이고,
+	 * 후속 재시도의 복사·커밋과 이 삭제의 S3 호출 순서가 어긋나도 서로 다른 키라 무해하다.
 	 */
 	private void deleteOnRollback(String originalKey) {
 		if (!TransactionSynchronizationManager.isSynchronizationActive()) {

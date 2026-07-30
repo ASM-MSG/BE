@@ -58,7 +58,8 @@ class VideoS3CleanupTest {
 	private static final long VIDEO_ID = 7L;
 	private static final String GRID_ID = "41716_110483";
 	private static final String PENDING = "videos/pending/1/new.mp4";
-	private static final String ORIGINAL = "videos/original/1/new.mp4";
+	// original 키는 확정 시도마다 새 UUID 라(MSG-247 2R) 정확값 대신 파생 prefix 로 단언한다.
+	private static final String ORIGINAL_CLAIM_PREFIX = "videos/original/1/new-";
 	private static final String OLD_ORIGINAL = "videos/original/1/old.mp4";
 
 	private VideoRepository repository;
@@ -114,12 +115,15 @@ class VideoS3CleanupTest {
 		ArgumentCaptor<CopyObjectRequest> copy = ArgumentCaptor.forClass(CopyObjectRequest.class);
 		then(s3Client).should().copyObject(copy.capture());
 		assertThat(copy.getValue().sourceKey()).as("원본은 pending").isEqualTo(PENDING);
-		assertThat(copy.getValue().destinationKey()).as("사본은 original").isEqualTo(ORIGINAL);
+		assertThat(copy.getValue().destinationKey())
+			.as("사본은 original — pendingStem 을 보존한 시도별 키 (MSG-247 2R)")
+			.startsWith(ORIGINAL_CLAIM_PREFIX).endsWith(".mp4");
 
 		ArgumentCaptor<Video> persisted = ArgumentCaptor.forClass(Video.class);
 		then(repository).should().saveAndFlush(persisted.capture());
 		assertThat(persisted.getValue().getOriginalS3Key())
-			.as("DB 에는 클라이언트가 준 pending 이 아니라 original 키가 남아야 한다").isEqualTo(ORIGINAL);
+			.as("DB 에는 클라이언트가 준 pending 이 아니라 복사된 그 original 키가 남아야 한다")
+			.isEqualTo(copy.getValue().destinationKey());
 	}
 
 	@Test
