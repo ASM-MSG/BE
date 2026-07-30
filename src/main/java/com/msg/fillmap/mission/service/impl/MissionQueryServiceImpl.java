@@ -66,7 +66,8 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 		MissionRepository missionRepository,
 		MissionGridRepository missionGridRepository
 	) {
-		this(missionRepository, missionGridRepository, Clock.systemDefaultZone(), CACHE_TTL.toMillis());
+		// systemUTC: findActive 의 :now 는 UTC 저장 start_at/end_at 과 비교된다 — 기본존(로컬 KST)이면 +9h 스큐.
+		this(missionRepository, missionGridRepository, Clock.systemUTC(), CACHE_TTL.toMillis());
 	}
 
 	/** 캐시 만료 검증용 — 클럭·TTL 을 주입한다(§테스트 시나리오 캐시). */
