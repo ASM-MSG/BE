@@ -1,5 +1,6 @@
 plugins {
 	id 'java'
+	id 'jacoco'
 	id 'org.springframework.boot' version '4.1.0'
 	id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -67,6 +68,15 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	finalizedBy 'jacocoTestReport'
+}
+
+// --- JaCoCo 커버리지 리포트 (MSG-249) ---
+// XML은 CI의 PR 코멘트 액션(madrapps/jacoco-report) 입력. 최소 기준선 게이트는 비스코프 — 기준선 실측 후 별도 티켓.
+jacocoTestReport {
+	reports {
+		xml.required = true
+	}
 }
 
 // --- Git hooks 자동 활성화 ---

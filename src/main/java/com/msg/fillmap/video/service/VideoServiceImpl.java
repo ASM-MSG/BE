@@ -1,6 +1,7 @@
 package com.msg.fillmap.video.service;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -32,6 +33,8 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
+import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
+import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.geo.KoreaCoordinates;
@@ -39,7 +42,10 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
+import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
+import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
+import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
@@ -58,6 +64,7 @@ import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.video.support.VideoCursor;
 
 // ponytail: presign 을 VideoServiceImpl 에 합침. MSG-71 에서 S3 관심사가 2개째면 PresignedUrlService 로 분리.
 @Slf4j
@@ -77,6 +84,10 @@ public class VideoServiceImpl implements VideoService {
 	private static final String PENDING_PREFIX = "videos/pending/";
 	private static final String ORIGINAL_PREFIX = "videos/original/";
 
+	// 전역 목록 페이지 크기 (MSG-237 §D5). 범위 밖은 에러가 아니라 클램프한다 — MSG-156 LEAST clamp 선례.
+	private static final int GLOBAL_PAGE_DEFAULT_SIZE = 20;
+	private static final int GLOBAL_PAGE_MAX_SIZE = 50;
+
 	private final VideoRepository videoRepository;
 	private final VideoEncodingService videoEncodingService;
 	private final VideoStatusWriter videoStatusWriter;
@@ -85,6 +96,8 @@ public class VideoServiceImpl implements VideoService {
 	private final AwsProperties awsProperties;
 	private final RegionStatsCommandService regionStatsCommandService;
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
+	private final BadgeAwardService badgeAwardService;
+	private final StreakCommandService streakCommandService;
 
 	@Override
 	@Transactional
@@ -105,14 +118,25 @@ public class VideoServiceImpl implements VideoService {
 
 		copyToOriginal(request.s3Key(), originalKey);
 		videoRepository.upsertUserGrid(userId, gridId, video.getId());
+
+		// 뱃지 지급 훅 (MSG-239): 업로드와 같은 트랜잭션에서 동기 판정하고, 새로 획득한 뱃지를 응답에 실어
+		// FE 가 획득 연출을 하게 한다. 전 종류를 훑지 않고 "이 행동으로 딸 수 있는 종류"만 판정한다 —
+		// 업로드는 항상 업로드 수 뱃지, 처음 수집한 격자면 총 격자 수·행정동 수집률 뱃지를 추가 판정.
+		// metric 계산은 뱃지 도메인 몫이라 여기서는 행동 단위 호출만 한다. 상세 결정: docs/MSG-239.md §D3~D5.
+		List<EarnedBadgeResponseDto> newBadges = new ArrayList<>(badgeAwardService.awardUploadBadges(userId));
 		if (!alreadyOccupied) {
 			// 첫 점령 — 그 격자 중심 행정동의 수집률 캐시를 같은 트랜잭션에서 갱신한다 (MSG-155).
+			// 순서 중요: awardCollectionBadges 의 수집률 판정이 refresh 가 방금 저장한 값을 읽는다.
 			regionStatsCommandService.refresh(userId, gridId);
+			newBadges.addAll(badgeAwardService.awardCollectionBadges(userId, gridId));
 		}
+		// 스트릭 (MSG-200): 아무 업로드(재방문 포함)가 인정 이벤트라 분기 바깥. 갱신·꾸준함 뱃지 판정은
+		// 스트릭 도메인 몫 — 여기서는 획득분을 응답에 합류시키기만 한다.
+		newBadges.addAll(streakCommandService.recordUpload(userId));
 		triggerEncodingAfterCommit(video.getId());
 
 		return new VideoUploadResponseDto(
-			video.getId(), gridId, video.getProcessingStatus().name(), !alreadyOccupied);
+			video.getId(), gridId, video.getProcessingStatus().name(), !alreadyOccupied, newBadges);
 	}
 
 	@Override
@@ -339,6 +363,52 @@ public class VideoServiceImpl implements VideoService {
 		return videoRepository.findGlobalCover(gridId)
 			.map(video -> GridCoverVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl())))
 			.orElse(null);
+	}
+
+	/**
+	 * 격자 전역 영상 목록 조회 (MSG-237). userId 없음 — 전역 선정이라 결과가 호출자와 무관하다(§D1·D4).
+	 * 필터·정렬은 repository(idx_videos_grid_popular 일치)가 정본이고, 여기서는 size 클램프 →
+	 * lookahead(size+1) 조회 → hasNext 판정·트림 → 항목 presign → nextCursor 발급만 한다 (MSG-90 패턴).
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public GridVideoPageResponseDto getGridGlobalVideos(String gridId, String cursor, int size) {
+		int pageSize = size < 1 ? GLOBAL_PAGE_DEFAULT_SIZE : Math.min(size, GLOBAL_PAGE_MAX_SIZE);
+		List<Video> rows = queryGlobalPage(gridId, cursor, pageSize + 1);
+		boolean hasNext = rows.size() > pageSize;
+		List<Video> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
+		List<GridGlobalVideoResponseDto> videos = pageRows.stream()
+			.map(video -> GridGlobalVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl())))
+			.toList();
+		String nextCursor = null;
+		if (hasNext) {
+			Video last = pageRows.get(pageRows.size() - 1);
+			nextCursor = VideoCursor.encode(gridId, last.getViewCount(), last.getCreatedAt(), last.getId());
+		}
+		return new GridVideoPageResponseDto(videos, hasNext, nextCursor);
+	}
+
+	private List<Video> queryGlobalPage(String gridId, String cursor, int limit) {
+		if (cursor == null) {
+			return videoRepository.findGlobalVideos(gridId, limit);
+		}
+		VideoCursor decoded = decodeGlobalCursor(cursor);
+		if (!decoded.gridId().equals(gridId)) {
+			// 다른 격자에서 발급된 커서 — 경계값이 이 격자의 keyset 으로 오적용돼 결과가 조용히 잘리는 걸
+			// 막는다 (2026-07-28 Codex 교차 리뷰 P2). 형식 위반과 같은 무효 커서로 취급한다.
+			throw new ApiException(VideoErrorCode.INVALID_CURSOR);
+		}
+		return videoRepository.findGlobalVideosAfter(
+			gridId, decoded.viewCount(), decoded.createdAt(), decoded.id(), limit);
+	}
+
+	/** 무효 커서는 조용히 첫 페이지로 폴백하지 않고 400 으로 거른다 — FE 버그가 무한 첫 페이지 루프로 은폐되는 걸 막는다(§D5). */
+	private VideoCursor decodeGlobalCursor(String cursor) {
+		try {
+			return VideoCursor.decode(cursor);
+		} catch (RuntimeException e) {
+			throw new ApiException(VideoErrorCode.INVALID_CURSOR, e);
+		}
 	}
 
 	/**

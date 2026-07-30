@@ -1,5 +1,6 @@
 package com.msg.fillmap.video.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,18 +44,59 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 
 	/**
 	 * 격자 전역 대표 영상 1건 (MSG-87). user_id 조건 없이 그 격자의 모든 공개·READY 영상 중 조회수 →
-	 * 최신 순으로 1건을 뽑는다 — MSG-127 의 개인 격리와 정반대 축(전역, 본인 포함)이다.
+	 * 최신 → id 순으로 1건을 뽑는다 — MSG-127 의 개인 격리와 정반대 축(전역, 본인 포함)이다.
 	 * WHERE·ORDER BY 는 idx_videos_grid_popular 부분 인덱스(V1__init.sql:110)와 바이트 단위로 일치시켜
 	 * 플래너가 인덱스만으로 LIMIT 1 을 만족하게 한다 — 인덱스가 대표 선정 정책의 단일 진실 원천이다.
+	 * id DESC 는 (조회수·시각) 완전 동률 타이브레이크(MSG-238 §D7) — 탐색 카드 커버(findExploreGrids*)와
+	 * 3키로 정합해 화면 간 대표가 항상 같다. 동률 그룹만 미니 정렬이라 인덱스 재정의 불요.
 	 */
 	@Query(value = """
 		SELECT * FROM videos
 		WHERE grid_id = :gridId
 		  AND status = 'ACTIVE' AND visibility = 'PUBLIC' AND processing_status = 'READY'
-		ORDER BY view_count DESC, created_at DESC
+		ORDER BY view_count DESC, created_at DESC, id DESC
 		LIMIT 1
 		""", nativeQuery = true)
 	Optional<Video> findGlobalCover(@Param("gridId") String gridId);
+
+	/**
+	 * 격자 전역 영상 목록 첫 페이지 (MSG-237). findGlobalCover 와 같은 후보 집합(전역·PUBLIC·READY·ACTIVE,
+	 * 본인 포함)을 LIMIT 1 → 페이지 윈도우로 넓힌 것이다. WHERE·ORDER BY 앞 두 키는 idx_videos_grid_popular
+	 * 부분 인덱스(V1__init.sql:110)와 바이트 단위로 일치시켜 인덱스 range scan 으로 페이지를 만족하게 한다.
+	 * id DESC 는 인덱스에 없는 동률 타이브레이크 — (view_count, created_at) 까지 같은 행의 페이지 간 순서를
+	 * 결정적으로 만들며, 동률 그룹 국소 정렬이라 단일 격자 소량 규모에 무해하다(§D2).
+	 * limit 은 서비스가 size+1 lookahead 로 넘기고 hasNext 판정도 서비스 소관이다.
+	 */
+	@Query(value = """
+		SELECT * FROM videos
+		WHERE grid_id = :gridId
+		  AND status = 'ACTIVE' AND visibility = 'PUBLIC' AND processing_status = 'READY'
+		ORDER BY view_count DESC, created_at DESC, id DESC
+		LIMIT :limit
+		""", nativeQuery = true)
+	List<Video> findGlobalVideos(@Param("gridId") String gridId, @Param("limit") int limit);
+
+	/**
+	 * 전역 목록 커서 이후 페이지 (MSG-237 §D2 keyset). 직전 페이지 마지막 항목의 경계값
+	 * (view_count, created_at, id) 보다 정렬상 뒤인 행만 PostgreSQL row-value 비교(DESC 등가 <)로 이어서
+	 * 반환한다 — GridRepository.findOccupiedPageAfter(MSG-90) 와 같은 패턴이다. 커서 유무로 메서드를
+	 * 나눈 것도 같은 이유다(null 가드 단일 쿼리의 native 파라미터 타입 추론 문제 회피).
+	 */
+	@Query(value = """
+		SELECT * FROM videos
+		WHERE grid_id = :gridId
+		  AND status = 'ACTIVE' AND visibility = 'PUBLIC' AND processing_status = 'READY'
+		  AND (view_count, created_at, id) < (:cursorViewCount, :cursorCreatedAt, :cursorId)
+		ORDER BY view_count DESC, created_at DESC, id DESC
+		LIMIT :limit
+		""", nativeQuery = true)
+	List<Video> findGlobalVideosAfter(
+		@Param("gridId") String gridId,
+		@Param("cursorViewCount") long cursorViewCount,
+		@Param("cursorCreatedAt") LocalDateTime cursorCreatedAt,
+		@Param("cursorId") long cursorId,
+		@Param("limit") int limit
+	);
 
 	/**
 	 * 격자 lazy insert (전역 격자 등록). 이미 있으면 no-op — 멱등.
@@ -180,4 +222,128 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	@Modifying
 	@Query(value = "UPDATE videos SET view_count = view_count + 1 WHERE id = :id", nativeQuery = true)
 	void incrementViewCount(@Param("id") long id);
+
+	/* ---------- MSG-238 전역 탐색 (행정동 축) ---------- */
+
+	/**
+	 * 행정동 격자 카드 — 인기순 (MSG-238 §도메인 1). 저장 라벨(grids.region_code) equi 로 그 행정동 격자만
+	 * 구동(idx_grids_region_code, V7)하고, 격자당 LATERAL 2회가 idx_videos_grid_popular 부분 인덱스를
+	 * prefix 프로브한다 — 게이트 프래그먼트는 그 부분 인덱스 조건과 바이트 단위 일치(87/237 원칙)가 정본이다.
+	 * agg.video_count > 0 이 §D1(게이트 통과 영상 ≥1 격자만)을 강제하고, 커버 LATERAL 은 findGlobalCover(87)와
+	 * 같은 3키(조회수→최신→id)라 카드 커버 = 격자 상세 대표가 항상 같은 영상이다(§D7). 인기 = 조회수 합 —
+	 * 동률은 영상 수 → grid_id 내림차순으로 결정적(§D3). 무라벨(해안) 격자는 equi 에 자연 탈락.
+	 * limit null 은 LIMIT NULL(전부) — 페이지네이션 미도입(§D4), CAST 가 null 파라미터의 타입을 고정한다.
+	 * native ORDER BY 분기 불가라 최신순과 메서드를 분리한다(90 선례).
+	 */
+	@Query(value = """
+		SELECT
+			g.grid_id           AS "gridId",
+			g.grid_y            AS "gridY",
+			g.grid_x            AS "gridX",
+			agg.video_count     AS "videoCount",
+			cover.thumbnail_url AS "coverThumbnailKey",
+			cover.duration_sec  AS "coverDurationSec"
+		FROM grids g
+		JOIN LATERAL (
+			SELECT COUNT(*) AS video_count,
+			       SUM(v.view_count) AS view_sum,
+			       MAX(v.created_at) AS latest_at
+			FROM videos v
+			WHERE v.grid_id = g.grid_id
+			  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+		) agg ON agg.video_count > 0
+		JOIN LATERAL (
+			SELECT v.thumbnail_url, v.duration_sec
+			FROM videos v
+			WHERE v.grid_id = g.grid_id
+			  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+			ORDER BY v.view_count DESC, v.created_at DESC, v.id DESC
+			LIMIT 1
+		) cover ON TRUE
+		WHERE g.region_code = :regionCode
+		ORDER BY agg.view_sum DESC, agg.video_count DESC, g.grid_id DESC
+		LIMIT CAST(:limit AS bigint)
+		""", nativeQuery = true)
+	List<ExploreGridProjection> findExploreGridsPopular(
+		@Param("regionCode") String regionCode, @Param("limit") Integer limit);
+
+	/**
+	 * 행정동 격자 카드 — 최신순 (MSG-238 §도메인 1). 인기순과 동일 몸통(게이트·커버·§D1)에 ORDER BY 만
+	 * 최신 공개 영상 시각(MAX created_at) 내림차순 — 동률은 grid_id 내림차순(§D3). 개인 축
+	 * user_grids.last_uploaded_at 은 사용자별 행이라 전역 축에 못 쓴다 — 게이트 통과 영상의 MAX 가 정본.
+	 */
+	@Query(value = """
+		SELECT
+			g.grid_id           AS "gridId",
+			g.grid_y            AS "gridY",
+			g.grid_x            AS "gridX",
+			agg.video_count     AS "videoCount",
+			cover.thumbnail_url AS "coverThumbnailKey",
+			cover.duration_sec  AS "coverDurationSec"
+		FROM grids g
+		JOIN LATERAL (
+			SELECT COUNT(*) AS video_count,
+			       SUM(v.view_count) AS view_sum,
+			       MAX(v.created_at) AS latest_at
+			FROM videos v
+			WHERE v.grid_id = g.grid_id
+			  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+		) agg ON agg.video_count > 0
+		JOIN LATERAL (
+			SELECT v.thumbnail_url, v.duration_sec
+			FROM videos v
+			WHERE v.grid_id = g.grid_id
+			  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+			ORDER BY v.view_count DESC, v.created_at DESC, v.id DESC
+			LIMIT 1
+		) cover ON TRUE
+		WHERE g.region_code = :regionCode
+		ORDER BY agg.latest_at DESC, g.grid_id DESC
+		LIMIT CAST(:limit AS bigint)
+		""", nativeQuery = true)
+	List<ExploreGridProjection> findExploreGridsLatest(
+		@Param("regionCode") String regionCode, @Param("limit") Integer limit);
+
+	/**
+	 * 행정동 헤더 카운트 + regionName (MSG-238 §도메인 2, 1왕복). 게이트·귀속(g.region_code equi)이 카드
+	 * 쿼리와 동일해 gridCount = 카드 집합 크기, videoCount = 카드 videoCount 합이 정의 차원에서 강제된다
+	 * (§D1 — limit 무관 전체 기준). LEFT JOIN + COUNT(v.id) 라 실존 region 콘텐츠 0 은 (regionName, 0, 0)
+	 * 1행으로 합성되고, 미존재 region 은 0행 — 서비스가 regionName null·0·빈 배열로 합성한다(§D2, 6404 아님).
+	 */
+	@Query(value = """
+		SELECT
+			r.region_name                  AS "regionName",
+			COUNT(DISTINCT v.grid_id)::int AS "gridCount",
+			COUNT(v.id)                    AS "videoCount"
+		FROM regions r
+		LEFT JOIN grids g  ON g.region_code = r.region_code
+		LEFT JOIN videos v ON v.grid_id = g.grid_id
+			AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+		WHERE r.region_code = :regionCode
+		GROUP BY r.region_name
+		""", nativeQuery = true)
+	Optional<RegionExploreSummaryProjection> getRegionExploreSummary(@Param("regionCode") String regionCode);
+
+	/**
+	 * 전체 지역 리스트 — 행정동별 게이트 통과 격자 수 (MSG-238 §도메인 3). 게이트 통과 영상 ≥1 격자만
+	 * EXISTS(부분 인덱스 prefix LIMIT 1 프로브)로 세고, regions JOIN 에서 무라벨(NULL) 격자가 자연 탈락한다.
+	 * gridCount 는 §D1 동일 정의라 ①의 카드 집합 크기와 항상 일치. 콘텐츠 많은 지역 먼저
+	 * (gridCount DESC, region_code ASC — §D3 결정적), 행 상한 = 콘텐츠 있는 행정동 수 ≤ 3,558 이라 no-LIMIT.
+	 * grids 전수 스캔 — lazy insert 라 상한이 전역 등록 격자 총수(§D6 ceiling 참조, MVP 소량).
+	 */
+	@Query(value = """
+		SELECT
+			g.region_code AS "regionCode",
+			r.region_name AS "regionName",
+			COUNT(*)::int AS "gridCount"
+		FROM grids g
+		JOIN regions r ON r.region_code = g.region_code
+		WHERE EXISTS (
+			SELECT 1 FROM videos v
+			WHERE v.grid_id = g.grid_id
+			  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY')
+		GROUP BY g.region_code, r.region_name
+		ORDER BY COUNT(*) DESC, g.region_code
+		""", nativeQuery = true)
+	List<RegionGridCountProjection> getRegionGridCounts();
 }

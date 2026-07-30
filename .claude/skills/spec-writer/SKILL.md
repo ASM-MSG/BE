@@ -11,7 +11,9 @@ MSG-XX 티켓을 `docs/MSG-XXX.md` 스펙 문서로 만드는 단일 작업 스�
 
 ## 실행 절차
 
-1. **입력 확보**: 대화에 티켓 설명이 있으면 그대로 사용. 없으면 Jira MCP
+1. **입력 확보**: `docs/prd/MSG-{번호}-prd.md`가 있으면 요구사항 정본으로 최우선 사용한다
+   (prd-writer 산출물 — 스펙은 PRD의 "무엇을/왜"에 "어떻게"를 붙이는 문서다).
+   대화에 티켓 설명이 있으면 그대로 사용. 없으면 Jira MCP
    (`mcp__claude_ai_Atlassian_Rovo__getJiraIssue`)가 연결돼 있는지 확인하고 MSG-XX 키로
    조회를 시도한다. 조회 실패 시 사용자에게 티켓 내용을 요청한다 — 추측하지 않는다.
 2. **기존 스펙 확인**: `docs/MSG-{번호}.md`가 이미 있으면 덮어쓰기 전에 diff를 요약해
@@ -21,7 +23,6 @@ MSG-XX 티켓을 `docs/MSG-XXX.md` 스펙 문서로 만드는 단일 작업 스�
 ```
 Agent(
   subagent_type: "spec-writer",
-  model: "opus",
   prompt: "{MSG-XX 티켓 설명 또는 Jira 조회 결과 전체}를 바탕으로 docs/MSG-{번호}.md 스펙 문서를 작성하라.
            .claude/rules/glossary.md 용어를 기준으로 쓰고, .claude/docs/infrastructure.md 패키지
            구조를 참고해 Owner A/B/공동을 판정하라."

@@ -3,6 +3,7 @@ package com.msg.fillmap.video.service;
 import java.util.List;
 
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
+import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
@@ -29,6 +30,15 @@ public interface VideoService {
 	 * 중만·타인 없음·존재하지 않는 gridId) null 이다(예외 아님). user_grids.cover_video_id 와 무관하다.
 	 */
 	GridCoverVideoResponseDto getGridCover(String gridId);
+
+	/**
+	 * 격자 전역 영상 목록 조회 (MSG-237). 그 격자의 공개(PUBLIC)·READY·ACTIVE 영상을 전역(본인 포함)에서
+	 * 인기순(view_count → created_at → id DESC)으로 한 페이지 돌려준다. 소유자 분기가 없어 내 PRIVATE 영상도
+	 * 포함되지 않는다(개인 축은 getGridVideos — §D1). cursor 는 직전 응답의 nextCursor(opaque) — null 이면
+	 * 첫 페이지, 무효면 INVALID_CURSOR(400). size 는 [1, 50] 밖이면 클램프(0 이하 → 기본 20, §D5). 후보가
+	 * 없거나 존재하지 않는 gridId 는 빈 페이지다(예외 아님).
+	 */
+	GridVideoPageResponseDto getGridGlobalVideos(String gridId, String cursor, int size);
 
 	/**
 	 * 단건 영상 재생 조회 (MSG-206). 접근 제어를 존재/DELETED → BLINDED → visibility → processing_status

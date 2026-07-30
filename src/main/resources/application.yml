@@ -52,6 +52,13 @@ oauth:
     jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
     # client-id(카카오 REST API 키) 는 application-local.yml (로컬) / KAKAO_CLIENT_ID 환경변수 (운영) 로 주입한다.
 
+# 장소 검색 — 카카오 로컬 키워드 검색 프록시 (MSG-251). rest-api-key 는 OAuth 로그인과 같은 "필맵" 카카오 앱의
+# REST API 키라 oauth.kakao.client-id 를 프로퍼티 레벨로 참조한다 — 신규 시크릿·env 0 (§D5, 키 로테이션 시 검색도 함께 영향).
+search:
+  kakao:
+    base-url: https://dapi.kakao.com
+    rest-api-key: ${oauth.kakao.client-id:}
+
 aws:
   region: ${AWS_REGION:ap-northeast-2}
   s3:
