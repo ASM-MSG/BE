@@ -32,9 +32,29 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 (전체 탐색 금지, 타겟 조회만 — frontmatter의 keywords/aliases로 검색). 그 외에는 레포·Jira 우선,
 불확실할 때만 위키 참조. 진입점: `index.md` · `hot.md` · 운영 규칙은 `00-meta/SCHEMA.md`.
 
+## 개발 파이프라인 — PRD 필수
+
+```text
+아이디어/티켓 → PRD(docs/prd/*.md) → 스펙(docs/MSG-XXX.md) → 구현
+                 ↑ 필수 게이트
+```
+
+**PRD 없이 스펙·구현에 착수하지 않는다.** PRD가 없으면 `prd-writer`를 먼저 실행한다 —
+`spec-writer`·`spec-driven-dev` 양쪽 진입부에 게이트가 있고, **스펙이 이미 있어도 PRD가 없으면
+통과가 아니다**(구 티켓 이어받기가 이 구멍으로 샌다).
+
+**면제 기준 = "이 작업이 제품 요구사항을 새로 만들거나 바꾸는가" 하나다.** PRD는 요구사항
+문서이므로, 요구사항이 그대로면 쓸 내용이 없다. 요구사항 불변 → 면제: 문서(`docs`), 리팩터링,
+버그 수정(**기존** 요구사항의 복구 — 무엇이 옳은 동작인지는 이미 정의돼 있음), 성능 개선(요구사항
+불변, 단 성능 목표 자체를 새로 세우면 요구사항 신설), 설정/의존성 갱신 중 요구사항에 안 닿는 것
+(보안 패치 버전업·포맷). 반대로 기능 플래그 on·동작이 달라지는 업그레이드처럼 **설정·의존성이라도
+요구사항을 바꾸면 면제가 아니다.** 면제로 판단하면 근거를 사용자에게 한 줄 알린다.
+**새 기능·새 API·기존 동작의 의도적 변경 = 요구사항 변경 = 언제나 PRD 필수.**
+(이 절이 면제 기준의 단일 정본 — 스킬·에이전트는 이 절을 참조한다)
+
 ## Skills — 특정 워크플로우
 
-- **prd-writer** — PRD(제품 요구사항 문서) 생성 (`docs/prd/*.md`), 티켓·스펙보다 선행
+- **prd-writer** — PRD(제품 요구사항 문서) 생성 (`docs/prd/*.md`), **티켓·스펙보다 선행 · 필수 게이트**
   트리거: "PRD 만들어줘", "요구사항 문서 정리해줘", "개발 전에 문서부터"
 - **spec-writer** — 개발 스펙 문서 생성 (`docs/MSG-XXX.md`)
   트리거: "MSG-XX 스펙 만들어줘", "스펙 문서 정리해줘"
@@ -43,7 +63,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 
 ## 하네스: FillMap 개발 에이전트 팀
 
-**목표:** MSG-XX 티켓 → 스펙 문서 → Owner A/B 도메인별 구현 → 컨벤션/계약 검증까지
+**목표:** MSG-XX 티켓 → PRD → 스펙 문서 → Owner A/B 도메인별 구현 → 컨벤션/계약 검증까지
 에이전트 팀(spec-writer, grid-developer, auth-developer, convention-reviewer)이 처리.
 에이전트 정의: `.claude/agents/`, 오케스트레이터: `.claude/skills/spec-driven-dev/`.
 
@@ -57,6 +77,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 | 2026-07-26 | 에이전트 정의 4종 프런트매터의 `model: opus` 제거 | 전체 에이전트 | 호출부 제거(07-24)만으론 미완 — 정의 쪽 `model`이 남아 있으면 호출부 생략 시 정의 값이 적용돼 Opus 고정이 유지됨 (PR #61 리뷰 지적). 정의·호출부 모두 생략해야 세션 모델 상속 |
 | 2026-07-28 | prd-writer 스킬 신설 (PRD 템플릿 포함), spec-writer가 PRD를 선행 입력으로 사용 | prd-writer, spec-writer | 멘토링 피드백 — 개발 착수 전 PRD(목적·기능·비기능·다이어그램·변경 파일) 단계 표준화 (MSG-256) |
 | 2026-07-28 | spec-driven-dev 분해 — SKILL.md는 라우팅만, 커밋 게이트·Codex 리뷰·마무리는 references/ 3종으로, 팀 운영 원칙은 rules/subagent-orchestration.md로 승격. spec-writer 예시의 `model: "opus"` 잔재 제거 | spec-driven-dev, spec-writer, rules | 멘토링 피드백(07-28) — 스킬은 작게 쪼개고 서브에이전트 오케스트레이션은 규칙으로 명문화 (MSG-257) |
+| 2026-07-30 | **PRD 필수 게이트** — CLAUDE.md에 파이프라인 명문화 + spec-writer 절차 1번·spec-driven-dev Phase 0에 게이트 신설(면제 목록 포함) | CLAUDE.md, spec-writer, spec-driven-dev | prd-writer 신설(07-28) 이후에도 PRD는 "있으면 쓴다"였을 뿐 강제가 없어 MSG-234·239 외엔 PRD 없이 스펙부터 착수 — 특히 **스펙이 이미 있는 티켓**은 게이트를 아예 안 거쳤다. 요구사항 즉석 창작 방지 (MSG-261) |
 
 ## Quick Commands
 
