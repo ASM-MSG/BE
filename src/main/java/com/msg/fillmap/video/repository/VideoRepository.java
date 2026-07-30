@@ -37,6 +37,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	 * 행 잠금 조회 (MSG-149 P1-c). 폴러의 블러 결과/실패/제출 쓰기 가드가 읽기-후-쓰기 레이스(ms 창)를
 	 * 없애기 위해 SELECT ... FOR UPDATE 로 잠근다 — replaceVideo/deleteVideo 트랜잭션의 UPDATE 와 같은 행에서
 	 * 직렬화되어, 폴러가 잠금 후 재확인한 상태가 그 트랜잭션 커밋 이후 상태임을 보장한다.
+	 * 삭제 경로(MSG-243)도 이 잠금으로 ACTIVE→DELETED 전이를 직렬화해 video_count 이중 감소를 막는다.
 	 */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select v from Video v where v.id = :id")

@@ -138,7 +138,8 @@ class VideoS3CleanupTest {
 	void 삭제하면_S3_에서도_지운다() {
 		Video video = existingVideo();
 		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
-		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(video));
+		// 삭제는 잠금 로드다 (MSG-243) — 스텁도 프로덕션 로드 메서드를 따라간다.
+		given(repository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		service.deleteVideo(USER_ID, VIDEO_ID);
 
@@ -152,7 +153,7 @@ class VideoS3CleanupTest {
 		Video video = existingVideo();
 		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
 		video.applyBlurResult("videos/blurred/1/7.mp4", List.of(List.of(0.0, 3.33)));
-		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(video));
+		given(repository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		service.deleteVideo(USER_ID, VIDEO_ID);
 
@@ -162,7 +163,7 @@ class VideoS3CleanupTest {
 	@Test
 	@DisplayName("인코딩 전 영상을 지우면 원본만 지운다 — null 키를 넣으면 S3 가 400 을 낸다")
 	void 인코딩_전_삭제는_원본만_지운다() {
-		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(existingVideo()));
+		given(repository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(existingVideo()));
 
 		service.deleteVideo(USER_ID, VIDEO_ID);
 
@@ -178,7 +179,7 @@ class VideoS3CleanupTest {
 			DeleteObjectsResponse.builder()
 				.errors(S3Error.builder().key(OLD_ORIGINAL).code("AccessDenied").build())
 				.build());
-		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(existingVideo()));
+		given(repository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(existingVideo()));
 
 		// 커밋 후 정리라 실패해도 사용자 요청은 성공해야 한다 — 삭제는 이미 커밋됐다.
 		assertThatCode(() -> service.deleteVideo(USER_ID, VIDEO_ID)).doesNotThrowAnyException();
