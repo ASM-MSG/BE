@@ -1,53 +1,55 @@
 package com.msg.fillmap.usergrid.repository;
 
+import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
+import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
+import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
+import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.persistence.EntityManager;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.msg.fillmap.grid.GridEncoder;
-import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridFixtures;
+import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 
 /**
- * 개인 도감 요약 집계 (실 PostGIS, MSG-152). 각 테스트는 자기 유저를 새로 만들고 @Transactional 로
- * 롤백한다 — 공유 로컬 DB 오염(NonUniqueResult) 방지. 단언은 전부 자기 유저 기준으로만 한다(전체 COUNT 금지).
+ * 개인 도감 요약 집계 (실 PostGIS, MSG-152 · 방문 행정동 축 정정 MSG-246). 각 테스트는 자기 유저를 새로 만들고
+ * @Transactional 로 롤백한다 — 공유 로컬 DB 오염(NonUniqueResult) 방지. 단언은 전부 자기 유저 기준으로만 한다
+ * (전체 COUNT 금지). 방문 행정동 시딩은 프로덕션 형상 그대로 — videos.region_code 는 NULL 로 두고
+ * 격자 라벨(grids.region_code, by-grid 귀속 MSG-167)만 시드한다.
  */
 @SpringBootTest
 @Transactional
 @DisplayName("UserGridRepository 도감 요약 집계 (실 PostGIS)")
 class UserGridRepositoryTest {
 
-	// 다른 테스트와 겹치지 않는 임의 기준점. 실제 grid_y/grid_x 는 GridEncoder 로 산출한다.
-	private static final double 잠실_LAT = 37.5133;
-	private static final double 잠실_LON = 127.1000;
+	// 공해상(서해) 기준점 — ST_Covers 라벨링에 실데이터 행정동(11… 대역, 999 보다 앞 정렬)이 끼어들 수 없는
+	// 좌표 대역. CollectionGridsRegionNameTest(GY 39700/GX 108500)와 다른 블록으로 격리.
+	private static final long GY0 = 39600L;
+	private static final long GX0 = 108600L;
+
+	// 합성 행정동(999 대역) — 동A 는 dx [0,2) 격자 2개, 동B 는 dx [2,3) 격자 1개를 덮는다.
+	private static final String 동A = "9992460001";
+	private static final String 동B = "9992460002";
 
 	@Autowired
 	private UserGridRepository userGridRepository;
+
+	@Autowired
+	private RegionRepository regionRepository;
 
 	@Autowired
 	private UserRepository userRepository;
 
 	@Autowired
 	private EntityManager em;
-
-	private long baseY;
-	private long baseX;
-
-	@BeforeEach
-	void setUp() {
-		GridIndex base = GridEncoder.decode(GridEncoder.encode(잠실_LAT, 잠실_LON));
-		baseY = base.gridY();
-		baseX = base.gridX();
-	}
 
 	@Test
 	@DisplayName("점령 격자 수와 영상 총합을 집계한다")
@@ -75,43 +77,70 @@ class UserGridRepositoryTest {
 	}
 
 	@Test
-	@DisplayName("방문 행정동 수는 videos region_code 의 distinct 개수다")
-	void 방문_행정동_수는_videos_region_code의_distinct_개수다() {
+	@DisplayName("프로덕션 데이터 형상에서 방문 행정동 수가 1 이상이다")
+	void 프로덕션_데이터_형상에서_방문_행정동_수가_1_이상이다() {
 		long me = newUser();
-		String g = grid(0, 0);
-		occupy(me, g, 3);
-		video(me, g, "TR152A", "ACTIVE");
-		video(me, g, "TR152B", "ACTIVE");
-		video(me, g, "TR152C", "ACTIVE");
+		seedRegion(동A, 0, 2);
+		String g = labeledGrid(0, 0);
+		occupy(me, g, 1);
+		video(me, g, "ACTIVE");
 
 		CollectionSummaryProjection summary = userGridRepository.getCollectionSummary(me);
 
-		assertThat(summary.getVisitedRegionCount()).isEqualTo(3);
-	}
-
-	@Test
-	@DisplayName("region_code가 null인 영상은 방문 행정동 수에 포함되지 않는다")
-	void region_code가_null인_영상은_방문_행정동_수에_포함되지_않는다() {
-		long me = newUser();
-		String g = grid(0, 0);
-		occupy(me, g, 2);
-		video(me, g, "TR152A", "ACTIVE");
-		video(me, g, null, "ACTIVE");
-
-		CollectionSummaryProjection summary = userGridRepository.getCollectionSummary(me);
-
-		// regions 미시딩·좌표 밖 업로드로 region_code 가 NULL 이어도 계산 가능(COUNT DISTINCT 가 NULL 제외).
+		// 프로덕션 쓰기 경로는 videos.region_code 를 채우지 않는다(MSG-246) — 격자 라벨 축이어야 1 이 나온다.
 		assertThat(summary.getVisitedRegionCount()).isEqualTo(1);
 	}
 
 	@Test
-	@DisplayName("DELETED 영상의 행정동은 방문 수에 포함되지 않는다")
-	void DELETED_영상의_행정동은_방문_수에_포함되지_않는다() {
+	@DisplayName("방문 행정동 수는 영상이 있는 격자들의 행정동 distinct 개수다")
+	void 방문_행정동_수는_영상이_있는_격자들의_행정동_distinct_개수다() {
 		long me = newUser();
-		String g = grid(0, 0);
-		occupy(me, g, 2);
-		video(me, g, "TR152A", "ACTIVE");
-		video(me, g, "TR152B", "DELETED");
+		seedRegion(동A, 0, 2);
+		seedRegion(동B, 2, 3);
+		String a1 = labeledGrid(0, 0);
+		String a2 = labeledGrid(0, 1);
+		String b = labeledGrid(0, 2);
+		occupy(me, a1, 1);
+		occupy(me, a2, 1);
+		occupy(me, b, 1);
+		video(me, a1, "ACTIVE");
+		video(me, a2, "ACTIVE");
+		video(me, b, "ACTIVE");
+
+		CollectionSummaryProjection summary = userGridRepository.getCollectionSummary(me);
+
+		assertThat(summary.getVisitedRegionCount()).isEqualTo(2);
+	}
+
+	@Test
+	@DisplayName("라벨 없는 격자의 영상은 방문 행정동 수에 포함되지 않는다")
+	void 라벨_없는_격자의_영상은_방문_행정동_수에_포함되지_않는다() {
+		long me = newUser();
+		seedRegion(동A, 0, 2);
+		String labeled = labeledGrid(0, 0);
+		String unlabeled = grid(0, 3);
+		occupy(me, labeled, 1);
+		occupy(me, unlabeled, 1);
+		video(me, labeled, "ACTIVE");
+		video(me, unlabeled, "ACTIVE");
+
+		CollectionSummaryProjection summary = userGridRepository.getCollectionSummary(me);
+
+		// 무귀속(해안 등) 격자는 grids.region_code NULL → COUNT DISTINCT 가 자동 제외.
+		assertThat(summary.getVisitedRegionCount()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("DELETED 영상만 있는 행정동은 방문 수에 포함되지 않는다")
+	void DELETED_영상만_있는_행정동은_방문_수에_포함되지_않는다() {
+		long me = newUser();
+		seedRegion(동A, 0, 2);
+		seedRegion(동B, 2, 3);
+		String a = labeledGrid(0, 0);
+		String b = labeledGrid(0, 2);
+		occupy(me, a, 1);
+		video(me, a, "ACTIVE");
+		video(me, b, "DELETED");
 
 		CollectionSummaryProjection summary = userGridRepository.getCollectionSummary(me);
 
@@ -119,17 +148,21 @@ class UserGridRepositoryTest {
 	}
 
 	@Test
-	@DisplayName("BLINDED 영상의 행정동은 방문 수에 포함된다")
-	void BLINDED_영상의_행정동은_방문_수에_포함된다() {
+	@DisplayName("BLINDED 영상의 행정동은 방문 행정동 수에 포함된다")
+	void BLINDED_영상의_행정동은_방문_행정동_수에_포함된다() {
 		long me = newUser();
-		String g = grid(0, 0);
-		occupy(me, g, 2);
-		video(me, g, "TR152A", "ACTIVE");
-		video(me, g, "TR152B", "BLINDED");
+		seedRegion(동A, 0, 2);
+		seedRegion(동B, 2, 3);
+		String a = labeledGrid(0, 0);
+		String b = labeledGrid(0, 2);
+		occupy(me, a, 1);
+		occupy(me, b, 1);
+		video(me, a, "ACTIVE");
+		video(me, b, "BLINDED");
 
 		CollectionSummaryProjection summary = userGridRepository.getCollectionSummary(me);
 
-		// BLINDED(모더레이션 숨김)는 방문 사실로 보고 포함(D6).
+		// BLINDED(모더레이션 숨김)는 방문 사실로 보고 포함(MSG-152 D6 승계).
 		assertThat(summary.getVisitedRegionCount()).isEqualTo(2);
 	}
 
@@ -138,29 +171,36 @@ class UserGridRepositoryTest {
 	void 다른_사용자의_점령과_영상은_집계에_포함되지_않는다() {
 		long me = newUser();
 		long other = newUser();
-		String g = grid(0, 0);
-		occupy(me, g, 1);
-		video(me, g, "TR152A", "ACTIVE");
-		occupy(other, g, 9);
-		video(other, g, "TR152B", "ACTIVE");
-		video(other, g, "TR152C", "ACTIVE");
+		seedRegion(동A, 0, 2);
+		seedRegion(동B, 2, 3);
+		String a = labeledGrid(0, 0);
+		String b = labeledGrid(0, 2);
+		occupy(me, a, 1);
+		video(me, a, "ACTIVE");
+		occupy(other, a, 9);
+		video(other, a, "ACTIVE");
+		occupy(other, b, 1);
+		video(other, b, "ACTIVE");
 
 		CollectionSummaryProjection summary = userGridRepository.getCollectionSummary(me);
 
+		// other 의 동B 방문이 내 행정동 수로 새면 2 가 된다 — 사용자 격리 확인.
 		assertThat(summary.getTotalGridCount()).isEqualTo(1);
 		assertThat(summary.getTotalVideoCount()).isEqualTo(1L);
 		assertThat(summary.getVisitedRegionCount()).isEqualTo(1);
 	}
 
 	@Test
-	@DisplayName("같은 행정동에 영상이 여러개여도 행정동 수는 한번만 센다")
-	void 같은_행정동에_영상이_여러개여도_행정동_수는_한번만_센다() {
+	@DisplayName("같은 행정동의 격자 여러개여도 행정동 수는 한번만 센다")
+	void 같은_행정동의_격자_여러개여도_행정동_수는_한번만_센다() {
 		long me = newUser();
-		String g = grid(0, 0);
-		occupy(me, g, 3);
-		video(me, g, "TR152A", "ACTIVE");
-		video(me, g, "TR152A", "ACTIVE");
-		video(me, g, "TR152A", "ACTIVE");
+		seedRegion(동A, 0, 2);
+		String a1 = labeledGrid(0, 0);
+		String a2 = labeledGrid(0, 1);
+		occupy(me, a1, 1);
+		occupy(me, a2, 1);
+		video(me, a1, "ACTIVE");
+		video(me, a2, "ACTIVE");
 
 		CollectionSummaryProjection summary = userGridRepository.getCollectionSummary(me);
 
@@ -173,46 +213,38 @@ class UserGridRepositoryTest {
 	}
 
 	private String grid(long dy, long dx) {
-		return GridFixtures.seedGrid(em, baseY + dy, baseX + dx);
+		return GridFixtures.seedGrid(em, GY0 + dy, GX0 + dx);
+	}
+
+	private String labeledGrid(long dy, long dx) {
+		return GridFixtures.seedLabeledGrid(em, GY0 + dy, GX0 + dx);
 	}
 
 	private void occupy(long userId, String gridId, int videoCount) {
 		GridFixtures.seedUserGrid(em, userId, gridId, videoCount);
 	}
 
-	/**
-	 * videos 네이티브 삽입 (region_code·status 지정). region_code 는 regions FK 라 먼저 시딩한다.
-	 * null 은 CAST 로 타입을 지정해 바인딩한다.
-	 */
-	private void video(long userId, String gridId, String regionCode, String status) {
-		if (regionCode != null) {
-			seedRegion(regionCode);
-		}
+	/** GY0 행의 격자 dx 구간 [dxFrom, dxTo) 중심점을 덮는 합성 행정동(999 대역)을 시드한다. */
+	private void seedRegion(String code, long dxFrom, long dxTo) {
+		String polygon = rectanglePolygonJson(
+			(GX0 + dxFrom) * GRID_LNG_STEP, GY0 * GRID_LAT_STEP,
+			(GX0 + dxTo) * GRID_LNG_STEP, (GY0 + 1) * GRID_LAT_STEP);
+		regionRepository.upsert(code, code, code.substring(0, 5), polygon, CELL_AREA_M2);
+	}
+
+	/** videos 네이티브 삽입 — 프로덕션 형상 그대로 region_code 미지정(NULL 유지). */
+	private void video(long userId, String gridId, String status) {
 		em.createNativeQuery("""
-			INSERT INTO videos (user_id, grid_id, region_code, geom, duration_sec, recorded_at, status)
+			INSERT INTO videos (user_id, grid_id, geom, duration_sec, recorded_at, status)
 			VALUES (
-				:userId, :gridId, CAST(:regionCode AS varchar),
-				ST_SetSRID(ST_MakePoint(127.10, 37.51), 4326)::geography,
+				:userId, :gridId,
+				ST_SetSRID(ST_MakePoint(124.89, 35.64), 4326)::geography,
 				10, now(), :status
 			)
 			""")
 			.setParameter("userId", userId)
 			.setParameter("gridId", gridId)
-			.setParameter("regionCode", regionCode)
 			.setParameter("status", status)
-			.executeUpdate();
-	}
-
-	private void seedRegion(String code) {
-		em.createNativeQuery("""
-			INSERT INTO regions (region_code, region_name, boundary_geom)
-			VALUES (
-				:code, :code,
-				ST_GeomFromText('MULTIPOLYGON(((127.0 37.5, 127.0 37.6, 127.1 37.6, 127.1 37.5, 127.0 37.5)))', 4326)
-			)
-			ON CONFLICT (region_code) DO NOTHING
-			""")
-			.setParameter("code", code)
 			.executeUpdate();
 	}
 }
