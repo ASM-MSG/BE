@@ -55,4 +55,13 @@ class ProdRedisPasswordValidatorTest {
 		assertThatCode(new ProdRedisPasswordValidator(properties)::afterPropertiesSet)
 			.doesNotThrowAnyException();
 	}
+
+	@Test
+	void 플레이스홀더_시퀀스를_포함한_정상_비밀번호는_통과한다() {
+		DataRedisProperties properties = new DataRedisProperties();
+		properties.setPassword("abc${def");
+
+		assertThatCode(new ProdRedisPasswordValidator(properties)::afterPropertiesSet)
+			.doesNotThrowAnyException();
+	}
 }

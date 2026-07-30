@@ -26,7 +26,8 @@ public class ProdRedisPasswordValidator implements InitializingBean {
 	@Override
 	public void afterPropertiesSet() {
 		String password = redisProperties.getPassword();
-		if (!StringUtils.hasText(password) || password.contains("${")) {
+		// 미해석 리터럴 완전 일치로만 거부 — 정상 비밀번호에 "${" 시퀀스가 있을 수 있다 (Codex 2R P2)
+		if (!StringUtils.hasText(password) || "${REDIS_PASSWORD}".equals(password)) {
 			throw new IllegalStateException(
 				"spring.data.redis.password 미설정 — REDIS_PASSWORD 환경변수를 주입해야 한다 (redis-prod requirepass, MSG-244)");
 		}
