@@ -207,7 +207,7 @@ public class VideoServiceImpl implements VideoService {
 		}
 	}
 
-	/** 소유권 검증 — 교체·삭제가 공유한다 (MSG-71 스펙: "소유권 검증(MSG-72와 공통 헬퍼)"). */
+	/** 소유권 검증 — 교체·공개설정이 공유한다. 삭제는 잠금 로드로 같은 검사를 한다 (MSG-243). */
 	private Video findOwnedVideo(long userId, long videoId) {
 		Video video = videoRepository.findById(videoId)
 			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
@@ -220,9 +220,18 @@ public class VideoServiceImpl implements VideoService {
 	@Override
 	@Transactional
 	public void deleteVideo(long userId, long videoId) {
-		Video video = findOwnedVideo(userId, videoId);
+		// 잠금 로드 (MSG-243). findOwnedVideo 의 일반 로드는 동시 삭제 2건이 모두 아래 멱등 가드를 통과해
+		// video_count 가 이중 감소한다 — ACTIVE 영상이 남았는데 점령이 오롤백되는 데이터 유실. 행 잠금
+		// (MSG-149 findWithLockById 재사용)으로 전이를 직렬화하면 패자는 대기 후 재조회에서 DELETED 를 보고
+		// 가드에서 반환하므로 감소·S3 삭제 등록·수집률 refresh 가 승자 1회만 실행된다. 잠금 유지 구간은
+		// DB 쓰기뿐이다 — S3 작업은 전부 afterCommit 이라 잠금이 길어지지 않는다.
+		Video video = videoRepository.findWithLockById(videoId)
+			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
+		if (video.getUserId() != userId) {
+			throw new ApiException(VideoErrorCode.VIDEO_FORBIDDEN);
+		}
 		if (video.isDeleted()) {
-			return;   // 중복 삭제는 멱등하게 성공 (MSG-72 D7)
+			return;   // 중복 삭제는 멱등하게 성공 (MSG-72 D7) — 동시 삭제의 패자도 여기로 (MSG-243)
 		}
 
 		// 아래 native 쿼리들은 이 변경을 본다 — Hibernate 가 native 쿼리 전에 영속성 컨텍스트를

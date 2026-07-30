@@ -62,6 +62,7 @@
 - MSG-64: presigned URL 발급(`POST /api/videos/presigned-url`)
 - MSG-65: 인코딩 워커(`VideoEncodingService`+`VideoStatusWriter`+`support/FfmpegRunner`+`config/AsyncConfig`, 커밋 후 `@Async` 트리거)
 - MSG-72: 삭제+점령 롤백(`DELETE /api/videos/{videoId}`, cover 재선정)
+- MSG-243: 삭제 동시성 정합(`deleteVideo` 도입부 `findWithLockById` 행 잠금 — 동시 삭제 이중 감소·점령 오롤백 차단, 패자 멱등 200 유지, `VideoDeleteConcurrencyTest` pg_blocking_pids 결정적 재현)
 - MSG-132: s3Key 검증(소유권·headObject 실존·UNIQUE 중복)
 - MSG-71: 교체(`PUT /api/videos/{videoId}`, 같은 격자만, 도감 불변)
 - MSG-133: S3 정리(presign은 `videos/pending/` 발급 → 확정 시 `videos/original/` 복사, 라이프사이클 1일 만료 / 삭제·교체 시 커밋 후 객체 제거)
