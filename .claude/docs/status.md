@@ -35,6 +35,7 @@
 
 ### `usergrid` (Owner B) — 🟡 부분
 - MSG-152: `repository/{UserGridRepository,CollectionSummaryProjection}`(user_grids·videos 네이티브 집계), `service/UserGridQueryService`(+impl, read 계약 B→A)·`CollectionSummaryView`, `controller/CollectionController`(`GET /api/collections/summary`), `dto/CollectionSummaryResponseDto`
+- MSG-246: 도감 요약 `visitedRegionCount` 정정(`getCollectionSummary` 서브쿼리 — dead `videos.region_code` 대신 `JOIN grids` 후 `COUNT(DISTINCT g.region_code)`, MSG-167 by-grid 귀속 정합. 테스트 시딩도 프로덕션 형상(videos.region_code NULL)으로 재작성)
 - MSG-153: 갤러리 격자 목록(`GET /api/collections/grids` — `first_collected_at DESC` 30 고정·무커서, `GridEncoder.decode`로 grids 미조인, `ThumbnailUrlPresigner` 소비, `CollectionGridProjection`/`CollectionGridView`/`CollectionGridResponseDto`·`getCollectionGrids` B-내부 read)
 - MSG-167: 갤러리 목록에 `regionName` 추가(`grids`·`regions` LEFT JOIN equi, geospatial 0 — 153 "grids 미조인"을 라벨 위해 뒤집음, 정렬·30상한 등 나머지 계약 불변), `CollectionGridProjection`/`View`/`ResponseDto`에 regionName 1필드. 동 단위 내 영상 조회(`GET /api/collections/videos?regionCode=` — `videos⨝grids` 격자 축 귀속·ACTIVE만·`created_at DESC, id DESC`·no-LIMIT·빈 배열 200, `RegionVideoProjection`/`View`/`RegionVideoResponseDto`(gridId 포함)·`getRegionVideos` B-내부 read)
 - **없는 것**: — (155/156 소비용 프리미티브 구상은 불필요해져 폐기 — 155 자기완결·156 별도 서비스로 종결)
