@@ -15,6 +15,8 @@ import org.springframework.core.task.TaskRejectedException;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
+import com.msg.fillmap.mission.dto.MissionAwardResult;
+import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
@@ -50,12 +52,17 @@ class VideoEncodingTriggerTest {
 		// 큐 포화 상황 재현
 		willThrow(new TaskRejectedException("queue full")).given(encodingService).encode(anyLong(), anyString());
 
+		// 미션 판정 목 — record 반환 타입은 Mockito 기본값이 null 이라 EMPTY 를 명시한다 (MSG-223).
+		MissionAwardService missionAwardService = mock(MissionAwardService.class);
+		org.mockito.BDDMockito.given(missionAwardService.awardOnUpload(anyLong(), anyString()))
+			.willReturn(MissionAwardResult.EMPTY);
+
 		// S3Client 목은 headObject 에서 예외를 던지지 않는다 = 객체가 존재하는 정상 업로드.
 		VideoService service = new VideoServiceImpl(repository, encodingService, statusWriter,
 			mock(S3Presigner.class), mock(software.amazon.awssdk.services.s3.S3Client.class),
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
-			mock(StreakCommandService.class));
+			mock(StreakCommandService.class), missionAwardService);
 
 		VideoUploadRequestDto request = new VideoUploadRequestDto(
 			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now());
