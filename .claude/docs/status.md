@@ -17,6 +17,7 @@
 ### `global` — ✅ 완성
 - `ApiException`, `GlobalExceptionHandler`, `config/SecurityConfig`, `config/S3Config`(S3Presigner 빈)·`config/AwsProperties` (MSG-64)
 - MSG-167: `GlobalExceptionHandler`에 `MissingServletRequestParameterException → 400 BAD_REQUEST` 전역 매핑 (필수 파라미터 누락이 catch-all에 삼켜져 500이던 결함 정정)
+- MSG-244: `config/ProdRedisPasswordValidator`(prod 프로파일 전용 기동 검증 — 바인더가 미해석 `${REDIS_PASSWORD}`를 리터럴로 통과시키는 결함 보완, 공백/미해석 리터럴 완전 일치 시 기동 실패) + prod Redis 포트 6380·헬스체크 호스트 보간 정합(application-prod.yml·docker-compose.server.yml)
 
 ### `auth` (Owner B) — ✅ 완성
 - 기본 골격: `controller`(+`/reissue`), `service`(AuthService·OidcLoginService·RefreshTokenService), `dto`(+Reissue*), `jwt`(TokenProvider·필터·JwtProperties·RefreshTokenProvider/Store·RedisInvalidatedTokenStore), `oidc`(Kakao OIDC), `support/RefreshTokenCookies`, `exception/AuthErrorCode`
