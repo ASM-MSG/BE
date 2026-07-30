@@ -21,6 +21,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.video.config.AsyncConfig;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.FfmpegRunner;
 
@@ -45,7 +46,7 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 
 	@Override
 	@Async(AsyncConfig.ENCODING_EXECUTOR)
-	public void encode(Long videoId) {
+	public void encode(Long videoId, String originalKey) {
 		Video video = videoRepository.findById(videoId).orElse(null);
 		if (video == null) {
 			log.error("인코딩 대상 영상 없음: videoId={}", videoId);
@@ -54,16 +55,21 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 
 		Path workDir = null;
 		try {
-			statusWriter.markEncoding(videoId);
+			// 큐 대기 중 교체/삭제됐으면 이 태스크의 원본은 더는 현재 시도가 아니다 — ffmpeg 을 돌리지 않는다 (MSG-241).
+			if (!statusWriter.markEncoding(videoId, originalKey)) {
+				return;
+			}
 			workDir = Files.createTempDirectory("encode-" + videoId + "-");
 
 			Path original = workDir.resolve("original");
-			download(video.getOriginalS3Key(), original);
+			// fresh 로드 값이 아니라 트리거 시점에 고정된 키로 받는다 — 트리거~시작 사이 교체가 끼어들어
+			// 옛 태스크가 새 키를 읽고 새 태스크와 이중 인코딩하는 변종을 닫는다 (MSG-241).
+			download(originalKey, original);
 
 			double duration = ffmpegRunner.probeDurationSec(original);
 			if (duration > MAX_DURATION_SEC) {
 				log.warn("영상 길이 초과로 인코딩 중단: videoId={} duration={}s", videoId, duration);
-				statusWriter.markFailed(videoId);
+				statusWriter.markFailed(videoId, originalKey);
 				return;
 			}
 
@@ -75,11 +81,13 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 				ffmpegRunner.extractThumbnail(original, thumbnail, duration);
 			}
 
-			// ffmpeg 가 도는 동안 삭제됐으면 결과를 올려봐야 아무도 참조하지 않는 고아가 된다 —
-			// 삭제 시점 정리(MSG-133)는 아직 없던 객체를 지울 수 없기 때문이다.
-			// ponytail: 이 확인과 upload 사이 창(~100ms)은 남는다. 10초짜리 인코딩 창을 그만큼 줄이는 걸로 충분.
-			if (videoRepository.findById(videoId).map(Video::isDeleted).orElse(true)) {
-				log.info("인코딩 중 삭제됨 — 결과 업로드 생략: videoId={}", videoId);
+			// ffmpeg 가 도는 동안 삭제됐으면 결과를 올려봐야 아무도 참조하지 않는 고아가 되고,
+			// 교체됐으면 옛 바이트가 결정적 encoded 키의 새 인코딩본을 덮는다 (MSG-241) — 정체성이
+			// 유지될 때(ACTIVE·같은 원본)만 올린다.
+			// ponytail: 이 확인과 upload 사이 창(~100ms)은 남는다. 10초짜리 인코딩 창을 그만큼 줄이는 걸로 충분
+			// — 상태 전이는 어차피 statusWriter 의 DB 가드가 막고, 새 태스크의 재인코딩이 같은 키를 덮는다.
+			if (!isCurrentEncodingAttempt(videoId, originalKey)) {
+				log.info("인코딩 중 삭제·교체됨 — 결과 업로드 생략: videoId={}", videoId);
 				return;
 			}
 
@@ -90,19 +98,26 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			if (aiEnabled) {
 				// 미블러 썸네일을 S3 에 올리지 않고 thumbnailUrl 도 기록하지 않는다(P1/R5 불변식) — 폴러가 완료 시
 				// 블러본에서 뽑아 결정적 키에 올린 뒤 그때 thumbnailUrl 을 기록한다. 교체돼도 미블러본이 공개 키에 안 닿는다.
-				statusWriter.markEncoded(videoId, encodedKey);
+				statusWriter.markEncoded(videoId, originalKey, encodedKey);
 			} else {
 				upload(thumbnailKey, "image/jpeg", thumbnail);
-				statusWriter.markReady(videoId, encodedKey, thumbnailKey);
+				statusWriter.markReady(videoId, originalKey, encodedKey, thumbnailKey);
 			}
 			log.info("인코딩 완료: videoId={} duration={}s aiEnabled={}", videoId, duration, aiEnabled);
 		} catch (Exception e) {
 			// 비동기라 던져봐야 받을 곳이 없다. 기록만 남기고 재시도하지 않는다 (MSG-65 D8).
 			log.error("인코딩 실패: videoId={}", videoId, e);
-			statusWriter.markFailed(videoId);
+			statusWriter.markFailed(videoId, originalKey);
 		} finally {
 			deleteQuietly(workDir);
 		}
+	}
+
+	/** 업로드 직전 fresh 재확인 — VideoStatusWriter.isCurrentEncodingAttempt 와 같은 술어다 (MSG-241). */
+	private boolean isCurrentEncodingAttempt(Long videoId, String originalKey) {
+		return videoRepository.findById(videoId)
+			.map(fresh -> fresh.getStatus() == VideoStatus.ACTIVE && originalKey.equals(fresh.getOriginalS3Key()))
+			.orElse(false);
 	}
 
 	private void download(String s3Key, Path target) {
