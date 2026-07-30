@@ -12,12 +12,35 @@ def field(z, snake, camel):
     return z[snake] if snake in z else z[camel]
 
 
+INT32 = 2 ** 31  # PostgreSQL INTEGER 범위
+
+
+def is_int(v):
+    return type(v) is int  # bool 은 int 서브클래스라 isinstance 로는 True 가 새서 type 비교
+
+
 rects = []
 for z in zones:
     key = field(z, "zone_key", "zoneKey")
-    r = (key, z.get("name"),
+    # 스키마 제약 미러 (V8) — 캡·겹침만 보면 소수점 좌표·초과 길이가 PASS 후 Jackson/DB 에서 죽는다
+    if not isinstance(key, str) or not key or len(key) > 30:
+        errors.append(f"[키형식] zone_key {key!r}: 비어있지 않은 30자 이하 문자열이어야 함 (VARCHAR(30))")
+    name = z.get("name")
+    if not isinstance(name, str) or not name or len(name) > 50:
+        errors.append(f"[이름형식] {key}: name {name!r} — 비어있지 않은 50자 이하 문자열 (VARCHAR(50))")
+    rc = field(z, "region_code", "regionCode") if ("region_code" in z or "regionCode" in z) else None
+    if rc is not None and (not isinstance(rc, str) or len(rc) > 10):
+        errors.append(f"[행정동형식] {key}: regionCode {rc!r} — null 또는 10자 이하 문자열 (VARCHAR(10))")
+    pr = z.get("priority", 0)
+    if not is_int(pr):
+        errors.append(f"[priority형식] {key}: {pr!r} — 정수여야 함")
+    r = (key, name,
          field(z, "min_grid_y", "minGridY"), field(z, "max_grid_y", "maxGridY"),
          field(z, "min_grid_x", "minGridX"), field(z, "max_grid_x", "maxGridX"))
+    bad = [v for v in r[2:] if not is_int(v) or abs(v) >= INT32]
+    if bad:
+        errors.append(f"[좌표형식] {key}: {bad!r} — INTEGER 정수여야 함 (소수점·문자열·범위 초과 불가)")
+        continue  # 좌표가 깨진 행은 아래 산술 검사 무의미
     rects.append(r)
     if r[3] < r[2] or r[5] < r[4]:
         errors.append(f"[범위역전] {key}: min > max")
