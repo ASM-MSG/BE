@@ -32,12 +32,12 @@ for z in zones:
     if rc is not None and (not isinstance(rc, str) or len(rc) > 10):
         errors.append(f"[행정동형식] {key}: regionCode {rc!r} — null 또는 10자 이하 문자열 (VARCHAR(10))")
     pr = z.get("priority", 0)
-    if not is_int(pr):
-        errors.append(f"[priority형식] {key}: {pr!r} — 정수여야 함")
+    if not is_int(pr) or not (-INT32 <= pr <= INT32 - 1):
+        errors.append(f"[priority형식] {key}: {pr!r} — INTEGER 범위 정수여야 함")
     r = (key, name,
          field(z, "min_grid_y", "minGridY"), field(z, "max_grid_y", "maxGridY"),
          field(z, "min_grid_x", "minGridX"), field(z, "max_grid_x", "maxGridX"))
-    bad = [v for v in r[2:] if not is_int(v) or abs(v) >= INT32]
+    bad = [v for v in r[2:] if not is_int(v) or not (-INT32 <= v <= INT32 - 1)]
     if bad:
         errors.append(f"[좌표형식] {key}: {bad!r} — INTEGER 정수여야 함 (소수점·문자열·범위 초과 불가)")
         continue  # 좌표가 깨진 행은 아래 산술 검사 무의미
