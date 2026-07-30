@@ -510,6 +510,10 @@ public class VideoServiceImpl implements VideoService {
 	 *
 	 * 호출부에서 videos INSERT 이후에 부르는 이유: 복사가 실패하면 트랜잭션이 롤백돼 row 가 안 남고
 	 * pending 은 만료된다. 반대 순서면 original 쪽에 라이프사이클이 못 잡는 고아가 생긴다.
+	 *
+	 * 복사 성공 이후 트랜잭션이 실패하면 DB 는 롤백돼도 original 복사본은 남는데, 라이프사이클이
+	 * pending 전용이라 영구 고아가 된다 — 복사 직후 롤백 보상을 걸어 함께 정리한다(MSG-247).
+	 * 복사 자체가 실패하면 대상 객체가 없으니 보상 불요(예외 전파 → 롤백 → pending 만료).
 	 */
 	private void copyToOriginal(String pendingKey, String originalKey) {
 		s3Client.copyObject(CopyObjectRequest.builder()
@@ -518,6 +522,30 @@ public class VideoServiceImpl implements VideoService {
 			.destinationBucket(awsProperties.s3().bucket())
 			.destinationKey(originalKey)
 			.build());
+		deleteOnRollback(originalKey);
+	}
+
+	/**
+	 * afterCommit 의 롤백 대칭 (MSG-247) — 확정 트랜잭션이 롤백되면 방금 복사한 original 을 지운다.
+	 * 트랜잭션 밖이면 롤백 개념이 없으니 아무것도 안 한다 — afterCommit 헬퍼의 "즉시 실행" 폴백과 반대다
+	 * (즉시 실행하면 방금 복사한 원본을 그 자리에서 지워버린다).
+	 *
+	 * STATUS_ROLLED_BACK 에만 지운다 — STATUS_UNKNOWN(커밋 결과 불명)은 커밋됐을 수 있는 영상의 원본이라
+	 * 지우면 데이터 유실(재생 불가)이고, 고아는 비용 문제일 뿐이다. 불명확하면 남기는 쪽이 안전.
+	 * 삭제는 deleteQuietly 베스트 에포트 — 롤백 응답을 보상 실패로 다시 오염시키지 않는다.
+	 */
+	private void deleteOnRollback(String originalKey) {
+		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+			return;
+		}
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCompletion(int status) {
+				if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+					deleteQuietly(originalKey);
+				}
+			}
+		});
 	}
 
 	private void requireObjectExists(String s3Key) {
