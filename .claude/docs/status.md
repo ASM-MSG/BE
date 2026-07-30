@@ -17,6 +17,7 @@
 ### `global` — ✅ 완성
 - `ApiException`, `GlobalExceptionHandler`, `config/SecurityConfig`, `config/S3Config`(S3Presigner 빈)·`config/AwsProperties` (MSG-64)
 - MSG-167: `GlobalExceptionHandler`에 `MissingServletRequestParameterException → 400 BAD_REQUEST` 전역 매핑 (필수 파라미터 누락이 catch-all에 삼켜져 500이던 결함 정정)
+- MSG-244: `config/ProdRedisPasswordValidator`(prod 프로파일 전용 기동 검증 — 바인더가 미해석 `${REDIS_PASSWORD}`를 리터럴로 통과시키는 결함 보완, 공백/미해석 리터럴 완전 일치 시 기동 실패) + prod Redis 포트 6380·헬스체크 호스트 보간 정합(application-prod.yml·docker-compose.server.yml)
 
 ### `auth` (Owner B) — ✅ 완성
 - 기본 골격: `controller`(+`/reissue`), `service`(AuthService·OidcLoginService·RefreshTokenService), `dto`(+Reissue*), `jwt`(TokenProvider·필터·JwtProperties·RefreshTokenProvider/Store·RedisInvalidatedTokenStore), `oidc`(Kakao OIDC), `support/RefreshTokenCookies`, `exception/AuthErrorCode`
@@ -35,9 +36,15 @@
 
 ### `usergrid` (Owner B) — 🟡 부분
 - MSG-152: `repository/{UserGridRepository,CollectionSummaryProjection}`(user_grids·videos 네이티브 집계), `service/UserGridQueryService`(+impl, read 계약 B→A)·`CollectionSummaryView`, `controller/CollectionController`(`GET /api/collections/summary`), `dto/CollectionSummaryResponseDto`
+- MSG-246: 도감 요약 `visitedRegionCount` 정정(`getCollectionSummary` 서브쿼리 — dead `videos.region_code` 대신 `JOIN grids` 후 `COUNT(DISTINCT g.region_code)`, MSG-167 by-grid 귀속 정합. 테스트 시딩도 프로덕션 형상(videos.region_code NULL)으로 재작성)
 - MSG-153: 갤러리 격자 목록(`GET /api/collections/grids` — `first_collected_at DESC` 30 고정·무커서, `GridEncoder.decode`로 grids 미조인, `ThumbnailUrlPresigner` 소비, `CollectionGridProjection`/`CollectionGridView`/`CollectionGridResponseDto`·`getCollectionGrids` B-내부 read)
 - MSG-167: 갤러리 목록에 `regionName` 추가(`grids`·`regions` LEFT JOIN equi, geospatial 0 — 153 "grids 미조인"을 라벨 위해 뒤집음, 정렬·30상한 등 나머지 계약 불변), `CollectionGridProjection`/`View`/`ResponseDto`에 regionName 1필드. 동 단위 내 영상 조회(`GET /api/collections/videos?regionCode=` — `videos⨝grids` 격자 축 귀속·ACTIVE만·`created_at DESC, id DESC`·no-LIMIT·빈 배열 200, `RegionVideoProjection`/`View`/`RegionVideoResponseDto`(gridId 포함)·`getRegionVideos` B-내부 read)
 - **없는 것**: — (155/156 소비용 프리미티브 구상은 불필요해져 폐기 — 155 자기완결·156 별도 서비스로 종결)
+
+### `mission` (Owner B) — 🟡 부분
+- MSG-166: V6 스키마 검증 테스트(`MissionSchemaMigrationTest` — 엔티티 없던 시점)
+- MSG-222: 활성 미션 조회(`GET /api/missions/active` — `entity/{Mission,MissionType,MissionGrid,MissionGridId}`(조회 전용), `MissionRepository.findActive`(기간 경계 독립 판정)·`MissionGridRepository`, `MissionQueryService`(+impl — 유형→shape 단일 분기: COURSE→PATH(path 원문+spots)/EVENT→BOX(bbox 합성)/THEME·CONTINUOUS→CELLS/AREA→REGION(코드만), 1h 전역 캐시 단일 volatile CacheEntry+더블체크 락, 단일 인스턴스 전제), `dto/MissionResponseDto`+`sealed MissionShape` 4종)
+- **없는 것**: 판정·스탬프(MSG-223), 시드 적재(MSG-224/225/235)
 
 ### `region` (Owner A) — 🟡 부분
 - MSG-154: `entity/Region`(boundary_geom 미매핑), `repository/RegionRepository`(native UPSERT + ST_Area 기반 total_grid_count), `seed/{RegionGeoJsonReader,RegionFeature,RegionSeeder}`(플래그 게이트 `fillmap.region.seed.enabled` 기본 off, 전국 3,558 행정동)
@@ -57,6 +64,9 @@
 - MSG-64: presigned URL 발급(`POST /api/videos/presigned-url`)
 - MSG-65: 인코딩 워커(`VideoEncodingService`+`VideoStatusWriter`+`support/FfmpegRunner`+`config/AsyncConfig`, 커밋 후 `@Async` 트리거)
 - MSG-72: 삭제+점령 롤백(`DELETE /api/videos/{videoId}`, cover 재선정)
+- MSG-243: 삭제 동시성 정합(`deleteVideo` 도입부 `findWithLockById` 행 잠금 — 동시 삭제 이중 감소·점령 오롤백 차단, 패자 멱등 200 유지, `VideoDeleteConcurrencyTest` pg_blocking_pids 결정적 재현)
+- MSG-241: 인코딩 stale completion 차단(`encode(videoId, originalKey)` 시그니처 + 인코딩 라이터 4종 `findWithLockById`·`isCurrentEncodingAttempt`(ACTIVE·originalS3Key 일치) 가드 — 교체 후 옛 태스크의 READY/BLURRING/FAILED 오염·ai_job_id 잔존 차단. 폴러 라이터 3종 무변경, 마이그레이션 불요)
+- MSG-247: 확정 롤백 S3 보상(`copyToOriginal` 복사 직후 `deleteOnRollback` — STATUS_ROLLED_BACK만·비활성 no-op·`deleteQuietly` 재사용) + 시도별 유니크 original 키(`{pendingStem}-{attemptUuid}`, `pg_advisory_xact_lock` 확정 직렬화·prefix 중복 검사 — 동시 확정 레이스 근절, 패자 4xx 수렴. prefix 인덱스는 MSG-262)
 - MSG-132: s3Key 검증(소유권·headObject 실존·UNIQUE 중복)
 - MSG-71: 교체(`PUT /api/videos/{videoId}`, 같은 격자만, 도감 불변)
 - MSG-133: S3 정리(presign은 `videos/pending/` 발급 → 확정 시 `videos/original/` 복사, 라이프사이클 1일 만료 / 삭제·교체 시 커밋 후 객체 제거)
@@ -73,6 +83,7 @@
 - MSG-237: 격자 전역 영상 목록(`GET /api/grids/{gridId}/videos` — `idx_videos_grid_popular` 일치 ACTIVE·PUBLIC·READY 필터, 조회수 인기순 keyset opaque 커서(gridId 바인딩·UTC epoch micros), `GridGlobalVideoResponseDto`/`GridVideoPageResponseDto`, `INVALID_CURSOR` 3423)
 - MSG-238: 전역 탐색 API 2종(`GET /api/regions/{regionCode}/grids` 카드+헤더 카운트·`GET /api/regions/explore` — `RegionExploreController`/`Service`, 게이트=ACTIVE·PUBLIC·READY 단일 정의, 커버 87 규칙 3키 정합(`findGlobalCover` id DESC 추가), DTO 3종·프로젝션 3종, sort 대문자 enum·limit null=전부, 신규 에러코드 0)
 - MSG-239: 업로드 뱃지 훅(`saveVideo` 2지점 — 항상 UPLOAD_COUNT(생애 카운트·status 무관), 첫 점령 시 TOTAL_GRIDS+refresh 직후 REGION_PERCENT 물질화 값 소비, 같은 트랜잭션)·`VideoUploadResponseDto.newBadges` 동봉(FR-9). 삭제·교체 경로 무변경(비회수 FR-5)
+- MSG-200: 업로드 스트릭 훅(`saveVideo` — `!alreadyOccupied` 분기 바깥 1줄, `StreakCommandService.recordUpload` 획득분 `newBadges` 합류. 삭제·교체 무변경 — 소급 차감 없음 §D4)
 - **없는 것**: —
 
 ### `search` (Owner A) — ✅ 완성 (MVP 범위)
@@ -80,7 +91,11 @@
 
 ### `badge` (Owner B) — 🟡 부분
 - MSG-239: 뱃지 시스템 MVP — V9(`chk_badges_condition`에 MISSION_COUNT 확장·`user_badges.notified_at/featured_rank`+partial UNIQUE·활성 3축 11종 시딩·set-based 소급), `entity/{Badge(conditionValue 미매핑),BadgeConditionType,UserBadge,UserBadgeId}`, `repository/{BadgeRepository.findEligible,UserBadgeRepository(지급 ON CONFLICT·metric 3종·featured lock/clear/set)}`, `service/BadgeAwardService`(+impl, 후보 SELECT+INSERT 2단 — B 내부)·`BadgeFeaturedService`(+impl), `PUT /api/badges/featured`(`BadgeController`·집합 교체 멱등), `dto/{EarnedBadge,FeaturedBadgeRequest,FeaturedBadgeResponse}ResponseDto`, `exception/BadgeErrorCode`(7xxx — 7400·7403)
-- **없는 것**: 조회 API·미확인 해제(MSG-201), STREAK_DAYS 훅·시딩(MSG-200), MISSION_COUNT 훅·시딩(미션 엔진 티켓), SPECIAL 시딩(오픈 준비 티켓)
+- MSG-200: V10 꾸준함 뱃지 시딩(STREAK_3/7/30 — DDL 0·소급 블록 없음, §D6 예외 주석. 판정 훅은 streak 도메인이 `award(STREAK_DAYS)` 호출)
+- **없는 것**: 조회 API·미확인 해제(MSG-201), MISSION_COUNT 훅·시딩(미션 엔진 티켓), SPECIAL 시딩(오픈 준비 티켓)
+
+### `streak` (Owner B) — ✅ 완성 (MVP 범위)
+- MSG-200: 스트릭 집계 — `entity/Streak`(전 컬럼 매핑·Setter 없음, 쓰기는 native 전용), `repository/StreakRepository`(`upsertOnUpload` — 3분기 CASE 한 문장 UPSERT·KST 자정 경계·ON CONFLICT 행 잠금 직렬화 + `findCurrentCount`), `service/StreakCommandService`(+impl — 갱신 직후 `BadgeAwardService.award(STREAK_DAYS)` 배선·획득분 반환, B 내부). 조회 API 없음(currentStreak·maxStreak 노출은 도감 summary 티켓 소관 §D8), freeze 미도입·소급 차감 없음 확정
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
@@ -98,7 +113,7 @@
 
 ## 스키마 vs JPA 엔티티
 
-`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다.
+`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다. `V10__streak_badges_seed.sql`(MSG-200)은 STREAK_3/7/30 시딩만 담는다(DDL 0·소급 없음).
 
 | 테이블 | 엔티티 | 상태 |
 |---|---|---|
@@ -116,7 +131,7 @@
 | `push_tokens` | — | ❌ 엔티티 없음 |
 | `reports` | — | ❌ 엔티티 없음 |
 | `sponsor_ads` | — | ❌ 엔티티 없음 |
-| `streaks` | — | ❌ 엔티티 없음 |
+| `streaks` | `streak/entity/Streak` | ✅ (MSG-200 — 전 컬럼 매핑, 쓰기는 native UPSERT 전용) |
 | `missions` | — | ❌ 엔티티 없음 (V6/MSG-166 스키마 선반영 — path JSONB, 엔티티·API는 MSG-222/223) |
 | `mission_grids` | — | ❌ 엔티티 없음 (grids FK 없는 논리 참조 — lazy insert 때문, MSG-166 §D2) |
 | `user_missions` | — | ❌ 엔티티 없음 (스탬프 영속 — user_badges 패턴, 비회수) |

@@ -42,6 +42,7 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
+import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
@@ -96,6 +97,7 @@ public class VideoServiceImpl implements VideoService {
 	private final RegionStatsCommandService regionStatsCommandService;
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
 	private final BadgeAwardService badgeAwardService;
+	private final StreakCommandService streakCommandService;
 
 	@Override
 	@Transactional
@@ -111,7 +113,9 @@ public class VideoServiceImpl implements VideoService {
 		boolean alreadyOccupied = videoRepository.existsUserGrid(userId, gridId);
 
 		Point geom = GeoSupport.toPoint(lat, lon);
-		Video video = videoRepository.save(
+		// saveAndFlush: original_s3_key 클레임(INSERT)을 S3 복사보다 먼저 확정한다 (MSG-247 1R 클레임 선행).
+		// IDENTITY 라 save 도 즉시 INSERT 지만, ID 전략이 바뀌어도 순서가 유지되게 명시한다.
+		Video video = videoRepository.saveAndFlush(
 			Video.create(userId, gridId, originalKey, geom, request.durationSec(), request.recordedAt()));
 
 		copyToOriginal(request.s3Key(), originalKey);
@@ -128,7 +132,10 @@ public class VideoServiceImpl implements VideoService {
 			regionStatsCommandService.refresh(userId, gridId);
 			newBadges.addAll(badgeAwardService.awardCollectionBadges(userId, gridId));
 		}
-		triggerEncodingAfterCommit(video.getId());
+		// 스트릭 (MSG-200): 아무 업로드(재방문 포함)가 인정 이벤트라 분기 바깥. 갱신·꾸준함 뱃지 판정은
+		// 스트릭 도메인 몫 — 여기서는 획득분을 응답에 합류시키기만 한다.
+		newBadges.addAll(streakCommandService.recordUpload(userId));
+		triggerEncodingAfterCommit(video.getId(), originalKey);
 
 		return new VideoUploadResponseDto(
 			video.getId(), gridId, video.getProcessingStatus().name(), !alreadyOccupied, newBadges);
@@ -151,12 +158,16 @@ public class VideoServiceImpl implements VideoService {
 		String replacedBlurredKey = video.getBlurredS3Key();
 
 		video.replaceFile(originalKey, request.durationSec(), request.recordedAt());
+		// 클레임 선행 (MSG-247 1R): original_s3_key 클레임(UPDATE)을 S3 복사보다 먼저 flush 한다.
+		// 동시 이중 확정 직렬화는 2R 부터 confirmUpload 의 advisory lock 몫이고, 이 flush 는
+		// "DB 클레임 없이 복사된 객체가 없다"는 순서 보장으로 남는다(무해 — 2R 에서 유지 결정).
+		videoRepository.flush();
 		copyToOriginal(request.s3Key(), originalKey);
 
 		// 교체된 원본은 참조를 잃는다. 인코딩본·썸네일은 키가 videoId 기반이라 재인코딩이 같은 자리에
 		// 덮어쓰므로 지울 게 없다 — 고아가 되는 건 옛 original 과 블러본(MSG-145)이다.
 		afterCommit(() -> deleteQuietly(replacedKey, replacedBlurredKey));
-		triggerEncodingAfterCommit(videoId);
+		triggerEncodingAfterCommit(videoId, originalKey);
 		return VideoReplaceResponseDto.from(video);
 	}
 
@@ -202,7 +213,7 @@ public class VideoServiceImpl implements VideoService {
 		}
 	}
 
-	/** 소유권 검증 — 교체·삭제가 공유한다 (MSG-71 스펙: "소유권 검증(MSG-72와 공통 헬퍼)"). */
+	/** 소유권 검증 — 교체·공개설정이 공유한다. 삭제는 잠금 로드로 같은 검사를 한다 (MSG-243). */
 	private Video findOwnedVideo(long userId, long videoId) {
 		Video video = videoRepository.findById(videoId)
 			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
@@ -215,9 +226,18 @@ public class VideoServiceImpl implements VideoService {
 	@Override
 	@Transactional
 	public void deleteVideo(long userId, long videoId) {
-		Video video = findOwnedVideo(userId, videoId);
+		// 잠금 로드 (MSG-243). findOwnedVideo 의 일반 로드는 동시 삭제 2건이 모두 아래 멱등 가드를 통과해
+		// video_count 가 이중 감소한다 — ACTIVE 영상이 남았는데 점령이 오롤백되는 데이터 유실. 행 잠금
+		// (MSG-149 findWithLockById 재사용)으로 전이를 직렬화하면 패자는 대기 후 재조회에서 DELETED 를 보고
+		// 가드에서 반환하므로 감소·S3 삭제 등록·수집률 refresh 가 승자 1회만 실행된다. 잠금 유지 구간은
+		// DB 쓰기뿐이다 — S3 작업은 전부 afterCommit 이라 잠금이 길어지지 않는다.
+		Video video = videoRepository.findWithLockById(videoId)
+			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
+		if (video.getUserId() != userId) {
+			throw new ApiException(VideoErrorCode.VIDEO_FORBIDDEN);
+		}
 		if (video.isDeleted()) {
-			return;   // 중복 삭제는 멱등하게 성공 (MSG-72 D7)
+			return;   // 중복 삭제는 멱등하게 성공 (MSG-72 D7) — 동시 삭제의 패자도 여기로 (MSG-243)
 		}
 
 		// 아래 native 쿼리들은 이 변경을 본다 — Hibernate 가 native 쿼리 전에 영속성 컨텍스트를
@@ -279,8 +299,8 @@ public class VideoServiceImpl implements VideoService {
 	 * 인코딩은 커밋 이후에 띄운다. @Async 는 별도 스레드라 여기서 바로 호출하면 아직 커밋되지 않은
 	 * videos row 를 조회해 "영상 없음"으로 실패할 수 있다 (MSG-65 트리거 타이밍).
 	 */
-	private void triggerEncodingAfterCommit(Long videoId) {
-		afterCommit(() -> submitEncoding(videoId));
+	private void triggerEncodingAfterCommit(Long videoId, String originalKey) {
+		afterCommit(() -> submitEncoding(videoId, originalKey));
 	}
 
 	/** 트랜잭션이 없으면(테스트 등) 그냥 지금 실행한다. */
@@ -303,12 +323,12 @@ public class VideoServiceImpl implements VideoService {
 	 * 500 으로 응답되고(클라이언트는 재시도 → 중복 업로드), 인코딩 쪽 catch 는 실행조차 되지 않아
 	 * 영상이 UPLOADED 로 남는다. 그래서 여기서 삼키고 FAILED 로 기록한다.
 	 */
-	private void submitEncoding(Long videoId) {
+	private void submitEncoding(Long videoId, String originalKey) {
 		try {
-			videoEncodingService.encode(videoId);
+			videoEncodingService.encode(videoId, originalKey);
 		} catch (TaskRejectedException e) {
 			log.error("인코딩 큐 포화로 작업이 거부됨: videoId={}", videoId, e);
-			videoStatusWriter.markFailed(videoId);
+			videoStatusWriter.markFailed(videoId, originalKey);
 		}
 	}
 
@@ -463,7 +483,7 @@ public class VideoServiceImpl implements VideoService {
 
 	/**
 	 * 확정 요청의 pending 키가 "내가 실제로 올린, 아직 안 쓴 파일"인지 확인하고(MSG-132)
-	 * original 로 옮긴 뒤 그 키를 돌려준다(MSG-133).
+	 * 이번 시도의 original 키를 발급해 돌려준다(MSG-133 · MSG-247 2R).
 	 *
 	 * 검증이 없으면 파일을 올리지 않고 좌표만 찍어서 격자를 점령할 수 있다 — upsertUserGrid 가
 	 * 인코딩보다 먼저 돌고, 인코딩이 FAILED 가 돼도 점령은 남기 때문이다. FillMap 은 직접 가서 찍어야
@@ -471,23 +491,35 @@ public class VideoServiceImpl implements VideoService {
 	 *
 	 * prefix 검사만으론 부족하다 — 공격자는 자기 userId 를 알기에 videos/pending/{내id}/아무거나.mp4 를
 	 * 지어낼 수 있다. S3 에 실제로 있는지(headObject) 봐야 막힌다.
+	 *
+	 * original 키는 pending 결정 파생이 아니라 확정 시도마다 새 UUID 다(Codex 2R P1): 목적지가 결정적이면
+	 * 롤백된 시도의 보상 삭제와 후속 시도의 복사·커밋이 같은 키를 두고 순서 경쟁한다(각각 S3 호출 1회,
+	 * 순서 미보장). 시도별 키는 목적지 공유 자체를 없애 그 레이스 클래스를 근절한다. 대신 이중 확정
+	 * 차단은 UNIQUE 직렬화가 아니라 pending 키 advisory lock + pendingStem prefix 존재 검사로 유지한다 —
+	 * 락이 같은 pending 의 확정을 직렬화하므로 락 획득 후의 검사는 앞 확정의 커밋을 반드시 본다.
+	 * (구형 결정 파생 키로 이미 확정된 pending 은 정확 매치가 마저 걸러낸다 — 배포 전 데이터 호환.)
 	 */
 	private String confirmUpload(long userId, String pendingKey) {
 		if (!pendingKey.startsWith("%s%d/".formatted(PENDING_PREFIX, userId))) {
 			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
 		}
-		String originalKey = ORIGINAL_PREFIX + pendingKey.substring(PENDING_PREFIX.length());
+		String stem = pendingKey.substring(PENDING_PREFIX.length());   // "{userId}/{uuid}.{ext}"
+		int extAt = stem.lastIndexOf('.');
+		if (extAt < 0) {
+			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);   // presign 발급 키는 항상 확장자를 가진다
+		}
+		String claimPrefix = ORIGINAL_PREFIX + stem.substring(0, extAt) + "-";
 
-		// 영상 1개로 좌표만 바꿔가며 무한 점령하는 걸 막는다. DB 의 UNIQUE 제약이 최종 방어선이고,
-		// 여기서 미리 걸러 500 대신 4xx 를 준다.
-		//
-		// 반드시 originalKey 로 조회해야 한다 — DB 에는 original 키만 저장되므로 클라이언트가 준
-		// pendingKey 로 조회하면 영영 매치되지 않아 중복 검사가 통째로 무력화된다.
-		if (videoRepository.existsByOriginalS3Key(originalKey)) {
+		videoRepository.acquirePendingKeyConfirmLock(pendingKey);
+		// 영상 1개로 좌표만 바꿔가며 무한 점령하는 걸 막는다(이중 확정 차단). prefix 매치가 시도별 키를,
+		// 정확 매치가 구형 결정 키를 잡는다. StartingWith 의 LIKE 와일드카드는 매치를 넓힐 뿐이라
+		// 거부 방향으로만 오작동 가능 — 이중 확정 우회로는 악용될 수 없다.
+		if (videoRepository.existsByOriginalS3KeyStartingWith(claimPrefix)
+			|| videoRepository.existsByOriginalS3Key(ORIGINAL_PREFIX + stem)) {
 			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
 		}
 		requireObjectExists(pendingKey);
-		return originalKey;
+		return claimPrefix + UUID.randomUUID() + stem.substring(extAt);
 	}
 
 	/**
@@ -496,6 +528,10 @@ public class VideoServiceImpl implements VideoService {
 	 *
 	 * 호출부에서 videos INSERT 이후에 부르는 이유: 복사가 실패하면 트랜잭션이 롤백돼 row 가 안 남고
 	 * pending 은 만료된다. 반대 순서면 original 쪽에 라이프사이클이 못 잡는 고아가 생긴다.
+	 *
+	 * 복사 성공 이후 트랜잭션이 실패하면 DB 는 롤백돼도 original 복사본은 남는데, 라이프사이클이
+	 * pending 전용이라 영구 고아가 된다 — 복사 직후 롤백 보상을 걸어 함께 정리한다(MSG-247).
+	 * 복사 자체가 실패하면 대상 객체가 없으니 보상 불요(예외 전파 → 롤백 → pending 만료).
 	 */
 	private void copyToOriginal(String pendingKey, String originalKey) {
 		s3Client.copyObject(CopyObjectRequest.builder()
@@ -504,6 +540,34 @@ public class VideoServiceImpl implements VideoService {
 			.destinationBucket(awsProperties.s3().bucket())
 			.destinationKey(originalKey)
 			.build());
+		deleteOnRollback(originalKey);
+	}
+
+	/**
+	 * afterCommit 의 롤백 대칭 (MSG-247) — 확정 트랜잭션이 롤백되면 방금 복사한 original 을 지운다.
+	 * 트랜잭션 밖이면 롤백 개념이 없으니 아무것도 안 한다 — afterCommit 헬퍼의 "즉시 실행" 폴백과 반대다
+	 * (즉시 실행하면 방금 복사한 원본을 그 자리에서 지워버린다).
+	 *
+	 * STATUS_ROLLED_BACK 에만 지운다 — STATUS_UNKNOWN(커밋 결과 불명)은 커밋됐을 수 있는 영상의 원본이라
+	 * 지우면 데이터 유실(재생 불가)이고, 고아는 비용 문제일 뿐이다. 불명확하면 남기는 쪽이 안전.
+	 * 삭제는 deleteQuietly 베스트 에포트 — 롤백 응답을 보상 실패로 다시 오염시키지 않는다.
+	 *
+	 * 불변식(시도별 유니크 키 — Codex 2R P1): original 키는 확정 시도마다 새 UUID 로 발급되므로
+	 * 목적지 공유 자체가 불가능하다. 이 보상이 지우는 객체는 언제나 자기 시도만 참조하던 것이고,
+	 * 후속 재시도의 복사·커밋과 이 삭제의 S3 호출 순서가 어긋나도 서로 다른 키라 무해하다.
+	 */
+	private void deleteOnRollback(String originalKey) {
+		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+			return;
+		}
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCompletion(int status) {
+				if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+					deleteQuietly(originalKey);
+				}
+			}
+		});
 	}
 
 	private void requireObjectExists(String s3Key) {

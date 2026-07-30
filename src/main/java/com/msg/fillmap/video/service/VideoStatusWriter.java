@@ -25,6 +25,10 @@ import com.msg.fillmap.video.repository.VideoRepository;
  *
  * 폴러 전용 쓰기(markBlurReady·markBlurFailed·recordAiJob)는 교체/삭제와 벌어진 창을 막기 위해
  * findWithLockById(행 잠금)로 fresh 조회한 뒤 잡 정체성을 재확인하고(P1/P2), 불일치면 조용히 skip 한다.
+ *
+ * 인코딩 태스크 쓰기(markEncoding·markReady·markEncoded·markFailed)도 같은 패턴으로 지킨다 (MSG-241) —
+ * 시도 정체성은 "어느 원본을 인코딩했나" = original_s3_key 다. 교체가 키를 갈아끼우므로(UNIQUE, V2)
+ * 키 불일치 = 다른 시도이고, 옛 태스크의 완료/실패가 새 파일 상태(UPLOADED→재인코딩)를 덮지 못한다.
  */
 @Slf4j
 @Component
@@ -33,20 +37,41 @@ public class VideoStatusWriter {
 
 	private final VideoRepository videoRepository;
 
+	/** 적용 여부를 반환한다 — false 면 태스크 시작 시점부터 스테일(큐 대기 중 교체·삭제됨)이라 ffmpeg 을 돌릴 이유가 없다. */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void markEncoding(Long videoId) {
-		videoRepository.findById(videoId).ifPresent(Video::markEncoding);
+	public boolean markEncoding(Long videoId, String expectedOriginalKey) {
+		Video video = videoRepository.findWithLockById(videoId).orElse(null);
+		if (!isCurrentEncodingAttempt(video, expectedOriginalKey)) {
+			logStaleSkip("인코딩 시작", videoId, expectedOriginalKey, video);
+			return false;
+		}
+		video.markEncoding();
+		return true;
 	}
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void markReady(Long videoId, String encodedKey, String thumbnailKey) {
-		videoRepository.findById(videoId).ifPresent(video -> video.markReady(encodedKey, thumbnailKey));
+	public void markReady(Long videoId, String expectedOriginalKey, String encodedKey, String thumbnailKey) {
+		videoRepository.findWithLockById(videoId).ifPresent(video -> {
+			if (!isCurrentEncodingAttempt(video, expectedOriginalKey)) {
+				logStaleSkip("인코딩 완료", videoId, expectedOriginalKey, video);
+				return;
+			}
+			video.markReady(encodedKey, thumbnailKey);
+		});
 	}
 
 	/** AI 활성 인코딩 완료 지점 (MSG-149) — READY 대신 BLURRING. thumbnailUrl 은 폴러가 완료 시 기록한다(P2). */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void markEncoded(Long videoId, String encodedKey) {
-		videoRepository.findById(videoId).ifPresent(video -> video.markEncoded(encodedKey));
+	public void markEncoded(Long videoId, String expectedOriginalKey, String encodedKey) {
+		videoRepository.findWithLockById(videoId).ifPresent(video -> {
+			if (!isCurrentEncodingAttempt(video, expectedOriginalKey)) {
+				// 스테일 markEncoded 는 blurringStartedAt 을 새로 찍어 폴러 가드를 정상 통과시키므로(MSG-241)
+				// 여기서 못 막으면 옛 파일의 ai_job_id 가 새 시도에 붙는다.
+				logStaleSkip("인코딩 완료(AI)", videoId, expectedOriginalKey, video);
+				return;
+			}
+			video.markEncoded(encodedKey);
+		});
 	}
 
 	/**
@@ -104,8 +129,23 @@ public class VideoStatusWriter {
 	}
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void markFailed(Long videoId) {
-		videoRepository.findById(videoId).ifPresent(Video::markFailed);
+	public void markFailed(Long videoId, String expectedOriginalKey) {
+		videoRepository.findWithLockById(videoId).ifPresent(video -> {
+			if (!isCurrentEncodingAttempt(video, expectedOriginalKey)) {
+				// 교체 afterCommit 이 옛 원본을 S3 에서 지워 옛 태스크의 다운로드가 실패하는 게 대표 경로 —
+				// 그 실패는 옛 시도의 것이니 새 시도의 UPLOADED/ENCODING 을 FAILED 로 밀지 않는다 (MSG-241).
+				logStaleSkip("인코딩 실패", videoId, expectedOriginalKey, video);
+				return;
+			}
+			video.markFailed();
+		});
+	}
+
+	/** 이 태스크가 인코딩한 원본과 현재 DB 행이 같은 시도인가 — 교체(키 갱신)/삭제(ACTIVE 이탈)로 벌어진 창을 닫는다. */
+	private boolean isCurrentEncodingAttempt(Video video, String expectedOriginalKey) {
+		return video != null
+			&& video.getStatus() == VideoStatus.ACTIVE
+			&& Objects.equals(video.getOriginalS3Key(), expectedOriginalKey);
 	}
 
 	/** 폴링/완료/실패 판단의 잡과 현재 DB 엔티티가 같은 잡인가 — 교체/삭제로 벌어진 창을 닫는다. */

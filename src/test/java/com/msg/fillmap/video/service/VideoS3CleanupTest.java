@@ -36,6 +36,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
+import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
@@ -57,7 +58,8 @@ class VideoS3CleanupTest {
 	private static final long VIDEO_ID = 7L;
 	private static final String GRID_ID = "41716_110483";
 	private static final String PENDING = "videos/pending/1/new.mp4";
-	private static final String ORIGINAL = "videos/original/1/new.mp4";
+	// original 키는 확정 시도마다 새 UUID 라(MSG-247 2R) 정확값 대신 파생 prefix 로 단언한다.
+	private static final String ORIGINAL_CLAIM_PREFIX = "videos/original/1/new-";
 	private static final String OLD_ORIGINAL = "videos/original/1/old.mp4";
 
 	private VideoRepository repository;
@@ -78,7 +80,8 @@ class VideoS3CleanupTest {
 		service = new VideoServiceImpl(repository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			mock(S3Presigner.class), s3Client,
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
-			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class));
+			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
+			mock(StreakCommandService.class));
 	}
 
 	@AfterEach
@@ -103,7 +106,8 @@ class VideoS3CleanupTest {
 	@DisplayName("확정하면 pending 을 original 로 복사하고 DB 에는 original 키를 남긴다")
 	void 확정하면_original_로_복사된다() {
 		Video saved = existingVideo();
-		given(repository.save(any(Video.class))).willReturn(saved);
+		// 확정은 클레임 선행 직렬화로 saveAndFlush 를 쓴다 (MSG-247 P1) — 스텁도 따라간다.
+		given(repository.saveAndFlush(any(Video.class))).willReturn(saved);
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(PENDING, 37.5445, 127.0560, (short) 10,
 			LocalDateTime.now()));
@@ -111,18 +115,21 @@ class VideoS3CleanupTest {
 		ArgumentCaptor<CopyObjectRequest> copy = ArgumentCaptor.forClass(CopyObjectRequest.class);
 		then(s3Client).should().copyObject(copy.capture());
 		assertThat(copy.getValue().sourceKey()).as("원본은 pending").isEqualTo(PENDING);
-		assertThat(copy.getValue().destinationKey()).as("사본은 original").isEqualTo(ORIGINAL);
+		assertThat(copy.getValue().destinationKey())
+			.as("사본은 original — pendingStem 을 보존한 시도별 키 (MSG-247 2R)")
+			.startsWith(ORIGINAL_CLAIM_PREFIX).endsWith(".mp4");
 
 		ArgumentCaptor<Video> persisted = ArgumentCaptor.forClass(Video.class);
-		then(repository).should().save(persisted.capture());
+		then(repository).should().saveAndFlush(persisted.capture());
 		assertThat(persisted.getValue().getOriginalS3Key())
-			.as("DB 에는 클라이언트가 준 pending 이 아니라 original 키가 남아야 한다").isEqualTo(ORIGINAL);
+			.as("DB 에는 클라이언트가 준 pending 이 아니라 복사된 그 original 키가 남아야 한다")
+			.isEqualTo(copy.getValue().destinationKey());
 	}
 
 	@Test
 	@DisplayName("확정해도 pending 은 지우지 않는다 — 라이프사이클이 쓸어간다")
 	void 확정해도_pending_은_안_지운다() {
-		given(repository.save(any(Video.class))).willReturn(existingVideo());
+		given(repository.saveAndFlush(any(Video.class))).willReturn(existingVideo());
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(PENDING, 37.5445, 127.0560, (short) 10,
 			LocalDateTime.now()));
@@ -136,7 +143,8 @@ class VideoS3CleanupTest {
 	void 삭제하면_S3_에서도_지운다() {
 		Video video = existingVideo();
 		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
-		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(video));
+		// 삭제는 잠금 로드다 (MSG-243) — 스텁도 프로덕션 로드 메서드를 따라간다.
+		given(repository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		service.deleteVideo(USER_ID, VIDEO_ID);
 
@@ -150,7 +158,7 @@ class VideoS3CleanupTest {
 		Video video = existingVideo();
 		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
 		video.applyBlurResult("videos/blurred/1/7.mp4", List.of(List.of(0.0, 3.33)));
-		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(video));
+		given(repository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		service.deleteVideo(USER_ID, VIDEO_ID);
 
@@ -160,7 +168,7 @@ class VideoS3CleanupTest {
 	@Test
 	@DisplayName("인코딩 전 영상을 지우면 원본만 지운다 — null 키를 넣으면 S3 가 400 을 낸다")
 	void 인코딩_전_삭제는_원본만_지운다() {
-		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(existingVideo()));
+		given(repository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(existingVideo()));
 
 		service.deleteVideo(USER_ID, VIDEO_ID);
 
@@ -176,7 +184,7 @@ class VideoS3CleanupTest {
 			DeleteObjectsResponse.builder()
 				.errors(S3Error.builder().key(OLD_ORIGINAL).code("AccessDenied").build())
 				.build());
-		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(existingVideo()));
+		given(repository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(existingVideo()));
 
 		// 커밋 후 정리라 실패해도 사용자 요청은 성공해야 한다 — 삭제는 이미 커밋됐다.
 		assertThatCode(() -> service.deleteVideo(USER_ID, VIDEO_ID)).doesNotThrowAnyException();

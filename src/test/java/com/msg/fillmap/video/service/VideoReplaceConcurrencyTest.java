@@ -1,0 +1,278 @@
+package com.msg.fillmap.video.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.times;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import jakarta.persistence.EntityManager;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
+
+import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.GridConstants;
+import com.msg.fillmap.grid.GridFixtures;
+import com.msg.fillmap.user.entity.User;
+import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
+import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.exception.VideoErrorCode;
+import com.msg.fillmap.video.repository.VideoRepository;
+import com.msg.fillmap.video.support.GeoSupport;
+
+/**
+ * 같은 pending 키 동시 교체 — 이중 확정 차단 회귀 (MSG-247 Codex 1R·2R P1, 실 PostGIS).
+ *
+ * original 키가 확정 시도마다 새 UUID 라(2R) 목적지 공유 레이스는 구조적으로 없다. 대신 유니크 제약의
+ * 동시 직렬화도 함께 사라지므로, 같은 pending 의 동시 확정 2건이 둘 다 exists 검사를 통과해 영상 2개가
+ * 되면 안 된다 — confirmUpload 의 pending 키 advisory lock 이 확정을 직렬화하고, 락 획득 후의
+ * pendingStem prefix 검사가 앞 확정의 커밋을 봐서 패자를 복사 전에 4xx 로 거부하는지 검증한다.
+ *
+ * <p>결정적 인터리빙 프로토콜(VideoDeleteConcurrencyTest/MSG-243 재사용): 승자 워커가 트랜잭션 안에서
+ * replaceVideo 를 실행(pending 키 advisory lock 보유)한 뒤 커밋을 보류하고 플래그를 올린다 → 패자
+ * 워커가 같은 pending 키로 replaceVideo 에 진입해 confirmUpload 의 advisory lock 에서 블록된다(복사 전)
+ * → 승자는 제3의 커넥션으로 pg_blocking_pids 를 관측한 뒤에야 커밋 → 패자는 락 획득 후 prefix 검사에서
+ * 승자 커밋을 보고 INVALID_S3_KEY 거부. 복사는 승자 1회뿐이고 승자의 객체는 지워지지 않는다.
+ *
+ * <p>격리: 서해 공해상 합성 격자(40247 대역 — m243 의 40243 대역과 분리). 두 워커가 각자 커밋하므로
+ * @Transactional 롤백을 못 쓴다 — @AfterEach 에서 자기 행만 FK 역순 대상 지정 삭제.
+ */
+@SpringBootTest
+@DisplayName("같은 pending 키 동시 교체 — 클레임 선행 직렬화 (실 PostGIS)")
+class VideoReplaceConcurrencyTest {
+
+	// 서해 공해상 합성 격자 인덱스 — 실데이터·다른 동시성 트랙(m243: 40243 대역)과 겹치지 않는 대역.
+	private static final long GY = 40247L;
+	private static final long GX = 108670L;
+
+	private static final long POLL_INTERVAL_MS = 20L;
+	private static final long PROTOCOL_TIMEOUT_SEC = 15L;
+	private static final long JOIN_TIMEOUT_SEC = 30L;
+
+	@Autowired
+	private VideoService videoService;
+
+	@Autowired
+	private VideoRepository videoRepository;
+
+	@Autowired
+	private UserRepository userRepository;
+
+	@Autowired
+	private EntityManager em;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private PlatformTransactionManager txManager;
+
+	@MockitoBean
+	private S3Client s3Client;
+
+	// 승자 커밋의 afterCommit 인코딩 무력화 — 실 인코딩이 돌면 없는 파일로 FAILED 마킹이 낀다.
+	@MockitoBean
+	private VideoEncodingService videoEncodingService;
+
+	private TransactionTemplate tx;
+	private long userId;
+	private String gridId;
+	private long videoAId;
+	private long videoBId;
+	private String oldOriginalB;
+	private String sharedPendingKey;
+	private String sharedClaimPrefix;
+
+	@BeforeEach
+	void setUp() {
+		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		// 커밋이 실제 발생하므로 afterCommit 의 deleteQuietly 가 목을 호출한다 — 빈 응답(에러 없음)으로 스텁.
+		given(s3Client.deleteObjects(any(DeleteObjectsRequest.class)))
+			.willReturn(DeleteObjectsResponse.builder().build());
+		tx = new TransactionTemplate(txManager);
+		tx.executeWithoutResult(status -> {
+			userId = userRepository.save(User.createLocalUser(
+				"m247-concurrency-" + System.nanoTime() + "@example.com", "hash", "m247동시")).getId();
+			gridId = GridFixtures.seedGrid(em, GY, GX);
+			videoAId = saveActiveVideo("a");
+			videoBId = saveActiveVideo("b");
+			videoRepository.upsertUserGrid(userId, gridId, videoAId);   // 첫 점령: count=1, cover=A
+			videoRepository.upsertUserGrid(userId, gridId, videoAId);   // 재방문: count=2
+		});
+		oldOriginalB = "videos/original/%d/m247-b.mp4".formatted(userId);
+		sharedPendingKey = "videos/pending/%d/m247-shared.mp4".formatted(userId);
+		// original 키는 시도별 발급이라(MSG-247 2R) 정확값 대신 pendingStem 파생 prefix 로 대조한다.
+		sharedClaimPrefix = "videos/original/%d/m247-shared-".formatted(userId);
+	}
+
+	@AfterEach
+	void tearDown() {
+		// 커밋해 둔 합성 행만 FK 역순으로 대상 지정 삭제한다(실데이터 불가침).
+		tx.executeWithoutResult(status -> {
+			exec("DELETE FROM user_grids WHERE user_id = :u", "u", userId);
+			exec("DELETE FROM videos WHERE user_id = :u", "u", userId);
+			exec("DELETE FROM grids WHERE grid_id = :g", "g", gridId);
+			exec("DELETE FROM users WHERE id = :u", "u", userId);
+		});
+	}
+
+	@Test
+	@DisplayName("같은 pending 키 동시 교체면 패자는 복사 전에 거부되고 승자의 객체는 지워지지 않는다")
+	void 같은_pending_키_동시_교체면_패자는_복사_전에_거부되고_승자의_객체는_안_지워진다() throws Exception {
+		List<Throwable> loserErrors = new CopyOnWriteArrayList<>();
+		AtomicBoolean winnerClaimed = new AtomicBoolean(false);
+		ExecutorService pool = Executors.newFixedThreadPool(2);
+		try {
+			// 승자: A 교체 실행(pending 키 advisory lock 보유) → 패자가 내 락에 블록된 것을 관측 → 커밋.
+			Future<?> winner = pool.submit(() -> tx.executeWithoutResult(status -> {
+				em.createNativeQuery("SET LOCAL lock_timeout = '20s'").executeUpdate();
+				videoService.replaceVideo(userId, videoAId, replaceRequest());
+				int myPid = ((Number) em.createNativeQuery("SELECT pg_backend_pid()").getSingleResult()).intValue();
+				winnerClaimed.set(true);
+				awaitBlocking(myPid);
+			}));
+			// 패자: 승자가 락을 보유한 뒤에야 같은 pending 키로 B 교체 진입 — 블록됐다 4xx 거부.
+			Future<?> loser = pool.submit(() -> {
+				awaitWinnerClaimed(winnerClaimed);
+				try {
+					tx.executeWithoutResult(status -> {
+						em.createNativeQuery("SET LOCAL lock_timeout = '20s'").executeUpdate();
+						videoService.replaceVideo(userId, videoBId, replaceRequest());
+					});
+				} catch (Throwable t) {
+					loserErrors.add(t);
+				}
+			});
+			winner.get(JOIN_TIMEOUT_SEC, TimeUnit.SECONDS);
+			loser.get(JOIN_TIMEOUT_SEC, TimeUnit.SECONDS);
+		} finally {
+			pool.shutdownNow();
+			if (!pool.awaitTermination(10, TimeUnit.SECONDS)) {
+				throw new IllegalStateException("워커 스레드가 종료되지 않음 — teardown 오염 위험");
+			}
+		}
+
+		// 패자는 이중 확정 차단(INVALID_S3_KEY 4xx)으로 거부된다 — 같은 업로드 1건이 영상 2개가 되면 안 된다.
+		assertThat(loserErrors).as("패자는 이중 확정 차단으로 거부돼야 한다").hasSize(1);
+		assertThat(loserErrors.get(0)).isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_S3_KEY);
+		// 복사는 승자 1회뿐 — 패자는 advisory lock 획득 후 prefix 검사에서 막혀 복사 자체를 안 한다.
+		ArgumentCaptor<CopyObjectRequest> copies = ArgumentCaptor.forClass(CopyObjectRequest.class);
+		then(s3Client).should(times(1)).copyObject(copies.capture());
+		String winnerKey = copies.getValue().destinationKey();
+		assertThat(winnerKey).startsWith(sharedClaimPrefix);
+		// 승자가 참조하는 객체는 안 지워진다 — 지워지는 건 승자 교체의 옛 original(afterCommit 소관)뿐이다.
+		assertThat(allDeletedKeys()).as("승자의 객체를 지우면 안 된다").doesNotContain(winnerKey);
+		// DB: 승자(A)만 새 키를 클레임했고, 패자(B)는 거부돼 옛 키 그대로다.
+		assertThat(originalKeyOf(videoAId)).isEqualTo(winnerKey);
+		assertThat(originalKeyOf(videoBId)).isEqualTo(oldOriginalB);
+	}
+
+	private long saveActiveVideo(String suffix) {
+		double lat = (GY + 0.5) * GridConstants.GRID_LAT_STEP;
+		double lon = (GX + 0.5) * GridConstants.GRID_LNG_STEP;
+		return videoRepository.save(Video.create(
+			userId, gridId, "videos/original/%d/m247-%s.mp4".formatted(userId, suffix),
+			GeoSupport.toPoint(lat, lon), (short) 10, LocalDateTime.now())).getId();
+	}
+
+	private VideoReplaceRequestDto replaceRequest() {
+		return new VideoReplaceRequestDto(sharedPendingKey, null, null, (short) 7, LocalDateTime.now());
+	}
+
+	private List<String> allDeletedKeys() {
+		ArgumentCaptor<DeleteObjectsRequest> captor = ArgumentCaptor.forClass(DeleteObjectsRequest.class);
+		then(s3Client).should(atLeast(0)).deleteObjects(captor.capture());
+		return captor.getAllValues().stream()
+			.flatMap(request -> request.delete().objects().stream())
+			.map(ObjectIdentifier::key)
+			.toList();
+	}
+
+	private String originalKeyOf(long videoId) {
+		return jdbcTemplate.queryForObject("SELECT original_s3_key FROM videos WHERE id = ?", String.class, videoId);
+	}
+
+	/**
+	 * 커밋해도 되는 신호를 결정적으로 기다린다: 내 백엔드 pid 가 다른 세션(패자)을 막고 있음이 관측될 때.
+	 * 고정 지연이 아니라 실제 락 경합 관측이라 스케줄링 지연과 무관하게 성립한다. 타임아웃/인터럽트 시엔
+	 * 조용히 커밋하지 않고 예외로 트랜잭션을 중단시킨다(모호 상태 은폐 금지).
+	 */
+	private void awaitBlocking(int myPid) {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(PROTOCOL_TIMEOUT_SEC);
+		while (System.nanoTime() < deadline) {
+			if (blocksAnotherSession(myPid)) {
+				return;
+			}
+			if (!sleepQuietly(POLL_INTERVAL_MS)) {
+				throw new IllegalStateException("커밋 신호 대기 중 인터럽트 — 트랜잭션 중단");
+			}
+		}
+		throw new IllegalStateException("커밋 신호 대기 타임아웃(" + PROTOCOL_TIMEOUT_SEC + "s): pid=" + myPid
+			+ " 가 아무 세션도 막지 못함 — 패자가 pending 키 advisory lock 에 블록되는 경합 구도가 형성되지 않았다");
+	}
+
+	/** 내 백엔드 pid 가 (다른) 어떤 세션의 blocker 인지 — pg_blocking_pids 로 내 pid 스코프 정밀 판정. */
+	private boolean blocksAnotherSession(int myPid) {
+		Long blocked = jdbcTemplate.queryForObject(
+			"SELECT count(*) FROM pg_stat_activity WHERE pid <> ? AND ? = ANY(pg_blocking_pids(pid))",
+			Long.class, myPid, myPid);
+		return blocked != null && blocked > 0;
+	}
+
+	private static void awaitWinnerClaimed(AtomicBoolean winnerClaimed) {
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(PROTOCOL_TIMEOUT_SEC);
+		while (System.nanoTime() < deadline) {
+			if (winnerClaimed.get()) {
+				return;
+			}
+			if (!sleepQuietly(POLL_INTERVAL_MS)) {
+				throw new IllegalStateException("승자 클레임 대기 중 인터럽트");
+			}
+		}
+		throw new IllegalStateException("승자 클레임 대기 타임아웃(" + PROTOCOL_TIMEOUT_SEC + "s)");
+	}
+
+	private static boolean sleepQuietly(long millis) {
+		try {
+			Thread.sleep(millis);
+			return true;
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return false;
+		}
+	}
+
+	private void exec(String sql, String param, Object value) {
+		em.createNativeQuery(sql).setParameter(param, value).executeUpdate();
+	}
+}

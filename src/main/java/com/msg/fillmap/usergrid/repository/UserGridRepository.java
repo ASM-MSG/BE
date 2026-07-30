@@ -19,7 +19,10 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 	 * 도감 요약 3지표를 스칼라 서브쿼리 3개로 1왕복 조회한다 (MSG-152 D4).
 	 * - totalGridCount: 내가 점령한 격자 수 (user_grids COUNT).
 	 * - totalVideoCount: 내 영상 총합 (SUM(video_count), 점령 0건이면 COALESCE 로 0).
-	 * - visitedRegionCount: 방문한 서로 다른 행정동 수 (videos.region_code DISTINCT, DELETED 제외, NULL 자동 제외).
+	 * - visitedRegionCount: 방문한 서로 다른 행정동 수 — 영상이 있는 격자들의 라벨(grids.region_code) DISTINCT
+	 *   (MSG-246, by-grid 귀속 MSG-167). videos.region_code 는 쓰기 경로가 없어 항상 NULL 이라 축에서 제외했다.
+	 *   DELETED 제외·BLINDED 포함(MSG-152 D6), 무라벨 격자(NULL)는 COUNT DISTINCT 가 자동 제외.
+	 *   videos.grid_id 는 NOT NULL FK 라 inner JOIN 에서 유실 없음. 저장 라벨 equi-join 소비(geospatial 0).
 	 * COUNT 는 bigint 라 ::int 캐스트로 Integer 프로젝션과 맞춘다.
 	 */
 	@Query(value = """
@@ -28,8 +31,10 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 				FROM user_grids WHERE user_id = :userId) AS "totalGridCount",
 			(SELECT COALESCE(SUM(video_count), 0)
 				FROM user_grids WHERE user_id = :userId) AS "totalVideoCount",
-			(SELECT COUNT(DISTINCT region_code)::int
-				FROM videos WHERE user_id = :userId AND status <> 'DELETED') AS "visitedRegionCount"
+			(SELECT COUNT(DISTINCT g.region_code)::int
+				FROM videos v
+				JOIN grids g ON g.grid_id = v.grid_id
+				WHERE v.user_id = :userId AND v.status <> 'DELETED') AS "visitedRegionCount"
 		""", nativeQuery = true)
 	CollectionSummaryProjection getCollectionSummary(@Param("userId") long userId);
 

@@ -37,7 +37,8 @@ docker compose up -d          # PostGIS 컨테이너(fillmap DB) 기동
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | RDS 접속 |
 | `JWT_SECRET` | JWT 서명 키 (`application.yml` 주석 기준 운영 주입) |
 | `KAKAO_CLIENT_ID` | 카카오 OIDC client-id |
-| `REDIS_HOST` / `REDIS_PORT` | ElastiCache (Redis 활성화는 추후) |
+| `REDIS_HOST` / `REDIS_PORT` | EC2 redis-prod 접속 (포트 기본 `6380`) |
+| `REDIS_PASSWORD` | redis-prod requirepass — 기본값 없음, 미설정 시 기동 실패 (MSG-244) |
 | `SERVER_PORT` | 서버 포트 (기본 `8080`) |
 
 운영 프로파일로 실행:

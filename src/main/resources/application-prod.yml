@@ -16,11 +16,14 @@ spring:
   jpa:
     show-sql: false                # 운영에선 절대 켜지 말 것
 
-  # Redis (ElastiCache) — 활성화는 추후
+  # Redis — EC2 docker-compose.server.yml 의 fillmap-redis-prod (6380, requirepass 필수)
   data:
     redis:
-      host: ${REDIS_HOST}          # 예: fillmap-redis.xxx.cache.amazonaws.com
-      port: ${REDIS_PORT:6379}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6380}
+      # 기본값을 두지 않는다. 단 미설정 시에도 바인더는 리터럴 "${REDIS_PASSWORD}" 로 통과시키므로
+      # 기동 실패는 ProdRedisPasswordValidator 가 보장한다. (MSG-244 Codex 리뷰)
+      password: ${REDIS_PASSWORD}
       timeout: 2000ms
       lettuce:
         pool:

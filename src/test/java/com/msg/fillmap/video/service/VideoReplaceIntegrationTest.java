@@ -115,7 +115,10 @@ class VideoReplaceIntegrationTest {
 
 		Object[] row = videoRow(videoId);
 		// 저장되는 건 클라이언트가 준 pending 키가 아니라 확정 시 옮겨진 original 키다 (MSG-133).
-		assertThat(row[0]).as("새 파일로 교체").isEqualTo(newS3Key.replace("videos/pending/", "videos/original/"));
+		// 키는 pendingStem 을 보존한 시도별 발급이라(MSG-247 2R) 정확값 대신 파생 prefix 로 단언한다.
+		assertThat((String) row[0]).as("새 파일로 교체")
+			.startsWith(newS3Key.replace("videos/pending/", "videos/original/").replace(".mp4", "-"))
+			.endsWith(".mp4");
 		assertThat(row[1]).as("재인코딩 대기").isEqualTo("UPLOADED");
 		assertThat(row[2]).as("옛 인코딩본은 비워야 한다").isNull();
 		assertThat(row[3]).as("옛 썸네일도 비워야 한다").isNull();

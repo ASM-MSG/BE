@@ -41,12 +41,14 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 class VideoEncodingServiceTest {
 
 	private static final long VIDEO_ID = 7L;
+	private static final String ORIGINAL_KEY = "videos/original/1/x.mp4";
 
 	private VideoRepository videoRepository;
 	private VideoStatusWriter statusWriter;
 	private FfmpegRunner ffmpegRunner;
 	private S3Client s3Client;
 	private VideoEncodingService encodingService;
+	private Video video;
 
 	@BeforeEach
 	void setUp() {
@@ -60,9 +62,10 @@ class VideoEncodingServiceTest {
 		encodingService = new VideoEncodingServiceImpl(
 			videoRepository, statusWriter, ffmpegRunner, s3Client, properties);
 
-		Video video = Video.create(1L, "41716_110483", "videos/original/1/x.mp4",
+		video = Video.create(1L, "41716_110483", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now());
 		given(videoRepository.findById(VIDEO_ID)).willReturn(Optional.of(video));
+		given(statusWriter.markEncoding(VIDEO_ID, ORIGINAL_KEY)).willReturn(true);
 	}
 
 	@Test
@@ -72,11 +75,11 @@ class VideoEncodingServiceTest {
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
-		encodingService.encode(VIDEO_ID);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markEncoding(VIDEO_ID);
-		verify(statusWriter).markReady(VIDEO_ID, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
-		verify(statusWriter, never()).markFailed(VIDEO_ID);
+		verify(statusWriter).markEncoding(VIDEO_ID, ORIGINAL_KEY);
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
 	}
 
 	/** 목 호출 시 출력 경로(마지막에서 두 번째 인자가 아닌 Path 인자)에 빈 파일을 만들어 준다. */
@@ -93,21 +96,21 @@ class VideoEncodingServiceTest {
 	void 길이가_30초를_넘으면_인코딩하지_않고_FAILED_다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(30.5);
 
-		encodingService.encode(VIDEO_ID);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markFailed(VIDEO_ID);
+		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
 		verify(ffmpegRunner, never()).encode720p(any(), any());
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any());
+		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any());
 	}
 
 	@Test
 	void 손상_영상이라_ffprobe_가_실패하면_FAILED_다() {
 		willThrow(new IllegalStateException("ffprobe 실패")).given(ffmpegRunner).probeDurationSec(any());
 
-		encodingService.encode(VIDEO_ID);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markFailed(VIDEO_ID);
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any());
+		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any());
 	}
 
 	@Test
@@ -116,26 +119,26 @@ class VideoEncodingServiceTest {
 		willThrow(new IllegalStateException("ffmpeg 실패"))
 			.given(ffmpegRunner).encode720p(any(Path.class), any(Path.class));
 
-		encodingService.encode(VIDEO_ID);   // 예외가 새어나오면 테스트 실패
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // 예외가 새어나오면 테스트 실패
 
-		verify(statusWriter).markFailed(VIDEO_ID);
+		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
 	}
 
 	@Test
 	void 대상_영상이_없으면_아무_전이도_하지_않는다() {
 		given(videoRepository.findById(999L)).willReturn(Optional.empty());
 
-		encodingService.encode(999L);
+		encodingService.encode(999L, ORIGINAL_KEY);
 
-		verify(statusWriter, never()).markEncoding(999L);
-		verify(statusWriter, never()).markFailed(999L);
+		verify(statusWriter, never()).markEncoding(999L, ORIGINAL_KEY);
+		verify(statusWriter, never()).markFailed(999L, ORIGINAL_KEY);
 	}
 
 	@Test
 	void 썸네일_추출은_실제_길이를_받아_seek_지점을_고른다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(0.5);
 
-		encodingService.encode(VIDEO_ID);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
 		verify(ffmpegRunner).extractThumbnail(any(), any(), eq(0.5));
 	}
@@ -145,9 +148,9 @@ class VideoEncodingServiceTest {
 		willThrow(new RuntimeException("S3 다운로드 실패"))
 			.given(s3Client).getObject(any(GetObjectRequest.class), any(Path.class));
 
-		encodingService.encode(VIDEO_ID);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markFailed(VIDEO_ID);
+		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
 		verify(ffmpegRunner, never()).probeDurationSec(any());
 	}
 
@@ -157,13 +160,28 @@ class VideoEncodingServiceTest {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 
-		encodingService.encode(VIDEO_ID);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
 		// 인코딩본 하나만 올린다 — 미블러 썸네일은 추출도 업로드도 하지 않는다 (P1).
 		ArgumentCaptor<PutObjectRequest> captor = ArgumentCaptor.forClass(PutObjectRequest.class);
 		verify(s3Client, times(1)).putObject(captor.capture(), any(RequestBody.class));
 		assertThat(captor.getValue().key()).isEqualTo("videos/encoded/1/7.mp4");
 		verify(ffmpegRunner, never()).extractThumbnail(any(), any(), anyDouble());
-		verify(statusWriter).markEncoded(VIDEO_ID, "videos/encoded/1/7.mp4");   // thumbnail 키는 폴러가 완료 시 기록(R5)
+		// thumbnail 키는 폴러가 완료 시 기록(R5)
+		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4");
+	}
+
+	@Test
+	void 교체로_원본이_바뀌면_인코딩_결과를_업로드하지_않는다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+		// ffmpeg 가 도는 사이 사용자가 교체 — 업로드 직전 fresh 로드가 다른 원본 키를 돌려준다 (MSG-241).
+		video.replaceFile("videos/original/1/y.mp4", (short) 8, LocalDateTime.now());
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any());
 	}
 }
