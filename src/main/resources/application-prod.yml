@@ -21,7 +21,8 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT:6380}
-      # 기본값을 두지 않는다 — 미설정 시 기동 실패로 즉시 드러나게 한다. (JWT_REFRESH_SECRET 선례)
+      # 기본값을 두지 않는다. 단 미설정 시에도 바인더는 리터럴 "${REDIS_PASSWORD}" 로 통과시키므로
+      # 기동 실패는 ProdRedisPasswordValidator 가 보장한다. (MSG-244 Codex 리뷰)
       password: ${REDIS_PASSWORD}
       timeout: 2000ms
       lettuce:
