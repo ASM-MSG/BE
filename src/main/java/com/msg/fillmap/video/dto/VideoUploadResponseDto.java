@@ -5,10 +5,12 @@ import java.util.List;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
+import com.msg.fillmap.mission.dto.CompletedMissionResponseDto;
 
 /**
  * 메타데이터 저장 응답. occupied = 이 업로드로 격자를 처음 점령했는지(첫 방문) 여부.
  * newBadges = 이 업로드로 새로 획득한 뱃지(MSG-239 FR-9) — 없으면 빈 배열.
+ * completedMissions = 이 업로드로 완료된 미션 스탬프(MSG-223 FR-19) — 없으면 빈 배열.
  */
 @Schema(description = "영상 메타데이터 저장 응답")
 public record VideoUploadResponseDto(
@@ -25,6 +27,9 @@ public record VideoUploadResponseDto(
 	boolean occupied,
 
 	@Schema(description = "이 업로드로 새로 획득한 뱃지 목록 — 없으면 빈 배열")
-	List<EarnedBadgeResponseDto> newBadges
+	List<EarnedBadgeResponseDto> newBadges,
+
+	@Schema(description = "이 업로드로 완료된 미션 스탬프 목록 — 없으면 빈 배열")
+	List<CompletedMissionResponseDto> completedMissions
 ) {
 }

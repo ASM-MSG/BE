@@ -107,9 +107,9 @@ class BadgeSchemaSeedTest {
 		}
 
 		@Test
-		@DisplayName("미션과 스페셜 뱃지는 시딩되어 있지 않다 — 훅 없는 시딩은 획득 불가 뱃지 노출(§D2)")
-		void 미션과_스페셜_뱃지는_시딩되어_있지_않다() {
-			assertThat(seededCodes("MISSION_COUNT", "SPECIAL")).isEmpty();
+		@DisplayName("스페셜 뱃지는 시딩되어 있지 않다 — 훅 없는 시딩은 획득 불가 뱃지 노출(§D2). 미션은 V12 활성화(MSG-223)")
+		void 스페셜_뱃지는_시딩되어_있지_않다() {
+			assertThat(seededCodes("SPECIAL")).isEmpty();
 		}
 
 		@Test

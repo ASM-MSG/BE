@@ -44,8 +44,9 @@
 
 ### `mission` (Owner B) — 🟡 부분
 - MSG-166: V6 스키마 검증 테스트(`MissionSchemaMigrationTest` — 엔티티 없던 시점)
-- MSG-222: 활성 미션 조회(`GET /api/missions/active` — `entity/{Mission,MissionType,MissionGrid,MissionGridId}`(조회 전용), `MissionRepository.findActive`(기간 경계 독립 판정)·`MissionGridRepository`, `MissionQueryService`(+impl — 유형→shape 단일 분기: COURSE→PATH(path 원문+spots)/EVENT→BOX(bbox 합성)/THEME·CONTINUOUS→CELLS/AREA→REGION(코드만), 1h 전역 캐시 단일 volatile CacheEntry+더블체크 락, 단일 인스턴스 전제), `dto/MissionResponseDto`+`sealed MissionShape` 4종)
-- **없는 것**: 판정·스탬프(MSG-223), 시드 적재(MSG-224/225/235)
+- MSG-222: 활성 미션 조회(`GET /api/missions/active` — `entity/{Mission,MissionType,MissionGrid,MissionGridId}`(조회 전용), `MissionRepository.findActive`(기간 경계 독립 판정)·`MissionGridRepository`, `MissionQueryService`(+impl — 유형→shape 단일 분기: COURSE→PATH(path 원문+spots)/EVENT→BOX(bbox 합성)/THEME·CONTINUOUS→CELLS/AREA→REGION(코드만), 1h 전역 캐시 단일 volatile CacheEntry+더블체크 락, 단일 인스턴스 전제), `dto/MissionResponseDto`+`sealed MissionShape` 4종. 기본 클럭 `Clock.systemUTC()` — KST JVM 9h 스큐 정정, MSG-223 리뷰 파생)
+- MSG-223: 미션 완료 판정·스탬프(`entity/{UserMission,UserMissionId}`(UserBadge 미러·비회수)·`UserMissionRepository`(`insertIgnoreConflict` ON CONFLICT·`countMyStamps`), `MissionRepository.findAwardCandidateIds/findCompleted`(native, `recorded_at` 판정·무기간 IS NULL 생략·`AT TIME ZONE 'UTC'` 정규화), `MissionAwardService`(+impl — 신규 INSERT 성공분만 응답·MISSION_COUNT 뱃지 배선), 업로드 확정 훅(streak 다음·점령 분기 바깥, `VideoUploadResponseDto.completedMissions`), V12 뱃지 시딩 1·5·10)
+- **없는 것**: 시드 적재(MSG-224/225/235) — 입력 원본은 `~/fillmap-data` 수집 완료(2026-07-23)
 
 ### `region` (Owner A) — 🟡 부분
 - MSG-154: `entity/Region`(boundary_geom 미매핑), `repository/RegionRepository`(native UPSERT + ST_Area 기반 total_grid_count), `seed/{RegionGeoJsonReader,RegionFeature,RegionSeeder}`(플래그 게이트 `fillmap.region.seed.enabled` 기본 off, 전국 3,558 행정동)

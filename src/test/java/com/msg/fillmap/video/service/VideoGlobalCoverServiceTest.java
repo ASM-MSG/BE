@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
+import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
@@ -58,7 +59,7 @@ class VideoGlobalCoverServiceTest {
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
-			mock(BadgeAwardService.class), mock(StreakCommandService.class));
+			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class));
 	}
 
 	private Video readyVideo(long id, String thumbKey, LocalDateTime recordedAt, long viewCount) {
