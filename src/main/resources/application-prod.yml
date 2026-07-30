@@ -22,7 +22,7 @@ spring:
       host: ${REDIS_HOST}
       port: ${REDIS_PORT:6380}
       # 기본값을 두지 않는다. 단 미설정 시에도 바인더는 리터럴 "${REDIS_PASSWORD}" 로 통과시키므로
-      # 기동 실패는 ProdRedisPasswordValidator 가 보장한다. (MSG-244 Codex 리뷰)
+      # 기동 실패는 ProdRequiredEnvValidator 가 보장한다. (MSG-244 → MSG-260 일반화)
       password: ${REDIS_PASSWORD}
       timeout: 2000ms
       lettuce:
@@ -37,13 +37,15 @@ oauth:
 
 jwt:
   # kebab-case(refresh-secret)는 JWT_REFRESH_SECRET env 로 relaxed binding 이 되지 않아 명시적으로 매핑한다.
-  # 기본값을 두지 않는다 — 미설정 시 기동 실패로 즉시 드러나게 한다. (MSG-135)
+  # 기본값을 두지 않는다. 단 미설정 시에도 바인더는 리터럴 "${JWT_REFRESH_SECRET}" 로 통과시켜
+  # 기동 실패하지 않으므로, 기동 실패는 ProdRequiredEnvValidator 가 보장한다. (MSG-135 → MSG-260 정정)
   refresh-secret: ${JWT_REFRESH_SECRET}
 
 aws:
   s3:
     # 기본값을 두지 않는다 — 미설정 시 application.yml 기본값(fillmap-video-dev)으로 흘러
-    # prod 영상이 dev 버킷에 조용히 쌓인다. 기동 실패로 즉시 드러나게 한다.
+    # prod 영상이 dev 버킷에 조용히 쌓인다. 미설정 시 리터럴 "${S3_BUCKET_VIDEO}" 를
+    # AwsProperties 의 @Pattern 이 거부해 기동 실패가 보장된다. (MSG-260 주체 명시)
     bucket: ${S3_BUCKET_VIDEO}
 
 server:
