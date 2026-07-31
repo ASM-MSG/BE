@@ -28,7 +28,13 @@ public class MissionGrid {
 
 	/** 시드용 (MSG-224) — EVENT 는 순서 없는 유형이라 seq NULL 유지. */
 	public MissionGrid(Long missionId, String gridId) {
+		this(missionId, gridId, null);
+	}
+
+	/** 코스 시드용 (MSG-225) — seq 는 포토스팟 순번(1..N), MSG-222 조회가 seq순으로 마커를 낸다. */
+	public MissionGrid(Long missionId, String gridId, Integer seq) {
 		this.id = new MissionGridId(missionId, gridId);
+		this.seq = seq;
 	}
 
 	public Long getMissionId() {
