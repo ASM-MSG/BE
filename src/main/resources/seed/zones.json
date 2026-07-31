@@ -1,1 +1,482 @@
-[]
+[
+ {
+  "zoneKey": "aewol",
+  "name": "애월",
+  "regionCode": null,
+  "minGridY": 37180,
+  "maxGridY": 37184,
+  "minGridX": 109834,
+  "maxGridX": 109840,
+  "priority": 0
+ },
+ {
+  "zoneKey": "anmok",
+  "name": "안목",
+  "regionCode": null,
+  "minGridY": 41967,
+  "maxGridY": 41973,
+  "minGridX": 112127,
+  "maxGridX": 112132,
+  "priority": 0
+ },
+ {
+  "zoneKey": "apgujeong",
+  "name": "압구정",
+  "regionCode": null,
+  "minGridY": 41692,
+  "maxGridY": 41698,
+  "minGridX": 110451,
+  "maxGridX": 110463,
+  "priority": 0
+ },
+ {
+  "zoneKey": "apsan",
+  "name": "앞산카페거리",
+  "regionCode": null,
+  "minGridY": 39807,
+  "maxGridY": 39812,
+  "minGridX": 111806,
+  "maxGridX": 111811,
+  "priority": 0
+ },
+ {
+  "zoneKey": "chinatown",
+  "name": "인천차이나타운",
+  "regionCode": null,
+  "minGridY": 41635,
+  "maxGridY": 41641,
+  "minGridX": 110101,
+  "maxGridX": 110107,
+  "priority": 0
+ },
+ {
+  "zoneKey": "chungjangno",
+  "name": "충장로",
+  "regionCode": null,
+  "minGridY": 39051,
+  "maxGridY": 39056,
+  "minGridX": 110355,
+  "maxGridX": 110360,
+  "priority": 0
+ },
+ {
+  "zoneKey": "daehangno",
+  "name": "대학로",
+  "regionCode": null,
+  "minGridY": 41747,
+  "maxGridY": 41754,
+  "minGridX": 110432,
+  "maxGridX": 110439,
+  "priority": 0
+ },
+ {
+  "zoneKey": "dongmyeongdong",
+  "name": "동명동",
+  "regionCode": null,
+  "minGridY": 39053,
+  "maxGridY": 39057,
+  "minGridX": 110366,
+  "maxGridX": 110370,
+  "priority": 0
+ },
+ {
+  "zoneKey": "dongnae",
+  "name": "동래",
+  "regionCode": null,
+  "minGridY": 39115,
+  "maxGridY": 39122,
+  "minGridX": 112242,
+  "maxGridX": 112249,
+  "priority": 0
+ },
+ {
+  "zoneKey": "dongseongno",
+  "name": "동성로",
+  "regionCode": null,
+  "minGridY": 39851,
+  "maxGridY": 39857,
+  "minGridX": 111819,
+  "maxGridX": 111824,
+  "priority": 0
+ },
+ {
+  "zoneKey": "eunhaengdong",
+  "name": "은행동",
+  "regionCode": null,
+  "minGridY": 40361,
+  "maxGridY": 40366,
+  "minGridX": 110804,
+  "maxGridX": 110809,
+  "priority": 0
+ },
+ {
+  "zoneKey": "gaeknidangil",
+  "name": "객리단길",
+  "regionCode": null,
+  "minGridY": 39795,
+  "maxGridY": 39800,
+  "minGridX": 110556,
+  "maxGridX": 110560,
+  "priority": 0
+ },
+ {
+  "zoneKey": "gamcheon",
+  "name": "감천문화마을",
+  "regionCode": null,
+  "minGridY": 38993,
+  "maxGridY": 39000,
+  "minGridX": 112180,
+  "maxGridX": 112185,
+  "priority": 0
+ },
+ {
+  "zoneKey": "gangnam",
+  "name": "강남",
+  "regionCode": null,
+  "minGridY": 41655,
+  "maxGridY": 41671,
+  "minGridX": 110453,
+  "maxGridX": 110461,
+  "priority": 0
+ },
+ {
+  "zoneKey": "garosugil",
+  "name": "가로수길",
+  "regionCode": null,
+  "minGridY": 41684,
+  "maxGridY": 41691,
+  "minGridX": 110451,
+  "maxGridX": 110457,
+  "priority": 0
+ },
+ {
+  "zoneKey": "gimgwangseokgil",
+  "name": "김광석길",
+  "regionCode": null,
+  "minGridY": 39844,
+  "maxGridY": 39847,
+  "minGridX": 111829,
+  "maxGridX": 111832,
+  "priority": 0
+ },
+ {
+  "zoneKey": "gwangalli",
+  "name": "광안리",
+  "regionCode": null,
+  "minGridY": 39042,
+  "maxGridY": 39066,
+  "minGridX": 112272,
+  "maxGridX": 112287,
+  "priority": 0
+ },
+ {
+  "zoneKey": "haengnidangil",
+  "name": "행리단길",
+  "regionCode": null,
+  "minGridY": 41421,
+  "maxGridY": 41427,
+  "minGridX": 110444,
+  "maxGridX": 110449,
+  "priority": 0
+ },
+ {
+  "zoneKey": "haeridangil",
+  "name": "해리단길",
+  "regionCode": null,
+  "minGridY": 39073,
+  "maxGridY": 39076,
+  "minGridX": 112309,
+  "maxGridX": 112313,
+  "priority": 0
+ },
+ {
+  "zoneKey": "haeundae",
+  "name": "해운대",
+  "regionCode": null,
+  "minGridY": 39064,
+  "maxGridY": 39072,
+  "minGridX": 112297,
+  "maxGridX": 112320,
+  "priority": 0
+ },
+ {
+  "zoneKey": "hamdeok",
+  "name": "함덕",
+  "regionCode": null,
+  "minGridY": 37267,
+  "maxGridY": 37272,
+  "minGridX": 110145,
+  "maxGridX": 110150,
+  "priority": 0
+ },
+ {
+  "zoneKey": "hongdae",
+  "name": "홍대",
+  "regionCode": null,
+  "minGridY": 41719,
+  "maxGridY": 41730,
+  "minGridX": 110359,
+  "maxGridX": 110375,
+  "priority": 0
+ },
+ {
+  "zoneKey": "hwangnidangil",
+  "name": "황리단길",
+  "regionCode": null,
+  "minGridY": 39814,
+  "maxGridY": 39821,
+  "minGridX": 112355,
+  "maxGridX": 112359,
+  "priority": 0
+ },
+ {
+  "zoneKey": "hyehwa",
+  "name": "혜화",
+  "regionCode": null,
+  "minGridY": 41755,
+  "maxGridY": 41760,
+  "minGridX": 110432,
+  "maxGridX": 110439,
+  "priority": 0
+ },
+ {
+  "zoneKey": "ikseondong",
+  "name": "익선동",
+  "regionCode": null,
+  "minGridY": 41746,
+  "maxGridY": 41749,
+  "minGridX": 110425,
+  "maxGridX": 110428,
+  "priority": 0
+ },
+ {
+  "zoneKey": "itaewon",
+  "name": "이태원",
+  "regionCode": null,
+  "minGridY": 41701,
+  "maxGridY": 41709,
+  "minGridX": 110424,
+  "maxGridX": 110437,
+  "priority": 0
+ },
+ {
+  "zoneKey": "jamsil",
+  "name": "잠실",
+  "regionCode": null,
+  "minGridY": 41682,
+  "maxGridY": 41686,
+  "minGridX": 110521,
+  "maxGridX": 110527,
+  "priority": 0
+ },
+ {
+  "zoneKey": "jeonjuhanok",
+  "name": "전주한옥마을",
+  "regionCode": null,
+  "minGridY": 39791,
+  "maxGridY": 39797,
+  "minGridX": 110563,
+  "maxGridX": 110569,
+  "priority": 0
+ },
+ {
+  "zoneKey": "jeonpo",
+  "name": "전포",
+  "regionCode": null,
+  "minGridY": 39056,
+  "maxGridY": 39066,
+  "minGridX": 112230,
+  "maxGridX": 112233,
+  "priority": 0
+ },
+ {
+  "zoneKey": "jonggak",
+  "name": "종각",
+  "regionCode": null,
+  "minGridY": 41742,
+  "maxGridY": 41750,
+  "minGridX": 110416,
+  "maxGridX": 110424,
+  "priority": 0
+ },
+ {
+  "zoneKey": "kondae",
+  "name": "건대",
+  "regionCode": null,
+  "minGridY": 41707,
+  "maxGridY": 41716,
+  "minGridX": 110491,
+  "maxGridX": 110499,
+  "priority": 0
+ },
+ {
+  "zoneKey": "kyungsung",
+  "name": "경성대부경대",
+  "regionCode": null,
+  "minGridY": 39039,
+  "maxGridY": 39044,
+  "minGridX": 112260,
+  "maxGridX": 112266,
+  "priority": 0
+ },
+ {
+  "zoneKey": "mangwon",
+  "name": "망원",
+  "regionCode": null,
+  "minGridY": 41726,
+  "maxGridY": 41732,
+  "minGridX": 110348,
+  "maxGridX": 110353,
+  "priority": 0
+ },
+ {
+  "zoneKey": "mullae",
+  "name": "문래",
+  "regionCode": null,
+  "minGridY": 41680,
+  "maxGridY": 41685,
+  "minGridX": 110338,
+  "maxGridX": 110344,
+  "priority": 0
+ },
+ {
+  "zoneKey": "myeongdong",
+  "name": "명동",
+  "regionCode": null,
+  "minGridY": 41734,
+  "maxGridY": 41739,
+  "minGridX": 110418,
+  "maxGridX": 110424,
+  "priority": 0
+ },
+ {
+  "zoneKey": "nampo",
+  "name": "남포",
+  "regionCode": null,
+  "minGridY": 38995,
+  "maxGridY": 39007,
+  "minGridX": 112193,
+  "maxGridX": 112206,
+  "priority": 0
+ },
+ {
+  "zoneKey": "noryangjin",
+  "name": "노량진",
+  "regionCode": null,
+  "minGridY": 41679,
+  "maxGridY": 41683,
+  "minGridX": 110380,
+  "maxGridX": 110388,
+  "priority": 0
+ },
+ {
+  "zoneKey": "sajik",
+  "name": "사직",
+  "regionCode": null,
+  "minGridY": 39103,
+  "maxGridY": 39109,
+  "minGridX": 112224,
+  "maxGridX": 112230,
+  "priority": 0
+ },
+ {
+  "zoneKey": "seomyeon",
+  "name": "서면",
+  "regionCode": null,
+  "minGridY": 39056,
+  "maxGridY": 39072,
+  "minGridX": 112220,
+  "maxGridX": 112229,
+  "priority": 0
+ },
+ {
+  "zoneKey": "seongsu",
+  "name": "성수",
+  "regionCode": null,
+  "minGridY": 41715,
+  "maxGridY": 41720,
+  "minGridX": 110479,
+  "maxGridX": 110485,
+  "priority": 0
+ },
+ {
+  "zoneKey": "sharosugil",
+  "name": "샤로수길",
+  "regionCode": null,
+  "minGridY": 41640,
+  "maxGridY": 41646,
+  "minGridX": 110391,
+  "maxGridX": 110396,
+  "priority": 0
+ },
+ {
+  "zoneKey": "sinchon",
+  "name": "신촌",
+  "regionCode": null,
+  "minGridY": 41728,
+  "maxGridY": 41732,
+  "minGridX": 110376,
+  "maxGridX": 110382,
+  "priority": 0
+ },
+ {
+  "zoneKey": "songdo",
+  "name": "송도센트럴파크",
+  "regionCode": null,
+  "minGridY": 41544,
+  "maxGridY": 41552,
+  "minGridX": 110116,
+  "maxGridX": 110125,
+  "priority": 0
+ },
+ {
+  "zoneKey": "sungshin",
+  "name": "성신여대",
+  "regionCode": null,
+  "minGridY": 41767,
+  "maxGridY": 41771,
+  "minGridX": 110448,
+  "maxGridX": 110454,
+  "priority": 0
+ },
+ {
+  "zoneKey": "wangsimni",
+  "name": "왕십리",
+  "regionCode": null,
+  "minGridY": 41730,
+  "maxGridY": 41735,
+  "minGridX": 110468,
+  "maxGridX": 110471,
+  "priority": 0
+ },
+ {
+  "zoneKey": "yangnidangil",
+  "name": "양리단길",
+  "regionCode": null,
+  "minGridY": 42300,
+  "maxGridY": 42305,
+  "minGridX": 111842,
+  "maxGridX": 111846,
+  "priority": 0
+ },
+ {
+  "zoneKey": "yeonnam",
+  "name": "연남",
+  "regionCode": null,
+  "minGridY": 41731,
+  "maxGridY": 41741,
+  "minGridX": 110364,
+  "maxGridX": 110371,
+  "priority": 0
+ },
+ {
+  "zoneKey": "yeouido",
+  "name": "여의도",
+  "regionCode": null,
+  "minGridY": 41687,
+  "maxGridY": 41698,
+  "minGridX": 110364,
+  "maxGridX": 110375,
+  "priority": 0
+ }
+]

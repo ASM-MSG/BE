@@ -1,0 +1,436 @@
+[
+ {
+  "zoneKey": "yeonnam",
+  "name": "연남",
+  "regionCode": null,
+  "minGridY": 41731,
+  "maxGridY": 41741,
+  "minGridX": 110364,
+  "maxGridX": 110371,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "경의선숲길(연트럴파크) 축. 남단은 홍대입구역 위도(37.5583)로 홍대입구와 분리 — hongdae maxGridY 41730 조정과 쌍"
+ },
+ {
+  "zoneKey": "garosugil",
+  "name": "가로수길",
+  "regionCode": null,
+  "minGridY": 41684,
+  "maxGridY": 41691,
+  "minGridX": 110451,
+  "maxGridX": 110457,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "신사역~압구정로 사이 가로수길 축. 북단 37.5228에서 압구정과 분리 — apgujeong minGridY 41692 조정과 쌍"
+ },
+ {
+  "zoneKey": "daehangno",
+  "name": "대학로",
+  "regionCode": null,
+  "minGridY": 41747,
+  "maxGridY": 41754,
+  "minGridX": 110432,
+  "maxGridX": 110439,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "혜화역 남측~이화사거리 대학로 축. 북단은 혜화(공공데이터) 남단 41755에 맞닿게 — 겹침 0. 혜화와 사실상 한 권역이라 통합 여부 검수 질문"
+ },
+ {
+  "zoneKey": "sharosugil",
+  "name": "샤로수길",
+  "regionCode": null,
+  "minGridY": 41640,
+  "maxGridY": 41646,
+  "minGridX": 110391,
+  "maxGridX": 110396,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "서울대입구역 남측 관악로14길 일대"
+ },
+ {
+  "zoneKey": "yeouido",
+  "name": "여의도",
+  "regionCode": null,
+  "minGridY": 41687,
+  "maxGridY": 41698,
+  "minGridX": 110364,
+  "maxGridX": 110375,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "여의도역~IFC 오피스·상업 핵심부 (한강공원 제외)"
+ },
+ {
+  "zoneKey": "mangwon",
+  "name": "망원",
+  "regionCode": null,
+  "minGridY": 41726,
+  "maxGridY": 41732,
+  "minGridX": 110348,
+  "maxGridX": 110353,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "망원시장·망리단길 일대. 홍대입구 서단(110359)과 5열 간격"
+ },
+ {
+  "zoneKey": "noryangjin",
+  "name": "노량진",
+  "regionCode": null,
+  "minGridY": 41679,
+  "maxGridY": 41683,
+  "minGridX": 110380,
+  "maxGridX": 110388,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "노량진역~학원가·컵밥거리"
+ },
+ {
+  "zoneKey": "mullae",
+  "name": "문래",
+  "regionCode": null,
+  "minGridY": 41680,
+  "maxGridY": 41685,
+  "minGridX": 110338,
+  "maxGridX": 110344,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "문래창작촌(문래동3가) 철공소 골목 일대"
+ },
+ {
+  "zoneKey": "sungshin",
+  "name": "성신여대",
+  "regionCode": null,
+  "minGridY": 41767,
+  "maxGridY": 41771,
+  "minGridX": 110448,
+  "maxGridX": 110454,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "성신여대입구역~돈암동 로데오"
+ },
+ {
+  "zoneKey": "dongnae",
+  "name": "동래",
+  "regionCode": null,
+  "minGridY": 39115,
+  "maxGridY": 39122,
+  "minGridX": 112242,
+  "maxGridX": 112249,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "동래역~명륜동 상권 (온천장은 별개 권역이라 제외)"
+ },
+ {
+  "zoneKey": "kyungsung",
+  "name": "경성대부경대",
+  "regionCode": null,
+  "minGridY": 39039,
+  "maxGridY": 39044,
+  "minGridX": 112260,
+  "maxGridX": 112266,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "경성대부경대역 북측 대연동 대학가. 광안리 서단(112272)과 6열 간격"
+ },
+ {
+  "zoneKey": "sajik",
+  "name": "사직",
+  "regionCode": null,
+  "minGridY": 39103,
+  "maxGridY": 39109,
+  "minGridX": 112224,
+  "maxGridX": 112230,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "사직야구장~사직동 먹자골목"
+ },
+ {
+  "zoneKey": "haeridangil",
+  "name": "해리단길",
+  "regionCode": null,
+  "minGridY": 39073,
+  "maxGridY": 39076,
+  "minGridX": 112309,
+  "maxGridX": 112313,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "해운대역 북측 우동1로 골목상권. 남단은 해운대해변 bbox 북단(행 39072)에 맞닿게 — 겹침 0"
+ },
+ {
+  "zoneKey": "hwangnidangil",
+  "name": "황리단길",
+  "regionCode": null,
+  "minGridY": 39814,
+  "maxGridY": 39821,
+  "minGridX": 112355,
+  "maxGridX": 112359,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "경주 황남동 포석로 일대(대릉원 서쪽). 서울·부산 외 첫 zone — 지역 못박기 폐지로 등재(PRD §2 2026-07-31 개정)"
+ },
+ {
+  "zoneKey": "haengnidangil",
+  "name": "행리단길",
+  "regionCode": null,
+  "minGridY": 41421,
+  "maxGridY": 41427,
+  "minGridX": 110444,
+  "maxGridX": 110449,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "수원 화성행궁 앞 행궁동 공방거리(신풍로 일대)"
+ },
+ {
+  "zoneKey": "gaeknidangil",
+  "name": "객리단길",
+  "regionCode": null,
+  "minGridY": 39795,
+  "maxGridY": 39800,
+  "minGridX": 110556,
+  "maxGridX": 110560,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "전주 고사동 객사 서쪽 골목. 전주 한옥마을(동쪽 약 500m)과 별개 권역 — 한옥마을 추가 시 겹침 없음"
+ },
+ {
+  "zoneKey": "gamcheon",
+  "name": "감천문화마을",
+  "regionCode": null,
+  "minGridY": 38993,
+  "maxGridY": 39000,
+  "minGridX": 112180,
+  "maxGridX": 112185,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "부산 사하구 감천2동 문화마을. 남포 bbox 서단(112193)과 8열 간격 — 겹침 없음"
+ },
+ {
+  "zoneKey": "ikseondong",
+  "name": "익선동",
+  "regionCode": null,
+  "minGridY": 41746,
+  "maxGridY": 41749,
+  "minGridX": 110425,
+  "maxGridX": 110428,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "익선동 한옥 카페골목. 서단을 종각 bbox 동단(열 110424) 바로 다음 열에 맞닿게 — 경계 조정 없이 겹침 0"
+ },
+ {
+  "zoneKey": "dongseongno",
+  "name": "동성로",
+  "regionCode": null,
+  "minGridY": 39851,
+  "maxGridY": 39857,
+  "minGridX": 111819,
+  "maxGridX": 111824,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "대구 중구 동성로 — 중앙로역~반월당 사이 보행거리 축"
+ },
+ {
+  "zoneKey": "gimgwangseokgil",
+  "name": "김광석길",
+  "regionCode": null,
+  "minGridY": 39844,
+  "maxGridY": 39847,
+  "minGridX": 111829,
+  "maxGridX": 111832,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "대구 방천시장 옆 김광석다시그리기길. 동성로 동단(128.598)과 간격 확보"
+ },
+ {
+  "zoneKey": "apsan",
+  "name": "앞산카페거리",
+  "regionCode": null,
+  "minGridY": 39807,
+  "maxGridY": 39812,
+  "minGridX": 111806,
+  "maxGridX": 111811,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "대구 남구 대명동 앞산 카페거리"
+ },
+ {
+  "zoneKey": "eunhaengdong",
+  "name": "은행동",
+  "regionCode": null,
+  "minGridY": 40361,
+  "maxGridY": 40366,
+  "minGridX": 110804,
+  "maxGridX": 110809,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "대전 중구 은행동 으능정이거리(성심당 본점 일대)"
+ },
+ {
+  "zoneKey": "chungjangno",
+  "name": "충장로",
+  "regionCode": null,
+  "minGridY": 39051,
+  "maxGridY": 39056,
+  "minGridX": 110355,
+  "maxGridX": 110360,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "광주 동구 충장로 1~3가 보행상권"
+ },
+ {
+  "zoneKey": "dongmyeongdong",
+  "name": "동명동",
+  "regionCode": null,
+  "minGridY": 39053,
+  "maxGridY": 39057,
+  "minGridX": 110366,
+  "maxGridX": 110370,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "광주 동구 동명동 카페거리. 충장로 동단(126.915)과 간격 확보"
+ },
+ {
+  "zoneKey": "chinatown",
+  "name": "인천차이나타운",
+  "regionCode": null,
+  "minGridY": 41635,
+  "maxGridY": 41641,
+  "minGridX": 110101,
+  "maxGridX": 110107,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "인천 중구 차이나타운·개항장 거리"
+ },
+ {
+  "zoneKey": "songdo",
+  "name": "송도센트럴파크",
+  "regionCode": null,
+  "minGridY": 41544,
+  "maxGridY": 41552,
+  "minGridX": 110116,
+  "maxGridX": 110125,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "인천 연수구 송도 센트럴파크 수변"
+ },
+ {
+  "zoneKey": "anmok",
+  "name": "안목커피거리",
+  "regionCode": null,
+  "minGridY": 41967,
+  "maxGridY": 41973,
+  "minGridX": 112127,
+  "maxGridX": 112132,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "강릉 안목해변 커피거리"
+ },
+ {
+  "zoneKey": "yangnidangil",
+  "name": "양리단길",
+  "regionCode": null,
+  "minGridY": 42300,
+  "maxGridY": 42305,
+  "minGridX": 111842,
+  "maxGridX": 111846,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "양양읍 남대천 인근 골목상권"
+ },
+ {
+  "zoneKey": "jeonjuhanok",
+  "name": "전주한옥마을",
+  "regionCode": null,
+  "minGridY": 39791,
+  "maxGridY": 39797,
+  "minGridX": 110563,
+  "maxGridX": 110569,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "전주 교동·풍남동 한옥마을. 객리단길 동단(열 110560)과 2열 이상 간격"
+ },
+ {
+  "zoneKey": "aewol",
+  "name": "애월카페거리",
+  "regionCode": null,
+  "minGridY": 37180,
+  "maxGridY": 37184,
+  "minGridX": 109834,
+  "maxGridX": 109840,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "제주 애월읍 한담해안 카페거리"
+ },
+ {
+  "zoneKey": "hamdeok",
+  "name": "함덕",
+  "regionCode": null,
+  "minGridY": 37267,
+  "maxGridY": 37272,
+  "minGridX": 110145,
+  "maxGridX": 110150,
+  "priority": 0,
+  "_sources": [
+   "수동 작도 (FR-2a)"
+  ],
+  "_basis": "제주 조천읍 함덕해수욕장 일대"
+ }
+]

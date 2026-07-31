@@ -1,0 +1,153 @@
+{
+  "_readme": "격자 표시명 명명 계약 픽스처 (언어 중립 — FE/모바일이 이 파일을 파싱해 자기 구현을 검증한다, 정본은 이 파일이고 위키 'zone 표시명 FE 계약' 노트는 미러). 규칙: 행 = maxGridY − gridY 를 A(0)…Z(25), 열 = gridX − minGridX + 1, 표시명 = '{name} {행}-{열}'. 두 zone 에 겹치면 priority 높은 쪽(동률은 zoneKey 사전순), 매칭 없으면 regionName 폴백(번호 없이 이름만), 그것도 없으면 null. 값은 ZoneNamingContractTest 기존 7건 시나리오의 상수를 그대로 이식한 것(m234 접두). 근거 결정: docs/MSG-259.md D-4.",
+  "zones": {
+    "seomyeon": {
+      "zoneKey": "m234-seomyeon",
+      "name": "m234서면",
+      "minGridY": 1000,
+      "maxGridY": 1010,
+      "minGridX": 2000,
+      "maxGridX": 2020,
+      "priority": 0
+    },
+    "tall": {
+      "zoneKey": "m234-tall",
+      "name": "m234높은구역",
+      "minGridY": 1000,
+      "maxGridY": 1025,
+      "minGridX": 2000,
+      "maxGridX": 2000,
+      "priority": 0
+    },
+    "big": {
+      "zoneKey": "m234-big",
+      "name": "m234큰구역",
+      "minGridY": 1000,
+      "maxGridY": 1010,
+      "minGridX": 2000,
+      "maxGridX": 2020,
+      "priority": 0
+    },
+    "hot": {
+      "zoneKey": "m234-hot",
+      "name": "m234핫스팟",
+      "minGridY": 1004,
+      "maxGridY": 1006,
+      "minGridX": 2008,
+      "maxGridX": 2012,
+      "priority": 10
+    },
+    "spot": {
+      "zoneKey": "m234-spot",
+      "name": "m234스팟",
+      "minGridY": 1004,
+      "maxGridY": 1006,
+      "minGridX": 2008,
+      "maxGridX": 2012,
+      "priority": 0
+    }
+  },
+  "cases": [
+    {
+      "name": "북단_서단_격자는_A_1로_명명된다",
+      "gridId": "1010_2000",
+      "zones": [
+        "seomyeon"
+      ],
+      "regionName": null,
+      "expected": "m234서면 A-1"
+    },
+    {
+      "name": "북단에서_14번째_열은_A_14다",
+      "gridId": "1010_2013",
+      "zones": [
+        "seomyeon"
+      ],
+      "regionName": null,
+      "expected": "m234서면 A-14"
+    },
+    {
+      "name": "한_행_남쪽은_B로_내려간다",
+      "gridId": "1009_2000",
+      "zones": [
+        "seomyeon"
+      ],
+      "regionName": null,
+      "expected": "m234서면 B-1"
+    },
+    {
+      "name": "남단_행은_사각형_높이에_따라_알파벳이_증가한다_25행이_Z_경계다",
+      "gridId": "1000_2000",
+      "zones": [
+        "tall"
+      ],
+      "regionName": null,
+      "expected": "m234높은구역 Z-1"
+    },
+    {
+      "name": "사각형_북쪽_밖_격자는_매칭이_없어_표시명이_없다",
+      "gridId": "1011_2000",
+      "zones": [
+        "seomyeon"
+      ],
+      "regionName": null,
+      "expected": null
+    },
+    {
+      "name": "사각형_동쪽_밖_격자는_매칭이_없어_표시명이_없다",
+      "gridId": "1005_2021",
+      "zones": [
+        "seomyeon"
+      ],
+      "regionName": null,
+      "expected": null
+    },
+    {
+      "name": "사각형_안_격자는_zone_매칭으로_명명된다",
+      "gridId": "1005_2010",
+      "zones": [
+        "seomyeon"
+      ],
+      "regionName": null,
+      "expected": "m234서면 F-11"
+    },
+    {
+      "name": "두_zone에_겹치는_격자는_priority가_높은_zone을_고른다",
+      "gridId": "1005_2010",
+      "zones": [
+        "big",
+        "hot"
+      ],
+      "regionName": null,
+      "expected": "m234핫스팟 B-3"
+    },
+    {
+      "name": "매칭_zone이_없으면_행정동_이름으로_폴백한다",
+      "gridId": "9999_9999",
+      "zones": [
+        "seomyeon"
+      ],
+      "regionName": "부산광역시 부산진구 부전동",
+      "expected": "부산광역시 부산진구 부전동"
+    },
+    {
+      "name": "zone_안이면_좌표_명명이_폴백보다_우선한다",
+      "gridId": "1010_2000",
+      "zones": [
+        "seomyeon"
+      ],
+      "regionName": "부산광역시 부산진구 부전동",
+      "expected": "m234서면 A-1"
+    },
+    {
+      "name": "priority가_동률이면_zoneKey_사전순으로_앞선_zone을_고른다",
+      "gridId": "1005_2010",
+      "zones": [
+        "big",
+        "spot"
+      ],
+      "regionName": null,
+      "expected": "m234큰구역 F-11"
+    }
+  ]
+}
