@@ -100,16 +100,17 @@ class MissionSchemaMigrationTest {
 	class MissionConstraints {
 
 		@Test
-		@DisplayName("type이_5종_외_값이면_chk_missions_type_위반으로_INSERT가_실패한다")
-		void type이_5종_외_값이면_chk_missions_type_위반으로_INSERT가_실패한다() {
+		@DisplayName("type이_6종_외_값이면_chk_missions_type_위반으로_INSERT가_실패한다")
+		void type이_6종_외_값이면_chk_missions_type_위반으로_INSERT가_실패한다() {
 			assertThatThrownBy(() -> insertMinimalMission("INVALID"))
 				.hasStackTraceContaining("chk_missions_type");
 		}
 
 		@Test
-		@DisplayName("코스_5종_전부는_INSERT된다")
-		void 코스_5종_전부는_INSERT된다() {
-			for (String type : List.of("COURSE", "AREA", "EVENT", "THEME", "CONTINUOUS")) {
+		@DisplayName("코스_6종_전부는_INSERT된다")
+		void 코스_6종_전부는_INSERT된다() {
+			// V14(MSG-235)가 CHECK 를 재생성하며 'POPUP' 을 추가했다 — 전종 목록 검증의 정본.
+			for (String type : List.of("COURSE", "AREA", "EVENT", "THEME", "CONTINUOUS", "POPUP")) {
 				assertThat(insertMinimalMission(type)).isPositive();
 			}
 		}

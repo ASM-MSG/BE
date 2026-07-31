@@ -126,7 +126,7 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 		return switch (mission.getType()) {
 			case COURSE -> pathShape(mission, grids);
 			case AREA -> new RegionShape(mission.getRegionCode());
-			case EVENT -> boxShape(grids);
+			case EVENT, POPUP -> boxShape(grids);
 			case THEME, CONTINUOUS -> cellsShape(grids);
 		};
 	}

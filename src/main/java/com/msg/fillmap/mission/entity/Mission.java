@@ -67,19 +67,28 @@ public class Mission {
 	@Column(name = "source", length = 30)
 	private String source;
 
+	/**
+	 * 외부 안정 id 멱등 키 (V14, MSG-235 D3) — 팝가 id 문자열화. NULL = 외부 id 없는 적재(수동·축제·코스).
+	 * (source, source_key) 부분 유니크 인덱스가 앱 dedupe 의 DB 백스톱이다.
+	 */
+	@Column(name = "source_key", length = 30)
+	private String sourceKey;
+
 	/** insertable=false — DB DEFAULT(CURRENT_TIMESTAMP) 위임. save 직후엔 null, 재조회 시 채워진다(MSG-224). */
 	@Column(name = "created_at", nullable = false, insertable = false, updatable = false)
 	private LocalDateTime createdAt;
 
 	@Builder
 	private Mission(MissionType type, String title, LocalDateTime startAt, LocalDateTime endAt, Integer targetCount,
-		String source, String path) {
+		String source, String sourceKey, String path) {
 		this.type = type;
 		this.title = title;
 		this.startAt = startAt;
 		this.endAt = endAt;
 		this.targetCount = targetCount;
 		this.source = source;
+		// sourceKey 는 팝업(MSG-235) 전용 멱등 키 — 외부 안정 id 없는 시더(축제·코스)는 미지정(null).
+		this.sourceKey = sourceKey;
 		// path 는 코스(MSG-225) 전용 — chk_missions_path 가 COURSE 외 path 를 거부하므로 타 시더는 미지정(null).
 		this.path = path;
 	}

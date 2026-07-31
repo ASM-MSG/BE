@@ -168,7 +168,7 @@ class FestivalMissionSeederIntegrationTest {
 		long endedId = insertFestival(unique("스탬프 종료"), nowUtc().minusDays(10), nowUtc().minusDays(1));
 		insertStamp(userId, endedId);
 
-		missionRepository.deleteEndedFestivalsWithoutStamps();
+		missionRepository.deleteEndedBySourceWithoutStamps(FestivalMissionSeeder.SOURCE_FESTIVAL);
 
 		assertThat(missionRepository.findById(endedId)).isPresent();
 	}
@@ -181,7 +181,7 @@ class FestivalMissionSeederIntegrationTest {
 		insertMissionGrid(popup, "-41742_110415");
 		long course = insertMission("COURSE", unique("무기간 코스"), null, null);
 
-		missionRepository.deleteEndedFestivalsWithoutStamps();
+		missionRepository.deleteEndedBySourceWithoutStamps(FestivalMissionSeeder.SOURCE_FESTIVAL);
 
 		assertThat(missionRepository.findById(popup)).isPresent();
 		assertThat(missionRepository.findById(course)).isPresent();
@@ -215,7 +215,7 @@ class FestivalMissionSeederIntegrationTest {
 		long stillActive = insertFestival(unique("한시간 뒤 종료"), nowUtc().minusDays(1), nowUtc().plusHours(1));
 		long ended = insertFestival(unique("한시간 전 종료"), nowUtc().minusDays(1), nowUtc().minusHours(1));
 
-		missionRepository.deleteEndedFestivalsWithoutStamps();
+		missionRepository.deleteEndedBySourceWithoutStamps(FestivalMissionSeeder.SOURCE_FESTIVAL);
 
 		assertThat(missionRepository.findById(stillActive)).isPresent();
 		assertThat(missionRepository.findById(ended)).isEmpty();
