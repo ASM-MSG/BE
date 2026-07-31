@@ -33,4 +33,23 @@ public interface BadgeRepository extends JpaRepository<Badge, Long> {
 		@Param("metric") BigDecimal metric,
 		@Param("userId") long userId
 	);
+
+	/**
+	 * 내 뱃지 전체 목록 (docs/MSG-201.md §D2·D6) — 마스터 driven: 시딩된 뱃지는 획득 여부와 무관하게
+	 * 전부 나오고, 미시딩 축은 행 자체가 없다. LEFT JOIN 의 ub.user_id = :userId equi 가
+	 * user_badges PK(user_id, badge_id) prefix 를 타므로 추가 인덱스가 필요 없다. isNew 는 이 SELECT
+	 * 시점의 notified_at NULL 여부 — 스탬프(markMyBadgesNotified)는 그 뒤 같은 트랜잭션에서 찍는다(§D3).
+	 * 정렬은 badges.id ASC = 시딩 순 = 축별·티어 오름차순(§D6, 도감 "빈 칸이 그 자리에" UX).
+	 */
+	@Query(value = """
+		SELECT b.id AS "badgeId", b.code, b.name, b.description, b.icon_url AS "iconUrl",
+		       ub.user_id IS NOT NULL AS "earned",
+		       ub.earned_at AS "earnedAt",
+		       (ub.user_id IS NOT NULL AND ub.notified_at IS NULL) AS "isNew",
+		       ub.featured_rank AS "featuredRank"
+		FROM badges b
+		LEFT JOIN user_badges ub ON ub.badge_id = b.id AND ub.user_id = :userId
+		ORDER BY b.id
+		""", nativeQuery = true)
+	List<MyBadgeProjection> findAllWithMyStatus(@Param("userId") long userId);
 }

@@ -1,6 +1,7 @@
 package com.msg.fillmap.badge.repository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,6 +62,19 @@ public interface UserBadgeRepository extends JpaRepository<UserBadge, UserBadgeI
 		  AND g.grid_id = :gridId
 		""", nativeQuery = true)
 	Optional<BigDecimal> findMyRegionProgress(@Param("userId") long userId, @Param("gridId") String gridId);
+
+	/**
+	 * 미확인(새 뱃지) 확인 스탬프 (docs/MSG-201.md §D3) — 조회 응답에 실제로 실린 미확인 행에만
+	 * notified_at 을 기록한다. IN 리스트로 좁히는 이유: user 전체 NULL UPDATE 면 SELECT 와 UPDATE 사이에
+	 * 소급 시딩(V10+ 류)이 끼워 넣은 행을 노출된 적 없는데 확인 처리할 수 있다. notified_at IS NULL
+	 * 가드는 동기 지급분(이미 now() 기록)·기확인분의 무의미 UPDATE 를 막는다.
+	 */
+	@Modifying
+	@Query(value = """
+		UPDATE user_badges SET notified_at = now()
+		WHERE user_id = :userId AND badge_id IN (:badgeIds) AND notified_at IS NULL
+		""", nativeQuery = true)
+	int markMyBadgesNotified(@Param("userId") long userId, @Param("badgeIds") Collection<Long> badgeIds);
 
 	/**
 	 * 대표 뱃지 교체 직렬화용 사용자 단위 advisory 트랜잭션 잠금. 같은 사용자의 교체 요청 둘이 겹치면
