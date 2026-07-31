@@ -33,7 +33,7 @@
 - MSG-90: viewport cursor 페이지네이션(`GridCursor` Base64URL 커서, `OccupiedGridPage`, `OccupiedGridPageResponseDto`, keyset 행값비교+lookahead, `?strategy` 파라미터·`ViewportStrategy` 제거 — A 고정, repo B 쿼리는 보존)
 - MSG-167: 격자 중심점 행정동 라벨 저장 — V5 `grids.region_code`(nullable FK→regions, 쓰기 시 1회 판정·조회는 equi) + 멱등 백필(`region_code IS NULL`만, regions 미시딩 no-op). 판정 규칙 = 93/155 중심점 축(`ST_Covers … ORDER BY region_code LIMIT 1`). 인덱스 미추가·Grid 엔티티 미매핑(native)
 - MSG-238: V7 `idx_grids_region_code`(단순 btree — 167 §D5 예약 발동, region_code 주도 조회 최초 등장의 물리 기반. partial 기각)
-- **없는 것**: `GridOccupationService`(write는 MSG-66이 흡수), `HotZoneService`
+- **없는 것**: `GridOccupationService`(write는 MSG-66이 흡수), `HotZoneService`(MSG-233 §D5로 `hotzone` 독립 패키지 배치 확정 — grid 아님)
 
 ### `usergrid` (Owner B) — 🟡 부분
 - MSG-152: `repository/{UserGridRepository,CollectionSummaryProjection}`(user_grids·videos 네이티브 집계), `service/UserGridQueryService`(+impl, read 계약 B→A)·`CollectionSummaryView`, `controller/CollectionController`(`GET /api/collections/summary`), `dto/CollectionSummaryResponseDto`
@@ -110,7 +110,7 @@
 | 인터페이스 | 제공자 | 상태 |
 |---|---|---|
 | `GridQueryService` | Owner A | ✅ built (MSG-73 — 격자 색칠 조회 read · MSG-90 — 4-arg cursor 페이지 시그니처 추가, 2-arg 유지·strategy 오버로드 제거) |
-| `HotZoneService` | Owner A | ❌ 미생성 |
+| `HotZoneService` | Owner A | ❌ 미생성 — 설계 확정 (MSG-233 §D5 시그니처, 구현 MSG-184). 짝 계약 `HotScoreCommandService`(write, B(video) 소비 — MSG-183) 함께 신설 예정 |
 | `UserGridQueryService` | Owner B | 🟡 partial (MSG-152 — `getCollectionSummary` 도감 요약 read 계약 신설 B→A · MSG-153 — `getCollectionGrids` B-내부 read 추가, A 미소비·크로스오너 시그니처 불변 · MSG-167 — `CollectionGridView`에 regionName 필드 확장(비파괴) + 신설 공유 컬럼 `grids.region_code` A(쓰기 규칙 권위)↔B(호스팅·소비)) |
 | `RegionQueryService` | Owner A | ✅ built (MSG-93 — `resolveByPoint(lat, lon)` 역지오코딩 read. stats 조회는 156에서 별도 서비스로 분리 확정) |
 | `RegionStatsCommandService` | Owner A | ✅ built (MSG-155 — `refresh(userId, gridId)` 동기 recompute 명령. B의 첫 점령/롤백 훅이 소비, 호출자 트랜잭션 참여) |
