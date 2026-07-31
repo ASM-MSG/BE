@@ -61,8 +61,8 @@ public class CourseSeedReader {
 	}
 
 	private CourseRecord toRecord(JsonNode course) {
-		String crsIdx = course.path("crsIdx").asString();
-		String name = course.path("name").asString();
+		String crsIdx = requireText(course, "crsIdx");
+		String name = requireText(course, "name");
 		if (crsIdx.isBlank() || name.isBlank()) {
 			throw new IllegalStateException("crsIdx/name 이 비어 있습니다: " + course);
 		}
@@ -103,9 +103,15 @@ public class CourseSeedReader {
 		List<CourseRecord.Spot> spots = new ArrayList<>(spotsNode.size());
 		Set<String> seenGridIds = new HashSet<>();
 		for (JsonNode spot : spotsNode) {
-			String gridId = spot.path("gridId").asString();
+			String gridId = requireText(spot, "gridId");
 			if (!GRID_ID.matcher(gridId).matches()) {
 				throw new IllegalStateException("gridId 포맷 위반입니다 (glossary 논리 식별자): " + crsIdx + " = " + gridId);
+			}
+			// 업로드 경로는 GridEncoder.encode 정규형("{y}_{x}")만 생성한다 — 선행 0·"-0" 같은 비정규형은
+			// mission_grids 에 저장돼도 판정(grid_id 문자열 조인)에 영원히 안 잡히는 죽은 스팟이 된다.
+			// GridEncoder 는 무수정(Owner A 유틸) — 정규형 왕복 검증은 reader 전담(D7).
+			if (!isCanonicalGridId(gridId)) {
+				throw new IllegalStateException("gridId 가 정규형이 아닙니다 (D7 죽은 스팟 방지): " + crsIdx + " = " + gridId);
 			}
 			if (!seenGridIds.add(gridId)) {
 				// mission_grids PK(mission_id, grid_id)가 중복 행을 조용히 흡수해 스팟 수 < N 이 되면
@@ -121,6 +127,23 @@ public class CourseSeedReader {
 			}
 		}
 		return List.copyOf(spots);
+	}
+
+	/** Long 왕복 재조립이 원본과 일치해야 정규형 — 정규식(자릿수 나열)만으로는 선행 0 을 못 거른다. */
+	private static boolean isCanonicalGridId(String gridId) {
+		int separator = gridId.indexOf('_');
+		long gridY = Long.parseLong(gridId.substring(0, separator));
+		long gridX = Long.parseLong(gridId.substring(separator + 1));
+		return (gridY + "_" + gridX).equals(gridId);
+	}
+
+	/** isTextual 확인 후 추출 — asString() 의 관용 변환이 숫자/불리언을 조용히 문자열로 통과시키는 것 차단. */
+	private static String requireText(JsonNode owner, String field) {
+		JsonNode value = owner.path(field);
+		if (!value.isTextual()) {
+			throw new IllegalStateException(field + " 가 문자열이 아닙니다: " + value);
+		}
+		return value.asString();
 	}
 
 	private static String truncateTitle(String name) {

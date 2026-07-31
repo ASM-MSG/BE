@@ -134,6 +134,27 @@ class CourseSeedReaderTest {
 	}
 
 	@Test
+	void gridId가_정규형이_아니면_예외다() {
+		// 선행 0 — 정규식(숫자 나열)은 통과하지만 GridEncoder.encode 정규형과 문자열 불일치 = 죽은 스팟.
+		String nonCanonical = spots(5).replace("39001_112198", "039001_112198");
+
+		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, nonCanonical) + "]"))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("정규형");
+	}
+
+	@Test
+	void crsIdx나_name이_문자열이_아니면_예외다() {
+		// 숫자 name — asString() 관용 변환이면 제목 "123" 으로 조용히 통과하던 입력.
+		String numericName = """
+			{"crsIdx": "T_1", "name": 123, "path": %s, "spots": [%s]}""".formatted(PATH, spots(5));
+
+		assertThatThrownBy(() -> read("[" + numericName + "]"))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("문자열");
+	}
+
+	@Test
 	void 코스_안에서_gridId가_중복이면_예외다() {
 		// 스팟 2의 격자를 스팟 1과 같게 — PK 흡수로 실격자 수 < N 이 되는 산출물은 전량 거부한다 (D7).
 		String duplicated = spots(5).replace("39002_112198", "39001_112198");
