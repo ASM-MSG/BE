@@ -1,7 +1,7 @@
 [
  {
   "zoneKey": "aewol",
-  "name": "애월카페거리",
+  "name": "애월",
   "regionCode": null,
   "minGridY": 37180,
   "maxGridY": 37184,
@@ -11,7 +11,7 @@
  },
  {
   "zoneKey": "anmok",
-  "name": "안목커피거리",
+  "name": "안목",
   "regionCode": null,
   "minGridY": 41967,
   "maxGridY": 41973,
@@ -161,7 +161,7 @@
  },
  {
   "zoneKey": "gwangalli",
-  "name": "광안리해변",
+  "name": "광안리",
   "regionCode": null,
   "minGridY": 39042,
   "maxGridY": 39066,
@@ -191,7 +191,7 @@
  },
  {
   "zoneKey": "haeundae",
-  "name": "해운대해변",
+  "name": "해운대",
   "regionCode": null,
   "minGridY": 39064,
   "maxGridY": 39072,
@@ -211,7 +211,7 @@
  },
  {
   "zoneKey": "hongdae",
-  "name": "홍대입구",
+  "name": "홍대",
   "regionCode": null,
   "minGridY": 41719,
   "maxGridY": 41730,
@@ -301,7 +301,7 @@
  },
  {
   "zoneKey": "kondae",
-  "name": "건대입구",
+  "name": "건대",
   "regionCode": null,
   "minGridY": 41707,
   "maxGridY": 41716,

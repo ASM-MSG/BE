@@ -84,6 +84,15 @@ zones = sorted(zones + json.load(open("zones-manual.json")), key=lambda z: z["zo
 found = {z["name"] for z in zones}
 missing = [n for n in FAMOUS if n not in found]
 
+# 표시명 다듬기 — 데이터 매칭용 통칭("광안리해변")과 화면 표시명("광안리 A-3")이 다른 경우 (검수 2026-07-31)
+DISPLAY_RENAME = {
+    "광안리해변": "광안리", "해운대해변": "해운대",       # 해변 접미 제거
+    "홍대입구": "홍대", "건대입구": "건대",               # 역 이름이 아니라 부르는 말로
+    "안목커피거리": "안목", "애월카페거리": "애월",       # 수식어 제거 — 단독으로 충분히 유명
+}
+for z in zones:
+    z["name"] = DISPLAY_RENAME.get(z["name"], z["name"])
+
 # 시딩 포맷(_sources 제거)으로 저장
 out = [{k: v for k, v in z.items() if not k.startswith("_")} for z in zones]
 json.dump(out, open("zones-candidate.json", "w"), ensure_ascii=False, indent=1)
