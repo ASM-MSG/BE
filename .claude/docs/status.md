@@ -59,7 +59,8 @@
 
 ### `zone` (Owner A) — 🟡 부분
 - MSG-234: 격자 표시명 구역 — `entity/Zone`(V8 `zones` 전 컬럼 매핑)·`repository/ZoneRepository`, `GET /api/zones` 전체 목록(`service/ZoneQueryService`(+impl)·`controller/ZoneController`·`dto/ZoneResponseDto`), `seed/{ZoneSeed,ZoneSeeder}`(플래그 게이트 `fillmap.zone.seed.enabled` 기본 off, `resources/seed/zones.json` `zone_key` UPSERT 멱등). 표시명("서면 A-14") 계산은 FE-local(§D3) — 서버는 데이터만. 장소 검색은 카카오 프록시 MSG-251 이관(2단 폴백 구현분 제거, §D6)
-- **없는 것**: zones 실데이터(상권 검수 후 주입 — 작도 해법 cf-26181633), glossary "구역/표시명" 등재(별도 PR), 장소 검색(MSG-251 카카오 프록시)
+- MSG-259: zones 실데이터 48건 주입(`seed/zones.json` — 공공 상권 17 + 수동 작도 31, 전국·검증기 PASS)·prod/dev 시더 상시 on·명명 계약 언어 중립 픽스처(`src/test/resources/fixtures/zone-naming.json`, `ZoneNamingContractTest` 픽스처 로드 리팩터)·glossary 구역/표시명 등재
+- **없는 것**: 장소 검색(MSG-251 카카오 프록시 — 구현 완료로 이관)
 
 ### `video` (Owner B) — 🟡 부분
 - MSG-66: `entity`(Video·ProcessingStatus·Visibility·VideoStatus + 상태전이 도메인 메서드), `repository/VideoRepository`(grids·user_grids native UPSERT/롤백), 메타저장 `service`·`controller`(`POST /api/videos`)·`dto`, `support/GeoSupport`, `exception/VideoErrorCode`(3xxx)
