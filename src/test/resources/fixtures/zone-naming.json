@@ -36,6 +36,15 @@
       "minGridX": 2008,
       "maxGridX": 2012,
       "priority": 10
+    },
+    "spot": {
+      "zoneKey": "m234-spot",
+      "name": "m234스팟",
+      "minGridY": 1004,
+      "maxGridY": 1006,
+      "minGridX": 2008,
+      "maxGridX": 2012,
+      "priority": 0
     }
   },
   "cases": [
@@ -129,6 +138,16 @@
       ],
       "regionName": "부산광역시 부산진구 부전동",
       "expected": "m234서면 A-1"
+    },
+    {
+      "name": "priority가_동률이면_zoneKey_사전순으로_앞선_zone을_고른다",
+      "gridId": "1005_2010",
+      "zones": [
+        "big",
+        "spot"
+      ],
+      "regionName": null,
+      "expected": "m234큰구역 F-11"
     }
   ]
 }
