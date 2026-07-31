@@ -87,6 +87,24 @@ class CourseSeedReaderTest {
 	}
 
 	@Test
+	void 좌표_원소가_경도위도_숫자_쌍이_아니면_예외다() {
+		// 대표 결함: 점 배열이 아니라 숫자 나열 — size 2 라 "2점 미만" 검사는 통과하므로 원소 검증이 격발해야 한다.
+		String numberList = """
+			{"type": "LineString", "coordinates": [129.03597, 35.09656]}""";
+		// 혼입 결함: 정상 쌍 사이의 1원소 배열·문자열 원소.
+		String onePointElement = """
+			{"type": "LineString", "coordinates": [[129.03597, 35.09656], [129.03642]]}""";
+		String stringElement = """
+			{"type": "LineString", "coordinates": [[129.03597, 35.09656], ["129.03642", "35.09721"]]}""";
+
+		for (String badPath : new String[] {numberList, onePointElement, stringElement}) {
+			assertThatThrownBy(() -> read("[" + course("T_1", "코스", badPath, spots(5)) + "]"))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("숫자 쌍");
+		}
+	}
+
+	@Test
 	void 스팟이_5개_미만이거나_8개_초과면_예외다() {
 		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, spots(4)) + "]"))
 			.isInstanceOf(IllegalStateException.class)

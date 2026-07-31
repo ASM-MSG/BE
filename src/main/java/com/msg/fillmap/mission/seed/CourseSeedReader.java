@@ -78,6 +78,20 @@ public class CourseSeedReader {
 		if (!coordinates.isArray() || coordinates.size() < 2) {
 			throw new IllegalStateException("path 좌표가 2점 미만입니다 (D5): " + crsIdx);
 		}
+		// 각 원소 = [lon, lat] 유한 숫자 쌍 (D5·D6 산출물 계약 — 고도 3원소도 거부). path 는 원문
+		// passthrough(@JsonRawValue) 라 깨진 GeoJSON 이 FE 까지 그대로 나간다 — 여기서 전량 거부한다(D7).
+		for (int i = 0; i < coordinates.size(); i++) {
+			JsonNode point = coordinates.get(i);
+			if (!point.isArray() || point.size() != 2
+				|| !isFiniteNumber(point.get(0)) || !isFiniteNumber(point.get(1))) {
+				throw new IllegalStateException(
+					"path 좌표 원소가 [lon, lat] 숫자 쌍이 아닙니다 (D5): " + crsIdx + " coordinates[" + i + "] = " + point);
+			}
+		}
+	}
+
+	private static boolean isFiniteNumber(JsonNode value) {
+		return value.isNumber() && Double.isFinite(value.asDouble());
 	}
 
 	private static List<CourseRecord.Spot> toSpots(JsonNode course, String crsIdx) {
