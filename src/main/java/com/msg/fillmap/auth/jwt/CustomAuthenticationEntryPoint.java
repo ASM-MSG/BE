@@ -39,7 +39,6 @@ public class CustomAuthenticationEntryPoint implements AuthenticationEntryPoint 
 
 		ApiResponseDto<Object> body = ApiResponseDto.builder()
 			.developCode(errorCode.getErrorCode())
-			.httpStatus(errorCode.getHttpStatus())
 			.message(errorCode.getMessage())
 			.build();
 
