@@ -48,6 +48,7 @@
 - MSG-223: 미션 완료 판정·스탬프(`entity/{UserMission,UserMissionId}`(UserBadge 미러·비회수)·`UserMissionRepository`(`insertIgnoreConflict` ON CONFLICT·`countMyStamps`), `MissionRepository.findAwardCandidateIds/findCompleted`(native, `recorded_at` 판정·무기간 IS NULL 생략·`AT TIME ZONE 'UTC'` 정규화), `MissionAwardService`(+impl — 신규 INSERT 성공분만 응답·MISSION_COUNT 뱃지 배선), 업로드 확정 훅(streak 다음·점령 분기 바깥, `VideoUploadResponseDto.completedMissions`), V12 뱃지 시딩 1·5·10)
 - MSG-224: 축제 미션 적재(`seed/{FestivalRecord,FestivalJsonlReader,FestivalMissionSeeder}` — 플래그 게이트 `fillmap.mission.festival.seed.enabled` 기본 off·`@Order(30)`, 시드+격주 수동 갱신 단일 러너·`@Transactional` 원자성, 9×9 격자 81행·target_count=1, dedupe=중심격자+기간(min+4 복원), 종료 정리 `deleteEndedFestivalsWithoutStamps`(native, `AT TIME ZONE 'UTC'`·스탬프 잔존). **V13 `missions.source`**(VARCHAR(30) NULL) — EVENT 타입이 팝업(MSG-235)과 공유라 `source='FESTIVAL'`로 소유 식별(Codex 리뷰 파생, 타 소스·NULL 불가침). `Mission` 시드 `@Builder` 6필드·`created_at` insertable=false 전환)
 - MSG-225: 코스 미션 시드(`seed/{CourseRecord,CourseSeedReader,CourseMissionSeeder}` — 플래그 게이트 `fillmap.mission.course.seed.enabled` 기본 off·`@Order(40)`, 무기간 INSERT-only(정리 단계·클럭 없음), dedupe=제목×`source='DURUNUBI'`, path=GeoJSON LineString 원문 jsonb. reader는 전량 거부 검증 계약 — LineString·좌표 쌍·스팟 5~8·seq 연속·gridId 포맷/정규형/중복·crsIdx/name 문자열(Codex 3라운드 파생 4건 포함). `Mission` 빌더 path 확장·`MissionGrid` seq 생성자. 리포지토리·조회·판정 경로 무수정 — 무기간 판정은 MSG-223 엔진 `IS NULL OR`로 자연 성립(계약 라운드트립 테스트 실증). 산출 파이프라인은 레포 밖 `~/fillmap-data/durunubi/spot_pipeline.py`)
+- MSG-235: 팝업 미션 적재(`seed/{PopupRecord,PopupJsonlReader,PopupMissionSeeder}` — 플래그 게이트 `fillmap.mission.popup.seed.enabled` 기본 off·`@Order(50)`, 주 1회 수동 갱신 단일 러너·**정리→적재 순**(id 단독 키라 연장 팝업 공백을 같은 실행에서 흡수 — 축제와 반대), 멱등=**V14 `missions.source_key`**(팝가 id, `(source,source_key)` 부분 유니크 백스톱)·INSERT-only, 9×9·target_count=1·**type=POPUP 신설**(V14 CHECK 확장, 조회 `case EVENT, POPUP → BOX`, 판정 무수정). reader는 코스 전량 거부 계약 승계(id 정수·중복, 좌표 33~39/124~132, 날짜 순서 — periodType 미사용·날짜 직접 판정). 정리 쿼리 `deleteEndedBySourceWithoutStamps(:source)` 파라미터화(축제 메서드 흡수). 산출은 레포 밖 `~/fillmap-data/popups/crawl_popga.py`)
 - **없는 것**: 팝업 시드(MSG-235). 축제·코스 실적재는 운영 절차(각 스펙 §D6/§D9 — 산출물 복사 + 플래그 on 1회 기동, 코스는 TourAPI 전량 수집 완료 후)
 
 ### `region` (Owner A) — 🟡 부분
@@ -118,7 +119,7 @@
 
 ## 스키마 vs JPA 엔티티
 
-`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다. `V10__streak_badges_seed.sql`(MSG-200)은 STREAK_3/7/30 시딩만 담는다(DDL 0·소급 없음). `V12__mission_badges_seed.sql`(MSG-223)은 MISSION_1/5/10 시딩만, `V13__mission_source.sql`(MSG-224)은 `missions.source` 적재 출처 컬럼 1개를 추가한다(NULL=수동·불가침).
+`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다. `V10__streak_badges_seed.sql`(MSG-200)은 STREAK_3/7/30 시딩만 담는다(DDL 0·소급 없음). `V12__mission_badges_seed.sql`(MSG-223)은 MISSION_1/5/10 시딩만, `V13__mission_source.sql`(MSG-224)은 `missions.source` 적재 출처 컬럼 1개를 추가한다(NULL=수동·불가침). `V14__missions_popup_type_and_source_key.sql`(MSG-235)은 type CHECK에 'POPUP' 추가·`source_key` 컬럼·`(source, source_key)` 부분 유니크 인덱스를 담는다.
 
 | 테이블 | 엔티티 | 상태 |
 |---|---|---|
@@ -137,7 +138,7 @@
 | `reports` | — | ❌ 엔티티 없음 |
 | `sponsor_ads` | — | ❌ 엔티티 없음 |
 | `streaks` | `streak/entity/Streak` | ✅ (MSG-200 — 전 컬럼 매핑, 쓰기는 native UPSERT 전용) |
-| `missions` | `mission/entity/Mission` | ✅ (MSG-222 조회 매핑 → MSG-224 쓰기 경로: 시드 `@Builder`·`source`(V13)·created_at DB DEFAULT 위임. path JSONB 미매핑 — COURSE 시드는 MSG-225) |
+| `missions` | `mission/entity/Mission` | ✅ (MSG-222 조회 매핑 → MSG-224 쓰기 경로: 시드 `@Builder`·`source`(V13)·created_at DB DEFAULT 위임. path JSONB 미매핑 — COURSE 시드는 MSG-225. MSG-235 `sourceKey`(V14) 매핑·빌더 8필드) |
 | `mission_grids` | `mission/entity/MissionGrid` | ✅ (MSG-222 — 복합 PK `MissionGridId`, grids FK 없는 논리 참조(lazy insert, MSG-166 §D2). MSG-224 시드 생성자) |
 | `user_missions` | `mission/entity/UserMission` | ✅ (MSG-223 — 복합 PK `UserMissionId`, native 전용 최소 매핑. 스탬프 영속 — 비회수) |
 
