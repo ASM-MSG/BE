@@ -96,11 +96,11 @@ class FestivalMissionSeederIntegrationTest {
 	void 플래그_off면_아무것도_하지_않는다() {
 		// 파일이 없는 경로 — 게이트가 새면 파일 부재 예외로 즉시 드러난다.
 		Path missing = tempDir.resolve("absent.jsonl");
-		long before = eventCount();
+		long before = festivalCount();
 
 		newSeeder(false, missing.toString()).run(emptyArgs());
 
-		assertThat(eventCount()).isEqualTo(before);
+		assertThat(festivalCount()).isEqualTo(before);
 	}
 
 	@Test
@@ -119,6 +119,8 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(mission.getTargetCount()).isEqualTo(1);
 		assertThat(mission.getRegionCode()).isNull();
 		assertThat(mission.getPath()).isNull();
+		// 적재 출처 기록 (D7) — 정리·dedupe 가 이 값으로 자기 산출물을 식별한다.
+		assertThat(mission.getSource()).isEqualTo(FestivalMissionSeeder.SOURCE_FESTIVAL);
 		// KST 00:00:00 / 23:59:59 → UTC 순간으로 저장 (D5) — 변환 계약의 고정 값 검증은 모듈 2 순수 테스트 담당.
 		assertThat(mission.getStartAt()).isEqualTo(FestivalMissionSeeder.toUtcStart(시작일));
 		assertThat(mission.getEndAt()).isEqualTo(FestivalMissionSeeder.toUtcEnd(종료일));
@@ -147,7 +149,7 @@ class FestivalMissionSeederIntegrationTest {
 	@Test
 	@DisplayName("종료 축제가 정리되고 mission_grids 가 CASCADE 로 사라진다")
 	void 종료_축제가_정리되고_mission_grids가_CASCADE로_사라진다() throws IOException {
-		long endedId = insertMission("EVENT", unique("끝난 축제"), nowUtc().minusDays(10), nowUtc().minusDays(1));
+		long endedId = insertFestival(unique("끝난 축제"), nowUtc().minusDays(10), nowUtc().minusDays(1));
 		insertMissionGrid(endedId, "-41741_110415");
 		Path file = writeJsonl("refresh.jsonl", activeRow(unique("진행 축제"), 합성_LAT + 0.2, 합성_LON));
 
@@ -163,24 +165,45 @@ class FestivalMissionSeederIntegrationTest {
 	void 스탬프_걸린_종료_미션은_삭제되지_않는다() {
 		long userId = userRepository.save(
 			User.createLocalUser("msg224-" + System.nanoTime() + "@example.com", "hash", "시더테스터")).getId();
-		long endedId = insertMission("EVENT", unique("스탬프 종료"), nowUtc().minusDays(10), nowUtc().minusDays(1));
+		long endedId = insertFestival(unique("스탬프 종료"), nowUtc().minusDays(10), nowUtc().minusDays(1));
 		insertStamp(userId, endedId);
 
-		missionRepository.deleteEndedEventsWithoutStamps();
+		missionRepository.deleteEndedFestivalsWithoutStamps();
 
 		assertThat(missionRepository.findById(endedId)).isPresent();
 	}
 
 	@Test
-	@DisplayName("EVENT 외 유형은 정리에서 불가침이다 — 무기간 코스·기간 지난 THEME 잔존")
-	void EVENT_외_유형은_정리에서_불가침이다() {
+	@DisplayName("타 소스와 수동 미션은 정리에서 불가침이다 — 종료 1격자 EVENT(source NULL)·무기간 코스 잔존")
+	void 타_소스와_수동_미션은_정리에서_불가침이다() {
+		// 팝업 모사: 종료된 1격자 EVENT, source NULL — 공유 EVENT 타입이라도 축제 정리가 못 건드린다 (D7).
+		long popup = insertMission("EVENT", unique("끝난 팝업 모사"), nowUtc().minusDays(10), nowUtc().minusDays(1));
+		insertMissionGrid(popup, "-41742_110415");
 		long course = insertMission("COURSE", unique("무기간 코스"), null, null);
-		long endedTheme = insertMission("THEME", unique("끝난 테마"), nowUtc().minusDays(10), nowUtc().minusDays(1));
 
-		missionRepository.deleteEndedEventsWithoutStamps();
+		missionRepository.deleteEndedFestivalsWithoutStamps();
 
+		assertThat(missionRepository.findById(popup)).isPresent();
 		assertThat(missionRepository.findById(course)).isPresent();
-		assertThat(missionRepository.findById(endedTheme)).isPresent();
+	}
+
+	@Test
+	@DisplayName("1격자 EVENT 는 dedupe 대조에 포함되지 않는다 — 가짜 중심 키가 실축제를 오스킵하지 않는다")
+	void 일격자_EVENT는_dedupe_대조에_포함되지_않는다() throws IOException {
+		// 팝업 모사(1격자 EVENT, source NULL)를 축제 중심의 (-4, -4) 격자·같은 기간에 둔다 — type 대조라면
+		// min+4 복원이 정확히 축제 중심을 가리키는 가짜 키가 돼 실축제를 오스킵한다 (D3·D7, Codex 리뷰 파생).
+		double lat = 합성_LAT + 0.3;
+		GridEncoder.GridIndex center = GridEncoder.decode(GridEncoder.encode(lat, 합성_LON));
+		long popup = insertMission("EVENT", unique("팝업 모사"),
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		insertMissionGrid(popup, (center.gridY() - 4) + "_" + (center.gridX() - 4));
+		String name = unique("같은 자리 축제");
+		Path file = writeJsonl("popup.jsonl", activeRow(name, lat, 합성_LON));
+
+		FestivalMissionSeeder.SeedResult result = seeder().seed(file);
+
+		assertThat(result.loaded()).isEqualTo(1);
+		assertThat(countByTitle(name)).isEqualTo(1);
 	}
 
 	@Test
@@ -189,10 +212,10 @@ class FestivalMissionSeederIntegrationTest {
 		// 세션 타임존을 KST 로 강제 — 나이브 비교면 statement_timestamp() 가 UTC+9 로 캐스트돼
 		// 1시간 뒤 종료 예정 미션이 "9시간 전 종료"로 오판·오삭제된다 (SET LOCAL 은 이 트랜잭션 한정).
 		em.createNativeQuery("SET LOCAL TIME ZONE 'Asia/Seoul'").executeUpdate();
-		long stillActive = insertMission("EVENT", unique("한시간 뒤 종료"), nowUtc().minusDays(1), nowUtc().plusHours(1));
-		long ended = insertMission("EVENT", unique("한시간 전 종료"), nowUtc().minusDays(1), nowUtc().minusHours(1));
+		long stillActive = insertFestival(unique("한시간 뒤 종료"), nowUtc().minusDays(1), nowUtc().plusHours(1));
+		long ended = insertFestival(unique("한시간 전 종료"), nowUtc().minusDays(1), nowUtc().minusHours(1));
 
-		missionRepository.deleteEndedEventsWithoutStamps();
+		missionRepository.deleteEndedFestivalsWithoutStamps();
 
 		assertThat(missionRepository.findById(stillActive)).isPresent();
 		assertThat(missionRepository.findById(ended)).isEmpty();
@@ -244,19 +267,19 @@ class FestivalMissionSeederIntegrationTest {
 		return LocalDateTime.now(ZoneOffset.UTC);
 	}
 
-	private long eventCount() {
-		return missionRepository.findByType(MissionType.EVENT).size();
+	private long festivalCount() {
+		return missionRepository.findBySource(FestivalMissionSeeder.SOURCE_FESTIVAL).size();
 	}
 
 	private Mission findByTitle(String title) {
-		return missionRepository.findByType(MissionType.EVENT).stream()
+		return missionRepository.findBySource(FestivalMissionSeeder.SOURCE_FESTIVAL).stream()
 			.filter(mission -> mission.getTitle().equals(title))
 			.findFirst()
 			.orElseThrow();
 	}
 
 	private long countByTitle(String title) {
-		return missionRepository.findByType(MissionType.EVENT).stream()
+		return missionRepository.findBySource(FestivalMissionSeeder.SOURCE_FESTIVAL).stream()
 			.filter(mission -> mission.getTitle().equals(title))
 			.count();
 	}
@@ -280,15 +303,27 @@ class FestivalMissionSeederIntegrationTest {
 			.formatted(name, startDate, endDate, lat, lon);
 	}
 
+	/** source NULL(수동/타 러너 모사) 미션 — 축제 정리·dedupe 의 불가침 대상 픽스처 (D7). */
 	private long insertMission(String type, String title, LocalDateTime startAt, LocalDateTime endAt) {
+		return insertMissionRow(type, title, startAt, endAt, null);
+	}
+
+	/** 축제 러너 산출물 모사 — source='FESTIVAL' 로 정리 대상이 되는 픽스처 (D7). */
+	private long insertFestival(String title, LocalDateTime startAt, LocalDateTime endAt) {
+		return insertMissionRow("EVENT", title, startAt, endAt, FestivalMissionSeeder.SOURCE_FESTIVAL);
+	}
+
+	private long insertMissionRow(String type, String title, LocalDateTime startAt, LocalDateTime endAt,
+		String source) {
 		em.createNativeQuery("""
-				INSERT INTO missions (type, title, start_at, end_at, target_count)
-				VALUES (:type, :title, :startAt, :endAt, 1)
+				INSERT INTO missions (type, title, start_at, end_at, target_count, source)
+				VALUES (:type, :title, :startAt, :endAt, 1, :source)
 				""")
 			.setParameter("type", type)
 			.setParameter("title", title)
 			.setParameter("startAt", startAt)
 			.setParameter("endAt", endAt)
+			.setParameter("source", source)
 			.executeUpdate();
 		return ((Number) em.createNativeQuery("SELECT id FROM missions WHERE title = :title")
 			.setParameter("title", title)

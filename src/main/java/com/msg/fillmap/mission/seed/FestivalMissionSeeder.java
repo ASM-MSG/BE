@@ -48,6 +48,8 @@ import com.msg.fillmap.mission.repository.MissionRepository;
 @Order(30)
 public class FestivalMissionSeeder implements ApplicationRunner {
 
+	/** 적재 출처 값 (D7) — 이 러너 산출물 식별자. 정리·dedupe 대조가 이 값만 본다(공유 EVENT 타입과 무관). */
+	static final String SOURCE_FESTIVAL = "FESTIVAL";
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 	/** 중심±4 → 9×9 = 81격자 (FR-2). */
 	private static final int RADIUS = 4;
@@ -125,7 +127,7 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 				+ " — 파일 내용과 수집 스냅샷(전부 종료된 축제인지)을 확인하세요");
 		}
 
-		Set<DedupeKey> existingKeys = existingEventKeys();
+		Set<DedupeKey> existingKeys = existingFestivalKeys();
 		int loaded = 0;
 		for (FestivalRecord record : dedupeSource(parsed.records())) {
 			DedupeKey key = keyOf(record);
@@ -135,26 +137,30 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 			insertMission(record, key);
 			loaded++;
 		}
-		int removed = missionRepository.deleteEndedEventsWithoutStamps();
+		int removed = missionRepository.deleteEndedFestivalsWithoutStamps();
 		return new SeedResult(loaded, parsed.records().size() - loaded,
 			parsed.skippedInvalidDate(), parsed.skippedEnded(), parsed.skippedMalformed(), removed);
 	}
 
-	/** 기존 EVENT 미션의 dedupe 키 집합 — 중심 격자는 81행에서 복원한다(재실행 멱등, D3). */
-	private Set<DedupeKey> existingEventKeys() {
-		List<Mission> events = missionRepository.findByType(MissionType.EVENT);
-		if (events.isEmpty()) {
+	/**
+	 * 기존 축제(source='FESTIVAL') 미션의 dedupe 키 집합 — 중심 격자는 81행에서 복원한다(재실행 멱등, D3).
+	 * 이 러너 산출물만 조회하므로 9×9 블록(중심±4)이 보장돼 min+4 복원이 결정적이다 — type 조회는
+	 * 공유 EVENT(팝업 1격자)의 가짜 중심 키 때문에 금지(D7).
+	 */
+	private Set<DedupeKey> existingFestivalKeys() {
+		List<Mission> festivals = missionRepository.findBySource(SOURCE_FESTIVAL);
+		if (festivals.isEmpty()) {
 			return Set.of();
 		}
 		Map<Long, List<MissionGrid>> gridsByMission = missionGridRepository
-			.findByMissionIds(events.stream().map(Mission::getId).toList()).stream()
+			.findByMissionIds(festivals.stream().map(Mission::getId).toList()).stream()
 			.collect(Collectors.groupingBy(MissionGrid::getMissionId));
 
 		Set<DedupeKey> keys = new HashSet<>();
-		for (Mission mission : events) {
+		for (Mission mission : festivals) {
 			List<MissionGrid> grids = gridsByMission.get(mission.getId());
 			if (grids == null) {
-				// 격자 없는 EVENT 는 이 시더 산출물이 아니다 — 중심 복원이 불가하니 대조에서 제외.
+				// 격자 없는 행은 이 시더 산출물 형태가 아니다 — 중심 복원이 불가하니 대조에서 제외.
 				continue;
 			}
 			keys.add(new DedupeKey(restoreCenter(grids), mission.getStartAt(), mission.getEndAt()));
@@ -162,7 +168,7 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 		return keys;
 	}
 
-	/** 미션 1건 + mission_grids 81행 INSERT — target_count=1(관대함으로만 작용), seq NULL (FR-2). */
+	/** 미션 1건 + mission_grids 81행 INSERT — target_count=1(관대함으로만 작용), seq NULL, source 기록 (FR-2, D7). */
 	private void insertMission(FestivalRecord record, DedupeKey key) {
 		Mission mission = missionRepository.save(Mission.builder()
 			.type(MissionType.EVENT)
@@ -170,6 +176,7 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 			.startAt(key.startAt())
 			.endAt(key.endAt())
 			.targetCount(1)
+			.source(SOURCE_FESTIVAL)
 			.build());
 		missionGridRepository.saveAll(expandGrids(key.centerGridId()).stream()
 			.map(gridId -> new MissionGrid(mission.getId(), gridId))

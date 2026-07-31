@@ -10,7 +10,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.msg.fillmap.mission.entity.Mission;
-import com.msg.fillmap.mission.entity.MissionType;
 
 /**
  * 미션 조회 리포지토리 (MSG-222 활성 조회 + MSG-223 판정). 활성 판정만 담당하고 mission_grids 는
@@ -74,25 +73,30 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 		@Param("candidateIds") Collection<Long> candidateIds
 	);
 
-	/** 시더 dedupe DB 대조용 (MSG-224 D3) — 기존 EVENT 전체를 기간과 함께 로드해 메모리 대조한다. */
-	List<Mission> findByType(MissionType type);
+	/**
+	 * 시더 dedupe DB 대조용 (MSG-224 D3·D7) — 해당 러너 산출물만 기간과 함께 로드해 메모리 대조한다.
+	 * type 조회 금지: EVENT 는 팝업(MSG-235, 1격자)과 공유 타입이라 1격자 미션의 min+4 가 가짜 중심 키를
+	 * 만들어 실축제를 오스킵한다(Codex 리뷰 파생).
+	 */
+	List<Mission> findBySource(String source);
 
 	/**
 	 * 종료 축제 정리 (MSG-224 D4). mission_grids 는 ON DELETE CASCADE 로 함께 정리된다.
 	 * AT TIME ZONE 'UTC' 필수 — 저장값이 UTC 순간이라 세션 타임존(KST) 캐스트 비교는 9시간 스큐가 난다
 	 * (MSG-223 §D2 규칙, findAwardCandidateIds 동일 패턴). 스탬프 걸린 미션은 NOT EXISTS 로 건너뛴다 —
 	 * V6 FK(user_missions.mission_id NO ACTION)가 하드삭제를 차단하므로 시도 자체가 러너 전체를 롤백시킨다.
-	 * type='EVENT' 한정 — 코스(MSG-225)·팝업(MSG-235) 등 타 유형 불가침.
+	 * source='FESTIVAL' 한정(D7) — 타 소스(팝업 등)·NULL(수동/미상) 불가침. 당초 type='EVENT' 한정은
+	 * 공유 타입이라 종료 팝업을 오삭제하는 결함이었다(Codex 리뷰 파생, 2026-07-31 성민 확정).
 	 * flush: 같은 트랜잭션에서 방금 save 된 미션도 정리 대상 판정에 들어가야 하고(러너 단일 트랜잭션, D4),
 	 * clear: native DELETE 는 영속성 컨텍스트를 우회하므로 삭제된 엔티티가 1차 캐시에 스테일로 남는 것을 막는다.
 	 */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query(value = """
 		DELETE FROM missions m
-		WHERE m.type = 'EVENT'
+		WHERE m.source = 'FESTIVAL'
 		  AND m.end_at IS NOT NULL
 		  AND m.end_at < statement_timestamp() AT TIME ZONE 'UTC'
 		  AND NOT EXISTS (SELECT 1 FROM user_missions um WHERE um.mission_id = m.id)
 		""", nativeQuery = true)
-	int deleteEndedEventsWithoutStamps();
+	int deleteEndedFestivalsWithoutStamps();
 }

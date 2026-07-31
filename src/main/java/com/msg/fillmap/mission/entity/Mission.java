@@ -59,16 +59,25 @@ public class Mission {
 	@Column(name = "path", columnDefinition = "jsonb")
 	private String path;
 
+	/**
+	 * 적재 출처 (V13, D7) — NULL = 수동/미상. String 유지(enum 금지): 공유 엔티티라 후속 소스(POPUP 등)가
+	 * 상수 추가를 잊으면 기존 조회 경로 전체가 역직렬화로 터진다. 값 상수는 각 러너가 보유한다.
+	 */
+	@Column(name = "source", length = 30)
+	private String source;
+
 	/** insertable=false — DB DEFAULT(CURRENT_TIMESTAMP) 위임. save 직후엔 null, 재조회 시 채워진다(MSG-224). */
 	@Column(name = "created_at", nullable = false, insertable = false, updatable = false)
 	private LocalDateTime createdAt;
 
 	@Builder
-	private Mission(MissionType type, String title, LocalDateTime startAt, LocalDateTime endAt, Integer targetCount) {
+	private Mission(MissionType type, String title, LocalDateTime startAt, LocalDateTime endAt, Integer targetCount,
+		String source) {
 		this.type = type;
 		this.title = title;
 		this.startAt = startAt;
 		this.endAt = endAt;
 		this.targetCount = targetCount;
+		this.source = source;
 	}
 }
