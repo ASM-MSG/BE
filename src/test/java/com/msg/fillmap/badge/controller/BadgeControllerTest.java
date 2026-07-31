@@ -57,7 +57,8 @@ class BadgeControllerTest {
 	@Test
 	@DisplayName("내 뱃지 목록을 조회한다 — 200·행 필드 9종(MSG-201 §D2)")
 	void 내_뱃지_목록을_조회한다() throws Exception {
-		given(badgeQueryService.findMyBadges(anyLong())).willReturn(List.of(
+		// 정확값 스텁 — principal userId(토큰의 USER_ID)가 서비스에 그대로 전달돼야만 매치된다(사용자 격리).
+		given(badgeQueryService.findMyBadges(USER_ID)).willReturn(List.of(
 			new MyBadgeResponseDto(1L, "EXPLORER_1", "첫 발자국", "첫 격자를 수집했어요", null,
 				true, LocalDateTime.of(2026, 7, 29, 10, 15, 0), true, null),
 			new MyBadgeResponseDto(2L, "EXPLORER_10", "탐험가 I", "격자 10개를 수집했어요", null,
