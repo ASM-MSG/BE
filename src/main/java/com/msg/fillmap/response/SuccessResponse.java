@@ -12,7 +12,6 @@ public class SuccessResponse<T> extends ResponseEntity<ApiResponseDto<T>> {
 		super(
 			ApiResponseDto.<T>builder()
 				.developCode(SUCCESS_CODE)
-				.httpStatus(HttpStatus.OK)
 				.message(SUCCESS_MESSAGE)
 				.body(data)
 				.build(),
