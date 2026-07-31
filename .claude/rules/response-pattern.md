@@ -5,14 +5,16 @@ FillMap 백엔드의 공통 응답 · 예외 처리 규칙. 모든 API가 이 �
 
 ## 공통 응답 포맷 — `ApiResponseDto<T>`
 
-모든 응답은 아래 4개 필드로 감싼다.
+모든 응답은 아래 3개 필드로 감싼다.
 
 | 필드 | 타입 | 의미 |
 |---|---|---|
 | `developCode` | `Integer` | 앱 내부 코드 (성공 200, 도메인 에러는 4자리 — 아래 규칙) |
-| `httpStatus` | `HttpStatusCode` | HTTP 상태 |
 | `message` | `String` | 사용자/개발자용 메시지 |
 | `body` | `T` | 실제 데이터 (에러 시 보통 `null`) |
+
+HTTP 상태는 body에 넣지 않는다 — 클라이언트는 응답 status line에서 이미 받으므로 중복이고,
+`HttpStatusCode` 타입 필드는 springdoc이 실제와 다른 boolean 객체 예시를 생성한다 (MSG-265).
 
 ## 성공 응답 — `SuccessResponse<T>`
 

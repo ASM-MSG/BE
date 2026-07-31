@@ -23,7 +23,6 @@ public class GlobalExceptionHandler {
 				.status(errorCode.getHttpStatus())
 				.body(ApiResponseDto.builder()
 						.developCode(errorCode.getErrorCode())
-						.httpStatus(errorCode.getHttpStatus())
 						.message(e.getMessage() != null ? e.getMessage() : errorCode.getMessage())
 						.build());
 	}
@@ -37,7 +36,6 @@ public class GlobalExceptionHandler {
 				.status(ErrorCode.BAD_REQUEST.getHttpStatus())
 				.body(ApiResponseDto.builder()
 						.developCode(ErrorCode.BAD_REQUEST.getErrorCode())
-						.httpStatus(ErrorCode.BAD_REQUEST.getHttpStatus())
 						.message(message.isBlank() ? ErrorCode.BAD_REQUEST.getMessage() : message)
 						.build());
 	}
@@ -50,7 +48,6 @@ public class GlobalExceptionHandler {
 				.status(ErrorCode.BAD_REQUEST.getHttpStatus())
 				.body(ApiResponseDto.builder()
 						.developCode(ErrorCode.BAD_REQUEST.getErrorCode())
-						.httpStatus(ErrorCode.BAD_REQUEST.getHttpStatus())
 						.message("필수 파라미터 누락: " + e.getParameterName())
 						.build());
 	}
@@ -62,7 +59,6 @@ public class GlobalExceptionHandler {
 				.status(ErrorCode.BAD_REQUEST.getHttpStatus())
 				.body(ApiResponseDto.builder()
 						.developCode(ErrorCode.BAD_REQUEST.getErrorCode())
-						.httpStatus(ErrorCode.BAD_REQUEST.getHttpStatus())
 						.message("파라미터 타입 불일치: " + e.getName())
 						.build());
 	}
@@ -73,7 +69,6 @@ public class GlobalExceptionHandler {
 				.status(ErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
 				.body(ApiResponseDto.builder()
 						.developCode(ErrorCode.INTERNAL_SERVER_ERROR.getErrorCode())
-						.httpStatus(ErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
 						.message(ErrorCode.INTERNAL_SERVER_ERROR.getMessage())
 						.build());
 	}
