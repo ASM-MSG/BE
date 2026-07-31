@@ -26,6 +26,11 @@ public class MissionGrid {
 	@Column(name = "seq")
 	private Integer seq;
 
+	/** 시드용 (MSG-224) — EVENT 는 순서 없는 유형이라 seq NULL 유지. */
+	public MissionGrid(Long missionId, String gridId) {
+		this.id = new MissionGridId(missionId, gridId);
+	}
+
 	public Long getMissionId() {
 		return id.getMissionId();
 	}
