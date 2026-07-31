@@ -87,10 +87,16 @@ public class CourseSeedReader {
 				"스팟은 " + SPOTS_MIN + "~" + SPOTS_MAX + "개여야 합니다 (FR-6): " + crsIdx + " = " + spotsNode.size());
 		}
 		List<CourseRecord.Spot> spots = new ArrayList<>(spotsNode.size());
+		Set<String> seenGridIds = new HashSet<>();
 		for (JsonNode spot : spotsNode) {
 			String gridId = spot.path("gridId").asString();
 			if (!GRID_ID.matcher(gridId).matches()) {
 				throw new IllegalStateException("gridId 포맷 위반입니다 (glossary 논리 식별자): " + crsIdx + " = " + gridId);
+			}
+			if (!seenGridIds.add(gridId)) {
+				// mission_grids PK(mission_id, grid_id)가 중복 행을 조용히 흡수해 스팟 수 < N 이 되면
+				// target_count 달성 불가 미션이 된다 — 파이프라인 격자 dedupe(D4-3) 위반 = 전량 거부(D7).
+				throw new IllegalStateException("코스 안에서 스팟 gridId 가 중복입니다 (D7): " + crsIdx + " = " + gridId);
 			}
 			spots.add(new CourseRecord.Spot(spot.path("seq").asInt(), gridId));
 		}

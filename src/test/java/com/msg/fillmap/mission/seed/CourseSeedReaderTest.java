@@ -116,6 +116,17 @@ class CourseSeedReaderTest {
 	}
 
 	@Test
+	void 코스_안에서_gridId가_중복이면_예외다() {
+		// 스팟 2의 격자를 스팟 1과 같게 — PK 흡수로 실격자 수 < N 이 되는 산출물은 전량 거부한다 (D7).
+		String duplicated = spots(5).replace("39002_112198", "39001_112198");
+
+		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, duplicated) + "]"))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("gridId")
+			.hasMessageContaining("중복");
+	}
+
+	@Test
 	void crsIdx나_제목이_중복이면_예외다() {
 		assertThatThrownBy(() -> read("[" + valid("T_1", "코스A") + "," + valid("T_1", "코스B") + "]"))
 			.isInstanceOf(IllegalStateException.class)
