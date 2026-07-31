@@ -3,3 +3,6 @@
 # zones-candidate.* : build-candidate.py 산출 (zones-draft.json 입력)
 *.json
 *.geojson
+
+# 예외: zones-manual.json 은 산출물이 아니라 수동 작도 원본(재생성 불가) — 커밋 대상 (2026-07-31)
+!zones-manual.json

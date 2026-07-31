@@ -20,16 +20,21 @@ FAMOUS = {
     "서면": "seomyeon", "전포": "jeonpo", "남포": "nampo", "사직": "sajik",
     "광안리해변": "gwangalli", "해운대해변": "haeundae",
 }
-# 목록에 있으나 공공데이터에 없어 수동 작도가 필요한 곳 (FR-2a) — 후보에 못 들어감
-MANUAL_TODO = ["가로수길", "연남", "대학로", "샤로수길", "광복", "동래", "경성대부경대"]
+# 목록에 있으나 공공데이터에 없어 수동 작도가 필요했던 곳 (FR-2a) — zones-manual.json 으로 작도 완료.
+# 광복만 제외: 남포 bbox(공공데이터)가 광복로 전체를 이미 포함해 별도 zone 이 겹침만 만든다 — 검수 확인 대상
+MANUAL_EXCLUDED = {"광복": "남포 bbox 가 광복로 전체 포함 — 별도 zone 불필요 제안"}
 
 # 4단계: 경계 겹침 분리 — 침범한 쪽의 변 하나를 물린다 (지도 대조로 정한 값, 검수에서 재확인)
 ADJUSTMENTS = {
     # 서면 동단이 전포 시작 열(112230)을 한 칸 침범 — 전포역 서쪽 경계에서 분리
     "seomyeon": {"maxGridX": 112229},
     # 홍대입구 동단(9번출구 bbox)이 신촌 시작 열(110376, 경도≈126.932 서교동/노고산동 경계)을
-    # 한 칸 침범 — 그 열은 신촌에 주고 홍대입구를 물린다
-    "hongdae": {"maxGridX": 110375},
+    # 한 칸 침범 — 그 열은 신촌에 주고 홍대입구를 물린다.
+    # 북단은 홍대입구역 위도(37.5583, 행 41731)부터 연남(수동 작도)에 주고 홍대입구를 물린다
+    "hongdae": {"maxGridX": 110375, "maxGridY": 41730},
+    # 공공데이터 압구정 bbox 가 신사역까지 내려와 가로수길(수동 작도)과 전면 겹침 —
+    # 남단을 37.5228(행 41692)로 물려 가로수길에 준다 (압구정로데오 37.527 은 유지)
+    "apgujeong": {"minGridY": 41692},
     # (강남↔압구정 겹침은 통칭 정확 매칭으로 재계산하니 소멸 — 이전 실측은 부분문자열 과매칭이 원인)
 }
 
@@ -69,9 +74,12 @@ for x in draft:
     m["maxGridX"] = max(m["maxGridX"], x["max_grid_x"])
     m["_sources"].append(x["name"])
 
-zones = sorted(merged.values(), key=lambda z: z["zoneKey"])
+zones = list(merged.values())
 for z in zones:
     z.update(ADJUSTMENTS.get(z["zoneKey"], {}))
+
+# FR-2a 수동 작도분 병합 — 공공데이터에 없는 유명지 (경계 근거는 각 항목 _basis)
+zones = sorted(zones + json.load(open("zones-manual.json")), key=lambda z: z["zoneKey"])
 
 found = {z["name"] for z in zones}
 missing = [n for n in FAMOUS if n not in found]
@@ -104,4 +112,5 @@ for z in zones:
     print(f"  {z['zoneKey']:12s} {z['name']:8s} {rows:2d}행 × {cols:2d}열  (원본 {srcs}건)")
 if missing:
     print(f"\n초안에 없어 후보 미포함(수동 작도 대상): {missing}")
-print(f"수동 작도 TODO (FR-2a): {MANUAL_TODO}")
+for name, why in MANUAL_EXCLUDED.items():
+    print(f"의도적 제외 — {name}: {why}")
