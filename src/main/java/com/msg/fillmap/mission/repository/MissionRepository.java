@@ -81,22 +81,23 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 	List<Mission> findBySource(String source);
 
 	/**
-	 * 종료 축제 정리 (MSG-224 D4). mission_grids 는 ON DELETE CASCADE 로 함께 정리된다.
+	 * 종료 미션 정리 — 러너별 :source 한정 (MSG-224 D4 → MSG-235 D4 파라미터화, 동일 SQL 2벌 복제 금지).
+	 * 타 소스·NULL(수동/미상)은 불가침(FR-8). mission_grids 는 ON DELETE CASCADE 로 함께 정리된다.
 	 * AT TIME ZONE 'UTC' 필수 — 저장값이 UTC 순간이라 세션 타임존(KST) 캐스트 비교는 9시간 스큐가 난다
 	 * (MSG-223 §D2 규칙, findAwardCandidateIds 동일 패턴). 스탬프 걸린 미션은 NOT EXISTS 로 건너뛴다 —
 	 * V6 FK(user_missions.mission_id NO ACTION)가 하드삭제를 차단하므로 시도 자체가 러너 전체를 롤백시킨다.
-	 * source='FESTIVAL' 한정(D7) — 타 소스(팝업 등)·NULL(수동/미상) 불가침. 당초 type='EVENT' 한정은
-	 * 공유 타입이라 종료 팝업을 오삭제하는 결함이었다(Codex 리뷰 파생, 2026-07-31 성민 확정).
-	 * flush: 같은 트랜잭션에서 방금 save 된 미션도 정리 대상 판정에 들어가야 하고(러너 단일 트랜잭션, D4),
-	 * clear: native DELETE 는 영속성 컨텍스트를 우회하므로 삭제된 엔티티가 1차 캐시에 스테일로 남는 것을 막는다.
+	 * 당초 type='EVENT' 한정은 공유 타입이라 종료 팝업을 오삭제하는 결함이었다(Codex 리뷰 파생, 2026-07-31
+	 * 성민 확정). flush: 같은 트랜잭션에서 방금 save 된 미션도 정리 대상 판정에 들어가야 하고(러너 단일
+	 * 트랜잭션, D4), clear: native DELETE 는 영속성 컨텍스트를 우회하므로 삭제된 엔티티가 1차 캐시에
+	 * 스테일로 남는 것을 막는다.
 	 */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query(value = """
 		DELETE FROM missions m
-		WHERE m.source = 'FESTIVAL'
+		WHERE m.source = :source
 		  AND m.end_at IS NOT NULL
 		  AND m.end_at < statement_timestamp() AT TIME ZONE 'UTC'
 		  AND NOT EXISTS (SELECT 1 FROM user_missions um WHERE um.mission_id = m.id)
 		""", nativeQuery = true)
-	int deleteEndedFestivalsWithoutStamps();
+	int deleteEndedBySourceWithoutStamps(@Param("source") String source);
 }

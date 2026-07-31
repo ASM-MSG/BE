@@ -137,7 +137,7 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 			insertMission(record, key);
 			loaded++;
 		}
-		int removed = missionRepository.deleteEndedFestivalsWithoutStamps();
+		int removed = missionRepository.deleteEndedBySourceWithoutStamps(SOURCE_FESTIVAL);
 		return new SeedResult(loaded, parsed.records().size() - loaded,
 			parsed.skippedInvalidDate(), parsed.skippedEnded(), parsed.skippedMalformed(), removed);
 	}
