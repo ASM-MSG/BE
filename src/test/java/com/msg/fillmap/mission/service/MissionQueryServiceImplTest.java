@@ -181,6 +181,32 @@ class MissionQueryServiceImplTest {
 	}
 
 	@Test
+	@DisplayName("POPUP 미션은 BOX shape로 합성된다 — 9×9 격자를 감싸는 5점 닫힌 링")
+	void POPUP_미션은_BOX_shape로_합성된다() {
+		// 시더 산출물 형태(중심±4, 81격자, MSG-235 FR-2) 그대로 — EVENT 와 같은 BOX 재사용 (D5).
+		long mission = insertMission("POPUP", null, null);
+		for (long dy = -4; dy <= 4; dy++) {
+			for (long dx = -4; dx <= 4; dx++) {
+				insertMissionGrid(mission, gid(GY0 + dy, GX0 + dx), null);
+			}
+		}
+
+		BoxShape shape = (BoxShape) findMission(mission).shape();
+
+		assertThat(findMission(mission).type()).isEqualTo("POPUP");
+		double south = GridEncoder.bbox(gid(GY0 - 4, GX0 - 4)).get(0).lat();
+		double west = GridEncoder.bbox(gid(GY0 - 4, GX0 - 4)).get(0).lon();
+		double north = GridEncoder.bbox(gid(GY0 + 4, GX0 + 4)).get(2).lat();
+		double east = GridEncoder.bbox(gid(GY0 + 4, GX0 + 4)).get(2).lon();
+		assertThat(shape.polygon()).containsExactly(
+			new LatLng(south, west),
+			new LatLng(south, east),
+			new LatLng(north, east),
+			new LatLng(north, west),
+			new LatLng(south, west));
+	}
+
+	@Test
 	@DisplayName("THEME는 CELLS shape로 각 격자 중심점을 반환한다")
 	void THEME는_CELLS_shape로_각_격자_중심점을_반환한다() {
 		long mission = insertMission("THEME", null, null);

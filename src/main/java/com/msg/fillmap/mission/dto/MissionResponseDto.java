@@ -16,7 +16,7 @@ public record MissionResponseDto(
 	Long missionId,
 
 	@Schema(description = "미션 유형 — FE 렌더러 판별자",
-		example = "COURSE", allowableValues = {"COURSE", "AREA", "EVENT", "THEME", "CONTINUOUS"})
+		example = "COURSE", allowableValues = {"COURSE", "AREA", "EVENT", "THEME", "CONTINUOUS", "POPUP"})
 	String type,
 
 	@Schema(description = "미션 제목", example = "남파랑길 3코스")
