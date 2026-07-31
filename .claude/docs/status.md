@@ -46,7 +46,8 @@
 - MSG-166: V6 스키마 검증 테스트(`MissionSchemaMigrationTest` — 엔티티 없던 시점)
 - MSG-222: 활성 미션 조회(`GET /api/missions/active` — `entity/{Mission,MissionType,MissionGrid,MissionGridId}`(조회 전용), `MissionRepository.findActive`(기간 경계 독립 판정)·`MissionGridRepository`, `MissionQueryService`(+impl — 유형→shape 단일 분기: COURSE→PATH(path 원문+spots)/EVENT→BOX(bbox 합성)/THEME·CONTINUOUS→CELLS/AREA→REGION(코드만), 1h 전역 캐시 단일 volatile CacheEntry+더블체크 락, 단일 인스턴스 전제), `dto/MissionResponseDto`+`sealed MissionShape` 4종. 기본 클럭 `Clock.systemUTC()` — KST JVM 9h 스큐 정정, MSG-223 리뷰 파생)
 - MSG-223: 미션 완료 판정·스탬프(`entity/{UserMission,UserMissionId}`(UserBadge 미러·비회수)·`UserMissionRepository`(`insertIgnoreConflict` ON CONFLICT·`countMyStamps`), `MissionRepository.findAwardCandidateIds/findCompleted`(native, `recorded_at` 판정·무기간 IS NULL 생략·`AT TIME ZONE 'UTC'` 정규화), `MissionAwardService`(+impl — 신규 INSERT 성공분만 응답·MISSION_COUNT 뱃지 배선), 업로드 확정 훅(streak 다음·점령 분기 바깥, `VideoUploadResponseDto.completedMissions`), V12 뱃지 시딩 1·5·10)
-- **없는 것**: 시드 적재(MSG-224/225/235) — 입력 원본은 `~/fillmap-data` 수집 완료(2026-07-23)
+- MSG-224: 축제 미션 적재(`seed/{FestivalRecord,FestivalJsonlReader,FestivalMissionSeeder}` — 플래그 게이트 `fillmap.mission.festival.seed.enabled` 기본 off·`@Order(30)`, 시드+격주 수동 갱신 단일 러너·`@Transactional` 원자성, 9×9 격자 81행·target_count=1, dedupe=중심격자+기간(min+4 복원), 종료 정리 `deleteEndedFestivalsWithoutStamps`(native, `AT TIME ZONE 'UTC'`·스탬프 잔존). **V13 `missions.source`**(VARCHAR(30) NULL) — EVENT 타입이 팝업(MSG-235)과 공유라 `source='FESTIVAL'`로 소유 식별(Codex 리뷰 파생, 타 소스·NULL 불가침). `Mission` 시드 `@Builder` 6필드·`created_at` insertable=false 전환)
+- **없는 것**: 코스·팝업 시드(MSG-225/235) — 입력 원본은 `~/fillmap-data` 수집 완료(2026-07-23). 축제 적재 실행은 운영 절차(스펙 §D6 — 데이터 파일 복사 + 플래그 on 1회 기동)
 
 ### `region` (Owner A) — 🟡 부분
 - MSG-154: `entity/Region`(boundary_geom 미매핑), `repository/RegionRepository`(native UPSERT + ST_Area 기반 total_grid_count), `seed/{RegionGeoJsonReader,RegionFeature,RegionSeeder}`(플래그 게이트 `fillmap.region.seed.enabled` 기본 off, 전국 3,558 행정동)
@@ -116,7 +117,7 @@
 
 ## 스키마 vs JPA 엔티티
 
-`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다. `V10__streak_badges_seed.sql`(MSG-200)은 STREAK_3/7/30 시딩만 담는다(DDL 0·소급 없음).
+`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다. `V10__streak_badges_seed.sql`(MSG-200)은 STREAK_3/7/30 시딩만 담는다(DDL 0·소급 없음). `V12__mission_badges_seed.sql`(MSG-223)은 MISSION_1/5/10 시딩만, `V13__mission_source.sql`(MSG-224)은 `missions.source` 적재 출처 컬럼 1개를 추가한다(NULL=수동·불가침).
 
 | 테이블 | 엔티티 | 상태 |
 |---|---|---|
@@ -135,9 +136,9 @@
 | `reports` | — | ❌ 엔티티 없음 |
 | `sponsor_ads` | — | ❌ 엔티티 없음 |
 | `streaks` | `streak/entity/Streak` | ✅ (MSG-200 — 전 컬럼 매핑, 쓰기는 native UPSERT 전용) |
-| `missions` | — | ❌ 엔티티 없음 (V6/MSG-166 스키마 선반영 — path JSONB, 엔티티·API는 MSG-222/223) |
-| `mission_grids` | — | ❌ 엔티티 없음 (grids FK 없는 논리 참조 — lazy insert 때문, MSG-166 §D2) |
-| `user_missions` | — | ❌ 엔티티 없음 (스탬프 영속 — user_badges 패턴, 비회수) |
+| `missions` | `mission/entity/Mission` | ✅ (MSG-222 조회 매핑 → MSG-224 쓰기 경로: 시드 `@Builder`·`source`(V13)·created_at DB DEFAULT 위임. path JSONB 미매핑 — COURSE 시드는 MSG-225) |
+| `mission_grids` | `mission/entity/MissionGrid` | ✅ (MSG-222 — 복합 PK `MissionGridId`, grids FK 없는 논리 참조(lazy insert, MSG-166 §D2). MSG-224 시드 생성자) |
+| `user_missions` | `mission/entity/UserMission` | ✅ (MSG-223 — 복합 PK `UserMissionId`, native 전용 최소 매핑. 스탬프 영속 — 비회수) |
 
 ## 로드맵 / 백로그
 
