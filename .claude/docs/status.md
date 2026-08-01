@@ -26,7 +26,8 @@
 
 ### `user` (Owner B) — 🟡 부분
 - `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode`
-- **없는 것**: `service`, `controller`, `dto`
+- MSG-205: 계정 삭제(`DELETE /api/users/me` — `controller/UserController`·`service/UserService`(+Impl) 첫 신설, V15 reports FK ON DELETE(CASCADE/SET NULL), 삭제 트랜잭션 = S3 키 수집(`findAllS3KeysByUserId`)→`deleteUser` 0행 1404, afterCommit = S3 1000키 청크 best-effort·refresh `deleteAll`·액세스 토큰 블랙리스트 각각 독립 try. CASCADE 보정 로직 없음, D5 경합 수용 — 스펙 §D1~D5)
+- **없는 것**: `dto` (프로필 조회/수정 MSG-203에서 신설 예정)
 
 ### `grid` (Owner A) — 🟡 부분
 - MSG-73: `GridEncoder`·`GridConstants`(순수 유틸), `entity/{UserGrid,UserGridId,Grid}`, `repository/GridRepository`, `service/GridQueryService`(+impl, read 계약 A→B), `controller/GridController`, `dto/*`, `exception/GridErrorCode`(4xxx)
