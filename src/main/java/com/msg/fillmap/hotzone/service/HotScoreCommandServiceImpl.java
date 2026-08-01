@@ -36,6 +36,7 @@ public class HotScoreCommandServiceImpl implements HotScoreCommandService {
 	private static final long BUCKET_SECONDS = 21600L;
 	private static final long BUCKET_TTL_SECONDS = Duration.ofHours(54).toSeconds();
 	private static final int QUEUE_CAPACITY = 10_000;
+	private static final long DRAIN_TIMEOUT_SECONDS = 5;
 
 	/** ZINCRBY+EXPIRE 원자 실행 — 분리 2명령이면 ZINCRBY 후 단절 시 TTL 없는 키가 잔존한다. */
 	private static final RedisScript<Long> INCREMENT_SCRIPT = new DefaultRedisScript<>(
@@ -80,8 +81,18 @@ public class HotScoreCommandServiceImpl implements HotScoreCommandService {
 
 	@PreDestroy
 	void shutdown() {
-		if (executor instanceof ExecutorService executorService) {
-			executorService.shutdown();
+		if (!(executor instanceof ExecutorService executorService)) {
+			return;
+		}
+		// 수락된 신호는 커밋된 업로드다 — 일상 배포에선 드레인하고, 타임아웃·인터럽트에서만 유실 허용(D4)
+		executorService.shutdown();
+		try {
+			if (!executorService.awaitTermination(DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+				log.warn("핫스코어 드레인 타임아웃 — 잔여 신호 {}건 유실 허용", executorService.shutdownNow().size());
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			log.warn("핫스코어 드레인 인터럽트 — 잔여 신호 {}건 유실 허용", executorService.shutdownNow().size());
 		}
 	}
 
