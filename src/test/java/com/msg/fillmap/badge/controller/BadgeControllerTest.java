@@ -1,12 +1,15 @@
 package com.msg.fillmap.badge.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
@@ -21,16 +24,19 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.badge.dto.FeaturedBadgeResponseDto;
+import com.msg.fillmap.badge.dto.MyBadgeResponseDto;
 import com.msg.fillmap.badge.service.BadgeFeaturedService;
+import com.msg.fillmap.badge.service.BadgeQueryService;
 import com.msg.fillmap.user.entity.UserRole;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@DisplayName("BadgeController 대표 뱃지 교체")
+@DisplayName("BadgeController 내 뱃지 조회 · 대표 뱃지 교체")
 class BadgeControllerTest {
 
 	private static final long USER_ID = 42L;
 	private static final String URL = "/api/badges/featured";
+	private static final String LIST_URL = "/api/badges";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -41,8 +47,44 @@ class BadgeControllerTest {
 	@MockitoBean
 	private BadgeFeaturedService badgeFeaturedService;
 
+	@MockitoBean
+	private BadgeQueryService badgeQueryService;
+
 	private String bearer() {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
+	}
+
+	@Test
+	@DisplayName("내 뱃지 목록을 조회한다 — 200·행 필드 9종(MSG-201 §D2)")
+	void 내_뱃지_목록을_조회한다() throws Exception {
+		// 정확값 스텁 — principal userId(토큰의 USER_ID)가 서비스에 그대로 전달돼야만 매치된다(사용자 격리).
+		given(badgeQueryService.findMyBadges(USER_ID)).willReturn(List.of(
+			new MyBadgeResponseDto(1L, "EXPLORER_1", "첫 발자국", "첫 격자를 수집했어요", null,
+				true, LocalDateTime.of(2026, 7, 29, 10, 15, 0), true, null),
+			new MyBadgeResponseDto(2L, "EXPLORER_10", "탐험가 I", "격자 10개를 수집했어요", null,
+				false, null, false, null)));
+
+		mockMvc.perform(get(LIST_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.body[0].badgeId").value(1))
+			.andExpect(jsonPath("$.body[0].code").value("EXPLORER_1"))
+			.andExpect(jsonPath("$.body[0].name").value("첫 발자국"))
+			.andExpect(jsonPath("$.body[0].description").value("첫 격자를 수집했어요"))
+			.andExpect(jsonPath("$.body[0].iconUrl").value(nullValue()))
+			.andExpect(jsonPath("$.body[0].earned").value(true))
+			.andExpect(jsonPath("$.body[0].earnedAt").value("2026-07-29T10:15:00"))
+			.andExpect(jsonPath("$.body[0].isNew").value(true))
+			.andExpect(jsonPath("$.body[0].featuredRank").value(nullValue()))
+			.andExpect(jsonPath("$.body[1].earned").value(false))
+			.andExpect(jsonPath("$.body[1].isNew").value(false));
+	}
+
+	@Test
+	@DisplayName("미인증 목록 조회는 401 이다")
+	void 미인증_목록_조회는_401이다() throws Exception {
+		mockMvc.perform(get(LIST_URL))
+			.andExpect(status().isUnauthorized());
 	}
 
 	@Test

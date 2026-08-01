@@ -99,7 +99,8 @@
 ### `badge` (Owner B) — 🟡 부분
 - MSG-239: 뱃지 시스템 MVP — V9(`chk_badges_condition`에 MISSION_COUNT 확장·`user_badges.notified_at/featured_rank`+partial UNIQUE·활성 3축 11종 시딩·set-based 소급), `entity/{Badge(conditionValue 미매핑),BadgeConditionType,UserBadge,UserBadgeId}`, `repository/{BadgeRepository.findEligible,UserBadgeRepository(지급 ON CONFLICT·metric 3종·featured lock/clear/set)}`, `service/BadgeAwardService`(+impl, 후보 SELECT+INSERT 2단 — B 내부)·`BadgeFeaturedService`(+impl), `PUT /api/badges/featured`(`BadgeController`·집합 교체 멱등), `dto/{EarnedBadge,FeaturedBadgeRequest,FeaturedBadgeResponse}ResponseDto`, `exception/BadgeErrorCode`(7xxx — 7400·7403)
 - MSG-200: V10 꾸준함 뱃지 시딩(STREAK_3/7/30 — DDL 0·소급 블록 없음, §D6 예외 주석. 판정 훅은 streak 도메인이 `award(STREAK_DAYS)` 호출)
-- **없는 것**: 조회 API·미확인 해제(MSG-201), MISSION_COUNT 훅·시딩(미션 엔진 티켓), SPECIAL 시딩(오픈 준비 티켓)
+- MSG-201: 내 뱃지 조회 — `GET /api/badges`(획득+미획득 전체, badges.id ASC·featuredRank 동봉), `repository/{BadgeRepository.findAllWithMyStatus,MyBadgeProjection,UserBadgeRepository.markMyBadgesNotified}`, `service/BadgeQueryService`(+impl — 조회 시 노출된 미확인분만 IN 리스트 자동 스탬프·isNew 는 SELECT 시점 값), `dto/MyBadgeResponseDto`(마이그레이션·신규 에러 코드 0)
+- **없는 것**: MISSION_COUNT 훅·시딩(미션 엔진 티켓), SPECIAL 시딩(오픈 준비 티켓)
 
 ### `streak` (Owner B) — ✅ 완성 (MVP 범위)
 - MSG-200: 스트릭 집계 — `entity/Streak`(전 컬럼 매핑·Setter 없음, 쓰기는 native 전용), `repository/StreakRepository`(`upsertOnUpload` — 3분기 CASE 한 문장 UPSERT·KST 자정 경계·ON CONFLICT 행 잠금 직렬화 + `findCurrentCount`), `service/StreakCommandService`(+impl — 갱신 직후 `BadgeAwardService.award(STREAK_DAYS)` 배선·획득분 반환, B 내부). 조회 API 없음(currentStreak·maxStreak 노출은 도감 summary 티켓 소관 §D8), freeze 미도입·소급 차감 없음 확정
