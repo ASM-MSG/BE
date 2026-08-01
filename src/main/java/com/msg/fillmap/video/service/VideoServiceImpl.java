@@ -41,6 +41,7 @@ import com.msg.fillmap.global.geo.KoreaCoordinates;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
+import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.dto.MissionAwardResult;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
@@ -101,6 +102,7 @@ public class VideoServiceImpl implements VideoService {
 	private final BadgeAwardService badgeAwardService;
 	private final StreakCommandService streakCommandService;
 	private final MissionAwardService missionAwardService;
+	private final HotScoreCommandService hotScoreCommandService;
 
 	@Override
 	@Transactional
@@ -142,6 +144,8 @@ public class VideoServiceImpl implements VideoService {
 		// 뱃지는 미션 도메인 몫 — 여기서는 완료 스탬프를 응답에 싣고 획득 뱃지를 합류시키기만 한다(§D2).
 		MissionAwardResult missionAward = missionAwardService.awardOnUpload(userId, gridId);
 		newBadges.addAll(missionAward.newBadges());
+		// 핫스코어 (MSG-233): 커밋 후 증분 — 롤백 시 유령 증분 방지. 실패는 구현이 삼킨다 (FR-6).
+		afterCommit(() -> hotScoreCommandService.recordUpload(gridId));
 		triggerEncodingAfterCommit(video.getId(), originalKey);
 
 		return new VideoUploadResponseDto(
