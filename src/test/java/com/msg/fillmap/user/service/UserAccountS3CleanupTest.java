@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -102,6 +103,17 @@ class UserAccountS3CleanupTest {
 
 		// S3 실패가 세션 정리까지 막으면 안 된다 (FR-4 는 별도 안전망이 없다).
 		then(refreshTokenService).should().deleteAll(USER_ID);
+		then(tokenProvider).should().invalidateAccessToken("access-token");
+	}
+
+	@Test
+	void refresh_삭제_실패가_액세스_토큰_블랙리스트를_막지_않는다() {
+		given(userRepository.findAllS3KeysByUserId(USER_ID)).willReturn(List.of());
+		willThrow(new RuntimeException("Redis 단절")).given(refreshTokenService).deleteAll(USER_ID);
+
+		assertThatCode(() -> service.deleteAccount(USER_ID, "access-token")).doesNotThrowAnyException();
+
+		// 독립 try-catch — refresh 정리 실패가 블랙리스트 시도까지 막으면 안 된다 (Codex 리뷰 반영).
 		then(tokenProvider).should().invalidateAccessToken("access-token");
 	}
 

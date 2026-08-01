@@ -105,14 +105,19 @@ public class UserServiceImpl implements UserService {
 
 	/**
 	 * 전 디바이스 refresh 소멸(SCAN 기반 deleteAll) + 요청에 쓴 액세스 토큰 블랙리스트 (FR-4).
+	 * 각각 독립 try-catch — 한쪽 실패가 다른 쪽 시도를 막으면 안 된다 (Codex 리뷰 반영).
 	 * 실패는 로그만 — refresh 는 TTL(2주)로, 액세스 토큰은 만료로 자연 소멸이 안전망.
 	 */
 	private void invalidateSessions(Long userId, String accessToken) {
 		try {
 			refreshTokenService.deleteAll(userId);
+		} catch (RuntimeException e) {
+			log.error("계정 삭제 refresh 세션 정리 실패 — TTL 만료가 안전망이다: userId={}", userId, e);
+		}
+		try {
 			tokenProvider.invalidateAccessToken(accessToken);
 		} catch (RuntimeException e) {
-			log.error("계정 삭제 세션 정리 실패 — TTL 만료가 안전망이다: userId={}", userId, e);
+			log.error("계정 삭제 액세스 토큰 블랙리스트 실패 — 토큰 만료가 안전망이다: userId={}", userId, e);
 		}
 	}
 
