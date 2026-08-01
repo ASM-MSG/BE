@@ -92,6 +92,7 @@
 - MSG-238: 전역 탐색 API 2종(`GET /api/regions/{regionCode}/grids` 카드+헤더 카운트·`GET /api/regions/explore` — `RegionExploreController`/`Service`, 게이트=ACTIVE·PUBLIC·READY 단일 정의, 커버 87 규칙 3키 정합(`findGlobalCover` id DESC 추가), DTO 3종·프로젝션 3종, sort 대문자 enum·limit null=전부, 신규 에러코드 0)
 - MSG-239: 업로드 뱃지 훅(`saveVideo` 2지점 — 항상 UPLOAD_COUNT(생애 카운트·status 무관), 첫 점령 시 TOTAL_GRIDS+refresh 직후 REGION_PERCENT 물질화 값 소비, 같은 트랜잭션)·`VideoUploadResponseDto.newBadges` 동봉(FR-9). 삭제·교체 경로 무변경(비회수 FR-5)
 - MSG-200: 업로드 스트릭 훅(`saveVideo` — `!alreadyOccupied` 분기 바깥 1줄, `StreakCommandService.recordUpload` 획득분 `newBadges` 합류. 삭제·교체 무변경 — 소급 차감 없음 §D4)
+- MSG-183: 업로드 핫스코어 훅(`saveVideo` 훅 체인 뒤 `afterCommit` 1줄 — `HotScoreCommandService.recordUpload(gridId)` 소비, 유령 증분 차단·응답 계약 무변. 교체·삭제 무배선 — 차감 없음 §D4·D6)
 - **없는 것**: —
 
 ### `search` (Owner A) — ✅ 완성 (MVP 범위)
@@ -106,6 +107,10 @@
 ### `streak` (Owner B) — ✅ 완성 (MVP 범위)
 - MSG-200: 스트릭 집계 — `entity/Streak`(전 컬럼 매핑·Setter 없음, 쓰기는 native 전용), `repository/StreakRepository`(`upsertOnUpload` — 3분기 CASE 한 문장 UPSERT·KST 자정 경계·ON CONFLICT 행 잠금 직렬화 + `findCurrentCount`), `service/StreakCommandService`(+impl — 갱신 직후 `BadgeAwardService.award(STREAK_DAYS)` 배선·획득분 반환, B 내부). 조회 API 없음(currentStreak·maxStreak 노출은 도감 summary 티켓 소관 §D8), freeze 미도입·소급 차감 없음 확정
 
+### `hotzone` (Owner A) — 🟡 부분
+- MSG-183: 핫스코어 집계 — `service/HotScoreCommandService`(+impl, 평면 service 패키지). 업로드 신호 +1을 UTC 6h 버킷(`hotzone:{bucketId}` Sorted Set, `bucketId=epochSeconds/21600`)에 Lua 원자 스크립트(ZINCRBY+EXPIRE 54h)로 증분. 버킷 키는 호출(커밋) 스레드에서 확정, 실행은 자체 데몬 1스레드 executor(큐 10k, 종료 시 5s 드레인) — 요청 스레드 무블록. 전 실패 삼킴+warn(FR-6, 에러코드 불요). DDL·yml 없음, Redis 전용(D4)
+- **없는 것**: `HotZoneService` 조회·`ZUNIONSTORE` 8버킷 합산·`hotzone:top` 캐시·`GET /api/hotzones`·top-k/min-score 프로퍼티·`HotZoneErrorCode`(8xxx) — 전부 MSG-184
+
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
 `infrastructure.md`가 계약 인터페이스로 명시하지만 **아직 코드에 하나도 없다.** 새로 만들기 전엔
@@ -114,7 +119,8 @@
 | 인터페이스 | 제공자 | 상태 |
 |---|---|---|
 | `GridQueryService` | Owner A | ✅ built (MSG-73 — 격자 색칠 조회 read · MSG-90 — 4-arg cursor 페이지 시그니처 추가, 2-arg 유지·strategy 오버로드 제거) |
-| `HotZoneService` | Owner A | ❌ 미생성 — 설계 확정 (MSG-233 §D5 시그니처, 구현 MSG-184). 짝 계약 `HotScoreCommandService`(write, B(video) 소비 — MSG-183) 함께 신설 예정 |
+| `HotZoneService` | Owner A | ❌ 미생성 — 설계 확정 (MSG-233 §D5 시그니처, 구현 MSG-184) |
+| `HotScoreCommandService` | Owner A | ✅ built (MSG-183 — `recordUpload(gridId)` write 계약, B(video)의 업로드 확정 `afterCommit` 훅이 소비. 실패 비전파가 계약의 일부 — 호출자는 try-catch 불요) |
 | `UserGridQueryService` | Owner B | 🟡 partial (MSG-152 — `getCollectionSummary` 도감 요약 read 계약 신설 B→A · MSG-153 — `getCollectionGrids` B-내부 read 추가, A 미소비·크로스오너 시그니처 불변 · MSG-167 — `CollectionGridView`에 regionName 필드 확장(비파괴) + 신설 공유 컬럼 `grids.region_code` A(쓰기 규칙 권위)↔B(호스팅·소비)) |
 | `RegionQueryService` | Owner A | ✅ built (MSG-93 — `resolveByPoint(lat, lon)` 역지오코딩 read. stats 조회는 156에서 별도 서비스로 분리 확정) |
 | `RegionStatsCommandService` | Owner A | ✅ built (MSG-155 — `refresh(userId, gridId)` 동기 recompute 명령. B의 첫 점령/롤백 훅이 소비, 호출자 트랜잭션 참여) |

@@ -25,6 +25,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
@@ -73,7 +74,7 @@ class VideoPlaybackServiceTest {
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), thumbnailUrlPresigner, mock(BadgeAwardService.class),
-			mock(StreakCommandService.class), mock(MissionAwardService.class));
+			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class));
 	}
 
 	/** 모든 상태 축을 명시 지정하는 코어 빌더 — 엔티티에 세터가 없어 리플렉션으로 벌린다. */
