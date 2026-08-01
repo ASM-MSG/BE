@@ -43,6 +43,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 
 import com.msg.fillmap.grid.GridEncoder;
+import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
@@ -89,6 +90,11 @@ class VideoUploadRollbackCompensationTest {
 	// 커밋 성공 케이스의 afterCommit 인코딩 무력화 — 실 인코딩이 돌면 없는 파일로 FAILED 마킹이 낀다.
 	@MockitoBean
 	private VideoEncodingService videoEncodingService;
+
+	// 커밋 성공 케이스의 afterCommit 핫스코어 무력화 (MSG-183) — 실 빈이 돌면 공유 로컬 Redis 현재
+	// 버킷에 테스트 격자 점수가 54시간 남는다. 이 테스트는 핫스코어와 무관하다 (S3 mock 과 같은 취지).
+	@MockitoBean
+	private HotScoreCommandService hotScoreCommandService;
 
 	private TransactionTemplate tx;
 	private long userId;
