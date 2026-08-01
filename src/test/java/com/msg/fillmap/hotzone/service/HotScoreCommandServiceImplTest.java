@@ -2,6 +2,11 @@ package com.msg.fillmap.hotzone.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -10,6 +15,8 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterAll;
@@ -128,6 +135,67 @@ class HotScoreCommandServiceImplTest {
 
 		assertThat(redisTemplate.opsForZSet().score(BUCKET_KEY, GRID_ID)).isEqualTo(1.0);
 		assertThat(redisTemplate.opsForZSet().score(NEXT_BUCKET_KEY, GRID_ID)).isNull();
+	}
+
+	@Test
+	void 큐가_포화되면_예외_없이_신호를_버린다() {
+		HotScoreCommandServiceImpl saturatedService = new HotScoreCommandServiceImpl(
+			redisTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC),
+			task -> {
+				throw new RejectedExecutionException("큐 포화");
+			});
+
+		assertThatCode(() -> saturatedService.recordUpload(GRID_ID)).doesNotThrowAnyException();
+
+		assertThat(redisTemplate.opsForZSet().score(BUCKET_KEY, GRID_ID)).isNull();
+	}
+
+	@Test
+	void 종료_드레인_타임아웃이면_강제_종료한다() throws InterruptedException {
+		ExecutorService stuckExecutor = mock(ExecutorService.class);
+		when(stuckExecutor.awaitTermination(anyLong(), any())).thenReturn(false);
+		when(stuckExecutor.shutdownNow()).thenReturn(List.of());
+		HotScoreCommandServiceImpl stuckService = new HotScoreCommandServiceImpl(
+			redisTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC), stuckExecutor);
+
+		stuckService.shutdown();
+
+		verify(stuckExecutor).shutdownNow();
+	}
+
+	@Test
+	void 종료_대기_중_인터럽트되면_플래그를_복원하고_강제_종료한다() throws InterruptedException {
+		ExecutorService interruptedExecutor = mock(ExecutorService.class);
+		when(interruptedExecutor.awaitTermination(anyLong(), any())).thenThrow(new InterruptedException());
+		when(interruptedExecutor.shutdownNow()).thenReturn(List.of());
+		HotScoreCommandServiceImpl interruptedService = new HotScoreCommandServiceImpl(
+			redisTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC), interruptedExecutor);
+
+		interruptedService.shutdown();
+
+		assertThat(Thread.interrupted()).isTrue();   // 복원 단언 겸 플래그 클리어 — 후속 테스트 오염 방지
+		verify(interruptedExecutor).shutdownNow();
+	}
+
+	@Test
+	void ExecutorService가_아닌_Executor면_종료는_아무_동작도_하지_않는다() {
+		assertThatCode(service::shutdown).doesNotThrowAnyException();
+	}
+
+	@Test
+	void 기본_생성자로_만든_서비스는_종료_시_큐를_드레인하고_끝난다() {
+		LettuceConnectionFactory deadFactory = new LettuceConnectionFactory("localhost", 6390);
+		deadFactory.afterPropertiesSet();
+		StringRedisTemplate deadTemplate = new StringRedisTemplate(deadFactory);
+		deadTemplate.afterPropertiesSet();
+		HotScoreCommandServiceImpl defaultService = new HotScoreCommandServiceImpl(deadTemplate);
+
+		// 죽은 포트 템플릿 — 워커 스레드는 실제로 생성·실행되지만 실서비스 버킷 키를 오염시키지 않는다
+		defaultService.recordUpload(GRID_ID);
+
+		assertThatCode(defaultService::shutdown).doesNotThrowAnyException();
+
+		deadFactory.destroy();
 	}
 
 	@Test
