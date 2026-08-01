@@ -107,9 +107,9 @@
 ### `streak` (Owner B) — ✅ 완성 (MVP 범위)
 - MSG-200: 스트릭 집계 — `entity/Streak`(전 컬럼 매핑·Setter 없음, 쓰기는 native 전용), `repository/StreakRepository`(`upsertOnUpload` — 3분기 CASE 한 문장 UPSERT·KST 자정 경계·ON CONFLICT 행 잠금 직렬화 + `findCurrentCount`), `service/StreakCommandService`(+impl — 갱신 직후 `BadgeAwardService.award(STREAK_DAYS)` 배선·획득분 반환, B 내부). 조회 API 없음(currentStreak·maxStreak 노출은 도감 summary 티켓 소관 §D8), freeze 미도입·소급 차감 없음 확정
 
-### `hotzone` (Owner A) — 🟡 부분
+### `hotzone` (Owner A) — ✅ 완성 (MVP 범위)
 - MSG-183: 핫스코어 집계 — `service/HotScoreCommandService`(+impl, 평면 service 패키지). 업로드 신호 +1을 UTC 6h 버킷(`hotzone:{bucketId}` Sorted Set, `bucketId=epochSeconds/21600`)에 Lua 원자 스크립트(ZINCRBY+EXPIRE 54h)로 증분. 버킷 키는 호출(커밋) 스레드에서 확정, 실행은 자체 데몬 1스레드 executor(큐 10k, 종료 시 5s 드레인) — 요청 스레드 무블록. 전 실패 삼킴+warn(FR-6, 에러코드 불요). DDL·yml 없음, Redis 전용(D4)
-- **없는 것**: `HotZoneService` 조회·`ZUNIONSTORE` 8버킷 합산·`hotzone:top` 캐시·`GET /api/hotzones`·top-k/min-score 프로퍼티·`HotZoneErrorCode`(8xxx) — 전부 MSG-184
+- MSG-184: 핫구역 조회(`GET /api/hotzones` 뷰포트 4파라미터 필수 — `service/HotZoneService`(+impl)·`HotZoneView`, `hotzone:top` 캐시(최근 8버킷 ZUNIONSTORE 균등 합산, TTL 30s, 캐시 보장 Lua 원자 — EXISTS→ZUNIONSTORE→EXPIRE), 상위 K(50)·임계(3)·뷰포트 필터(encode→decode 정수 인덱스, queryByRange 동형), `config/HotZoneProperties`(record, `fillmap.hotzone.top-k/min-score` — topK 양수 기동 검증), `controller/HotZoneController`·DTO 2종, `exception/HotZoneErrorCode`(8400 INVALID_VIEWPORT — 비유한 좌표 NaN 우회 차단 포함), 파라미터 누락은 전역 400(MSG-167 매핑, GridController 구 관행 미답습). 48h 판정은 룩백 몫·TTL은 청소 전용(D4 역할 분리))
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
@@ -119,7 +119,7 @@
 | 인터페이스 | 제공자 | 상태 |
 |---|---|---|
 | `GridQueryService` | Owner A | ✅ built (MSG-73 — 격자 색칠 조회 read · MSG-90 — 4-arg cursor 페이지 시그니처 추가, 2-arg 유지·strategy 오버로드 제거) |
-| `HotZoneService` | Owner A | ❌ 미생성 — 설계 확정 (MSG-233 §D5 시그니처, 구현 MSG-184) |
+| `HotZoneService` | Owner A | ✅ built (MSG-184 — `getHotZones(ViewportBounds): List<HotZoneView>` read, D5 예약 이행. `ViewportBounds`는 grid.dto 재사용 — 둘 다 A 소유라 크로스오너 아님, 현 소비자는 `HotZoneController`뿐) |
 | `HotScoreCommandService` | Owner A | ✅ built (MSG-183 — `recordUpload(gridId)` write 계약, B(video)의 업로드 확정 `afterCommit` 훅이 소비. 실패 비전파가 계약의 일부 — 호출자는 try-catch 불요) |
 | `UserGridQueryService` | Owner B | 🟡 partial (MSG-152 — `getCollectionSummary` 도감 요약 read 계약 신설 B→A · MSG-153 — `getCollectionGrids` B-내부 read 추가, A 미소비·크로스오너 시그니처 불변 · MSG-167 — `CollectionGridView`에 regionName 필드 확장(비파괴) + 신설 공유 컬럼 `grids.region_code` A(쓰기 규칙 권위)↔B(호스팅·소비)) |
 | `RegionQueryService` | Owner A | ✅ built (MSG-93 — `resolveByPoint(lat, lon)` 역지오코딩 read. stats 조회는 156에서 별도 서비스로 분리 확정) |
