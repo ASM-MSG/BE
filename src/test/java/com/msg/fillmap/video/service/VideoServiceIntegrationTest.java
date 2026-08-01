@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
 
@@ -18,6 +20,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
@@ -28,6 +31,7 @@ import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 import com.msg.fillmap.video.exception.VideoErrorCode;
+import com.msg.fillmap.video.repository.VideoRepository;
 
 @SpringBootTest
 @Transactional
@@ -42,6 +46,9 @@ class VideoServiceIntegrationTest {
 
 	@Autowired
 	private UserRepository userRepository;
+
+	@Autowired
+	private VideoRepository videoRepository;
 
 	@Autowired
 	private EntityManager em;
@@ -64,9 +71,20 @@ class VideoServiceIntegrationTest {
 
 	/** s3Key 는 매번 새로 만든다 — presign 이 호출마다 새 UUID 를 발급하고, 재사용은 이제 거부된다(MSG-132). */
 	private VideoUploadRequestDto request(double lat, double lon) {
+		return request(lat, lon, null);   // visibility 미지정 = 기본 PUBLIC (MSG-204)
+	}
+
+	private VideoUploadRequestDto request(double lat, double lon, String visibility) {
 		return new VideoUploadRequestDto(
 			"videos/pending/" + userId + "/" + java.util.UUID.randomUUID() + ".mp4",
-			lat, lon, (short) 10, LocalDateTime.now());
+			lat, lon, (short) 10, LocalDateTime.now(), visibility);
+	}
+
+	private String visibilityOf(long videoId) {
+		em.flush();
+		return (String) em.createNativeQuery("SELECT visibility FROM videos WHERE id = :i")
+			.setParameter("i", videoId)
+			.getSingleResult();
 	}
 
 	private long countRows(String sql, String gridId) {
@@ -112,5 +130,61 @@ class VideoServiceIntegrationTest {
 		assertThatThrownBy(() -> videoService.saveVideo(userId, request(0.0, 0.0)))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_COORDINATE);
+	}
+
+	// 업로드 시 공개범위 지정 (MSG-204). 미지정은 PUBLIC, 지정값 저장, 오류값은 S3 부수효과 없이 3420.
+
+	@Test
+	void 업로드에_visibility를_생략하면_PUBLIC으로_저장된다() {
+		long videoId = videoService.saveVideo(userId, request(성수_LAT, 성수_LON)).videoId();
+
+		assertThat(visibilityOf(videoId)).isEqualTo("PUBLIC");
+	}
+
+	@Test
+	void 업로드에_PRIVATE를_지정하면_PRIVATE로_저장된다() {
+		long videoId = videoService.saveVideo(userId, request(성수_LAT, 성수_LON, "PRIVATE")).videoId();
+
+		assertThat(visibilityOf(videoId)).isEqualTo("PRIVATE");
+	}
+
+	@Test
+	void 업로드에_PUBLIC을_지정하면_PUBLIC으로_저장된다() {
+		long videoId = videoService.saveVideo(userId, request(성수_LAT, 성수_LON, "PUBLIC")).videoId();
+
+		assertThat(visibilityOf(videoId)).isEqualTo("PUBLIC");
+	}
+
+	@Test
+	void 업로드_visibility는_소문자도_허용된다() {
+		// parseVisibility 의 toUpperCase 관용 — MSG-162 전환 API 와 동일
+		long videoId = videoService.saveVideo(userId, request(성수_LAT, 성수_LON, "private")).videoId();
+
+		assertThat(visibilityOf(videoId)).isEqualTo("PRIVATE");
+	}
+
+	@Test
+	void 업로드에_PUBLIC_PRIVATE가_아닌_값이면_INVALID_VISIBILITY고_영상은_저장되지_않는다() {
+		assertThatThrownBy(() -> videoService.saveVideo(userId, request(성수_LAT, 성수_LON, "FRIENDS")))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_VISIBILITY);
+
+		String gridId = GridEncoder.encode(성수_LAT, 성수_LON);
+		assertThat(countRows("SELECT count(*) FROM videos WHERE grid_id = :g", gridId)).isZero();
+		// 파싱이 confirmUpload 보다 먼저라 S3 검증(headObject)·원본 복사(copyObject)가 아예 없어야 한다 (FR-3).
+		then(s3Client).should(never()).headObject(any(HeadObjectRequest.class));
+		then(s3Client).should(never()).copyObject(any(CopyObjectRequest.class));
+	}
+
+	@Test
+	void 업로드_직후_PUBLIC이어도_READY_전엔_전역_노출면에_안_잡힌다() {
+		videoService.saveVideo(userId, request(성수_LAT, 성수_LON));   // 기본 PUBLIC · processing_status=UPLOADED
+
+		String gridId = GridEncoder.encode(성수_LAT, 성수_LON);
+		em.flush();
+		em.clear();
+		assertThat(videoRepository.findGlobalCover(gridId))
+			.as("전역 노출 게이트는 visibility='PUBLIC' AND processing_status='READY' — READY 전엔 비노출 (FR-4)")
+			.isEmpty();
 	}
 }
