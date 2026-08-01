@@ -21,6 +21,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  * 실제 Redis(localhost:6379)를 사용하는 스토어 계층 테스트 — 로컬은 fillmap-local-redis,
  * CI 는 redis 서비스 컨테이너 (RedisRefreshTokenStoreTest 방식). 고정 Clock 을 과거 시각
  * (2000-01-01)으로 잡아 버킷 키가 실서비스·타 테스트 키와 겹치지 않게 한다.
+ * Executor 는 same-thread(Runnable::run) 주입 — 비동기 플레이크 없이 결정적으로 단언한다.
  */
 @DisplayName("HotScoreCommandServiceImpl")
 class HotScoreCommandServiceImplTest {
@@ -42,7 +43,8 @@ class HotScoreCommandServiceImplTest {
 		connectionFactory.afterPropertiesSet();
 		redisTemplate = new StringRedisTemplate(connectionFactory);
 		redisTemplate.afterPropertiesSet();
-		service = new HotScoreCommandServiceImpl(redisTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
+		service = new HotScoreCommandServiceImpl(redisTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC),
+			Runnable::run);
 	}
 
 	@AfterEach
@@ -84,7 +86,8 @@ class HotScoreCommandServiceImplTest {
 	void 버킷이_바뀌면_다른_키에_기록된다() {
 		Instant nextBucketInstant = FIXED_INSTANT.plusSeconds(BUCKET_SECONDS);
 		HotScoreCommandServiceImpl nextBucketService =
-			new HotScoreCommandServiceImpl(redisTemplate, Clock.fixed(nextBucketInstant, ZoneOffset.UTC));
+			new HotScoreCommandServiceImpl(redisTemplate, Clock.fixed(nextBucketInstant, ZoneOffset.UTC),
+				Runnable::run);
 
 		service.recordUpload(GRID_ID);
 		nextBucketService.recordUpload(GRID_ID);
@@ -100,7 +103,8 @@ class HotScoreCommandServiceImplTest {
 		StringRedisTemplate deadTemplate = new StringRedisTemplate(deadFactory);
 		deadTemplate.afterPropertiesSet();
 		HotScoreCommandServiceImpl deadService =
-			new HotScoreCommandServiceImpl(deadTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
+			new HotScoreCommandServiceImpl(deadTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC),
+				Runnable::run);
 
 		assertThatCode(() -> deadService.recordUpload(GRID_ID)).doesNotThrowAnyException();
 
