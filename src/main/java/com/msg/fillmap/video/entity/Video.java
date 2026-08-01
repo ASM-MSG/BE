@@ -112,7 +112,7 @@ public class Video {
 	private LocalDateTime createdAt;
 
 	private Video(Long userId, String gridId, String originalS3Key, Point geom, Short durationSec,
-		LocalDateTime recordedAt) {
+		LocalDateTime recordedAt, Visibility visibility) {
 		this.userId = userId;
 		this.gridId = gridId;
 		this.originalS3Key = originalS3Key;
@@ -120,14 +120,15 @@ public class Video {
 		this.durationSec = durationSec;
 		this.recordedAt = recordedAt;
 		this.processingStatus = ProcessingStatus.UPLOADED;
-		this.visibility = Visibility.PRIVATE;
+		this.visibility = visibility;
 		this.status = VideoStatus.ACTIVE;
 		this.viewCount = 0L;
 	}
 
+	/** visibility 는 받은 값을 저장만 한다 — "미지정은 PUBLIC" 기본값 결정은 제품 결정이라 서비스 몫이다 (MSG-204). */
 	public static Video create(Long userId, String gridId, String originalS3Key, Point geom, Short durationSec,
-		LocalDateTime recordedAt) {
-		return new Video(userId, gridId, originalS3Key, geom, durationSec, recordedAt);
+		LocalDateTime recordedAt, Visibility visibility) {
+		return new Video(userId, gridId, originalS3Key, geom, durationSec, recordedAt, visibility);
 	}
 
 	/** UPLOADED → ENCODING (MSG-65 워커 진입). */
