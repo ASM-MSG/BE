@@ -6,8 +6,11 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -94,6 +97,37 @@ class HotScoreCommandServiceImplTest {
 
 		assertThat(redisTemplate.opsForZSet().score(BUCKET_KEY, GRID_ID)).isEqualTo(1.0);
 		assertThat(redisTemplate.opsForZSet().score(NEXT_BUCKET_KEY, GRID_ID)).isEqualTo(1.0);
+	}
+
+	@Test
+	void 워커_실행이_버킷_경계를_넘겨_지연돼도_호출_시각_버킷에_기록된다() {
+		AtomicReference<Instant> now = new AtomicReference<>(FIXED_INSTANT);
+		Clock mutableClock = new Clock() {
+			@Override
+			public ZoneId getZone() {
+				return ZoneOffset.UTC;
+			}
+
+			@Override
+			public Clock withZone(ZoneId zone) {
+				return this;
+			}
+
+			@Override
+			public Instant instant() {
+				return now.get();
+			}
+		};
+		List<Runnable> deferred = new ArrayList<>();
+		HotScoreCommandServiceImpl delayedService =
+			new HotScoreCommandServiceImpl(redisTemplate, mutableClock, deferred::add);
+
+		delayedService.recordUpload(GRID_ID);
+		now.set(FIXED_INSTANT.plusSeconds(BUCKET_SECONDS));   // 워커 실행 전에 6h 경계를 넘긴다
+		deferred.forEach(Runnable::run);
+
+		assertThat(redisTemplate.opsForZSet().score(BUCKET_KEY, GRID_ID)).isEqualTo(1.0);
+		assertThat(redisTemplate.opsForZSet().score(NEXT_BUCKET_KEY, GRID_ID)).isNull();
 	}
 
 	@Test

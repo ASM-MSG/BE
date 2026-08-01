@@ -60,16 +60,18 @@ public class HotScoreCommandServiceImpl implements HotScoreCommandService {
 	@Override
 	public void recordUpload(String gridId) {
 		try {
-			executor.execute(() -> increment(gridId));
+			// 버킷 키는 호출(커밋) 시각에 확정 — 큐가 밀려 워커가 6h 경계를 넘겨 실행돼도 이벤트 시각 버킷에 기록
+			String key = KEY_PREFIX + clock.instant().getEpochSecond() / BUCKET_SECONDS;
+			executor.execute(() -> increment(key, gridId));
 		} catch (Exception e) {
 			// 큐 포화(RejectedExecutionException) 포함 — 폐기하고 warn 만 남긴다 (FR-6)
 			log.warn("핫스코어 증분 실패 — 신호 1건 유실 허용: gridId={}", gridId, e);
 		}
 	}
 
-	private void increment(String gridId) {
+	/** 워커 스레드 실행 — clock 을 읽지 않는다(버킷은 호출 시각에 이미 확정). */
+	private void increment(String key, String gridId) {
 		try {
-			String key = KEY_PREFIX + clock.instant().getEpochSecond() / BUCKET_SECONDS;
 			redisTemplate.execute(INCREMENT_SCRIPT, List.of(key), gridId, String.valueOf(BUCKET_TTL_SECONDS));
 		} catch (Exception e) {
 			log.warn("핫스코어 증분 실패 — 신호 1건 유실 허용: gridId={}", gridId, e);   // FR-6
