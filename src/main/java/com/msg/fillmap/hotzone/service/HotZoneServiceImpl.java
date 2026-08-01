@@ -100,6 +100,12 @@ public class HotZoneServiceImpl implements HotZoneService {
 	}
 
 	private void validateBounds(ViewportBounds bounds) {
+		// NaN 은 모든 비교가 false 라 뒤집힘 검사를 통과하고 GridEncoder 환산에서 인덱스 0 으로 떨어진다
+		// — 비유한 값(NaN·Infinity)은 뒤집힘 검사보다 먼저 거른다.
+		if (!Double.isFinite(bounds.swLat()) || !Double.isFinite(bounds.swLng())
+			|| !Double.isFinite(bounds.neLat()) || !Double.isFinite(bounds.neLng())) {
+			throw new ApiException(HotZoneErrorCode.INVALID_VIEWPORT);
+		}
 		if (bounds.swLat() > bounds.neLat() || bounds.swLng() > bounds.neLng()) {
 			throw new ApiException(HotZoneErrorCode.INVALID_VIEWPORT);
 		}

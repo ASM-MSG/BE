@@ -138,6 +138,24 @@ class HotZoneServiceImplTest {
 	}
 
 	@Test
+	void NaN_좌표_뷰포트는_INVALID_VIEWPORT_에러다() {
+		ViewportBounds nanBounds = new ViewportBounds(Double.NaN, 127.00, 37.55, 127.05);
+
+		assertThatThrownBy(() -> service.getHotZones(nanBounds))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", HotZoneErrorCode.INVALID_VIEWPORT);
+	}
+
+	@Test
+	void 무한대_좌표_뷰포트는_INVALID_VIEWPORT_에러다() {
+		ViewportBounds infiniteBounds = new ViewportBounds(37.50, 127.00, Double.POSITIVE_INFINITY, 127.05);
+
+		assertThatThrownBy(() -> service.getHotZones(infiniteBounds))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", HotZoneErrorCode.INVALID_VIEWPORT);
+	}
+
+	@Test
 	void 합산_캐시에_30초_TTL이_설정된다() {
 		record(CURRENT_BUCKET, IN_GRID_A, 5);
 
