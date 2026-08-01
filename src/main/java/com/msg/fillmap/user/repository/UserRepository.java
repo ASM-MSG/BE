@@ -1,8 +1,12 @@
 package com.msg.fillmap.user.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.msg.fillmap.user.entity.AuthProvider;
 import com.msg.fillmap.user.entity.User;
@@ -14,4 +18,17 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	Optional<User> findByEmail(String email);
 
 	Optional<User> findByProviderAndOid(AuthProvider provider, String oid);
+
+	/** 계정 삭제용 S3 키 수집 — videos 를 읽지만 용도가 user 소속 (UserBadgeRepository 관례). 4컬럼 모두 실제 S3 key. */
+	@Query(value = """
+		SELECT original_s3_key, encoded_url, thumbnail_url, blurred_s3_key
+		FROM videos
+		WHERE user_id = :userId
+		""", nativeQuery = true)
+	List<Object[]> findAllS3KeysByUserId(@Param("userId") Long userId);
+
+	/** 삭제 행 수 반환 — 0 이면 이미 없는 유저(1404). deleteById 는 부재 시 조용히 무시라 판별 불가. */
+	@Modifying
+	@Query("DELETE FROM User u WHERE u.id = :userId")
+	int deleteUser(@Param("userId") Long userId);
 }
