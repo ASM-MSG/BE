@@ -131,7 +131,7 @@ class VideoMissionIntegrationTest {
 
 	private VideoUploadRequestDto uploadRequest(double lat, double lon) {
 		String pendingKey = "videos/pending/" + userId + "/" + UUID.randomUUID() + ".mp4";
-		return new VideoUploadRequestDto(pendingKey, lat, lon, (short) 10, LocalDateTime.now(ZoneOffset.UTC));
+		return new VideoUploadRequestDto(pendingKey, lat, lon, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE");
 	}
 
 	/** 지금 진행 중인 EVENT 미션(UTC 기간 — §D3, target 1)을 삽입하고 id 를 돌려준다. */

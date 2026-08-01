@@ -36,6 +36,10 @@ public record VideoUploadRequestDto(
 
 	@Schema(description = "촬영 시각", example = "2026-07-17T14:30:00")
 	@NotNull
-	LocalDateTime recordedAt
+	LocalDateTime recordedAt,
+
+	// @NotBlank 를 붙이지 않는다 — null 이 유효값(기본 PUBLIC)이다. 빈 문자열·오타는 서비스 파싱이 3420 으로 거른다 (MSG-204).
+	@Schema(description = "공개범위. PUBLIC 또는 PRIVATE, 생략 시 PUBLIC", example = "PUBLIC")
+	String visibility
 ) {
 }

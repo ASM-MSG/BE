@@ -35,6 +35,7 @@ import com.msg.fillmap.video.config.AiProperties;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.service.AiClient.AiJobResult;
 import com.msg.fillmap.video.service.AiClient.AiJobStatus;
@@ -98,7 +99,7 @@ class AiBlurPollerTest {
 	 */
 	private Video blurring(long id, String jobId, LocalDateTime startedAt) {
 		Video video = Video.create(1L, "41716_110483", "videos/original/1/x.mp4",
-			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now());
+			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 		video.markEncoding();
 		video.markEncoded("videos/encoded/1/" + id + ".mp4");
 		if (jobId != null) {

@@ -107,6 +107,11 @@ public class VideoServiceImpl implements VideoService {
 	@Override
 	@Transactional
 	public VideoUploadResponseDto saveVideo(long userId, VideoUploadRequestDto request) {
+		// confirmUpload(S3 원본 키 클레임) 전에 확정한다 — 잘못된 값이 S3 부수효과 없이 거부되게 (MSG-204 FR-3).
+		// 미지정(null)은 PUBLIC: "올리면 지도에 게시된다"는 제품 기본. 빈 문자열·오타는 parseVisibility 가 3420 으로 거른다.
+		Visibility visibility = request.visibility() == null
+			? Visibility.PUBLIC
+			: parseVisibility(request.visibility());
 		double lat = request.lat();
 		double lon = request.lon();
 		validateCoordinate(lat, lon);
@@ -121,7 +126,7 @@ public class VideoServiceImpl implements VideoService {
 		// saveAndFlush: original_s3_key 클레임(INSERT)을 S3 복사보다 먼저 확정한다 (MSG-247 1R 클레임 선행).
 		// IDENTITY 라 save 도 즉시 INSERT 지만, ID 전략이 바뀌어도 순서가 유지되게 명시한다.
 		Video video = videoRepository.saveAndFlush(
-			Video.create(userId, gridId, originalKey, geom, request.durationSec(), request.recordedAt()));
+			Video.create(userId, gridId, originalKey, geom, request.durationSec(), request.recordedAt(), visibility));
 
 		copyToOriginal(request.s3Key(), originalKey);
 		videoRepository.upsertUserGrid(userId, gridId, video.getId());

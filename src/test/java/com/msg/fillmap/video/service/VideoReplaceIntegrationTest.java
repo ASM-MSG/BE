@@ -77,7 +77,7 @@ class VideoReplaceIntegrationTest {
 
 	private long upload() {
 		return videoService.saveVideo(userId, new VideoUploadRequestDto(
-			newKey(), 잠실_LAT, 잠실_LON, (short) 10, LocalDateTime.now())).videoId();
+			newKey(), 잠실_LAT, 잠실_LON, (short) 10, LocalDateTime.now(), "PRIVATE")).videoId();
 	}
 
 	private VideoReplaceRequestDto replaceRequest(String s3Key, Double lat, Double lon) {
@@ -131,7 +131,7 @@ class VideoReplaceIntegrationTest {
 		LocalDateTime 옛시각 = LocalDateTime.of(2026, 6, 1, 10, 0);
 		LocalDateTime 새시각 = LocalDateTime.of(2026, 7, 24, 18, 0);
 		long videoId = videoService.saveVideo(userId, new VideoUploadRequestDto(
-			newKey(), 잠실_LAT, 잠실_LON, (short) 10, 옛시각)).videoId();
+			newKey(), 잠실_LAT, 잠실_LON, (short) 10, 옛시각, "PRIVATE")).videoId();
 
 		videoService.replaceVideo(userId, videoId, new VideoReplaceRequestDto(newKey(), null, null, (short) 7, 새시각));
 		em.flush();

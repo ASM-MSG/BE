@@ -29,6 +29,7 @@ import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
@@ -65,7 +66,8 @@ class VideoGlobalCoverServiceTest {
 	}
 
 	private Video readyVideo(long id, String thumbKey, LocalDateTime recordedAt, long viewCount) {
-		Video video = Video.create(1L, GRID_ID, "videos/original/x.mp4", null, (short) 12, recordedAt);
+		Video video = Video.create(1L, GRID_ID, "videos/original/x.mp4", null, (short) 12, recordedAt,
+			Visibility.PRIVATE);
 		video.markReady("videos/encoded/" + id + ".mp4", thumbKey);
 		ReflectionTestUtils.setField(video, "id", id);
 		ReflectionTestUtils.setField(video, "viewCount", viewCount);

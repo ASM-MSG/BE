@@ -140,7 +140,7 @@ class VideoUploadRollbackCompensationTest {
 	}
 
 	private VideoUploadRequestDto uploadRequest(String s3Key) {
-		return new VideoUploadRequestDto(s3Key, LAT, LON, (short) 10, LocalDateTime.now());
+		return new VideoUploadRequestDto(s3Key, LAT, LON, (short) 10, LocalDateTime.now(), "PRIVATE");
 	}
 
 	private List<String> deletedKeys() {

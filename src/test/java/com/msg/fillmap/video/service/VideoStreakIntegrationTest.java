@@ -118,7 +118,7 @@ class VideoStreakIntegrationTest {
 	}
 
 	private VideoUploadRequestDto uploadRequest() {
-		return new VideoUploadRequestDto(pendingKey(), 망원_LAT, 망원_LON, (short) 10, LocalDateTime.now());
+		return new VideoUploadRequestDto(pendingKey(), 망원_LAT, 망원_LON, (short) 10, LocalDateTime.now(), "PRIVATE");
 	}
 
 	private String pendingKey() {

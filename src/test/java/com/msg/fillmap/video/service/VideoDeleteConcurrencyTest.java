@@ -36,6 +36,7 @@ import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 
@@ -174,7 +175,7 @@ class VideoDeleteConcurrencyTest {
 		double lon = (GX + 0.5) * GRID_LNG_STEP;
 		return videoRepository.save(Video.create(
 			userId, gridId, "videos/original/%d/m243-%s.mp4".formatted(userId, suffix),
-			GeoSupport.toPoint(lat, lon), (short) 10, LocalDateTime.now())).getId();
+			GeoSupport.toPoint(lat, lon), (short) 10, LocalDateTime.now(), Visibility.PRIVATE)).getId();
 	}
 
 	/**

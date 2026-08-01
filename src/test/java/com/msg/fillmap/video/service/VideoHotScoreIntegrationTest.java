@@ -82,6 +82,6 @@ class VideoHotScoreIntegrationTest {
 	private VideoUploadRequestDto uploadRequest() {
 		return new VideoUploadRequestDto(
 			"videos/pending/" + userId + "/" + UUID.randomUUID() + ".mp4", 문래_LAT, 문래_LON, (short) 10,
-			LocalDateTime.now());
+			LocalDateTime.now(), "PRIVATE");
 	}
 }

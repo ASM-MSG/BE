@@ -22,6 +22,7 @@ import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.support.GeoSupport;
 
 /**
@@ -68,12 +69,12 @@ class VideoGlobalCoverQueryTest {
 		return gridId;
 	}
 
-	/** 기본(PRIVATE·UPLOADED·view_count 0)으로 저장한 뒤, native UPDATE 로 대표 후보 조건을 명시적으로 맞춘다. */
+	/** PRIVATE 명시·기본(UPLOADED·view_count 0)으로 저장한 뒤, native UPDATE 로 대표 후보 조건을 명시적으로 맞춘다. */
 	private Long saveVideo(Long ownerId, String gridId, String visibility, String processingStatus,
 		VideoStatus status, long viewCount, LocalDateTime createdAt) {
 		Point geom = GeoSupport.toPoint(성수_LAT, 성수_LON);
 		String key = "videos/original/" + java.util.UUID.randomUUID() + ".mp4";   // uq_videos_original_s3_key
-		Video video = Video.create(ownerId, gridId, key, geom, (short) 10, LocalDateTime.now());
+		Video video = Video.create(ownerId, gridId, key, geom, (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 		if (status == VideoStatus.DELETED) {
 			video.markDeleted();
 		}

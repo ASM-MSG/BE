@@ -31,6 +31,7 @@ import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
@@ -74,19 +75,20 @@ class VideoHotScoreTest {
 
 	private void givenSavedVideo() {
 		Video saved = Video.create(USER_ID, GRID_ID, "videos/original/1/x.mp4", null, (short) 10,
-			LocalDateTime.now());
+			LocalDateTime.now(), Visibility.PRIVATE);
 		ReflectionTestUtils.setField(saved, "id", VIDEO_ID);
 		given(repository.saveAndFlush(any(Video.class))).willReturn(saved);
 	}
 
 	private VideoUploadRequestDto uploadRequest() {
-		return new VideoUploadRequestDto("videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now());
+		return new VideoUploadRequestDto("videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now(),
+			"PRIVATE");
 	}
 
 	/** 이미 확정돼 original 에 있는 영상 — 교체·삭제 대상. */
 	private Video existingVideo() {
 		Video video = Video.create(USER_ID, GRID_ID, "videos/original/1/old.mp4", null, (short) 10,
-			LocalDateTime.now());
+			LocalDateTime.now(), Visibility.PRIVATE);
 		ReflectionTestUtils.setField(video, "id", VIDEO_ID);
 		return video;
 	}

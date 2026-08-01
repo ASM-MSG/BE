@@ -33,6 +33,7 @@ import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
@@ -73,7 +74,7 @@ class VideoGlobalListServiceTest {
 	/** 목록 후보 조건(PUBLIC 는 repository 필터 소관)·READY·썸네일 key 를 갖춘 픽스처 — 정상 경로 기준. */
 	private Video readyVideo(long id, long viewCount, LocalDateTime createdAt) {
 		Video video = Video.create(1L, GRID_ID, "videos/original/" + id + ".mp4", null, (short) 12,
-			LocalDateTime.of(2026, 7, 20, 18, 3, 11));
+			LocalDateTime.of(2026, 7, 20, 18, 3, 11), Visibility.PRIVATE);
 		video.markReady("videos/encoded/" + id + ".mp4", "videos/thumb/" + id + ".jpg");
 		ReflectionTestUtils.setField(video, "id", id);
 		ReflectionTestUtils.setField(video, "viewCount", viewCount);

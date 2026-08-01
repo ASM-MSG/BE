@@ -20,6 +20,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.FfmpegRunner;
 import com.msg.fillmap.video.support.GeoSupport;
@@ -54,7 +55,7 @@ class VideoEncodingAiTriggerTest {
 			videoRepository, statusWriter, ffmpegRunner, s3Client, properties);
 
 		Video video = Video.create(1L, "41716_110483", ORIGINAL_KEY,
-			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now());
+			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 		given(videoRepository.findById(VIDEO_ID)).willReturn(Optional.of(video));
 		given(statusWriter.markEncoding(VIDEO_ID, ORIGINAL_KEY)).willReturn(true);
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);

@@ -22,6 +22,7 @@ import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.support.GeoSupport;
 
 @SpringBootTest
@@ -66,7 +67,7 @@ class VideoGridQueryTest {
 	private Long saveVideo(Long ownerId, String gridId, double lat, double lon, VideoStatus status) {
 		Point geom = GeoSupport.toPoint(lat, lon);
 		String key = "videos/original/" + java.util.UUID.randomUUID() + ".mp4";   // uq_videos_original_s3_key
-		Video video = Video.create(ownerId, gridId, key, geom, (short) 10, LocalDateTime.now());
+		Video video = Video.create(ownerId, gridId, key, geom, (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 		if (status == VideoStatus.DELETED) {
 			video.markDeleted();
 		}

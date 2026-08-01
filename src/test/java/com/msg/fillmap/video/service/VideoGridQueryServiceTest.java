@@ -27,6 +27,7 @@ import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
@@ -69,7 +70,8 @@ class VideoGridQueryServiceTest {
 	}
 
 	private Video readyVideo(long id, String thumbKey, LocalDateTime createdAt) {
-		Video video = Video.create(USER_ID, GRID_ID, "videos/original/x.mp4", null, (short) 12, createdAt);
+		Video video = Video.create(USER_ID, GRID_ID, "videos/original/x.mp4", null, (short) 12, createdAt,
+			Visibility.PRIVATE);
 		video.markReady("videos/encoded/" + id + ".mp4", thumbKey);
 		ReflectionTestUtils.setField(video, "id", id);
 		ReflectionTestUtils.setField(video, "createdAt", createdAt);
@@ -77,7 +79,8 @@ class VideoGridQueryServiceTest {
 	}
 
 	private Video encodingVideo(long id, LocalDateTime createdAt) {
-		Video video = Video.create(USER_ID, GRID_ID, "videos/original/x.mp4", null, (short) 8, createdAt);
+		Video video = Video.create(USER_ID, GRID_ID, "videos/original/x.mp4", null, (short) 8, createdAt,
+			Visibility.PRIVATE);
 		video.markEncoding();
 		ReflectionTestUtils.setField(video, "id", id);
 		ReflectionTestUtils.setField(video, "createdAt", createdAt);

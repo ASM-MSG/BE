@@ -26,6 +26,7 @@ import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
@@ -85,8 +86,8 @@ class VideoGlobalListViewCountIntegrationTest {
 	private Long publicReady(long viewCount, LocalDateTime createdAt) {
 		Point geom = GeoSupport.toPoint(성수_LAT, 성수_LON);
 		String key = "videos/original/" + UUID.randomUUID() + ".mp4";   // uq_videos_original_s3_key
-		Long id = videoRepository.save(Video.create(ownerId, gridId, key, geom, (short) 10, LocalDateTime.now()))
-			.getId();
+		Long id = videoRepository.save(
+			Video.create(ownerId, gridId, key, geom, (short) 10, LocalDateTime.now(), Visibility.PRIVATE)).getId();
 		em.createNativeQuery("UPDATE videos SET visibility='PUBLIC', processing_status='READY', status='ACTIVE', "
 				+ "encoded_url = :enc, view_count = :vc, created_at = :ts WHERE id = :id")
 			.setParameter("enc", "videos/encoded/" + id + ".mp4")

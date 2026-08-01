@@ -18,7 +18,7 @@ class VideoBlurTransitionTest {
 
 	private Video newVideo() {
 		return Video.create(1L, "41716_110483", "videos/original/1/x.mp4",
-			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now());
+			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 	}
 
 	@Test
