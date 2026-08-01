@@ -15,6 +15,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 
@@ -43,7 +44,7 @@ class VideoStatusWriterTest {
 	/** BLURRING·ACTIVE 인, 아직 미제출(aiJobId=null) 시도의 영상. */
 	private Video attempt() {
 		Video video = Video.create(1L, "41716_110483", "videos/original/1/x.mp4",
-			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now());
+			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 		video.markEncoding();
 		video.markEncoded("videos/encoded/1/7.mp4");   // BLURRING + blurringStartedAt=now (thumbnailUrl 은 null)
 		ReflectionTestUtils.setField(video, "id", VIDEO_ID);
@@ -138,7 +139,7 @@ class VideoStatusWriterTest {
 	/** K1 원본으로 ENCODING 중인 시도의 영상. */
 	private Video encoding() {
 		Video video = Video.create(1L, "41716_110483", K1,
-			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now());
+			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 		video.markEncoding();
 		ReflectionTestUtils.setField(video, "id", VIDEO_ID);
 		return video;

@@ -69,7 +69,7 @@ class VideoBlurResultTest {
 	private Video newVideo() {
 		String key = "videos/original/" + UUID.randomUUID() + ".mp4";   // uq_videos_original_s3_key
 		return Video.create(userId, gridId, key, GeoSupport.toPoint(성수_LAT, 성수_LON), (short) 10,
-			LocalDateTime.now());
+			LocalDateTime.now(), Visibility.PRIVATE);
 	}
 
 	private Video persistAndReload(Video video) {

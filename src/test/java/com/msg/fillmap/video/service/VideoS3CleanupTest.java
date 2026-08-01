@@ -42,6 +42,7 @@ import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
@@ -97,7 +98,8 @@ class VideoS3CleanupTest {
 
 	/** 이미 확정돼 original 에 있는 영상. */
 	private Video existingVideo() {
-		Video video = Video.create(USER_ID, GRID_ID, OLD_ORIGINAL, null, (short) 10, LocalDateTime.now());
+		Video video = Video.create(USER_ID, GRID_ID, OLD_ORIGINAL, null, (short) 10, LocalDateTime.now(),
+			Visibility.PRIVATE);
 		ReflectionTestUtils.setField(video, "id", VIDEO_ID);
 		return video;
 	}
@@ -116,7 +118,7 @@ class VideoS3CleanupTest {
 		given(repository.saveAndFlush(any(Video.class))).willReturn(saved);
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(PENDING, 37.5445, 127.0560, (short) 10,
-			LocalDateTime.now()));
+			LocalDateTime.now(), "PRIVATE"));
 
 		ArgumentCaptor<CopyObjectRequest> copy = ArgumentCaptor.forClass(CopyObjectRequest.class);
 		then(s3Client).should().copyObject(copy.capture());
@@ -138,7 +140,7 @@ class VideoS3CleanupTest {
 		given(repository.saveAndFlush(any(Video.class))).willReturn(existingVideo());
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(PENDING, 37.5445, 127.0560, (short) 10,
-			LocalDateTime.now()));
+			LocalDateTime.now(), "PRIVATE"));
 
 		// 지우면 API 호출 하나와 그 실패 경로가 늘 뿐, 만료 규칙이 어차피 정리한다.
 		then(s3Client).should(never()).deleteObjects(any(DeleteObjectsRequest.class));

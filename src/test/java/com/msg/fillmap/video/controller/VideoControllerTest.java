@@ -47,7 +47,7 @@ class VideoControllerTest {
 	@DisplayName("duration 이 30 초를 초과하면 400 을 반환하고 서비스는 호출되지 않는다")
 	void duration_31이면_400() throws Exception {
 		VideoUploadRequestDto request = new VideoUploadRequestDto(
-			"videos/pending/1/uuid.mp4", 37.5, 127.0, (short) 31, LocalDateTime.now());
+			"videos/pending/1/uuid.mp4", 37.5, 127.0, (short) 31, LocalDateTime.now(), "PRIVATE");
 
 		mockMvc.perform(post(UPLOAD_URL)
 				.contentType(MediaType.APPLICATION_JSON)

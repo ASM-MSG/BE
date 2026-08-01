@@ -21,6 +21,7 @@ import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
@@ -43,7 +44,7 @@ class VideoEncodingTriggerTest {
 		VideoStatusWriter statusWriter = mock(VideoStatusWriter.class);
 
 		Video saved = Video.create(USER_ID, "41716_110483", "videos/original/1/x.mp4", null, (short) 10,
-			LocalDateTime.now());
+			LocalDateTime.now(), Visibility.PRIVATE);
 		org.springframework.test.util.ReflectionTestUtils.setField(saved, "id", 7L);
 		// 확정은 클레임 선행 직렬화로 saveAndFlush 를 쓴다 (MSG-247 P1) — 스텁도 따라간다.
 		org.mockito.BDDMockito.given(repository.saveAndFlush(org.mockito.ArgumentMatchers.any(Video.class)))
@@ -65,7 +66,7 @@ class VideoEncodingTriggerTest {
 			mock(StreakCommandService.class), missionAwardService);
 
 		VideoUploadRequestDto request = new VideoUploadRequestDto(
-			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now());
+			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now(), "PRIVATE");
 
 		// 업로드는 이미 커밋된 상태다 — 여기서 예외가 나가면 클라이언트가 재시도해 중복 업로드가 된다.
 		assertThatCode(() -> service.saveVideo(USER_ID, request)).doesNotThrowAnyException();

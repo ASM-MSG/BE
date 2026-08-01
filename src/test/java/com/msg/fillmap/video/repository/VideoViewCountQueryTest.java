@@ -31,6 +31,7 @@ import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.support.GeoSupport;
 
 /**
@@ -88,7 +89,8 @@ class VideoViewCountQueryTest {
 		double lon = (GX + 0.5) * GRID_LNG_STEP;
 		Point geom = GeoSupport.toPoint(lat, lon);
 		String key = "videos/original/" + UUID.randomUUID() + ".mp4";   // uq_videos_original_s3_key
-		return videoRepository.save(Video.create(userId, gridId, key, geom, (short) 10, LocalDateTime.now())).getId();
+		return videoRepository.save(
+			Video.create(userId, gridId, key, geom, (short) 10, LocalDateTime.now(), Visibility.PRIVATE)).getId();
 	}
 
 	private long viewCount() {

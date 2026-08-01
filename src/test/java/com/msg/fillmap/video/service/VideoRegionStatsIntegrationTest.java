@@ -89,7 +89,7 @@ class VideoRegionStatsIntegrationTest {
 	private VideoUploadRequestDto request() {
 		return new VideoUploadRequestDto(
 			"videos/pending/" + userId + "/" + UUID.randomUUID() + ".mp4",
-			LAT, LON, (short) 10, LocalDateTime.now());
+			LAT, LON, (short) 10, LocalDateTime.now(), "PRIVATE");
 	}
 
 	private long upload() {

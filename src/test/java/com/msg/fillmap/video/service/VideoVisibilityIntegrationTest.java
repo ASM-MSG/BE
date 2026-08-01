@@ -77,9 +77,10 @@ class VideoVisibilityIntegrationTest {
 		return "videos/pending/" + userId + "/" + UUID.randomUUID() + ".mp4";
 	}
 
+	/** PRIVATE 명시 업로드 — MSG-204 부터 미지정은 PUBLIC 이라, "PRIVATE→PUBLIC 전환" 전제를 명시로 보존한다. */
 	private long upload() {
 		return videoService.saveVideo(userId, new VideoUploadRequestDto(
-			newKey(), 구로_LAT, 구로_LON, (short) 10, LocalDateTime.now())).videoId();
+			newKey(), 구로_LAT, 구로_LON, (short) 10, LocalDateTime.now(), "PRIVATE")).videoId();
 	}
 
 	private VideoVisibilityRequestDto request(String visibility) {

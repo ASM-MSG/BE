@@ -79,7 +79,8 @@ class VideoPlaybackServiceTest {
 	/** 모든 상태 축을 명시 지정하는 코어 빌더 — 엔티티에 세터가 없어 리플렉션으로 벌린다. */
 	private Video video(VideoStatus status, Visibility visibility, ProcessingStatus processingStatus,
 		String encodedKey, String blurredKey, String thumbKey, long viewCount) {
-		Video v = Video.create(OWNER_ID, GRID_ID, "videos/original/x.mp4", null, (short) 12, RECORDED_AT);
+		Video v = Video.create(OWNER_ID, GRID_ID, "videos/original/x.mp4", null, (short) 12, RECORDED_AT,
+			Visibility.PRIVATE);
 		ReflectionTestUtils.setField(v, "id", VIDEO_ID);
 		ReflectionTestUtils.setField(v, "status", status);
 		ReflectionTestUtils.setField(v, "visibility", visibility);
