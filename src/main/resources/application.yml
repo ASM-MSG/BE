@@ -59,6 +59,12 @@ search:
     base-url: https://dapi.kakao.com
     rest-api-key: ${oauth.kakao.client-id:}
 
+# 핫구역 판정 값 (MSG-233 D3) — 초기 데이터를 보고 튜닝. top-k: 전국 상위 개수, min-score: 48h 합산 최소 임계.
+fillmap:
+  hotzone:
+    top-k: 50
+    min-score: 3
+
 aws:
   region: ${AWS_REGION:ap-northeast-2}
   s3:
