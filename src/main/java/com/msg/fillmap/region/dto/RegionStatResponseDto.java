@@ -11,7 +11,8 @@ import com.msg.fillmap.region.service.RegionStatView;
  * 행정동별 수집률 응답 (MSG-156, RegionResponseDto 패턴 복제). region_stats 를 regions 와 조인한 한 행정동의 수집 현황.
  * progressRate 는 표시 100 clamp 값(§D4), updatedAt 은 region_stats 캐시 기준 시각.
  */
-@Schema(description = "한 행정동의 수집률. 사용자가 그 행정동에서 점령(수집)한 격자 수와 진행률.")
+@Schema(description = "한 행정동의 수집률. 사용자가 그 행정동에서 점령(수집)한 격자 수와 진행률.",
+	requiredProperties = {"regionCode", "regionName", "collectedCount", "totalCount", "progressRate", "updatedAt"})
 public record RegionStatResponseDto(
 	@Schema(description = "행정동 코드 (region_stats.region_code)", example = "1168051500")
 	String regionCode,
