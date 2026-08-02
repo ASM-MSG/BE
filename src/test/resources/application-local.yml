@@ -17,8 +17,10 @@ spring:
   # 공유 로컬 DB는 여러 브랜치가 함께 쓴다 — 다른 브랜치 세션이 적용한 미머지 마이그레이션이
   # 이 브랜치에 파일로 없으면 validate가 "applied but not resolved"로 죽는다(V7=MSG-238 선점 사례).
   # 테스트에서만 missing을 허용한다. CI는 매번 새 DB라 이 패턴이 발동할 일 없고, dev/prod는 무영향.
+  # future도 함께 — 이 값은 Flyway 기본값("*:future")을 대체하므로 missing만 적으면 브랜치 최대
+  # 버전보다 큰 미머지 마이그레이션(V15=MSG-205 사례)이 future로 분류돼 다시 죽는다.
   flyway:
-    ignore-migration-patterns: "*:missing"
+    ignore-migration-patterns: "*:missing,*:future"
 
   data:
     redis:
