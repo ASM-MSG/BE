@@ -16,17 +16,17 @@ public sealed interface MissionShape
 	permits MissionShape.PathShape, MissionShape.BoxShape, MissionShape.CellsShape, MissionShape.RegionShape {
 
 	/** 좌표 한 점 (경계 폴리곤 꼭짓점). */
-	@Schema(description = "좌표 한 점")
+	@Schema(description = "좌표 한 점", requiredProperties = {"lat", "lon"})
 	record LatLng(double lat, double lon) {
 	}
 
 	/** 코스 포토스팟 마커 (격자 중심점 + gridId + seq). */
-	@Schema(description = "코스 포토스팟 마커")
+	@Schema(description = "코스 포토스팟 마커", requiredProperties = {"gridId", "lat", "lon"})
 	record Spot(String gridId, double lat, double lon, Integer seq) {
 	}
 
 	/** 격자 중심점 (gridId 포함). */
-	@Schema(description = "격자 중심점")
+	@Schema(description = "격자 중심점", requiredProperties = {"gridId", "lat", "lon"})
 	record Cell(String gridId, double lat, double lon) {
 	}
 
@@ -34,7 +34,8 @@ public sealed interface MissionShape
 	 * PATH (COURSE) — 코스 라인 + 포토스팟 마커. line 은 missions.path GeoJSON LineString 원문을 raw JSON 으로
 	 * 재발행한다(@JsonRawValue, §설계 D7) — 따옴표 escape 없이 JSON 객체로 나간다. spots 는 seq 오름차순.
 	 */
-	@Schema(description = "코스(COURSE) — GeoJSON LineString + seq순 포토스팟 마커")
+	@Schema(description = "코스(COURSE) — GeoJSON LineString + seq순 포토스팟 마커",
+		requiredProperties = {"spots"})
 	record PathShape(
 		@Schema(description = "코스 라인 GeoJSON LineString 원문", type = "object")
 		@JsonRawValue String line,
@@ -46,12 +47,12 @@ public sealed interface MissionShape
 	 * BOX (EVENT) — mission_grids 격자 집합을 감싸는 경계 사각형 5점 닫힌 링(남서→남동→북동→북서→남서).
 	 * 축제는 큰 사각형, 단일 격자 팝업은 한 셀 사각형(≈마커)으로 자연 정합.
 	 */
-	@Schema(description = "이벤트(EVENT) — 격자 집합을 감싸는 경계 사각형")
+	@Schema(description = "이벤트(EVENT) — 격자 집합을 감싸는 경계 사각형", requiredProperties = {"polygon"})
 	record BoxShape(List<LatLng> polygon) implements MissionShape {
 	}
 
 	/** CELLS (THEME·CONTINUOUS) — 각 격자 중심점 배열(seq 무의미). */
-	@Schema(description = "테마·지속(THEME·CONTINUOUS) — 각 격자 중심점")
+	@Schema(description = "테마·지속(THEME·CONTINUOUS) — 각 격자 중심점", requiredProperties = {"cells"})
 	record CellsShape(List<Cell> cells) implements MissionShape {
 	}
 

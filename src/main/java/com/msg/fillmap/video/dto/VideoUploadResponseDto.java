@@ -12,7 +12,8 @@ import com.msg.fillmap.mission.dto.CompletedMissionResponseDto;
  * newBadges = 이 업로드로 새로 획득한 뱃지(MSG-239 FR-9) — 없으면 빈 배열.
  * completedMissions = 이 업로드로 완료된 미션 스탬프(MSG-223 FR-19) — 없으면 빈 배열.
  */
-@Schema(description = "영상 메타데이터 저장 응답")
+@Schema(description = "영상 메타데이터 저장 응답",
+	requiredProperties = {"videoId", "gridId", "processingStatus", "occupied", "newBadges", "completedMissions"})
 public record VideoUploadResponseDto(
 	@Schema(description = "생성된 영상 ID", example = "1001")
 	Long videoId,

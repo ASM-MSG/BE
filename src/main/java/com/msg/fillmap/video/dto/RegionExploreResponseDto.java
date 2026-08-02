@@ -9,7 +9,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * 전체 보기(limit 생략)가 같은 응답을 쓴다 — 카운트는 limit 무관 전체 기준이라 "격자 N개 · 영상 M개"와
  * 카드 집합이 항상 같은 정의다(§D1). 미존재/무콘텐츠 regionCode 는 에러가 아니라 0·빈 배열이다(§D2).
  */
-@Schema(description = "행정동 격자 카드 리스트 + 헤더 카운트")
+@Schema(description = "행정동 격자 카드 리스트 + 헤더 카운트",
+	requiredProperties = {"regionCode", "gridCount", "videoCount", "grids"})
 public record RegionExploreResponseDto(
 	@Schema(description = "행정동 코드 (요청 에코)", example = "2644056000")
 	String regionCode,
