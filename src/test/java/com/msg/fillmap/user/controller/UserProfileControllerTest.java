@@ -62,8 +62,8 @@ class UserProfileControllerTest {
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.email").value("user@fillmap.dev"))
-			.andExpect(jsonPath("$.body.nickname").value("채우미"));
+			.andExpect(jsonPath("$.data.email").value("user@fillmap.dev"))
+			.andExpect(jsonPath("$.data.nickname").value("채우미"));
 	}
 
 	@Test
@@ -75,9 +75,9 @@ class UserProfileControllerTest {
 		// OpenAPI 계약(required + nullable) 그대로의 와이어 검증 — 필드 존재(hasKey)와 값 null 을 구분해 단언한다.
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.body", hasKey("email")))
-			.andExpect(jsonPath("$.body.email").value(nullValue()))
-			.andExpect(jsonPath("$.body.nickname").value("카카오유저"));
+			.andExpect(jsonPath("$.data", hasKey("email")))
+			.andExpect(jsonPath("$.data.email").value(nullValue()))
+			.andExpect(jsonPath("$.data.nickname").value("카카오유저"));
 	}
 
 	@Test
@@ -92,7 +92,7 @@ class UserProfileControllerTest {
 				.content("{\"nickname\":\"새닉네임\"}"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.nickname").value("새닉네임"));
+			.andExpect(jsonPath("$.data.nickname").value("새닉네임"));
 	}
 
 	@Test

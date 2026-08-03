@@ -61,12 +61,12 @@ class GridVideoControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body[0].videoId").value(1042))
-			.andExpect(jsonPath("$.body[0].thumbnailUrl").value("https://bucket.s3/thumb.jpg?X-Amz-Signature=abc"))
-			.andExpect(jsonPath("$.body[0].processingStatus").value("READY"))
-			.andExpect(jsonPath("$.body[0].durationSec").value(12))
-			.andExpect(jsonPath("$.body[1].thumbnailUrl").value(org.hamcrest.Matchers.nullValue()))
-			.andExpect(jsonPath("$.body[1].processingStatus").value("ENCODING"));
+			.andExpect(jsonPath("$.data[0].videoId").value(1042))
+			.andExpect(jsonPath("$.data[0].thumbnailUrl").value("https://bucket.s3/thumb.jpg?X-Amz-Signature=abc"))
+			.andExpect(jsonPath("$.data[0].processingStatus").value("READY"))
+			.andExpect(jsonPath("$.data[0].durationSec").value(12))
+			.andExpect(jsonPath("$.data[1].thumbnailUrl").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.data[1].processingStatus").value("ENCODING"));
 	}
 
 	@Test
@@ -78,7 +78,7 @@ class GridVideoControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body").isEmpty());
+			.andExpect(jsonPath("$.data").isEmpty());
 	}
 
 	@Test
@@ -99,12 +99,12 @@ class GridVideoControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.videoId").value(1042))
-			.andExpect(jsonPath("$.body.thumbnailUrl").value("https://bucket.s3/thumb.jpg?X-Amz-Signature=abc"))
-			.andExpect(jsonPath("$.body.durationSec").value(12))
-			.andExpect(jsonPath("$.body.viewCount").value(37))
-			.andExpect(jsonPath("$.body.recordedAt").value("2026-07-20T18:03:11"))
-			.andExpect(jsonPath("$.body.processingStatus").doesNotExist());
+			.andExpect(jsonPath("$.data.videoId").value(1042))
+			.andExpect(jsonPath("$.data.thumbnailUrl").value("https://bucket.s3/thumb.jpg?X-Amz-Signature=abc"))
+			.andExpect(jsonPath("$.data.durationSec").value(12))
+			.andExpect(jsonPath("$.data.viewCount").value(37))
+			.andExpect(jsonPath("$.data.recordedAt").value("2026-07-20T18:03:11"))
+			.andExpect(jsonPath("$.data.processingStatus").doesNotExist());
 	}
 
 	@Test
@@ -116,7 +116,7 @@ class GridVideoControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body").value(org.hamcrest.Matchers.nullValue()));
+			.andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.nullValue()));
 	}
 
 	@Test

@@ -57,8 +57,8 @@ class DevAuthControllerTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(objectMapper.writeValueAsString(request)))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.body.accessToken").value("access-jwt"))
-			.andExpect(jsonPath("$.body.refreshToken").value("refresh-jwt"))
+			.andExpect(jsonPath("$.data.accessToken").value("access-jwt"))
+			.andExpect(jsonPath("$.data.refreshToken").value("refresh-jwt"))
 			.andExpect(header().exists("X-Device-Id"));
 	}
 

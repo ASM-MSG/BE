@@ -63,7 +63,7 @@ class FriendControllerTest {
 		mockMvc.perform(get("/api/friends/code").header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.friendCode").value("AB3DE7GH"));
+			.andExpect(jsonPath("$.data.friendCode").value("AB3DE7GH"));
 	}
 
 	@Test
@@ -75,7 +75,7 @@ class FriendControllerTest {
 				.param("code", "AB3DE7GH")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.body.nickname").value("채우미"));
+			.andExpect(jsonPath("$.data.nickname").value("채우미"));
 	}
 
 	@Test
@@ -90,7 +90,7 @@ class FriendControllerTest {
 				.content("{\"friendCode\":\"AB3DE7GH\"}"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.status").value("PENDING"));
+			.andExpect(jsonPath("$.data.status").value("PENDING"));
 	}
 
 	@Test
@@ -111,11 +111,11 @@ class FriendControllerTest {
 
 		mockMvc.perform(get("/api/friends/requests/received").header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.body", Matchers.hasSize(1)))
-			.andExpect(jsonPath("$.body[0].requesterId").value(3))
-			.andExpect(jsonPath("$.body[0].nickname").value("채우미"))
-			.andExpect(jsonPath("$.body[0].profileImageUrl").value(Matchers.nullValue()))
-			.andExpect(jsonPath("$.body[0].requestedAt").value("2026-08-03T12:00:00"));
+			.andExpect(jsonPath("$.data", Matchers.hasSize(1)))
+			.andExpect(jsonPath("$.data[0].requesterId").value(3))
+			.andExpect(jsonPath("$.data[0].nickname").value("채우미"))
+			.andExpect(jsonPath("$.data[0].profileImageUrl").value(Matchers.nullValue()))
+			.andExpect(jsonPath("$.data[0].requestedAt").value("2026-08-03T12:00:00"));
 	}
 
 	@Test
@@ -124,7 +124,7 @@ class FriendControllerTest {
 		mockMvc.perform(post("/api/friends/requests/3/accept").header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body").value(Matchers.nullValue()));
+			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
 		verify(friendService).accept(USER_ID, 3L);
 	}
@@ -134,7 +134,7 @@ class FriendControllerTest {
 	void 요청을_거절한다() throws Exception {
 		mockMvc.perform(post("/api/friends/requests/3/reject").header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.body").value(Matchers.nullValue()));
+			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
 		verify(friendService).reject(USER_ID, 3L);
 	}
@@ -144,7 +144,7 @@ class FriendControllerTest {
 	void 친구를_삭제한다() throws Exception {
 		mockMvc.perform(delete("/api/friends/7").header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.body").value(Matchers.nullValue()));
+			.andExpect(jsonPath("$.data").value(Matchers.nullValue()));
 
 		verify(friendService).deleteFriend(USER_ID, 7L);
 	}

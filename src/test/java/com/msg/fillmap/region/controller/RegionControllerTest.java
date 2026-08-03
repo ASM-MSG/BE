@@ -76,9 +76,9 @@ class RegionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.regionCode").value("1168051500"))
-			.andExpect(jsonPath("$.body.regionName").value("서울특별시 강남구 역삼1동"))
-			.andExpect(jsonPath("$.body.parentCode").value("11680"));
+			.andExpect(jsonPath("$.data.regionCode").value("1168051500"))
+			.andExpect(jsonPath("$.data.regionName").value("서울특별시 강남구 역삼1동"))
+			.andExpect(jsonPath("$.data.parentCode").value("11680"));
 	}
 
 	@Test
@@ -92,7 +92,7 @@ class RegionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body").value(nullValue()));
+			.andExpect(jsonPath("$.data").value(nullValue()));
 	}
 
 	@Test
@@ -129,12 +129,12 @@ class RegionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body", hasSize(1)))
-			.andExpect(jsonPath("$.body[0].regionCode").value("1168051500"))
-			.andExpect(jsonPath("$.body[0].regionName").value("서울특별시 강남구 역삼1동"))
-			.andExpect(jsonPath("$.body[0].parentCode").value("11680"))
-			.andExpect(jsonPath("$.body[0].collectedCount").value(5))
-			.andExpect(jsonPath("$.body[0].totalCount").value(20));
+			.andExpect(jsonPath("$.data", hasSize(1)))
+			.andExpect(jsonPath("$.data[0].regionCode").value("1168051500"))
+			.andExpect(jsonPath("$.data[0].regionName").value("서울특별시 강남구 역삼1동"))
+			.andExpect(jsonPath("$.data[0].parentCode").value("11680"))
+			.andExpect(jsonPath("$.data[0].collectedCount").value(5))
+			.andExpect(jsonPath("$.data[0].totalCount").value(20));
 	}
 
 	@Test
@@ -146,7 +146,7 @@ class RegionControllerTest {
 		mockMvc.perform(get("/api/regions/stats")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.body", hasSize(1)));
+			.andExpect(jsonPath("$.data", hasSize(1)));
 	}
 
 	@Test
@@ -159,7 +159,7 @@ class RegionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body", hasSize(0)));
+			.andExpect(jsonPath("$.data", hasSize(0)));
 	}
 
 	@Test
@@ -187,9 +187,9 @@ class RegionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.regionCode").value("1168051500"))
-			.andExpect(jsonPath("$.body.collectedCount").value(5))
-			.andExpect(jsonPath("$.body.totalCount").value(20));
+			.andExpect(jsonPath("$.data.regionCode").value("1168051500"))
+			.andExpect(jsonPath("$.data.collectedCount").value(5))
+			.andExpect(jsonPath("$.data.totalCount").value(20));
 	}
 
 	@Test
@@ -204,7 +204,7 @@ class RegionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body").value(nullValue()));
+			.andExpect(jsonPath("$.data").value(nullValue()));
 	}
 
 	@Test
@@ -242,8 +242,8 @@ class RegionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.regionCode").value("1168051500"))
-			.andExpect(jsonPath("$.body.collectedCount").value(5));
+			.andExpect(jsonPath("$.data.regionCode").value("1168051500"))
+			.andExpect(jsonPath("$.data.collectedCount").value(5));
 	}
 
 	@Test
@@ -257,7 +257,7 @@ class RegionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body").value(nullValue()));
+			.andExpect(jsonPath("$.data").value(nullValue()));
 	}
 
 	@Test

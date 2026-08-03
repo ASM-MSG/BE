@@ -54,11 +54,11 @@ class ZoneControllerTest {
 		mockMvc.perform(get("/api/zones").header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body", hasSize(1)))
-			.andExpect(jsonPath("$.body[0].zoneKey").value("seomyeon"))
-			.andExpect(jsonPath("$.body[0].name").value("서면"))
-			.andExpect(jsonPath("$.body[0].minGridY").value(39710))
-			.andExpect(jsonPath("$.body[0].maxGridY").value(39725));
+			.andExpect(jsonPath("$.data", hasSize(1)))
+			.andExpect(jsonPath("$.data[0].zoneKey").value("seomyeon"))
+			.andExpect(jsonPath("$.data[0].name").value("서면"))
+			.andExpect(jsonPath("$.data[0].minGridY").value(39710))
+			.andExpect(jsonPath("$.data[0].maxGridY").value(39725));
 	}
 
 	@Test
@@ -69,7 +69,7 @@ class ZoneControllerTest {
 		mockMvc.perform(get("/api/zones").header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body", hasSize(0)));
+			.andExpect(jsonPath("$.data", hasSize(0)));
 	}
 
 	@Test
