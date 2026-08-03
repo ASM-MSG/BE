@@ -89,6 +89,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 | 2026-07-30 | **PRD 필수 게이트** — CLAUDE.md에 파이프라인 명문화 + spec-writer 절차 1번·spec-driven-dev Phase 0에 게이트 신설(면제 목록 포함) | CLAUDE.md, spec-writer, spec-driven-dev | prd-writer 신설(07-28) 이후에도 PRD는 "있으면 쓴다"였을 뿐 강제가 없어 MSG-234·239 외엔 PRD 없이 스펙부터 착수 — 특히 **스펙이 이미 있는 티켓**은 게이트를 아예 안 거쳤다. 요구사항 즉석 창작 방지 (MSG-261) |
 | 2026-07-29 | finalize.md에 PR 단계 추가 — 본문은 `.github/PULL_REQUEST_TEMPLATE.md` 구조 강제 | spec-driven-dev | 파이프라인이 커밋 제안에서 끝나 PR 형식 규정이 부재 — 템플릿 미준수 반복 지적(PR #70), 세션마다 재발해 명문화 (MSG-200에 편승) |
 | 2026-08-03 | 작업 로그에 런타임 동작 기록 의무화 — 저장 위치·실행 쿼리·예외 흐름·빈 동작 4항목 (finalize.md 3번 상세) | CLAUDE.md, spec-driven-dev | 사용자 요청 — diff 요약만으론 실행 시점 사실(생성 SQL·핸들러 변환·빈 생명주기)이 안 남아 코드 재독으로도 복원이 어려움 |
+| 2026-08-03 | Codex 리뷰 라운드 상한 확대 — 재리뷰 2회(총 3회) → 3회(총 4회) | spec-driven-dev (codex-review-loop.md) | 사용자 지시 — MSG-183이 4라운드에서 수렴한 실측 반영, 상한 도달 시 사용자 확인 절차는 유지 |
 
 ## Quick Commands
 
