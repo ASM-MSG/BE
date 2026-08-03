@@ -100,6 +100,7 @@ sequenceDiagram
 | `build.gradle` | spring-kafka · firebase-admin 의존성 추가 | B |
 | `docker-compose*.yml` · 배포 설정 | Kafka(KRaft 단일 노드) 컨테이너 추가 | B(인프라 겸) |
 | `src/main/java/com/msg/fillmap/badge/**` · `streak/**` | 수정 — 발급/리마인드 트리거 지점에 알림 요청 기록 | B |
+| `src/main/java/com/msg/fillmap/auth/**` | 수정 — logout에 fcmToken 선택 필드(푸시 토큰 동시 정리, MSG-178 Codex 1R P1 반영) | B |
 | hotzone 접점 | 기존 조회 인터페이스 소비 우선. 신설 계약 필요 시 스펙에서 Owner A와 협의 | A/B 경계 |
 
 ## 8. 확정 사항 (2026-08-03 성민 결정)
