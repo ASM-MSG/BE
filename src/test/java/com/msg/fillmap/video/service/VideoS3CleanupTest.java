@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -99,7 +100,7 @@ class VideoS3CleanupTest {
 
 	/** 이미 확정돼 original 에 있는 영상. */
 	private Video existingVideo() {
-		Video video = Video.create(USER_ID, GRID_ID, OLD_ORIGINAL, null, (short) 10, LocalDateTime.now(),
+		Video video = Video.create(USER_ID, GRID_ID, OLD_ORIGINAL, null, (short) 10, LocalDateTime.now(ZoneOffset.UTC),
 			Visibility.PRIVATE);
 		ReflectionTestUtils.setField(video, "id", VIDEO_ID);
 		return video;
@@ -119,7 +120,7 @@ class VideoS3CleanupTest {
 		given(repository.saveAndFlush(any(Video.class))).willReturn(saved);
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(PENDING, 37.5445, 127.0560, (short) 10,
-			LocalDateTime.now(), "PRIVATE"));
+			LocalDateTime.now(ZoneOffset.UTC), "PRIVATE"));
 
 		ArgumentCaptor<CopyObjectRequest> copy = ArgumentCaptor.forClass(CopyObjectRequest.class);
 		then(s3Client).should().copyObject(copy.capture());
@@ -141,7 +142,7 @@ class VideoS3CleanupTest {
 		given(repository.saveAndFlush(any(Video.class))).willReturn(existingVideo());
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(PENDING, 37.5445, 127.0560, (short) 10,
-			LocalDateTime.now(), "PRIVATE"));
+			LocalDateTime.now(ZoneOffset.UTC), "PRIVATE"));
 
 		// 지우면 API 호출 하나와 그 실패 경로가 늘 뿐, 만료 규칙이 어차피 정리한다.
 		then(s3Client).should(never()).deleteObjects(any(DeleteObjectsRequest.class));
@@ -212,7 +213,7 @@ class VideoS3CleanupTest {
 		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		service.replaceVideo(USER_ID, VIDEO_ID, new VideoReplaceRequestDto(
-			PENDING, null, null, (short) 7, LocalDateTime.now()));
+			PENDING, null, null, (short) 7, LocalDateTime.now(ZoneOffset.UTC)));
 
 		// 새 original 을 지우면 방금 올린 파일이 사라지고, 인코딩본을 지우면 재인코딩이 어차피 덮어쓸
 		// 자리를 헛되이 건드린다.
@@ -228,7 +229,7 @@ class VideoS3CleanupTest {
 		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		service.replaceVideo(USER_ID, VIDEO_ID, new VideoReplaceRequestDto(
-			PENDING, null, null, (short) 7, LocalDateTime.now()));
+			PENDING, null, null, (short) 7, LocalDateTime.now(ZoneOffset.UTC)));
 
 		// replaceFile 이 블러본 키를 null 로 밀기 전에 잡아둔 값이어야 한다 — 캡처 순서 회귀 방지.
 		assertThat(deletedKeys()).containsExactlyInAnyOrder(OLD_ORIGINAL, "videos/blurred/1/7.mp4");

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -140,7 +141,7 @@ class VideoUploadRollbackCompensationTest {
 	}
 
 	private VideoUploadRequestDto uploadRequest(String s3Key) {
-		return new VideoUploadRequestDto(s3Key, LAT, LON, (short) 10, LocalDateTime.now(), "PRIVATE");
+		return new VideoUploadRequestDto(s3Key, LAT, LON, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE");
 	}
 
 	private List<String> deletedKeys() {
@@ -210,7 +211,7 @@ class VideoUploadRollbackCompensationTest {
 
 		tx.executeWithoutResult(status -> {
 			videoService.replaceVideo(userId, videoId,
-				new VideoReplaceRequestDto(newPending, null, null, (short) 7, LocalDateTime.now()));
+				new VideoReplaceRequestDto(newPending, null, null, (short) 7, LocalDateTime.now(ZoneOffset.UTC)));
 			status.setRollbackOnly();
 		});
 

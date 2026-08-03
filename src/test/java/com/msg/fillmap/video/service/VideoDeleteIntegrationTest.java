@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 import jakarta.persistence.EntityManager;
 
@@ -74,7 +75,7 @@ class VideoDeleteIntegrationTest {
 	private long upload() {
 		return videoService.saveVideo(userId, new VideoUploadRequestDto(
 			"videos/pending/" + userId + "/" + System.nanoTime() + ".mp4",
-			여의도_LAT, 여의도_LON, (short) 10, LocalDateTime.now(), "PRIVATE")).videoId();
+			여의도_LAT, 여의도_LON, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE")).videoId();
 	}
 
 	private Long userGridCount() {

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -80,7 +81,7 @@ class VideoVisibilityIntegrationTest {
 	/** PRIVATE 명시 업로드 — MSG-204 부터 미지정은 PUBLIC 이라, "PRIVATE→PUBLIC 전환" 전제를 명시로 보존한다. */
 	private long upload() {
 		return videoService.saveVideo(userId, new VideoUploadRequestDto(
-			newKey(), 구로_LAT, 구로_LON, (short) 10, LocalDateTime.now(), "PRIVATE")).videoId();
+			newKey(), 구로_LAT, 구로_LON, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE")).videoId();
 	}
 
 	private VideoVisibilityRequestDto request(String visibility) {

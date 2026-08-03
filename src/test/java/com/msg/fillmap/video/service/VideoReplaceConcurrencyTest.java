@@ -8,6 +8,7 @@ import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.times;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -203,11 +204,11 @@ class VideoReplaceConcurrencyTest {
 		double lon = (GX + 0.5) * GridConstants.GRID_LNG_STEP;
 		return videoRepository.save(Video.create(
 			userId, gridId, "videos/original/%d/m247-%s.mp4".formatted(userId, suffix),
-			GeoSupport.toPoint(lat, lon), (short) 10, LocalDateTime.now(), Visibility.PRIVATE)).getId();
+			GeoSupport.toPoint(lat, lon), (short) 10, LocalDateTime.now(ZoneOffset.UTC), Visibility.PRIVATE)).getId();
 	}
 
 	private VideoReplaceRequestDto replaceRequest() {
-		return new VideoReplaceRequestDto(sharedPendingKey, null, null, (short) 7, LocalDateTime.now());
+		return new VideoReplaceRequestDto(sharedPendingKey, null, null, (short) 7, LocalDateTime.now(ZoneOffset.UTC));
 	}
 
 	private List<String> allDeletedKeys() {
