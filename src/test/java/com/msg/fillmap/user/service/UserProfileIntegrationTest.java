@@ -19,6 +19,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.dto.UserProfileResponseDto;
+import com.msg.fillmap.user.entity.AuthProvider;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.exception.UserErrorCode;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -82,6 +83,19 @@ class UserProfileIntegrationTest {
 		em.clear();
 
 		assertThat(userService.getMyProfile(userId).nickname()).isEqualTo("바뀐이름");
+	}
+
+	@Test
+	@DisplayName("이메일 없는 카카오 가입 사용자는 email null 로 조회된다 (MSG-310)")
+	void 이메일_없는_카카오_가입_사용자는_email_null_로_조회된다() {
+		long kakaoUserId = userRepository
+			.save(User.createOAuthUser(AuthProvider.KAKAO, "oid-" + UUID.randomUUID(), null, "카카오유저"))
+			.getId();
+
+		UserProfileResponseDto profile = userService.getMyProfile(kakaoUserId);
+
+		assertThat(profile.email()).isNull();
+		assertThat(profile.nickname()).isEqualTo("카카오유저");
 	}
 
 	@Test
