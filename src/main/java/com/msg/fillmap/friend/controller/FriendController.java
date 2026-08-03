@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.friend.dto.FriendCodeResponseDto;
+import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
 import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateRequestDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
@@ -73,6 +74,20 @@ public class FriendController {
 		@Valid @RequestBody FriendRequestCreateRequestDto request
 	) {
 		return SuccessResponse.of(friendService.request(principal.userId(), request.friendCode()));
+	}
+
+	@Operation(
+		summary = "친구 목록 조회",
+		description = "수락된 친구 전체를 반환한다 — 누가 먼저 요청했는지와 무관하다. 기본 정렬은 친구가 된 "
+			+ "시각 내림차순이고 sort=nickname 이면 닉네임순이다. 친구가 없으면 빈 배열."
+	)
+	@GetMapping
+	public SuccessResponse<List<FriendListItemResponseDto>> getFriends(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "정렬 기준 — recent(기본, 친구가 된 시각 내림차순) 또는 nickname", example = "nickname")
+		@RequestParam(required = false) String sort
+	) {
+		return SuccessResponse.of(friendService.getFriends(principal.userId(), sort));
 	}
 
 	@Operation(
