@@ -1,5 +1,7 @@
 package com.msg.fillmap.notification.service;
 
+import java.util.Locale;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,13 +32,14 @@ public class PushTokenServiceImpl implements PushTokenService {
 
 	@Override
 	@Transactional
-	public void unregister(String fcmToken) {
-		pushTokenRepository.deleteByToken(fcmToken);
+	public void unregister(long userId, String fcmToken) {
+		pushTokenRepository.deleteByTokenAndUser(fcmToken, userId);
 	}
 
 	private PushPlatform parsePlatform(String platform) {
 		try {
-			return PushPlatform.valueOf(platform.toUpperCase());
+			// Locale.ROOT: 터키어 로케일 JVM에서 "ios"→"İOS"가 되는 배포 로케일 의존 차단 (Codex 1R P2)
+			return PushPlatform.valueOf(platform.toUpperCase(Locale.ROOT));
 		} catch (IllegalArgumentException e) {
 			throw new ApiException(NotificationErrorCode.INVALID_PLATFORM);
 		}

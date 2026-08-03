@@ -23,7 +23,7 @@ import com.msg.fillmap.response.SuccessResponse;
 
 /**
  * FCM 푸시 토큰 API (MSG-178). 3-layer 얇게 — principal userId + 서비스 호출 + SuccessResponse 변환만.
- * 클라 규약: 로그인 직후 POST, 로그아웃 직전 DELETE → 그 다음 /api/auth/logout (logout 후엔 토큰 무효).
+ * 클라 규약: 로그인 직후 POST, 로그아웃은 /api/auth/logout body 에 fcmToken 을 실어 한 번에 (logout 통합).
  */
 @Tag(name = "알림 (Notification)", description = "FCM 푸시 토큰 등록/갱신·해제 API.")
 @RestController
@@ -50,14 +50,16 @@ public class PushTokenController {
 
 	@Operation(
 		summary = "FCM 토큰 해제",
-		description = "토큰 행을 삭제한다 — 멱등, 없는 토큰 해제도 200. 소유 검증 없음: fcm_token 은 "
-			+ "그 디바이스만 아는 opaque 토큰이라 소지 자체가 디바이스 증명이다."
+		description = "본인 소유(user_id 일치) 토큰 행을 삭제한다 — 멱등, 없는 토큰·소유 불일치 해제도 200. "
+			+ "로그아웃은 /api/auth/logout body 의 fcmToken 으로 한 번에 처리하고, 이 API 는 토큰 로테이션 등 "
+			+ "로그아웃 외 정리 용도다."
 	)
 	@DeleteMapping
 	public SuccessResponse<Void> unregister(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "해제할 FCM 토큰") @RequestParam String fcmToken
 	) {
-		pushTokenService.unregister(fcmToken);
+		pushTokenService.unregister(principal.userId(), fcmToken);
 		return new SuccessResponse<>(null);
 	}
 }

@@ -121,7 +121,7 @@ class PushTokenControllerTest {
 	}
 
 	@Test
-	@DisplayName("해제는 200과 body null 을 반환한다 — 멱등, 서비스에 토큰 그대로 전달")
+	@DisplayName("해제는 200과 body null 을 반환한다 — 멱등, principal userId + 토큰 그대로 전달(소유 검증)")
 	void 해제는_200과_body_null을_반환한다() throws Exception {
 		mockMvc.perform(delete(URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
@@ -130,7 +130,7 @@ class PushTokenControllerTest {
 			.andExpect(jsonPath("$.developCode").value(200))
 			.andExpect(jsonPath("$.body").value(nullValue()));
 
-		then(pushTokenService).should().unregister("fcm-token-abc");
+		then(pushTokenService).should().unregister(USER_ID, "fcm-token-abc");
 	}
 
 	@Test

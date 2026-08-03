@@ -15,6 +15,9 @@ public interface PushTokenService {
 	 */
 	void register(long userId, PushTokenRequestDto request);
 
-	/** 토큰 해제 (FR-2) — 멱등. 행이 있으면 삭제, 없어도 성공. */
-	void unregister(String fcmToken);
+	/**
+	 * 토큰 해제 (FR-2) — 멱등. 본인 소유(user_id 일치) 행만 삭제하고, 없는 토큰·소유 불일치도
+	 * 0행 삭제로 조용히 성공한다.
+	 */
+	void unregister(long userId, String fcmToken);
 }

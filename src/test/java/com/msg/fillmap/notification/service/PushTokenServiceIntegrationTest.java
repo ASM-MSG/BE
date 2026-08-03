@@ -2,6 +2,7 @@ package com.msg.fillmap.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
 
@@ -14,9 +15,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.notification.dto.PushTokenRequestDto;
 import com.msg.fillmap.notification.entity.PushPlatform;
 import com.msg.fillmap.notification.entity.PushToken;
+import com.msg.fillmap.notification.exception.NotificationErrorCode;
 import com.msg.fillmap.notification.repository.PushTokenRepository;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -111,7 +114,7 @@ class PushTokenServiceIntegrationTest {
 	@Test
 	@DisplayName("없는 토큰 해제도 예외 없이 끝난다 — 멱등")
 	void 없는_토큰_해제도_예외_없이_끝난다() {
-		assertThatCode(() -> pushTokenService.unregister("msg178-missing-" + System.nanoTime()))
+		assertThatCode(() -> pushTokenService.unregister(me, "msg178-missing-" + System.nanoTime()))
 			.doesNotThrowAnyException();
 	}
 
@@ -120,7 +123,28 @@ class PushTokenServiceIntegrationTest {
 	void 해제하면_행이_삭제된다() {
 		pushTokenService.register(me, new PushTokenRequestDto(token, "WEB", null));
 
-		pushTokenService.unregister(token);
+		pushTokenService.unregister(me, token);
+
+		assertThat(pushTokenRepository.findById(token)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("다른 사용자의 해제는 행을 지우지 않는다 — 소유 검증 (Codex 1R), 200이되 행 잔존")
+	void 다른_사용자의_해제는_행을_지우지_않는다() {
+		pushTokenService.register(me, new PushTokenRequestDto(token, "WEB", null));
+
+		// 이관 경합 시나리오 — 토큰을 소유하지 않은 계정의 지연 DELETE 는 0행 삭제로 조용히 끝난다(멱등).
+		assertThatCode(() -> pushTokenService.unregister(other, token)).doesNotThrowAnyException();
+
+		assertThat(pushTokenRepository.findById(token).orElseThrow().getUserId()).isEqualTo(me);
+	}
+
+	@Test
+	@DisplayName("목록 외 platform 은 서비스에서 9400 을 던진다 — Locale.ROOT 파싱 실패 경로 실서비스 실행")
+	void 목록_외_platform은_서비스에서_9400을_던진다() {
+		assertThatThrownBy(() -> pushTokenService.register(me, new PushTokenRequestDto(token, "WINDOWS", null)))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", NotificationErrorCode.INVALID_PLATFORM);
 
 		assertThat(pushTokenRepository.findById(token)).isEmpty();
 	}

@@ -34,10 +34,14 @@ public interface PushTokenRepository extends JpaRepository<PushToken, String> {
 		@Param("appVersion") String appVersion
 	);
 
-	/** 토큰 해제 (FR-2). affected 0이어도 성공 — 반환 int 는 무시(멱등). */
+	/**
+	 * 토큰 해제 (FR-2). 소유 검증(user_id 대조) 포함 — 이관 경합(토큰이 다른 계정으로 넘어간 직후
+	 * 지연 도착한 이전 사용자의 DELETE)이 새 사용자 행을 오삭제하는 것을 차단한다 (Codex 1R P2).
+	 * affected 0이어도 성공 — 없는 토큰·소유 불일치 모두 0행 = 멱등, 반환 int 는 무시.
+	 */
 	@Modifying
 	@Query(value = """
-		DELETE FROM push_tokens WHERE fcm_token = :fcmToken
+		DELETE FROM push_tokens WHERE fcm_token = :fcmToken AND user_id = :userId
 		""", nativeQuery = true)
-	int deleteByToken(@Param("fcmToken") String fcmToken);
+	int deleteByTokenAndUser(@Param("fcmToken") String fcmToken, @Param("userId") long userId);
 }
