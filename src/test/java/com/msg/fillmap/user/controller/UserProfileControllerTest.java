@@ -1,5 +1,7 @@
 package com.msg.fillmap.user.controller;
 
+import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -62,6 +64,20 @@ class UserProfileControllerTest {
 			.andExpect(jsonPath("$.developCode").value(200))
 			.andExpect(jsonPath("$.body.email").value("user@fillmap.dev"))
 			.andExpect(jsonPath("$.body.nickname").value("채우미"));
+	}
+
+	@Test
+	@DisplayName("카카오 가입 사용자는 email 필드가 존재하되 값이 null 이다 (MSG-310, required+nullable)")
+	void 카카오_가입_사용자는_email_필드가_존재하되_값이_null_이다() throws Exception {
+		given(userService.getMyProfile(USER_ID))
+			.willReturn(new UserProfileResponseDto(null, "카카오유저"));
+
+		// OpenAPI 계약(required + nullable) 그대로의 와이어 검증 — 필드 존재(hasKey)와 값 null 을 구분해 단언한다.
+		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.body", hasKey("email")))
+			.andExpect(jsonPath("$.body.email").value(nullValue()))
+			.andExpect(jsonPath("$.body.nickname").value("카카오유저"));
 	}
 
 	@Test
