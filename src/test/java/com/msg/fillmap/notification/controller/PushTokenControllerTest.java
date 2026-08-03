@@ -57,7 +57,7 @@ class PushTokenControllerTest {
 				.content("{\"fcmToken\":\"fcm-token-abc\",\"platform\":\"WEB\",\"appVersion\":\"1.0.0\"}"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body").value(nullValue()));
+			.andExpect(jsonPath("$.data").value(nullValue()));
 
 		// 정확값 검증 — 토큰의 USER_ID 와 요청 DTO 가 그대로 서비스에 전달돼야 한다(사용자 격리).
 		then(pushTokenService).should()
@@ -128,7 +128,7 @@ class PushTokenControllerTest {
 				.param("fcmToken", "fcm-token-abc"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body").value(nullValue()));
+			.andExpect(jsonPath("$.data").value(nullValue()));
 
 		then(pushTokenService).should().unregister(USER_ID, "fcm-token-abc");
 	}
