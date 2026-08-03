@@ -56,9 +56,9 @@ class CollectionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.totalGridCount").value(15))
-			.andExpect(jsonPath("$.body.totalVideoCount").value(42))
-			.andExpect(jsonPath("$.body.visitedRegionCount").value(6));
+			.andExpect(jsonPath("$.data.totalGridCount").value(15))
+			.andExpect(jsonPath("$.data.totalVideoCount").value(42))
+			.andExpect(jsonPath("$.data.visitedRegionCount").value(6));
 	}
 
 	@Test
@@ -71,9 +71,9 @@ class CollectionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.totalGridCount").value(0))
-			.andExpect(jsonPath("$.body.totalVideoCount").value(0))
-			.andExpect(jsonPath("$.body.visitedRegionCount").value(0));
+			.andExpect(jsonPath("$.data.totalGridCount").value(0))
+			.andExpect(jsonPath("$.data.totalVideoCount").value(0))
+			.andExpect(jsonPath("$.data.visitedRegionCount").value(0));
 	}
 
 	@Test
@@ -97,15 +97,15 @@ class CollectionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.length()").value(1))
-			.andExpect(jsonPath("$.body[0].gridId").value("41642_110458"))
-			.andExpect(jsonPath("$.body[0].gridY").value(41642))
-			.andExpect(jsonPath("$.body[0].gridX").value(110458))
-			.andExpect(jsonPath("$.body[0].videoCount").value(3))
-			.andExpect(jsonPath("$.body[0].coverVideoId").value(1042))
-			.andExpect(jsonPath("$.body[0].coverThumbnailUrl")
+			.andExpect(jsonPath("$.data.length()").value(1))
+			.andExpect(jsonPath("$.data[0].gridId").value("41642_110458"))
+			.andExpect(jsonPath("$.data[0].gridY").value(41642))
+			.andExpect(jsonPath("$.data[0].gridX").value(110458))
+			.andExpect(jsonPath("$.data[0].videoCount").value(3))
+			.andExpect(jsonPath("$.data[0].coverVideoId").value(1042))
+			.andExpect(jsonPath("$.data[0].coverThumbnailUrl")
 				.value("https://s3.example/thumb.jpg?X-Amz-Signature=abc"))
-			.andExpect(jsonPath("$.body[0].regionName").value("서울특별시 강남구 역삼1동"));
+			.andExpect(jsonPath("$.data[0].regionName").value("서울특별시 강남구 역삼1동"));
 	}
 
 	@Test
@@ -117,7 +117,7 @@ class CollectionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.length()").value(0));
+			.andExpect(jsonPath("$.data.length()").value(0));
 	}
 
 	@Test
@@ -141,13 +141,13 @@ class CollectionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.length()").value(1))
-			.andExpect(jsonPath("$.body[0].videoId").value(1042))
-			.andExpect(jsonPath("$.body[0].gridId").value("41642_110458"))
-			.andExpect(jsonPath("$.body[0].thumbnailUrl")
+			.andExpect(jsonPath("$.data.length()").value(1))
+			.andExpect(jsonPath("$.data[0].videoId").value(1042))
+			.andExpect(jsonPath("$.data[0].gridId").value("41642_110458"))
+			.andExpect(jsonPath("$.data[0].thumbnailUrl")
 				.value("https://s3.example/thumb.jpg?X-Amz-Signature=abc"))
-			.andExpect(jsonPath("$.body[0].processingStatus").value("READY"))
-			.andExpect(jsonPath("$.body[0].durationSec").value(12));
+			.andExpect(jsonPath("$.data[0].processingStatus").value("READY"))
+			.andExpect(jsonPath("$.data[0].durationSec").value(12));
 	}
 
 	@Test
@@ -160,7 +160,7 @@ class CollectionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.length()").value(0));
+			.andExpect(jsonPath("$.data.length()").value(0));
 	}
 
 	@Test

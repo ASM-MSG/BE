@@ -71,15 +71,15 @@ class GridGlobalVideoControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.videos[0].videoId").value(1042))
-			.andExpect(jsonPath("$.body.videos[0].thumbnailUrl")
+			.andExpect(jsonPath("$.data.videos[0].videoId").value(1042))
+			.andExpect(jsonPath("$.data.videos[0].thumbnailUrl")
 				.value("https://bucket.s3/thumb.jpg?X-Amz-Signature=abc"))
-			.andExpect(jsonPath("$.body.videos[0].durationSec").value(12))
-			.andExpect(jsonPath("$.body.videos[0].viewCount").value(37))
-			.andExpect(jsonPath("$.body.videos[0].recordedAt").value("2026-07-20T18:03:11"))
-			.andExpect(jsonPath("$.body.videos[1].videoId").value(1039))
-			.andExpect(jsonPath("$.body.hasNext").value(true))
-			.andExpect(jsonPath("$.body.nextCursor").value("NToxNzg0NDU1ODAwMDAwMDAwOjEwMzk"));
+			.andExpect(jsonPath("$.data.videos[0].durationSec").value(12))
+			.andExpect(jsonPath("$.data.videos[0].viewCount").value(37))
+			.andExpect(jsonPath("$.data.videos[0].recordedAt").value("2026-07-20T18:03:11"))
+			.andExpect(jsonPath("$.data.videos[1].videoId").value(1039))
+			.andExpect(jsonPath("$.data.hasNext").value(true))
+			.andExpect(jsonPath("$.data.nextCursor").value("NToxNzg0NDU1ODAwMDAwMDAwOjEwMzk"));
 	}
 
 	@Test
@@ -90,11 +90,11 @@ class GridGlobalVideoControllerTest {
 		mockMvc.perform(get(URL, GRID_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.body.videos[0].videoId").value(1042))   // 항목 실존 확인 — 공허 통과 방지
-			.andExpect(jsonPath("$.body.videos[0].processingStatus").doesNotExist())   // 전역 목록은 항상 READY
-			.andExpect(jsonPath("$.body.videos[0].userId").doesNotExist())             // 작성자 프라이버시
-			.andExpect(jsonPath("$.body.videos[0].nickname").doesNotExist())
-			.andExpect(jsonPath("$.body.videos[0].title").doesNotExist());             // MSG-240 후속 additive
+			.andExpect(jsonPath("$.data.videos[0].videoId").value(1042))   // 항목 실존 확인 — 공허 통과 방지
+			.andExpect(jsonPath("$.data.videos[0].processingStatus").doesNotExist())   // 전역 목록은 항상 READY
+			.andExpect(jsonPath("$.data.videos[0].userId").doesNotExist())             // 작성자 프라이버시
+			.andExpect(jsonPath("$.data.videos[0].nickname").doesNotExist())
+			.andExpect(jsonPath("$.data.videos[0].title").doesNotExist());             // MSG-240 후속 additive
 	}
 
 	@Test
@@ -107,9 +107,9 @@ class GridGlobalVideoControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.videos").isEmpty())
-			.andExpect(jsonPath("$.body.hasNext").value(false))
-			.andExpect(jsonPath("$.body.nextCursor").value(org.hamcrest.Matchers.nullValue()));
+			.andExpect(jsonPath("$.data.videos").isEmpty())
+			.andExpect(jsonPath("$.data.hasNext").value(false))
+			.andExpect(jsonPath("$.data.nextCursor").value(org.hamcrest.Matchers.nullValue()));
 	}
 
 	@Test

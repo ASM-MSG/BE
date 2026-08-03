@@ -77,18 +77,18 @@ class RegionExploreControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.regionCode").value(REGION_CODE))
-			.andExpect(jsonPath("$.body.regionName").value("부산광역시 부산진구 부전2동"))
-			.andExpect(jsonPath("$.body.gridCount").value(5))
-			.andExpect(jsonPath("$.body.videoCount").value(355))
-			.andExpect(jsonPath("$.body.grids[0].gridId").value("38879_112390"))
-			.andExpect(jsonPath("$.body.grids[0].gridY").value(38879))
-			.andExpect(jsonPath("$.body.grids[0].gridX").value(112390))
-			.andExpect(jsonPath("$.body.grids[0].videoCount").value(138))
-			.andExpect(jsonPath("$.body.grids[0].coverDurationSec").value(12))
-			.andExpect(jsonPath("$.body.grids[0].coverThumbnailUrl", containsString("X-Amz-Algorithm")))
-			.andExpect(jsonPath("$.body.grids[0].coverThumbnailUrl", containsString("X-Amz-Signature")))
-			.andExpect(jsonPath("$.body.grids[0].coverThumbnailUrl", containsString("X-Amz-Expires")));
+			.andExpect(jsonPath("$.data.regionCode").value(REGION_CODE))
+			.andExpect(jsonPath("$.data.regionName").value("부산광역시 부산진구 부전2동"))
+			.andExpect(jsonPath("$.data.gridCount").value(5))
+			.andExpect(jsonPath("$.data.videoCount").value(355))
+			.andExpect(jsonPath("$.data.grids[0].gridId").value("38879_112390"))
+			.andExpect(jsonPath("$.data.grids[0].gridY").value(38879))
+			.andExpect(jsonPath("$.data.grids[0].gridX").value(112390))
+			.andExpect(jsonPath("$.data.grids[0].videoCount").value(138))
+			.andExpect(jsonPath("$.data.grids[0].coverDurationSec").value(12))
+			.andExpect(jsonPath("$.data.grids[0].coverThumbnailUrl", containsString("X-Amz-Algorithm")))
+			.andExpect(jsonPath("$.data.grids[0].coverThumbnailUrl", containsString("X-Amz-Signature")))
+			.andExpect(jsonPath("$.data.grids[0].coverThumbnailUrl", containsString("X-Amz-Expires")));
 	}
 
 	@Test
@@ -156,11 +156,11 @@ class RegionExploreControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.regionCode").value("9999999999"))
-			.andExpect(jsonPath("$.body.regionName").value(nullValue()))
-			.andExpect(jsonPath("$.body.gridCount").value(0))
-			.andExpect(jsonPath("$.body.videoCount").value(0))
-			.andExpect(jsonPath("$.body.grids").isEmpty());
+			.andExpect(jsonPath("$.data.regionCode").value("9999999999"))
+			.andExpect(jsonPath("$.data.regionName").value(nullValue()))
+			.andExpect(jsonPath("$.data.gridCount").value(0))
+			.andExpect(jsonPath("$.data.videoCount").value(0))
+			.andExpect(jsonPath("$.data.grids").isEmpty());
 	}
 
 	@Test
@@ -174,10 +174,10 @@ class RegionExploreControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body[0].regionCode").value(REGION_CODE))
-			.andExpect(jsonPath("$.body[0].regionName").value("부산광역시 부산진구 부전2동"))
-			.andExpect(jsonPath("$.body[0].gridCount").value(5))
-			.andExpect(jsonPath("$.body[1].regionCode").value("1168051500"));
+			.andExpect(jsonPath("$.data[0].regionCode").value(REGION_CODE))
+			.andExpect(jsonPath("$.data[0].regionName").value("부산광역시 부산진구 부전2동"))
+			.andExpect(jsonPath("$.data[0].gridCount").value(5))
+			.andExpect(jsonPath("$.data[1].regionCode").value("1168051500"));
 	}
 
 	@Test
@@ -189,7 +189,7 @@ class RegionExploreControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body").isEmpty());
+			.andExpect(jsonPath("$.data").isEmpty());
 	}
 
 	@Test

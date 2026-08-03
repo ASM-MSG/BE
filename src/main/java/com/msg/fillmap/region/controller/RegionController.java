@@ -38,7 +38,7 @@ public class RegionController {
 
 	@Operation(
 		summary = "역지오코딩 (좌표 → 행정동)",
-		description = "좌표를 포함하는 행정동 1건을 반환한다. 포함 행정동이 없으면(바다·국외) 404가 아니라 200 + body null. "
+		description = "좌표를 포함하는 행정동 1건을 반환한다. 포함 행정동이 없으면(바다·국외) 404가 아니라 200 + data null. "
 			+ "서비스 좌표 범위(한국) 밖이면 400(6400)."
 	)
 	@GetMapping("/reverse-geocode")
@@ -81,7 +81,7 @@ public class RegionController {
 	@Operation(
 		summary = "현재 위치 행정동 탐험률 (좌표 → 수집률)",
 		description = "도감 갤러리 진입 초기값. 현재 위치 좌표가 속한 행정동 1건의 내 수집률을 반환한다. 그 행정동에 수집이 없어도 "
-			+ "0% 로 합성해 반환하고, 어떤 행정동에도 안 속하면(바다·국외) 404 가 아니라 200 + body null. 서비스 범위 밖 좌표는 400(6400)."
+			+ "0% 로 합성해 반환하고, 어떤 행정동에도 안 속하면(바다·국외) 404 가 아니라 200 + data null. 서비스 범위 밖 좌표는 400(6400)."
 	)
 	@GetMapping("/stats/by-point")
 	public SuccessResponse<RegionStatResponseDto> getStatByPoint(
@@ -103,7 +103,7 @@ public class RegionController {
 	@Operation(
 		summary = "격자 중심 행정동 탐험률 (격자 클릭 → 수집률)",
 		description = "클릭한 격자의 중심점이 속한 행정동 1건의 내 수집률을 반환한다. 귀속 축이 수집률 집계(MSG-155)와 같아 탐험률·라벨이 "
-			+ "일치한다. 중심점이 어떤 행정동에도 안 속하거나 gridId 형식이 이상하면 200 + body null(별도 에러 코드 없음)."
+			+ "일치한다. 중심점이 어떤 행정동에도 안 속하거나 gridId 형식이 이상하면 200 + data null(별도 에러 코드 없음)."
 	)
 	@GetMapping("/stats/by-grid")
 	public SuccessResponse<RegionStatResponseDto> getStatByGrid(

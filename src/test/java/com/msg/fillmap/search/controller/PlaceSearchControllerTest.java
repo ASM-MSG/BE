@@ -59,12 +59,12 @@ class PlaceSearchControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body", hasSize(1)))
-			.andExpect(jsonPath("$.body[0].name").value("부산대학교"))
-			.andExpect(jsonPath("$.body[0].address").value("부산 금정구 부산대학로 63번길 2"))
-			.andExpect(jsonPath("$.body[0].lat").value(35.23272))
-			.andExpect(jsonPath("$.body[0].lng").value(129.08246))
-			.andExpect(jsonPath("$.body[0].gridId").value("39147_112245"));
+			.andExpect(jsonPath("$.data", hasSize(1)))
+			.andExpect(jsonPath("$.data[0].name").value("부산대학교"))
+			.andExpect(jsonPath("$.data[0].address").value("부산 금정구 부산대학로 63번길 2"))
+			.andExpect(jsonPath("$.data[0].lat").value(35.23272))
+			.andExpect(jsonPath("$.data[0].lng").value(129.08246))
+			.andExpect(jsonPath("$.data[0].gridId").value("39147_112245"));
 	}
 
 	@Test
@@ -77,7 +77,7 @@ class PlaceSearchControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body", hasSize(0)));
+			.andExpect(jsonPath("$.data", hasSize(0)));
 	}
 
 	@Test

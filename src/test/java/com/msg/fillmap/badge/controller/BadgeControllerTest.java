@@ -67,17 +67,17 @@ class BadgeControllerTest {
 		mockMvc.perform(get(LIST_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body[0].badgeId").value(1))
-			.andExpect(jsonPath("$.body[0].code").value("EXPLORER_1"))
-			.andExpect(jsonPath("$.body[0].name").value("첫 발자국"))
-			.andExpect(jsonPath("$.body[0].description").value("첫 격자를 수집했어요"))
-			.andExpect(jsonPath("$.body[0].iconUrl").value(nullValue()))
-			.andExpect(jsonPath("$.body[0].earned").value(true))
-			.andExpect(jsonPath("$.body[0].earnedAt").value("2026-07-29T10:15:00"))
-			.andExpect(jsonPath("$.body[0].isNew").value(true))
-			.andExpect(jsonPath("$.body[0].featuredRank").value(nullValue()))
-			.andExpect(jsonPath("$.body[1].earned").value(false))
-			.andExpect(jsonPath("$.body[1].isNew").value(false));
+			.andExpect(jsonPath("$.data[0].badgeId").value(1))
+			.andExpect(jsonPath("$.data[0].code").value("EXPLORER_1"))
+			.andExpect(jsonPath("$.data[0].name").value("첫 발자국"))
+			.andExpect(jsonPath("$.data[0].description").value("첫 격자를 수집했어요"))
+			.andExpect(jsonPath("$.data[0].iconUrl").value(nullValue()))
+			.andExpect(jsonPath("$.data[0].earned").value(true))
+			.andExpect(jsonPath("$.data[0].earnedAt").value("2026-07-29T10:15:00"))
+			.andExpect(jsonPath("$.data[0].isNew").value(true))
+			.andExpect(jsonPath("$.data[0].featuredRank").value(nullValue()))
+			.andExpect(jsonPath("$.data[1].earned").value(false))
+			.andExpect(jsonPath("$.data[1].isNew").value(false));
 	}
 
 	@Test
@@ -100,10 +100,10 @@ class BadgeControllerTest {
 				.content("{\"badgeIds\":[3, 7]}"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body[0].badgeId").value(3))
-			.andExpect(jsonPath("$.body[0].rank").value(1))
-			.andExpect(jsonPath("$.body[1].code").value("RECORDER_50"))
-			.andExpect(jsonPath("$.body[1].rank").value(2));
+			.andExpect(jsonPath("$.data[0].badgeId").value(3))
+			.andExpect(jsonPath("$.data[0].rank").value(1))
+			.andExpect(jsonPath("$.data[1].code").value("RECORDER_50"))
+			.andExpect(jsonPath("$.data[1].rank").value(2));
 	}
 
 	@Test

@@ -13,6 +13,7 @@
 
 ### `response` — ✅ 완성
 - `ApiResponseDto`, `SuccessResponse`, `ErrorCode`, `ErrorCodeIfs`
+- MSG-311: 공통 응답 실데이터 키 `body` → `data` rename (필드명 자체 변경 — @JsonProperty 미사용, 테스트 17파일 190곳 치환. **breaking — FE 동시 배포 전제**)
 
 ### `global` — ✅ 완성
 - `ApiException`, `GlobalExceptionHandler`, `config/SecurityConfig`, `config/S3Config`(S3Presigner 빈)·`config/AwsProperties` (MSG-64)

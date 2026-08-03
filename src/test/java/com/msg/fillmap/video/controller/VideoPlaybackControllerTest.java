@@ -61,12 +61,12 @@ class VideoPlaybackControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.videoId").value(1042))
-			.andExpect(jsonPath("$.body.playbackUrl").value("https://bucket.s3/play.mp4?X-Amz-Signature=abc"))
-			.andExpect(jsonPath("$.body.processingStatus").value("READY"))
-			.andExpect(jsonPath("$.body.status").value("ACTIVE"))
-			.andExpect(jsonPath("$.body.viewCount").value(37))
-			.andExpect(jsonPath("$.body.expiresInSec").value(600));
+			.andExpect(jsonPath("$.data.videoId").value(1042))
+			.andExpect(jsonPath("$.data.playbackUrl").value("https://bucket.s3/play.mp4?X-Amz-Signature=abc"))
+			.andExpect(jsonPath("$.data.processingStatus").value("READY"))
+			.andExpect(jsonPath("$.data.status").value("ACTIVE"))
+			.andExpect(jsonPath("$.data.viewCount").value(37))
+			.andExpect(jsonPath("$.data.expiresInSec").value(600));
 	}
 
 	@Test
