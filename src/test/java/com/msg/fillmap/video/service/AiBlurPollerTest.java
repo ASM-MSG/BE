@@ -298,18 +298,30 @@ class AiBlurPollerTest {
 	}
 
 	@Test
-	void AI가_FAILED거나_잡이_404면_markBlurFailed로_전이한다() {
-		Video failVideo = blurring(7L, "job-fail", LocalDateTime.now());
-		Video lostVideo = blurring(8L, "job-lost", LocalDateTime.now());
-		givenBlurring(failVideo, lostVideo);
+	void AI가_명시_FAILED면_즉시_markBlurFailed로_전이한다() {
+		Video video = blurring(7L, "job-fail", LocalDateTime.now());
+		givenBlurring(video);
 		given(aiClient.poll("job-fail")).willReturn(new AiJobResult(AiJobStatus.FAILED, null, false));
+
+		poller.reconcile();
+
+		verify(statusWriter).markBlurFailed(7L, "job-fail", video.getBlurringStartedAt());
+		verify(statusWriter, never()).clearAiJob(anyLong(), anyString());   // 명시 실패는 재제출 대상이 아니다 (MSG-283 기준 2)
+		verify(statusWriter, never()).markBlurReady(anyLong(), anyString(), anyString(), anyString(), any());
+	}
+
+	@Test
+	void 잡이_404면_markBlurFailed_대신_clearAiJob으로_미제출_복귀한다() {
+		Video video = blurring(7L, "job-lost", LocalDateTime.now());
+		givenBlurring(video);
 		given(aiClient.poll("job-lost")).willReturn(new AiJobResult(null, null, true));
 
 		poller.reconcile();
 
-		verify(statusWriter).markBlurFailed(7L, "job-fail", failVideo.getBlurringStartedAt());
-		verify(statusWriter).markBlurFailed(8L, "job-lost", lostVideo.getBlurringStartedAt());
-		verify(statusWriter, never()).markBlurReady(anyLong(), anyString(), anyString(), anyString(), any());
+		// 404 = 잡 유실(AI 재시작) — 실패가 아니라 미제출 복귀. 재제출은 다음 주기 미제출 경로 몫 (MSG-283 D1)
+		verify(statusWriter).clearAiJob(7L, "job-lost");
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any());
+		verify(aiClient, never()).submit(any());
 	}
 
 	@Test
@@ -345,6 +357,36 @@ class AiBlurPollerTest {
 
 		verify(statusWriter, never()).recordAiJob(anyLong(), anyString(), any());
 		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any());
+	}
+
+	@Test
+	void 잡_유실_404_후_재제출되고_DONE이면_READY로_수렴한다() {
+		// AI 컨테이너 교체 시나리오 (MSG-283 기준 1·4). 폴러는 매 주기 fresh 조회하므로 주기별 givenBlurring
+		// 갱신으로 clearAiJob/recordAiJob 이 커밋한 DB 상태 전이를 흉내낸다. startedAt 은 세 주기 내내 동일 —
+		// 재제출은 같은 시도의 계속이라 시도 넌스가 밀리지 않는다 (기준 3).
+		LocalDateTime startedAt = LocalDateTime.now();
+
+		// 1주기: 제출됐던 잡이 AI 재시작으로 유실 → poll 404 → 미제출 복귀
+		givenBlurring(blurring(7L, "job-old", startedAt));
+		given(aiClient.poll("job-old")).willReturn(new AiJobResult(null, null, true));
+		poller.reconcile();
+		verify(statusWriter).clearAiJob(7L, "job-old");
+
+		// 2주기: clear 반영 행(jobId null·startedAt 유지) → 미제출 경로가 encoded 재다운로드 후 재제출
+		givenBlurring(blurring(7L, null, startedAt));
+		givenS3Download("encoded".getBytes());
+		given(aiClient.submit(any())).willReturn("job-new");
+		poller.reconcile();
+		verify(statusWriter).recordAiJob(7L, "job-new", startedAt);   // 같은 시도 넌스로 기록 → 가드 통과 (기준 3)
+
+		// 3주기: 재제출 잡 DONE → 블러본 업로드 후 READY 수렴
+		givenBlurring(blurring(7L, "job-new", startedAt));
+		givenDone("job-new", List.of(List.of(0.0, 3.33)));
+		given(statusWriter.markBlurReady(anyLong(), anyString(), anyString(), anyString(), any())).willReturn(true);
+		poller.reconcile();
+		verify(statusWriter).markBlurReady(7L, "job-new", "videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg",
+			List.of(List.of(0.0, 3.33)));
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any());   // 세 주기 어디서도 FAILED 없음
 	}
 
 	@Test

@@ -41,7 +41,8 @@ import com.msg.fillmap.video.support.FfmpegRunner;
  *
  * 잡별 reconcile:
  *  - 미제출(job_id null) → 타임아웃 넘었으면 markBlurFailed, 아니면 encoded 재다운로드 후 제출·job_id 기록 (D2)
- *  - 제출됨 → 먼저 GET /jobs/{id} 폴링. QUEUED/PROCESSING=살아있음(타임아웃 skip), DONE=완료, FAILED/404=markBlurFailed
+ *  - 제출됨 → 먼저 GET /jobs/{id} 폴링. QUEUED/PROCESSING=살아있음(타임아웃 skip), DONE=완료,
+ *    FAILED=markBlurFailed, 404=clearAiJob 으로 미제출 복귀 후 다음 주기 재제출 (MSG-283)
  *  - poll 불가(연결 실패)·미제출 행에만 blurringStartedAt 기준 타임아웃 적용 (D4). 그 외 예외는 잡별 catch 로 BLURRING 유지
  *
  * 완료 시: 블러본을 S3 에 올리고, 인코딩 시 만든 미블러 썸네일을 블러본에서 다시 뽑아 같은 키에 덮어쓴 뒤
@@ -116,9 +117,17 @@ public class AiBlurPoller {
 			}
 			return;
 		}
-		if (result.notFound() || result.status() == AiJobStatus.FAILED) {
-			log.warn("AI 실패/유실로 FAILED: videoId={} jobId={} notFound={}",
-				video.getId(), video.getAiJobId(), result.notFound());
+		if (result.notFound()) {
+			// 404 = 잡 유실(AI 재시작으로 인메모리 큐 소실, MSG-282 정례화) — 처리 실패가 아니므로 미제출로
+			// 복귀시켜 다음 주기의 미제출 경로가 재제출하게 한다 (MSG-283). 타임아웃 선검사는 하지 않는다 —
+			// 그 경로의 failIfTimedOut 이 같은 판정을 하고, 무한 재시도 방지(AI 재시작 반복)도 거기가 담당한다.
+			log.warn("AI 잡 유실(404) — 미제출 복귀: videoId={} jobId={}", video.getId(), video.getAiJobId());
+			statusWriter.clearAiJob(video.getId(), video.getAiJobId());
+			return;
+		}
+		if (result.status() == AiJobStatus.FAILED) {
+			// AI 명시 실패 = 그 파일로 재시도해도 같은 결과 — 재제출 없이 즉시 수렴 (MSG-283 기준 2).
+			log.warn("AI 명시 FAILED: videoId={} jobId={}", video.getId(), video.getAiJobId());
 			statusWriter.markBlurFailed(video.getId(), video.getAiJobId(), video.getBlurringStartedAt());
 			return;
 		}
