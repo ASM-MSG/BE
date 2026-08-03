@@ -150,6 +150,28 @@ class VideoVisibilityIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("V20 이후 visibility='FRIENDS' 행은 CHECK 를 통과하고 허용 외 값은 위반한다 (MSG-285)")
+	void FRIENDS는_CHECK를_통과하고_허용_외_값은_위반한다() {
+		long videoId = upload();
+
+		updateVisibilityNative(videoId, "FRIENDS");
+		assertThat(visibilityOf(videoId)).isEqualTo("FRIENDS");
+
+		// CHECK 위반은 PG 트랜잭션 전체를 abort 시키므로 이 단언이 이 테스트의 마지막이어야 한다.
+		assertThatThrownBy(() -> updateVisibilityNative(videoId, "BOGUS"))
+			.hasStackTraceContaining("chk_videos_visibility");
+	}
+
+	/** 엔티티(Visibility enum)를 우회해 DDL CHECK 자체를 때린다 — V20 적용 여부의 직접 증거. */
+	private void updateVisibilityNative(long videoId, String visibility) {
+		em.flush();
+		em.createNativeQuery("UPDATE videos SET visibility = :v WHERE id = :i")
+			.setParameter("v", visibility)
+			.setParameter("i", videoId)
+			.executeUpdate();
+	}
+
+	@Test
 	void 이미_PUBLIC인_영상을_다시_PUBLIC으로_전환하면_성공한다() {
 		long videoId = upload();
 		videoService.setVisibility(userId, videoId, request("PUBLIC"));
