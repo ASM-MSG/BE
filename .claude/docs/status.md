@@ -24,6 +24,7 @@
 ### `auth` (Owner B) — ✅ 완성
 - 기본 골격: `controller`(+`/reissue`), `service`(AuthService·OidcLoginService·RefreshTokenService), `dto`(+Reissue*), `jwt`(TokenProvider·필터·JwtProperties·RefreshTokenProvider/Store·RedisInvalidatedTokenStore), `oidc`(Kakao OIDC), `support/RefreshTokenCookies`, `exception/AuthErrorCode`
 - MSG-135: 리프레시 토큰(디바이스별 Redis `refresh:{userId}:{deviceId}`, 2주 슬라이딩, 로테이션+재사용감지)·블랙리스트 Redis 이관·하이브리드 전송(웹 쿠키/앱 body)
+- MSG-178: logout에 `LogoutRequestDto`(fcmToken 선택, `@RequestBody(required = false)` — body 없는 기존 호출 하위 호환) — 세션 삭제와 같은 처리에서 `PushTokenService.unregister(userId, fcmToken)` 호출(auth → notification 단방향 주입, 공유 기기 알림 잔존 P1 차단)
 
 ### `user` (Owner B) — 🟡 부분
 - `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode`
@@ -121,6 +122,10 @@
 - MSG-183: 핫스코어 집계 — `service/HotScoreCommandService`(+impl, 평면 service 패키지). 업로드 신호 +1을 UTC 6h 버킷(`hotzone:{bucketId}` Sorted Set, `bucketId=epochSeconds/21600`)에 Lua 원자 스크립트(ZINCRBY+EXPIRE 54h)로 증분. 버킷 키는 호출(커밋) 스레드에서 확정, 실행은 자체 데몬 1스레드 executor(큐 10k, 종료 시 5s 드레인) — 요청 스레드 무블록. 전 실패 삼킴+warn(FR-6, 에러코드 불요). DDL·yml 없음, Redis 전용(D4)
 - MSG-184: 핫구역 조회(`GET /api/hotzones` 뷰포트 4파라미터 필수 — `service/HotZoneService`(+impl)·`HotZoneView`, `hotzone:top` 캐시(최근 8버킷 ZUNIONSTORE 균등 합산, TTL 30s, 캐시 보장 Lua 원자 — EXISTS→ZUNIONSTORE→EXPIRE), 상위 K(50)·임계(3)·뷰포트 필터(encode→decode 정수 인덱스, queryByRange 동형), `config/HotZoneProperties`(record, `fillmap.hotzone.top-k/min-score` — topK 양수 기동 검증), `controller/HotZoneController`·DTO 2종, `exception/HotZoneErrorCode`(8400 INVALID_VIEWPORT — 비유한 좌표 NaN 우회 차단 포함), 파라미터 누락은 전역 400(MSG-167 매핑, GridController 구 관행 미답습). 48h 판정은 룩백 몫·TTL은 청소 전용(D4 역할 분리))
 
+### `notification` (Owner B) — 🟡 부분
+- MSG-178: FCM 푸시 토큰 등록/해제 — `entity/PushToken`(String 자연키 PK, 조회 매핑 앵커)·`PushPlatform`(IOS/ANDROID/WEB), `repository/PushTokenRepository`(native UPSERT `ON CONFLICT (fcm_token) DO UPDATE` user_id 포함 — 계정 전환 이관 시맨틱 · 해제는 `WHERE fcm_token AND user_id` 소유 검증+멱등), `service/PushTokenService`(+Impl — platform `toUpperCase(Locale.ROOT)` 파싱 → 9400), `controller/PushTokenController`(`/api/notifications/tokens` POST·DELETE), `exception/NotificationErrorCode`(**9xxx 대역** — 8xxx는 hotzone 점유로 기각). 마이그레이션 없음(V1 push_tokens 그대로), FCM 호출 없음(발송은 MSG-179)
+- **없는 것**: 발송 파이프라인(outbox·Kafka·FCM — MSG-179), 알림 설정(MSG-180), 트리거(MSG-181)
+
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
 `infrastructure.md`가 계약 인터페이스로 명시하지만 **아직 코드에 하나도 없다.** 새로 만들기 전엔
@@ -153,7 +158,7 @@
 | `user_badges` | `badge/entity/UserBadge` | ✅ (MSG-239 — 복합 PK `UserBadgeId`, V9 notified_at·featured_rank 추가. 지급은 native ON CONFLICT) |
 | `friendships` | `friend/entity/Friendship` | ✅ (MSG-185 — 복합 PK `FriendshipId`, status 는 PENDING·ACCEPTED 만 영속(§D3). V1 테이블 무수정) |
 | `likes` | — | ❌ 엔티티 없음 |
-| `push_tokens` | — | ❌ 엔티티 없음 |
+| `push_tokens` | `notification/entity/PushToken` | ✅ (MSG-178 — 전 컬럼 매핑, 쓰기는 native UPSERT/DELETE 전용) |
 | `reports` | — | ❌ 엔티티 없음 |
 | `sponsor_ads` | — | ❌ 엔티티 없음 |
 | `streaks` | `streak/entity/Streak` | ✅ (MSG-200 — 전 컬럼 매핑, 쓰기는 native UPSERT 전용) |

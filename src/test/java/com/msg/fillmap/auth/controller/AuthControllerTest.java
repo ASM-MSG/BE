@@ -415,7 +415,7 @@ class AuthControllerTest {
 				.andExpect(jsonPath("$.developCode").value(200))
 				.andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
 
-			verify(authService).logout("jwt-token", "device-1");
+			verify(authService).logout("jwt-token", "device-1", null);
 		}
 
 		@Test
@@ -425,7 +425,33 @@ class AuthControllerTest {
 					.header(HttpHeaders.AUTHORIZATION, "Bearer jwt-token"))
 				.andExpect(status().isOk());
 
-			verify(authService).logout("jwt-token", null);
+			verify(authService).logout("jwt-token", null, null);
+		}
+
+		@Test
+		@DisplayName("body 에 fcmToken 이 있으면 서비스로 전달돼 푸시 토큰도 정리된다 (MSG-178 logout 통합)")
+		void 로그아웃_body에_fcmToken이_있으면_푸시_토큰도_정리된다() throws Exception {
+			mockMvc.perform(post(LOGOUT_URL)
+					.header(HttpHeaders.AUTHORIZATION, "Bearer jwt-token")
+					.header(DEVICE_ID_HEADER, "device-1")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{\"fcmToken\":\"fcm-token-abc\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.developCode").value(200));
+
+			verify(authService).logout("jwt-token", "device-1", "fcm-token-abc");
+		}
+
+		@Test
+		@DisplayName("body 없는 기존 호출은 그대로 동작한다 — 하위 호환 (MSG-178)")
+		void 로그아웃_body_없는_기존_호출은_그대로_동작한다() throws Exception {
+			mockMvc.perform(post(LOGOUT_URL)
+					.header(HttpHeaders.AUTHORIZATION, "Bearer jwt-token")
+					.header(DEVICE_ID_HEADER, "device-1"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.developCode").value(200));
+
+			verify(authService).logout("jwt-token", "device-1", null);
 		}
 
 		@Test
@@ -437,7 +463,7 @@ class AuthControllerTest {
 				.andExpect(jsonPath("$.developCode").value(2401))
 				.andExpect(jsonPath("$.message").value("유효하지 않은 토큰입니다"));
 
-			verify(authService, never()).logout(any(), any());
+			verify(authService, never()).logout(any(), any(), any());
 		}
 
 		@Test
@@ -448,7 +474,7 @@ class AuthControllerTest {
 				.andExpect(jsonPath("$.developCode").value(2401))
 				.andExpect(jsonPath("$.message").value("유효하지 않은 토큰입니다"));
 
-			verify(authService, never()).logout(any(), any());
+			verify(authService, never()).logout(any(), any(), any());
 		}
 	}
 }
