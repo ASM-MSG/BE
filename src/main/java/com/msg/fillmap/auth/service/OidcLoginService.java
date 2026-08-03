@@ -66,7 +66,8 @@ public class OidcLoginService {
 	}
 
 	private User registerNewUser(AuthProvider provider, OidcUserInfo info) {
-		if (userRepository.existsByEmail(info.email())) {
+		// email 은 카카오에서 받지 않아 null 일 수 있다 (MSG-310) — null 이면 중복 검사 없이 그대로 저장한다.
+		if (info.email() != null && userRepository.existsByEmail(info.email())) {
 			throw new ApiException(UserErrorCode.EMAIL_ALREADY_EXISTS);
 		}
 		return userRepository.save(User.createOAuthUser(provider, info.oid(), info.email(), info.nickname()));

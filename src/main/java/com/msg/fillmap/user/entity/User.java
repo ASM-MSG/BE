@@ -35,7 +35,8 @@ public class User {
 	@Column(length = 64)
 	private String oid;
 
-	@Column(nullable = false, length = 255, unique = true)
+	// 카카오 가입은 email 을 받지 않아 null 이다 (MSG-310, V16 에서 NOT NULL 해제). UNIQUE 는 NULL 중복 허용.
+	@Column(length = 255, unique = true)
 	private String email;
 
 	@Column(name = "password_hash", length = 255)
