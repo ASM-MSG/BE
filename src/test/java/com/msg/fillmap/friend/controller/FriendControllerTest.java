@@ -24,11 +24,13 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.friend.dto.FriendCodeResponseDto;
+import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
 import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.entity.FriendshipStatus;
 import com.msg.fillmap.friend.service.FriendService;
+import com.msg.fillmap.user.entity.GridColor;
 import com.msg.fillmap.user.entity.UserRole;
 
 /**
@@ -116,6 +118,43 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data[0].nickname").value("채우미"))
 			.andExpect(jsonPath("$.data[0].profileImageUrl").value(Matchers.nullValue()))
 			.andExpect(jsonPath("$.data[0].requestedAt").value("2026-08-03T12:00:00"));
+	}
+
+	@Test
+	@DisplayName("친구 목록은 사용자 id·닉네임·프로필 이미지·도감 색상을 담는다 (MSG-186 FR-3)")
+	void 친구_목록은_친구_정보를_담는다() throws Exception {
+		given(friendService.getFriends(USER_ID, null)).willReturn(List.of(
+			new FriendListItemResponseDto(7L, "채우미", "https://cdn.example.com/p.png", GridColor.PINK)));
+
+		mockMvc.perform(get("/api/friends").header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data", Matchers.hasSize(1)))
+			.andExpect(jsonPath("$.data[0].userId").value(7))
+			.andExpect(jsonPath("$.data[0].nickname").value("채우미"))
+			.andExpect(jsonPath("$.data[0].profileImageUrl").value("https://cdn.example.com/p.png"))
+			.andExpect(jsonPath("$.data[0].gridColor").value("PINK"));
+	}
+
+	@Test
+	@DisplayName("sort 파라미터가 서비스로 전달된다 (FR-2)")
+	void sort_파라미터가_서비스로_전달된다() throws Exception {
+		given(friendService.getFriends(USER_ID, "nickname")).willReturn(List.of());
+
+		mockMvc.perform(get("/api/friends")
+				.param("sort", "nickname")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data", Matchers.hasSize(0)));
+
+		verify(friendService).getFriends(USER_ID, "nickname");
+	}
+
+	@Test
+	@DisplayName("친구 목록은 토큰 없이 호출하면 401 이다")
+	void 친구_목록은_토큰_없이_호출하면_401이다() throws Exception {
+		mockMvc.perform(get("/api/friends"))
+			.andExpect(status().isUnauthorized());
 	}
 
 	@Test
