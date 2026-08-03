@@ -1,5 +1,7 @@
 package com.msg.fillmap.user.service;
 
+import com.msg.fillmap.user.dto.UserProfileResponseDto;
+
 public interface UserService {
 
 	/**
@@ -10,4 +12,10 @@ public interface UserService {
 	 * @param accessToken Bearer 접두어를 제거한 요청 원문 토큰 — 커밋 후 블랙리스트용 (§D4)
 	 */
 	void deleteAccount(Long userId, String accessToken);
+
+	/** 내 프로필 조회 (MSG-203 FR-1). 소셜 로그인이 저장한 email·nickname 을 가공 없이 반환한다. */
+	UserProfileResponseDto getMyProfile(Long userId);
+
+	/** 닉네임 변경 (MSG-203 FR-2·5). 변경 후 프로필을 반환한다(§D2). 중복 검사 없음 (FR-6). */
+	UserProfileResponseDto updateNickname(Long userId, String nickname);
 }

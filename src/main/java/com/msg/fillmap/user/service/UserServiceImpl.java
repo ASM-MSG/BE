@@ -23,6 +23,8 @@ import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.auth.service.RefreshTokenService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.user.dto.UserProfileResponseDto;
+import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.exception.UserErrorCode;
 import com.msg.fillmap.user.repository.UserRepository;
 
@@ -61,6 +63,25 @@ public class UserServiceImpl implements UserService {
 			deleteS3Objects(s3Keys);
 			invalidateSessions(userId, accessToken);
 		});
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public UserProfileResponseDto getMyProfile(Long userId) {
+		return UserProfileResponseDto.from(findUser(userId));
+	}
+
+	@Override
+	@Transactional
+	public UserProfileResponseDto updateNickname(Long userId, String nickname) {
+		User user = findUser(userId);
+		user.updateNickname(nickname);
+		return UserProfileResponseDto.from(user);
+	}
+
+	private User findUser(Long userId) {
+		return userRepository.findById(userId)
+			.orElseThrow(() -> new ApiException(UserErrorCode.USER_NOT_FOUND));
 	}
 
 	/** 4컬럼(원본·인코딩본·썸네일·블러본 — 컬럼명과 달리 전부 실제 S3 key) 평탄화. null 은 미생성 키다. */
