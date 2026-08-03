@@ -129,6 +129,25 @@ class UserProfileControllerTest {
 	}
 
 	@Test
+	@DisplayName("본문 없는 닉네임 수정은 400 이다 — HttpMessageNotReadable 전역 핸들러 (Codex 리뷰 반영)")
+	void 본문_없는_닉네임_수정은_400을_반환한다() throws Exception {
+		mockMvc.perform(put(NICKNAME_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON))
+			.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	@DisplayName("깨진 JSON 닉네임 수정은 400 이다 — 500 으로 새면 안 된다")
+	void 깨진_JSON_닉네임_수정은_400을_반환한다() throws Exception {
+		mockMvc.perform(put(NICKNAME_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"nickname\":"))
+			.andExpect(status().isBadRequest());
+	}
+
+	@Test
 	@DisplayName("토큰 없는 프로필 조회는 401 이다 (FR-4)")
 	void 토큰_없는_프로필_조회는_401을_반환한다() throws Exception {
 		mockMvc.perform(get(ME_URL))
