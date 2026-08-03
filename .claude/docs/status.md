@@ -94,6 +94,7 @@
 - MSG-239: 업로드 뱃지 훅(`saveVideo` 2지점 — 항상 UPLOAD_COUNT(생애 카운트·status 무관), 첫 점령 시 TOTAL_GRIDS+refresh 직후 REGION_PERCENT 물질화 값 소비, 같은 트랜잭션)·`VideoUploadResponseDto.newBadges` 동봉(FR-9). 삭제·교체 경로 무변경(비회수 FR-5)
 - MSG-200: 업로드 스트릭 훅(`saveVideo` — `!alreadyOccupied` 분기 바깥 1줄, `StreakCommandService.recordUpload` 획득분 `newBadges` 합류. 삭제·교체 무변경 — 소급 차감 없음 §D4)
 - MSG-183: 업로드 핫스코어 훅(`saveVideo` 훅 체인 뒤 `afterCommit` 1줄 — `HotScoreCommandService.recordUpload(gridId)` 소비, 유령 증분 차단·응답 계약 무변. 교체·삭제 무배선 — 차감 없음 §D4·D6)
+- MSG-283: AI 폴링 404 미제출 복귀(`AiBlurPoller` 결합 분기 분리 — 404=`clearAiJob`(aiJobId null·startedAt 유지) 후 기존 미제출 경로가 다음 주기 재제출, 명시 FAILED만 즉시 실패. `VideoStatusWriter.clearAiJob` 신규(행 잠금+`isCurrentBlurJob` 가드), 배포發 잡 유실이 PT30M 내 READY 수렴. `AiClient`·마이그레이션 무변경)
 - **없는 것**: —
 
 ### `search` (Owner A) — ✅ 완성 (MVP 범위)

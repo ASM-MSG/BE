@@ -128,6 +128,24 @@ public class VideoStatusWriter {
 		});
 	}
 
+	/**
+	 * 폴링 404(잡 유실)를 미제출로 복귀 (MSG-283) — aiJobId 만 null 로 되돌려 다음 주기의 미제출 경로가
+	 * 재제출하게 한다. blurringStartedAt 은 유지한다 (Video.clearAiJob 주석 — 시도 넌스). expectedStartedAt 은
+	 * 받지 않는다 — poll 경로에서만 호출돼 expectedJobId 가 항상 non-null 이라 jobId 일치만으로 시도가
+	 * 유일하게 식별된다 (markBlurFailed 가 startedAt 까지 보는 이유인 "미제출 행끼리 jobId 구분 불가"가 없다).
+	 * 교체는 replaceFile 이 aiJobId 를 비워 불일치로 skip, 삭제는 ACTIVE 이탈로 skip.
+	 */
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void clearAiJob(Long videoId, String expectedJobId) {
+		videoRepository.findWithLockById(videoId).ifPresent(video -> {
+			if (!isCurrentBlurJob(video, expectedJobId)) {
+				logStaleSkip("잡 유실 복귀", videoId, expectedJobId, video);
+				return;
+			}
+			video.clearAiJob();
+		});
+	}
+
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void markFailed(Long videoId, String expectedOriginalKey) {
 		videoRepository.findWithLockById(videoId).ifPresent(video -> {

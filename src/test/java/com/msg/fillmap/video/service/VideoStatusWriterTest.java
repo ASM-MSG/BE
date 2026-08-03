@@ -134,6 +134,44 @@ class VideoStatusWriterTest {
 		assertThat(video.getAiJobId()).isNull();
 	}
 
+	// ── 잡 유실(404) 미제출 복귀 가드 (MSG-283) ──
+
+	@Test
+	void 현재_잡이면_aiJobId만_null로_되돌리고_blurringStartedAt은_유지한다() {
+		Video video = blurring("job-1");
+		LocalDateTime startedAt = video.getBlurringStartedAt();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.clearAiJob(VIDEO_ID, "job-1");
+
+		assertThat(video.getAiJobId()).isNull();
+		assertThat(video.getBlurringStartedAt()).isEqualTo(startedAt);   // 시도 넌스 유지 — 타임아웃 창 리셋 금지 (D2)
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.BLURRING);   // 미제출 경로 재진입 대상
+	}
+
+	@Test
+	void 교체로_잡이_바뀌면_옛_잡의_clear를_적용하지_않는다() {
+		Video video = blurring("job-1");
+		// 폴러가 404 를 보고 clear 하러 오는 사이 사용자가 교체 → replaceFile 이 AI 필드를 비우고 UPLOADED 로 되돌림
+		video.replaceFile(K2, (short) 8, LocalDateTime.now());
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.clearAiJob(VIDEO_ID, "job-1");
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.UPLOADED);   // jobId 불일치로 skip — 새 파일 흐름 유지
+	}
+
+	@Test
+	void 삭제된_영상이면_옛_잡의_clear를_적용하지_않는다() {
+		Video video = blurring("job-1");
+		video.markDeleted();   // status=DELETED, aiJobId 는 그대로 — ACTIVE 가드가 걸러야 한다
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.clearAiJob(VIDEO_ID, "job-1");
+
+		assertThat(video.getAiJobId()).isEqualTo("job-1");   // clear 안 됨 — 삭제본을 미제출로 되살리지 않는다
+	}
+
 	// ── 인코딩 라이터 원본 키 가드 (MSG-241) ──
 
 	/** K1 원본으로 ENCODING 중인 시도의 영상. */

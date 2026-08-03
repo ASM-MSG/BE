@@ -171,6 +171,15 @@ public class Video {
 		this.aiJobId = jobId;
 	}
 
+	/**
+	 * 폴링 404(잡 유실) 시 미제출로 복귀 (MSG-283). aiJobId 만 비워 폴러의 미제출 경로가 다음 주기에
+	 * 재제출하게 한다. blurringStartedAt 은 시도 넌스라 유지한다 — 갱신하면 AI 재시작마다 타임아웃 창이
+	 * 리셋되고, 재제출 recordAiJob 의 startedAt 일치 가드도 깨진다 (재제출은 새 시도가 아니라 같은 시도의 계속).
+	 */
+	public void clearAiJob() {
+		this.aiJobId = null;
+	}
+
 	/** 변환 실패. 재시도는 없고 기록만 남긴다 (MSG-65 D8). */
 	public void markFailed() {
 		this.processingStatus = ProcessingStatus.FAILED;
