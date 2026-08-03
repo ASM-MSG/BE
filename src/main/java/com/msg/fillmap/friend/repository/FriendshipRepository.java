@@ -30,6 +30,19 @@ public interface FriendshipRepository extends JpaRepository<Friendship, Friendsh
 		""")
 	Optional<Friendship> findPair(@Param("a") Long a, @Param("b") Long b);
 
+	/**
+	 * 방향 무관 ACCEPTED 쌍 존재 여부 — 잠금 없는 읽기 전용 판정 (MSG-285 §D2).
+	 * findPair 는 PESSIMISTIC_WRITE 라 재생 판정처럼 잦은 읽기에 쓰면 요청마다 행 잠금이 걸린다.
+	 * OR 두 방향 모두 복합 PK (requester_id, addressee_id) 인덱스 단건 lookup 이다.
+	 */
+	@Query("""
+		SELECT COUNT(f) > 0 FROM Friendship f
+		WHERE f.status = com.msg.fillmap.friend.entity.FriendshipStatus.ACCEPTED
+			AND ((f.id.requesterId = :a AND f.id.addresseeId = :b)
+				OR (f.id.requesterId = :b AND f.id.addresseeId = :a))
+		""")
+	boolean existsAcceptedPair(@Param("a") Long a, @Param("b") Long b);
+
 	/** 수락·거절용 복합 PK 행 잠금 조회 — 같은 요청의 동시 수락+거절이 둘 다 성공하는 경합 차단 (Codex 리뷰 반영). */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	Optional<Friendship> findWithLockById(FriendshipId id);
