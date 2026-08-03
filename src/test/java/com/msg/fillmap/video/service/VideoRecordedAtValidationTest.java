@@ -23,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.friend.service.FriendService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
@@ -71,7 +72,7 @@ class VideoRecordedAtValidationTest {
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
-			Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
+			mock(FriendService.class), Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
 	}
 
 	@Test

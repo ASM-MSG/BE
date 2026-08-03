@@ -165,10 +165,24 @@ class VideoServiceIntegrationTest {
 	}
 
 	@Test
-	void 업로드에_PUBLIC_PRIVATE가_아닌_값이면_INVALID_VISIBILITY고_영상은_저장되지_않는다() {
-		assertThatThrownBy(() -> videoService.saveVideo(userId, request(성수_LAT, 성수_LON, "FRIENDS")))
+	@DisplayName("업로드에 FRIENDS 를 지정하면 FRIENDS 로 저장되고 점령도 그대로 반영된다 (MSG-285 FR-1·9)")
+	void 업로드에_FRIENDS를_지정하면_FRIENDS로_저장된다() {
+		VideoUploadResponseDto response = videoService.saveVideo(userId, request(성수_LAT, 성수_LON, "FRIENDS"));
+
+		assertThat(visibilityOf(response.videoId())).isEqualTo("FRIENDS");
+		// 공개범위는 노출 정책일 뿐 기록 사실을 바꾸지 않는다 — 점령·도감·스트릭·핫스코어 훅은 visibility 를
+		// 분기 조건으로 쓰지 않는다. 대표로 점령(user_grids)만 확인한다 (FR-9).
+		assertThat(response.occupied()).isTrue();
+		assertThat(countRows("SELECT video_count FROM user_grids WHERE grid_id = :g",
+			GridEncoder.encode(성수_LAT, 성수_LON))).isEqualTo(1);
+	}
+
+	@Test
+	void 업로드에_허용_외_값이면_INVALID_VISIBILITY고_영상은_저장되지_않는다() {
+		assertThatThrownBy(() -> videoService.saveVideo(userId, request(성수_LAT, 성수_LON, "BOGUS")))
 			.isInstanceOf(ApiException.class)
-			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_VISIBILITY);
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_VISIBILITY)
+			.hasMessageContaining("PUBLIC, PRIVATE, FRIENDS");   // 3 값 안내 (MSG-285 FR-8)
 
 		String gridId = GridEncoder.encode(성수_LAT, 성수_LON);
 		assertThat(countRows("SELECT count(*) FROM videos WHERE grid_id = :g", gridId)).isZero();
