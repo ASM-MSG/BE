@@ -96,4 +96,9 @@ public class User {
 			.role(UserRole.USER)
 			.build();
 	}
+
+	/** 닉네임 변경 (MSG-203). 길이 검증은 요청 DTO 몫 — 엔티티는 전달값을 그대로 반영한다(더티 체킹 UPDATE). */
+	public void updateNickname(String nickname) {
+		this.nickname = nickname;
+	}
 }

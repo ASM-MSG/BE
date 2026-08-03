@@ -5,10 +5,14 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,6 +22,8 @@ import lombok.RequiredArgsConstructor;
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.auth.support.RefreshTokenCookies;
 import com.msg.fillmap.response.SuccessResponse;
+import com.msg.fillmap.user.dto.NicknameUpdateRequestDto;
+import com.msg.fillmap.user.dto.UserProfileResponseDto;
 import com.msg.fillmap.user.service.UserService;
 
 @Tag(name = "사용자 (User)", description = "계정 관리 API. 인증 필수 — 본인 계정만 대상이다.")
@@ -29,6 +35,30 @@ public class UserController {
 	private static final String BEARER_PREFIX = "Bearer ";
 
 	private final UserService userService;
+
+	@Operation(
+		summary = "내 프로필 조회",
+		description = "소셜 로그인이 자동 저장한 이메일·닉네임을 반환한다. "
+			+ "항상 본인 계정만 — 경로에 대상 식별자가 없다."
+	)
+	@GetMapping("/me")
+	public SuccessResponse<UserProfileResponseDto> getMe(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal
+	) {
+		return SuccessResponse.of(userService.getMyProfile(principal.userId()));
+	}
+
+	@Operation(
+		summary = "닉네임 수정",
+		description = "닉네임(2~20자)을 교체하고 변경 후 프로필을 반환한다. 중복 닉네임은 허용된다."
+	)
+	@PutMapping("/me/nickname")
+	public SuccessResponse<UserProfileResponseDto> updateNickname(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Valid @RequestBody NicknameUpdateRequestDto request
+	) {
+		return SuccessResponse.of(userService.updateNickname(principal.userId(), request.nickname()));
+	}
 
 	@Operation(
 		summary = "계정 삭제",

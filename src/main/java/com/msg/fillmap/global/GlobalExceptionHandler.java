@@ -3,6 +3,7 @@ package com.msg.fillmap.global;
 import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -49,6 +50,17 @@ public class GlobalExceptionHandler {
 				.body(ApiResponseDto.builder()
 						.developCode(ErrorCode.BAD_REQUEST.getErrorCode())
 						.message("필수 파라미터 누락: " + e.getParameterName())
+						.build());
+	}
+
+	// @RequestBody 본문 누락·JSON 파싱 불가도 클라이언트 잘못이라 400 이다 — 파라미터 누락(위)의 본문판.
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ResponseEntity<ApiResponseDto<Object>> handleNotReadable(HttpMessageNotReadableException e) {
+		return ResponseEntity
+				.status(ErrorCode.BAD_REQUEST.getHttpStatus())
+				.body(ApiResponseDto.builder()
+						.developCode(ErrorCode.BAD_REQUEST.getErrorCode())
+						.message("요청 본문이 없거나 읽을 수 없습니다")
 						.build());
 	}
 
