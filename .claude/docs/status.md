@@ -27,7 +27,8 @@
 ### `user` (Owner B) — 🟡 부분
 - `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode`
 - MSG-205: 계정 삭제(`DELETE /api/users/me` — `controller/UserController`·`service/UserService`(+Impl) 첫 신설, V15 reports FK ON DELETE(CASCADE/SET NULL), 삭제 트랜잭션 = S3 키 수집(`findAllS3KeysByUserId`)→`deleteUser` 0행 1404, afterCommit = S3 1000키 청크 best-effort·refresh `deleteAll`·액세스 토큰 블랙리스트 각각 독립 try. CASCADE 보정 로직 없음, D5 경합 수용 — 스펙 §D1~D5)
-- **없는 것**: `dto` (프로필 조회/수정 MSG-203에서 신설 예정)
+- MSG-203: 프로필 조회/닉네임 수정 — `GET /api/users/me`·`PUT /api/users/me/nickname`, `dto/{UserProfileResponseDto,NicknameUpdateRequestDto}` (email 은 카카오 유저 null — MSG-310, 색상 수정은 기획 제외)
+- MSG-185: `User.friendCode`(V18 — 생성자 자동 부여, 혼동 문자 제외 32종 8자)·`UserRepository.findByFriendCode` — friend 도메인이 소비
 
 ### `grid` (Owner A) — 🟡 부분
 - MSG-73: `GridEncoder`·`GridConstants`(순수 유틸), `entity/{UserGrid,UserGridId,Grid}`, `repository/GridRepository`, `service/GridQueryService`(+impl, read 계약 A→B), `controller/GridController`, `dto/*`, `exception/GridErrorCode`(4xxx)
@@ -111,6 +112,10 @@
 ### `streak` (Owner B) — ✅ 완성 (MVP 범위)
 - MSG-200: 스트릭 집계 — `entity/Streak`(전 컬럼 매핑·Setter 없음, 쓰기는 native 전용), `repository/StreakRepository`(`upsertOnUpload` — 3분기 CASE 한 문장 UPSERT·KST 자정 경계·ON CONFLICT 행 잠금 직렬화 + `findCurrentCount`), `service/StreakCommandService`(+impl — 갱신 직후 `BadgeAwardService.award(STREAK_DAYS)` 배선·획득분 반환, B 내부). 조회 API 없음(currentStreak·maxStreak 노출은 도감 summary 티켓 소관 §D8), freeze 미도입·소급 차감 없음 확정
 
+### `friend` (Owner B) — ✅ 완성 (MVP 범위)
+- MSG-185: 친구 코드·관계 수명주기 — V18(users.friend_code 추가·기존 행 백필·UNIQUE)·V19(대칭 쌍 유니크 — findPair Optional 계약 보호), `entity/{Friendship,FriendshipId,FriendshipStatus}`(복합 PK @EmbeddedId — UserGrid 미러. status 는 PENDING·ACCEPTED 만 영속 — 거절·삭제는 행 DELETE, §D3 "행 존재 = 활성 관계"), `repository/FriendshipRepository`(`findPair` 양방향·`findReceivedRequests` 생성자 프로젝션 — User FK 매핑 없이 Long 조인), `service/FriendService`(+Impl — 요청 시 역방향 PENDING 자동 수락 = 기존 행 ACCEPTED 승격), `controller/FriendController` 7종(`/api/friends` — code·preview·requests·requests/received·accept·reject·`DELETE /{userId}`), `exception/FriendErrorCode`(9xxx — 9400·9404·9409·9410·9414·9424)
+- **없는 것**: 친구 목록/프로필 조회(MSG-186)·친구 도감 레이어(MSG-187)·차단(후속)·코드 재발급(후속)
+
 ### `hotzone` (Owner A) — ✅ 완성 (MVP 범위)
 - MSG-183: 핫스코어 집계 — `service/HotScoreCommandService`(+impl, 평면 service 패키지). 업로드 신호 +1을 UTC 6h 버킷(`hotzone:{bucketId}` Sorted Set, `bucketId=epochSeconds/21600`)에 Lua 원자 스크립트(ZINCRBY+EXPIRE 54h)로 증분. 버킷 키는 호출(커밋) 스레드에서 확정, 실행은 자체 데몬 1스레드 executor(큐 10k, 종료 시 5s 드레인) — 요청 스레드 무블록. 전 실패 삼킴+warn(FR-6, 에러코드 불요). DDL·yml 없음, Redis 전용(D4)
 - MSG-184: 핫구역 조회(`GET /api/hotzones` 뷰포트 4파라미터 필수 — `service/HotZoneService`(+impl)·`HotZoneView`, `hotzone:top` 캐시(최근 8버킷 ZUNIONSTORE 균등 합산, TTL 30s, 캐시 보장 Lua 원자 — EXISTS→ZUNIONSTORE→EXPIRE), 상위 K(50)·임계(3)·뷰포트 필터(encode→decode 정수 인덱스, queryByRange 동형), `config/HotZoneProperties`(record, `fillmap.hotzone.top-k/min-score` — topK 양수 기동 검증), `controller/HotZoneController`·DTO 2종, `exception/HotZoneErrorCode`(8400 INVALID_VIEWPORT — 비유한 좌표 NaN 우회 차단 포함), 파라미터 누락은 전역 400(MSG-167 매핑, GridController 구 관행 미답습). 48h 판정은 룩백 몫·TTL은 청소 전용(D4 역할 분리))
@@ -132,11 +137,11 @@
 
 ## 스키마 vs JPA 엔티티
 
-`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다. `V10__streak_badges_seed.sql`(MSG-200)은 STREAK_3/7/30 시딩만 담는다(DDL 0·소급 없음). `V12__mission_badges_seed.sql`(MSG-223)은 MISSION_1/5/10 시딩만, `V13__mission_source.sql`(MSG-224)은 `missions.source` 적재 출처 컬럼 1개를 추가한다(NULL=수동·불가침). `V14__missions_popup_type_and_source_key.sql`(MSG-235)은 type CHECK에 'POPUP' 추가·`source_key` 컬럼·`(source, source_key)` 부분 유니크 인덱스를 담는다.
+`V1__init.sql`은 14개 테이블을 정의하고, `V6__mission_schema.sql`(MSG-166)이 미션 3테이블을, `V8__zones.sql`(MSG-234)이 `zones`를 추가했다(V7은 MSG-238 grids.region_code 인덱스가 선점). `V9__badges_seed.sql`(MSG-239)은 badges CHECK 확장(MISSION_COUNT)·`user_badges` 컬럼 2개(notified_at·featured_rank+partial UNIQUE)·활성 3축 11종 시딩·소급 지급을 담는다. `V10__streak_badges_seed.sql`(MSG-200)은 STREAK_3/7/30 시딩만 담는다(DDL 0·소급 없음). `V12__mission_badges_seed.sql`(MSG-223)은 MISSION_1/5/10 시딩만, `V13__mission_source.sql`(MSG-224)은 `missions.source` 적재 출처 컬럼 1개를 추가한다(NULL=수동·불가침). `V14__missions_popup_type_and_source_key.sql`(MSG-235)은 type CHECK에 'POPUP' 추가·`source_key` 컬럼·`(source, source_key)` 부분 유니크 인덱스를 담는다. (V15=MSG-205 reports FK ON DELETE·V16=MSG-310 email nullable·V17=MSG-283 videos fail_reason.) `V18__users_friend_code.sql`(MSG-185)은 `users.friend_code`(혼동 문자 제외 32종 8자) 추가·기존 행 상관 서브쿼리 백필·NOT NULL·UNIQUE 를, `V19__friendships_pair_unique.sql`(MSG-185)은 friendships 대칭 쌍 유니크 인덱스(LEAST/GREATEST — 상호 요청 레이스 DB 백스톱)를 담는다.
 
 | 테이블 | 엔티티 | 상태 |
 |---|---|---|
-| `users` | `user/entity/User` | ✅ (단, 스키마의 `grid_color` 컬럼이 엔티티에 아직 없음) |
+| `users` | `user/entity/User` | ✅ (grid_color 매핑됨 — 구 표기 정정. V16 email nullable·V18 friend_code 반영) |
 | `user_grids` | `grid/entity/UserGrid` | ✅ |
 | `videos` | `video/entity/Video` | ✅ (MSG-66) |
 | `grids` | `grid/entity/Grid` | ✅ (MSG-73 — 조회 전용 최소 매핑: grid_id/grid_y/grid_x, geom 미매핑; MSG-167 — `region_code`(V5) 추가·미매핑, native 접근) |
@@ -145,7 +150,7 @@
 | `zones` | `zone/entity/Zone` | ✅ (MSG-234 — 전 컬럼 매핑, 정수 사각형·PostGIS 컬럼 없음, V8) |
 | `badges` | `badge/entity/Badge` | ✅ (MSG-239 — condition_value JSONB 미매핑, 판정은 native. V9 시딩 11종) |
 | `user_badges` | `badge/entity/UserBadge` | ✅ (MSG-239 — 복합 PK `UserBadgeId`, V9 notified_at·featured_rank 추가. 지급은 native ON CONFLICT) |
-| `friendships` | — | ❌ 엔티티 없음 |
+| `friendships` | `friend/entity/Friendship` | ✅ (MSG-185 — 복합 PK `FriendshipId`, status 는 PENDING·ACCEPTED 만 영속(§D3). V1 테이블 무수정) |
 | `likes` | — | ❌ 엔티티 없음 |
 | `push_tokens` | — | ❌ 엔티티 없음 |
 | `reports` | — | ❌ 엔티티 없음 |

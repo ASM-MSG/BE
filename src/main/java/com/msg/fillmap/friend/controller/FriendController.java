@@ -1,0 +1,129 @@
+package com.msg.fillmap.friend.controller;
+
+import java.util.List;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import jakarta.validation.Valid;
+
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import lombok.RequiredArgsConstructor;
+
+import com.msg.fillmap.auth.jwt.AuthPrincipal;
+import com.msg.fillmap.friend.dto.FriendCodeResponseDto;
+import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
+import com.msg.fillmap.friend.dto.FriendRequestCreateRequestDto;
+import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
+import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
+import com.msg.fillmap.friend.service.FriendService;
+import com.msg.fillmap.response.SuccessResponse;
+
+@Tag(
+	name = "친구 (Friend)",
+	description = "고정 친구 코드 기반 친구 관계 API — 요청·수락·거절·삭제 (MSG-185). 인증 필수."
+)
+@RestController
+@RequestMapping("/api/friends")
+@RequiredArgsConstructor
+public class FriendController {
+
+	private final FriendService friendService;
+
+	@Operation(
+		summary = "내 친구 코드 조회",
+		description = "가입 시 자동 부여된 고정 8자 코드를 반환한다. 상대에게 임의 채널(카톡 등)로 공유하면 "
+			+ "상대가 이 코드로 친구 요청을 보낼 수 있다. 재발급 없음."
+	)
+	@GetMapping("/code")
+	public SuccessResponse<FriendCodeResponseDto> getMyFriendCode(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal
+	) {
+		return SuccessResponse.of(friendService.getMyFriendCode(principal.userId()));
+	}
+
+	@Operation(
+		summary = "친구 코드 미리보기",
+		description = "요청을 보내기 전 확인 화면용 — 코드 소유자의 닉네임만 반환한다. "
+			+ "요청 가능 여부 검증(자기 자신·중복 등)은 요청 API 가 수행한다."
+	)
+	@GetMapping("/preview")
+	public SuccessResponse<FriendPreviewResponseDto> preview(@RequestParam("code") String code) {
+		return SuccessResponse.of(friendService.preview(code));
+	}
+
+	@Operation(
+		summary = "친구 요청",
+		description = "상대의 친구 코드로 요청을 보낸다. 응답 status 가 PENDING 이면 상대 수락 대기, "
+			+ "ACCEPTED 면 상대가 먼저 보낸 요청이 있어 즉시 친구 성립(자동 수락)이다."
+	)
+	@PostMapping("/requests")
+	public SuccessResponse<FriendRequestCreateResponseDto> request(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Valid @RequestBody FriendRequestCreateRequestDto request
+	) {
+		return SuccessResponse.of(friendService.request(principal.userId(), request.friendCode()));
+	}
+
+	@Operation(
+		summary = "받은 친구 요청 목록",
+		description = "내가 수신자인 대기 중 요청을 최신순으로 반환한다. 항목의 requesterId 를 "
+			+ "수락/거절 경로 변수로 그대로 쓴다."
+	)
+	@GetMapping("/requests/received")
+	public SuccessResponse<List<ReceivedFriendRequestResponseDto>> getReceivedRequests(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal
+	) {
+		return SuccessResponse.of(friendService.getReceivedRequests(principal.userId()));
+	}
+
+	@Operation(
+		summary = "친구 요청 수락",
+		description = "받은 요청을 수락해 친구 관계를 성립시킨다. 요청의 수신자 본인만 가능하다."
+	)
+	@PostMapping("/requests/{requesterId}/accept")
+	public SuccessResponse<Void> accept(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@PathVariable Long requesterId
+	) {
+		friendService.accept(principal.userId(), requesterId);
+		return new SuccessResponse<>(null);
+	}
+
+	@Operation(
+		summary = "친구 요청 거절",
+		description = "받은 요청을 거절한다. 보낸 쪽에 통지는 없고, 상대는 다시 요청할 수 있다."
+	)
+	@PostMapping("/requests/{requesterId}/reject")
+	public SuccessResponse<Void> reject(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@PathVariable Long requesterId
+	) {
+		friendService.reject(principal.userId(), requesterId);
+		return new SuccessResponse<>(null);
+	}
+
+	@Operation(
+		summary = "친구 삭제",
+		description = "친구 관계를 해소한다. 어느 쪽이든 삭제할 수 있고 즉시 양쪽 모두에서 사라진다. "
+			+ "대기 중 요청은 대상이 아니다."
+	)
+	@DeleteMapping("/{userId}")
+	public SuccessResponse<Void> deleteFriend(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@PathVariable Long userId
+	) {
+		friendService.deleteFriend(principal.userId(), userId);
+		return new SuccessResponse<>(null);
+	}
+}
