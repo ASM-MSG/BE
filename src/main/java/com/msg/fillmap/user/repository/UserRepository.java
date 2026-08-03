@@ -19,6 +19,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	Optional<User> findByProviderAndOid(AuthProvider provider, String oid);
 
+	/** 친구 코드로 상대 특정 (MSG-185) — friend 도메인의 미리보기·요청이 소비한다. */
+	Optional<User> findByFriendCode(String friendCode);
+
 	/** 계정 삭제용 S3 키 수집 — videos 를 읽지만 용도가 user 소속 (UserBadgeRepository 관례). 4컬럼 모두 실제 S3 key. */
 	@Query(value = """
 		SELECT original_s3_key, encoded_url, thumbnail_url, blurred_s3_key
