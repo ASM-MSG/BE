@@ -13,7 +13,7 @@ public record VideoVisibilityResponseDto(
 	@Schema(description = "전환된 영상 ID", example = "1042")
 	Long videoId,
 
-	@Schema(description = "전환 후 공개 범위 (PUBLIC 또는 PRIVATE)", example = "PUBLIC")
+	@Schema(description = "전환 후 공개 범위 (PUBLIC, PRIVATE, FRIENDS 중 하나)", example = "PUBLIC")
 	String visibility
 ) {
 

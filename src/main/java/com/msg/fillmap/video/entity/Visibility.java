@@ -1,7 +1,8 @@
 package com.msg.fillmap.video.entity;
 
 /**
- * 영상 공개 범위 (videos.visibility). DDL CHECK 와 일치. 기본 PRIVATE.
+ * 영상 공개 범위 (videos.visibility). DDL CHECK 와 일치. 업로드 시 미지정이면 PUBLIC 이다
+ * (MSG-204 — 미지정 기본 PUBLIC 확정).
  */
 public enum Visibility {
 	PUBLIC,
