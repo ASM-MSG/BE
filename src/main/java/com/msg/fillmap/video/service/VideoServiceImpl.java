@@ -1,6 +1,8 @@
 package com.msg.fillmap.video.service;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -10,6 +12,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.locationtech.jts.geom.Point;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -82,6 +85,9 @@ public class VideoServiceImpl implements VideoService {
 
 	private static final Duration PRESIGN_TTL = Duration.ofMinutes(10);
 
+	// 미래 recordedAt 허용 오차 (MSG-278 PRD §8) — 단말 시계 스큐 커버. 상수 고정, 설정화하지 않는다.
+	private static final Duration RECORDED_AT_TOLERANCE = Duration.ofMinutes(5);
+
 	// 발급은 pending 으로, 확정되면 original 로 옮긴다 — pending 만 라이프사이클로 만료시키기 위해서다(MSG-133).
 	// 한 prefix 를 쓰면 고아와 정상 영상이 섞여 만료 규칙을 걸 수 없다.
 	private static final String PENDING_PREFIX = "videos/pending/";
@@ -103,6 +109,24 @@ public class VideoServiceImpl implements VideoService {
 	private final StreakCommandService streakCommandService;
 	private final MissionAwardService missionAwardService;
 	private final HotScoreCommandService hotScoreCommandService;
+	private final Clock clock;
+
+	/**
+	 * 프로덕션 생성자 — 13번째 인자 clock 을 Clock.systemUTC() 로 고정해 Lombok 전체 생성자로 위임한다.
+	 * systemUTC 인 이유: recordedAt 은 UTC 순간으로 해석된다(findCompleted 가 UTC 저장 미션 기간과 직접
+	 * 비교 — MSG-278 §D1). 기본존(KST JVM)이면 now 가 +9h 앞서 판정이 환경별로 갈린다(MSG-222 전례).
+	 * 전체 생성자(@RequiredArgsConstructor 생성)는 테스트 고정 클럭 주입용이다.
+	 */
+	@Autowired
+	public VideoServiceImpl(VideoRepository videoRepository, VideoEncodingService videoEncodingService,
+		VideoStatusWriter videoStatusWriter, S3Presigner s3Presigner, S3Client s3Client, AwsProperties awsProperties,
+		RegionStatsCommandService regionStatsCommandService, ThumbnailUrlPresigner thumbnailUrlPresigner,
+		BadgeAwardService badgeAwardService, StreakCommandService streakCommandService,
+		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService) {
+		this(videoRepository, videoEncodingService, videoStatusWriter, s3Presigner, s3Client, awsProperties,
+			regionStatsCommandService, thumbnailUrlPresigner, badgeAwardService, streakCommandService,
+			missionAwardService, hotScoreCommandService, Clock.systemUTC());
+	}
 
 	@Override
 	@Transactional
@@ -115,6 +139,7 @@ public class VideoServiceImpl implements VideoService {
 		double lat = request.lat();
 		double lon = request.lon();
 		validateCoordinate(lat, lon);
+		validateRecordedAt(request.recordedAt());
 		String originalKey = confirmUpload(userId, request.s3Key());
 
 		String gridId = GridEncoder.encode(lat, lon);
@@ -165,6 +190,9 @@ public class VideoServiceImpl implements VideoService {
 		if (video.isDeleted()) {
 			throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);   // 지운 영상은 되살리지 않는다
 		}
+		// 교체도 recordedAt 을 그대로 반영하므로 업로드와 같은 검증을 지난다 — 교체로 우회 불가 (MSG-278 FR-2).
+		// 소유권(3403)·존재(3404)가 먼저인 게 기존 에러 우선순위와 일관, confirmUpload 전이라 S3 부수효과 없음.
+		validateRecordedAt(request.recordedAt());
 		// 교체도 s3Key 를 받으므로 업로드와 같은 검증이 필요하다 — 없으면 "교체로 가짜 키 밀어넣기"가
 		// 되어 MSG-132 에서 막은 구멍이 옆문으로 다시 열린다. (스펙 D4 에는 없던 보강)
 		String originalKey = confirmUpload(userId, request.s3Key());
@@ -495,6 +523,18 @@ public class VideoServiceImpl implements VideoService {
 	private void validateCoordinate(double lat, double lon) {
 		if (KoreaCoordinates.isOutOfService(lat, lon)) {
 			throw new ApiException(VideoErrorCode.INVALID_COORDINATE);
+		}
+	}
+
+	/**
+	 * 클라 신고값 recordedAt 의 미래 시각 검증 (MSG-278) — 업로드·교체가 공유한다.
+	 * findCompleted 가 이 값을 미션 기간과 직접 비교하므로, 미래 시각 위조로 끝난 축제의 스탬프를 따는
+	 * 트리비얼 공격을 입력 경계에서 막는다. 경계 포함(isAfter — 초과만 거부), 모든 과거는 통과(갤러리 방문).
+	 * "기간 안 과거 시각" 위조는 서명 없는 신고값이라 이 검증으로 못 막는다 — PRD 비목표, 잔존 위험 수용.
+	 */
+	private void validateRecordedAt(LocalDateTime recordedAt) {
+		if (recordedAt.isAfter(LocalDateTime.now(clock).plus(RECORDED_AT_TOLERANCE))) {
+			throw new ApiException(VideoErrorCode.RECORDED_AT_IN_FUTURE);
 		}
 	}
 

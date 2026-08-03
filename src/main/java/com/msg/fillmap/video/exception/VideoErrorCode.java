@@ -27,6 +27,7 @@ public enum VideoErrorCode implements ErrorCodeIfs {
 	INVALID_VISIBILITY(3420, HttpStatus.BAD_REQUEST, "visibility 는 PUBLIC 또는 PRIVATE 여야 합니다"),
 	GRID_MISMATCH(3422, HttpStatus.BAD_REQUEST, "같은 격자 안에서만 교체할 수 있습니다"),
 	INVALID_CURSOR(3423, HttpStatus.BAD_REQUEST, "유효하지 않은 커서입니다"),
+	RECORDED_AT_IN_FUTURE(3424, HttpStatus.BAD_REQUEST, "촬영 시각이 현재 시각보다 미래입니다"),
 	;
 
 	private final Integer errorCode;
