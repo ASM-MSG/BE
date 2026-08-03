@@ -42,7 +42,8 @@ import com.msg.fillmap.video.support.FfmpegRunner;
  * 잡별 reconcile:
  *  - 미제출(job_id null) → 타임아웃 넘었으면 markBlurFailed, 아니면 encoded 재다운로드 후 제출·job_id 기록 (D2)
  *  - 제출됨 → 먼저 GET /jobs/{id} 폴링. QUEUED/PROCESSING=살아있음(타임아웃 skip), DONE=완료,
- *    FAILED=markBlurFailed, 404=clearAiJob 으로 미제출 복귀 후 다음 주기 재제출 (MSG-283)
+ *    FAILED=markBlurFailed, 404=clearAiJob 으로 미제출 복귀 후 다음 주기 재제출 (MSG-283),
+ *    프리체크 탈락(precheck.passed=false)=status 무관 즉시 markBlurFailed+사유 코드 (MSG-286)
  *  - poll 불가(연결 실패)·미제출 행에만 blurringStartedAt 기준 타임아웃 적용 (D4). 그 외 예외는 잡별 catch 로 BLURRING 유지
  *
  * 완료 시: 블러본을 S3 에 올리고, 인코딩 시 만든 미블러 썸네일을 블러본에서 다시 뽑아 같은 키에 덮어쓴 뒤
@@ -128,7 +129,17 @@ public class AiBlurPoller {
 		if (result.status() == AiJobStatus.FAILED) {
 			// AI 명시 실패 = 그 파일로 재시도해도 같은 결과 — 재제출 없이 즉시 수렴 (MSG-283 기준 2).
 			log.warn("AI 명시 FAILED: videoId={} jobId={}", video.getId(), video.getAiJobId());
-			statusWriter.markBlurFailed(video.getId(), video.getAiJobId(), video.getBlurringStartedAt());
+			statusWriter.markBlurFailed(video.getId(), video.getAiJobId(), video.getBlurringStartedAt(), null);
+			return;
+		}
+		if (result.precheck() != null && !result.precheck().passed()) {
+			// 프리체크 탈락 = 그 파일로 재시도해도 같은 판정 (AI 임계값은 오탐 0 보수적) — 재검증 없이 즉시 수렴
+			// (MSG-286 FR-1). 탈락 잡은 status=DONE 이라 DONE 블록 앞에 서야 downloadBlurred 409 경로에 안
+			// 들어간다 (FR-6). status 조건은 걸지 않는다 — 판정은 precheck 필드로만 가른다 (FR-2).
+			log.warn("AI 프리체크 탈락 — 즉시 실패: videoId={} jobId={} reason={}",
+				video.getId(), video.getAiJobId(), result.precheck().reason());
+			statusWriter.markBlurFailed(video.getId(), video.getAiJobId(), video.getBlurringStartedAt(),
+				failReasonCode(result.precheck().reason()));
 			return;
 		}
 		if (result.status() == AiJobStatus.DONE) {
@@ -192,12 +203,22 @@ public class AiBlurPoller {
 			video.getId(), blurredKey, result.highlights());
 	}
 
+	/** reason 원문("too_dark: std 3.18 < 10.0")에서 콜론 앞 코드만. null/blank 는 폴백, 64자 절단 (MSG-286 D2). */
+	private String failReasonCode(String reason) {
+		if (reason == null || reason.isBlank()) {
+			return "precheck_failed";   // 계약 위반(탈락인데 사유 없음)이어도 시스템 오류(NULL)와는 구분 (FR-4)
+		}
+		String code = reason.split(":", 2)[0].strip();
+		return code.length() > 64 ? code.substring(0, 64) : code;
+	}
+
 	private boolean failIfTimedOut(Video video) {
 		if (!isTimedOut(video)) {
 			return false;
 		}
 		log.warn("AI 처리 타임아웃 초과로 FAILED: videoId={} startedAt={}", video.getId(), video.getBlurringStartedAt());
-		statusWriter.markBlurFailed(video.getId(), video.getAiJobId(), video.getBlurringStartedAt());
+		// 사유 null = 시스템 오류 실패 — 프리체크 탈락(D2 분기)만 사유 코드를 남긴다 (MSG-286 FR-4)
+		statusWriter.markBlurFailed(video.getId(), video.getAiJobId(), video.getBlurringStartedAt(), null);
 		return true;
 	}
 

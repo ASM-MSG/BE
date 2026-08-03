@@ -104,6 +104,10 @@ public class Video {
 	@Column(name = "blurring_started_at")
 	private LocalDateTime blurringStartedAt;
 
+	/** 실패 사유 코드 (MSG-286). 프리체크 탈락 시 콜론 앞 코드(too_dark 등), NULL=시스템 오류 실패. */
+	@Column(name = "fail_reason", length = 64)
+	private String failReason;
+
 	@Column(name = "recorded_at", nullable = false)
 	private LocalDateTime recordedAt;
 
@@ -180,8 +184,14 @@ public class Video {
 		this.aiJobId = null;
 	}
 
-	/** 변환 실패. 재시도는 없고 기록만 남긴다 (MSG-65 D8). */
+	/** 변환 실패. 재시도는 없고 기록만 남긴다 (MSG-65 D8). 사유 없는 실패(인코딩·타임아웃)는 이쪽. */
 	public void markFailed() {
+		markFailed(null);
+	}
+
+	/** 사유 있는 실패 (MSG-286 프리체크 탈락). */
+	public void markFailed(String failReason) {
+		this.failReason = failReason;
 		this.processingStatus = ProcessingStatus.FAILED;
 	}
 
@@ -203,6 +213,7 @@ public class Video {
 		this.highlights = null;
 		this.aiJobId = null;
 		this.blurringStartedAt = null;
+		this.failReason = null;   // 사유도 원본 파생 값 — 새 시도에 옛 탈락 사유가 남으면 안 된다 (MSG-286)
 		this.processingStatus = ProcessingStatus.UPLOADED;
 	}
 

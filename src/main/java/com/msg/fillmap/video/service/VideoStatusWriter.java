@@ -115,16 +115,18 @@ public class VideoStatusWriter {
 	 * 가드를 건다 — 교체/삭제로 이미 대상이 아니게 된 영상을 옛 잡 판단으로 FAILED 로 밀지 않는다 (P1/P2).
 	 * jobId 와 함께 blurringStartedAt(시도 넌스)도 확인한다 (P2-a) — 미제출 행(jobId null)끼리는 jobId 로
 	 * 구분되지 않으므로 recordAiJob 과 대칭으로 시도 시작시각까지 일치해야 한다.
+	 * failReason 은 프리체크 탈락 사유 코드(MSG-286), null = 시스템 오류 실패 — 가드 skip 시 사유도 안 남는다.
 	 */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void markBlurFailed(Long videoId, String expectedJobId, LocalDateTime expectedStartedAt) {
+	public void markBlurFailed(Long videoId, String expectedJobId, LocalDateTime expectedStartedAt,
+		String failReason) {
 		videoRepository.findWithLockById(videoId).ifPresent(video -> {
 			if (!isCurrentBlurJob(video, expectedJobId)
 				|| !Objects.equals(video.getBlurringStartedAt(), expectedStartedAt)) {
 				logStaleSkip("블러 실패", videoId, expectedJobId, video);
 				return;
 			}
-			video.markFailed();
+			video.markFailed(failReason);
 		});
 	}
 
