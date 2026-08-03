@@ -9,7 +9,8 @@ import com.msg.fillmap.video.repository.RegionGridCountProjection;
  * "어디에 콘텐츠가 많은가" 발견용이다(§D3 gridCount DESC). gridCount 는 ①의 카드 집합 크기와 동일
  * 정의(§D1)라 선택해 들어간 화면과 숫자가 어긋나지 않는다.
  */
-@Schema(description = "전체 지역 리스트 항목 (행정동별 격자 수)")
+@Schema(description = "전체 지역 리스트 항목 (행정동별 격자 수)",
+	requiredProperties = {"regionCode", "regionName", "gridCount"})
 public record RegionGridCountResponseDto(
 	@Schema(description = "행정동 코드 — 선택 시 격자 카드 조회에 전달", example = "2644056000")
 	String regionCode,

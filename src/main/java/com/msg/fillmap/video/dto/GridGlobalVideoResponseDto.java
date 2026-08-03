@@ -12,7 +12,8 @@ import com.msg.fillmap.video.entity.Video;
  * 전역 목록은 항상 READY 라 processingStatus 가 무의미하고, 작성자 식별 정보(닉네임·색)는 프라이버시상
  * 담지 않으며(glossary Phase 2+), title 은 videos.title 컬럼 신설(MSG-240) 후 additive 로 붙는다.
  */
-@Schema(description = "격자 전역 영상 목록 항목")
+@Schema(description = "격자 전역 영상 목록 항목",
+	requiredProperties = {"videoId", "thumbnailUrl", "durationSec", "viewCount", "recordedAt"})
 public record GridGlobalVideoResponseDto(
 	@Schema(description = "영상 ID. 항목 탭 → 단건 재생(GET /api/videos/{videoId}) 진입 키", example = "1042")
 	Long videoId,

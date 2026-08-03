@@ -12,7 +12,8 @@ import com.msg.fillmap.video.entity.Video;
  * 대표는 필터가 READY 를 강제하므로 thumbnailUrl 은 항상 발급되고 processingStatus 분기는 없다.
  * 작성자 식별 정보(닉네임·색)는 프라이버시상 담지 않는다(glossary Phase 2+).
  */
-@Schema(description = "격자 전역 대표 영상")
+@Schema(description = "격자 전역 대표 영상",
+	requiredProperties = {"videoId", "thumbnailUrl", "durationSec", "viewCount", "recordedAt"})
 public record GridCoverVideoResponseDto(
 	@Schema(description = "대표 영상 ID. 개별 재생 진입 키", example = "1042")
 	Long videoId,

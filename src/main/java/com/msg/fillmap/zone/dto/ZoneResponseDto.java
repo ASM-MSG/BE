@@ -8,7 +8,8 @@ import com.msg.fillmap.zone.entity.Zone;
  * 구역 목록 응답 (MSG-234 GET /api/zones). FE 가 캐시해 gridId 로 표시명을 로컬 산술하고 구역 오버레이에 쓴다(§D3).
  * 식별자는 재시딩·환경 무관 안정 참조인 zoneKey 를 노출한다(DB 생성 id 는 환경마다 달라 노출하지 않음, §D5).
  */
-@Schema(description = "격자 표시명 계산용 구역(zone). 정수 사각형 + 이름 + 소속 행정동.")
+@Schema(description = "격자 표시명 계산용 구역(zone). 정수 사각형 + 이름 + 소속 행정동.",
+	requiredProperties = {"zoneKey", "name", "minGridY", "maxGridY", "minGridX", "maxGridX", "priority"})
 public record ZoneResponseDto(
 	@Schema(description = "안정 식별자 slug (zones.zone_key) — 클라이언트 참조·타이브레이크 기준", example = "seomyeon")
 	String zoneKey,

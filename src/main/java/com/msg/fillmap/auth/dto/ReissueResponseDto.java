@@ -2,7 +2,7 @@ package com.msg.fillmap.auth.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(description = "토큰 재발급 성공 응답")
+@Schema(description = "토큰 재발급 성공 응답", requiredProperties = {"accessToken"})
 public record ReissueResponseDto(
 	@Schema(description = "새로 발급된 JWT 액세스 토큰.", example = "eyJhbGciOiJIUzI1NiJ9...")
 	String accessToken,

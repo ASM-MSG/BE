@@ -6,7 +6,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import com.msg.fillmap.user.entity.User;
 
-@Schema(description = "회원가입 성공 응답 — 생성된 사용자 정보")
+@Schema(description = "회원가입 성공 응답 — 생성된 사용자 정보",
+	requiredProperties = {"id", "email", "nickname", "createdAt"})
 public record SignupResponseDto(
 	@Schema(description = "생성된 사용자 ID", example = "1")
 	Long id,

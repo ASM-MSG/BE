@@ -10,7 +10,7 @@ import com.msg.fillmap.grid.service.OccupiedGridPage;
  * viewport 색칠 페이지 응답 (MSG-90). grids 는 (grid_y, grid_x) 오름차순 정렬된 한 페이지,
  * nextCursor 는 다음 페이지 opaque 커서 — 마지막 페이지면 null.
  */
-@Schema(description = "뷰포트 색칠 격자 페이지 응답 (커서 페이지네이션)")
+@Schema(description = "뷰포트 색칠 격자 페이지 응답 (커서 페이지네이션)", requiredProperties = {"grids"})
 public record OccupiedGridPageResponseDto(
 	@Schema(description = "이 페이지의 색칠 격자 목록 ((grid_y, grid_x) 오름차순)")
 	List<OccupiedGridResponseDto> grids,

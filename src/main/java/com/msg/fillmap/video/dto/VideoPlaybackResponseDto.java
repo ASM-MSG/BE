@@ -12,7 +12,9 @@ import com.msg.fillmap.video.entity.Video;
  * 따라 발급 여부를 정한다(엔티티엔 S3 key 만 있어서다). status 는 소유자가 블라인드 사유(재생 불가)를
  * playbackUrl=null 만으로 구분 못 하는 걸 해소하는 축이다(§설계 M5).
  */
-@Schema(description = "단건 영상 재생 조회 응답")
+@Schema(description = "단건 영상 재생 조회 응답",
+	requiredProperties = {"videoId", "gridId", "durationSec", "processingStatus", "visibility", "status", "viewCount",
+		"recordedAt"})
 public record VideoPlaybackResponseDto(
 	@Schema(description = "영상(방문 이벤트) ID", example = "1042")
 	Long videoId,

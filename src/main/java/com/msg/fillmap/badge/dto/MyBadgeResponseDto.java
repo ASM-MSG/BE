@@ -11,7 +11,8 @@ import com.msg.fillmap.badge.repository.MyBadgeProjection;
  * 나가고, 미획득 행은 earned false + earnedAt·featuredRank null + isNew false 다(3값 boolean 금지).
  * 진열장은 FE 가 earned true 를 earnedAt 내림차순 정렬해 파생한다(§D4) — 별도 필드 없음.
  */
-@Schema(description = "내 뱃지 목록 행 — 획득+미획득 전체")
+@Schema(description = "내 뱃지 목록 행 — 획득+미획득 전체",
+	requiredProperties = {"badgeId", "code", "name", "earned", "isNew"})
 public record MyBadgeResponseDto(
 	@Schema(description = "뱃지 ID", example = "2")
 	Long badgeId,
