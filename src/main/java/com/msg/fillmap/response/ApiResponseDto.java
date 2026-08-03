@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-// body 는 에러 응답에서 null 이므로 required 에 넣지 않는다.
+// data 는 에러 응답에서 null 이므로 required 에 넣지 않는다.
 @Schema(requiredProperties = {"developCode", "message"})
 @Getter
 @Builder
@@ -17,5 +17,5 @@ public class ApiResponseDto<T> {
 
 	private Integer developCode;
 	private String message;
-	private T body;
+	private T data;
 }
