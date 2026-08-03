@@ -38,6 +38,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 
 import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.friend.service.FriendService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.geo.KoreaCoordinates;
@@ -109,10 +110,12 @@ public class VideoServiceImpl implements VideoService {
 	private final StreakCommandService streakCommandService;
 	private final MissionAwardService missionAwardService;
 	private final HotScoreCommandService hotScoreCommandService;
+	// 재생 판정의 FRIENDS 분기만 쓰는 B-내부 의존 (MSG-285) — video → friend 단방향, 순환 없음.
+	private final FriendService friendService;
 	private final Clock clock;
 
 	/**
-	 * 프로덕션 생성자 — 13번째 인자 clock 을 Clock.systemUTC() 로 고정해 Lombok 전체 생성자로 위임한다.
+	 * 프로덕션 생성자 — 마지막 인자 clock 을 Clock.systemUTC() 로 고정해 Lombok 전체 생성자로 위임한다.
 	 * systemUTC 인 이유: recordedAt 은 UTC 순간으로 해석된다(findCompleted 가 UTC 저장 미션 기간과 직접
 	 * 비교 — MSG-278 §D1). 기본존(KST JVM)이면 now 가 +9h 앞서 판정이 환경별로 갈린다(MSG-222 전례).
 	 * 전체 생성자(@RequiredArgsConstructor 생성)는 테스트 고정 클럭 주입용이다.
@@ -122,10 +125,11 @@ public class VideoServiceImpl implements VideoService {
 		VideoStatusWriter videoStatusWriter, S3Presigner s3Presigner, S3Client s3Client, AwsProperties awsProperties,
 		RegionStatsCommandService regionStatsCommandService, ThumbnailUrlPresigner thumbnailUrlPresigner,
 		BadgeAwardService badgeAwardService, StreakCommandService streakCommandService,
-		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService) {
+		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService,
+		FriendService friendService) {
 		this(videoRepository, videoEncodingService, videoStatusWriter, s3Presigner, s3Client, awsProperties,
 			regionStatsCommandService, thumbnailUrlPresigner, badgeAwardService, streakCommandService,
-			missionAwardService, hotScoreCommandService, Clock.systemUTC());
+			missionAwardService, hotScoreCommandService, friendService, Clock.systemUTC());
 	}
 
 	@Override
@@ -491,10 +495,24 @@ public class VideoServiceImpl implements VideoService {
 			if (!owner) {
 				throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);
 			}
-		} else if (video.getVisibility() == Visibility.PRIVATE && !owner) {
-			// 3. visibility — PRIVATE 는 존재는 노출하되 접근만 막는다(404 아니라 403, 티켓 확정).
-			// 공유 상수의 기본 메시지("본인의 영상만 처리...")는 수정 거부 뉘앙스라 조회 맥락 문구로 override.
-			throw new ApiException(VideoErrorCode.VIDEO_FORBIDDEN, "비공개 영상입니다");
+		} else if (!owner) {
+			// 3. visibility — 통과할 값을 명시한다(MSG-285 §D3). "PRIVATE 만 차단"이라는 부정형이면 새 공개범위가
+			// 조용히 전원 공개로 새기 때문이다 — FRIENDS 추가가 바로 그 회귀 지점이었다.
+			// 문(statement)이 아니라 식(expression)인 이유: javac 은 식에서만 미포함 상수를 컴파일 에러로 잡는다
+			// (문은 그냥 통과). 4값째가 생기면 여기서 컴파일이 깨져 판정 재검토가 강제된다 — §D3 의 목적.
+			boolean visible = switch (video.getVisibility()) {
+				case PUBLIC -> true;
+				// 친구 조회는 이 분기에서만 1회 — PUBLIC·PRIVATE·소유자 경로는 쿼리 0회다.
+				// 캐시 없는 요청 시점 판정이라 친구 삭제가 다음 요청부터 즉시 반영된다 (FR-6).
+				case FRIENDS -> friendService.isFriend(video.getUserId(), userId);
+				case PRIVATE -> false;
+			};
+			if (!visible) {
+				// PRIVATE 는 존재는 노출하되 접근만 막는다(404 아니라 403, 티켓 확정). 비친구의 FRIENDS 도
+				// 같은 자리에서 던져 응답이 PRIVATE 와 바이트 단위로 같다 — 신규 에러코드 없음(§D1).
+				// 공유 상수의 기본 메시지("본인의 영상만 처리...")는 수정 거부 뉘앙스라 조회 맥락 문구로 override.
+				throw new ApiException(VideoErrorCode.VIDEO_FORBIDDEN, "비공개 영상입니다");
+			}
 		}
 
 		// 4. 재생 소스 선택 & presign — ACTIVE·READY 만 발급. 블러본이 있으면 우선, 없으면 인코딩본.

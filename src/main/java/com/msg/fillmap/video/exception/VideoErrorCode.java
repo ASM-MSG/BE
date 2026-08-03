@@ -24,7 +24,7 @@ public enum VideoErrorCode implements ErrorCodeIfs {
 	VIDEO_NOT_FOUND(3404, HttpStatus.NOT_FOUND, "영상을 찾을 수 없습니다"),
 	FILE_TOO_LARGE(3413, HttpStatus.BAD_REQUEST, "허용 크기를 초과한 영상입니다"),
 	UNSUPPORTED_EXTENSION(3415, HttpStatus.BAD_REQUEST, "지원하지 않는 영상 확장자입니다 (mp4, mov)"),
-	INVALID_VISIBILITY(3420, HttpStatus.BAD_REQUEST, "visibility 는 PUBLIC 또는 PRIVATE 여야 합니다"),
+	INVALID_VISIBILITY(3420, HttpStatus.BAD_REQUEST, "visibility 는 PUBLIC, PRIVATE, FRIENDS 중 하나여야 합니다"),
 	GRID_MISMATCH(3422, HttpStatus.BAD_REQUEST, "같은 격자 안에서만 교체할 수 있습니다"),
 	INVALID_CURSOR(3423, HttpStatus.BAD_REQUEST, "유효하지 않은 커서입니다"),
 	RECORDED_AT_IN_FUTURE(3424, HttpStatus.BAD_REQUEST, "촬영 시각이 현재 시각보다 미래입니다"),
