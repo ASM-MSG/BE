@@ -39,6 +39,7 @@ import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.service.AiClient.AiJobResult;
 import com.msg.fillmap.video.service.AiClient.AiJobStatus;
+import com.msg.fillmap.video.service.AiClient.Precheck;
 import com.msg.fillmap.video.support.FfmpegRunner;
 import com.msg.fillmap.video.support.GeoSupport;
 
@@ -200,7 +201,7 @@ class AiBlurPollerTest {
 		poller.reconcile();
 
 		// UNKNOWN 은 살아있지 않음 → 타임아웃 경로 → 상한 초과라 FAILED (즉시 FAILED 가 아니라 타임아웃 경유)
-		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt());
+		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), null);
 	}
 
 	@Test
@@ -214,7 +215,7 @@ class AiBlurPollerTest {
 
 		verify(statusWriter, never()).markBlurReady(anyLong(), anyString(), anyString(), anyString(), any());   // READY 전이 안 함
 		verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));   // 업로드 전에 중단
-		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any());   // 타임아웃 전이라 FAILED 도 아님
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 타임아웃 전이라 FAILED 도 아님
 	}
 
 	@Test
@@ -227,7 +228,7 @@ class AiBlurPollerTest {
 		poller.reconcile();
 
 		// DONE 소비 실패가 외곽 로그가 아니라 타임아웃 경로로 수렴 → 상한 초과라 FAILED (성공 기준 3, P1)
-		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt());
+		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), null);
 		verify(statusWriter, never()).markBlurReady(anyLong(), anyString(), anyString(), anyString(), any());
 	}
 
@@ -241,7 +242,7 @@ class AiBlurPollerTest {
 		poller.reconcile();
 
 		// 넓힌 catch 가 파싱 실패까지 타임아웃 경로로 라우팅 → 상한 초과라 FAILED (P2-a)
-		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt());
+		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), null);
 	}
 
 	@Test
@@ -254,7 +255,7 @@ class AiBlurPollerTest {
 		poller.reconcile();
 
 		// downloadBlurred null 이 조기 return 이 아니라 타임아웃 경로로 → 상한 초과라 FAILED (P2-b)
-		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt());
+		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), null);
 		verify(statusWriter, never()).markBlurReady(anyLong(), anyString(), anyString(), anyString(), any());
 	}
 
@@ -282,7 +283,7 @@ class AiBlurPollerTest {
 
 		poller.reconcile();
 
-		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any());   // 타임아웃으로 오탐 안 됨
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 타임아웃으로 오탐 안 됨
 		verify(aiClient).poll("job-1");
 	}
 
@@ -294,7 +295,7 @@ class AiBlurPollerTest {
 		poller.reconcile();
 
 		verify(aiClient).poll("job-1");   // 제출된 잡은 먼저 poll
-		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any());   // 살아있어 타임아웃 검사 skip
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 살아있어 타임아웃 검사 skip
 	}
 
 	@Test
@@ -305,7 +306,7 @@ class AiBlurPollerTest {
 
 		poller.reconcile();
 
-		verify(statusWriter).markBlurFailed(7L, "job-fail", video.getBlurringStartedAt());
+		verify(statusWriter).markBlurFailed(7L, "job-fail", video.getBlurringStartedAt(), null);
 		verify(statusWriter, never()).clearAiJob(anyLong(), anyString());   // 명시 실패는 재제출 대상이 아니다 (MSG-283 기준 2)
 		verify(statusWriter, never()).markBlurReady(anyLong(), anyString(), anyString(), anyString(), any());
 	}
@@ -320,7 +321,7 @@ class AiBlurPollerTest {
 
 		// 404 = 잡 유실(AI 재시작) — 실패가 아니라 미제출 복귀. 재제출은 다음 주기 미제출 경로 몫 (MSG-283 D1)
 		verify(statusWriter).clearAiJob(7L, "job-lost");
-		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any());
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());
 		verify(aiClient, never()).submit(any());
 	}
 
@@ -331,7 +332,7 @@ class AiBlurPollerTest {
 
 		poller.reconcile();
 
-		verify(statusWriter).markBlurFailed(7L, null, video.getBlurringStartedAt());
+		verify(statusWriter).markBlurFailed(7L, null, video.getBlurringStartedAt(), null);
 		verify(aiClient, never()).submit(any());   // 타임아웃이라 제출도 안 함
 		verify(aiClient, never()).poll(anyString());
 	}
@@ -344,7 +345,7 @@ class AiBlurPollerTest {
 
 		poller.reconcile();
 
-		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt());
+		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), null);
 	}
 
 	@Test
@@ -356,7 +357,94 @@ class AiBlurPollerTest {
 		assertThatCode(() -> poller.reconcile()).doesNotThrowAnyException();
 
 		verify(statusWriter, never()).recordAiJob(anyLong(), anyString(), any());
-		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any());
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());
+	}
+
+	// ── 프리체크 탈락 즉시 실패 (MSG-286) ──
+
+	@Test
+	void 프리체크_탈락이면_타임아웃_없이_즉시_사유와_함께_FAILED로_전이한다() {
+		Video video = blurring(7L, "job-1", LocalDateTime.now());   // 방금 시작 — 타임아웃 한참 전
+		givenBlurring(video);
+		given(aiClient.poll("job-1")).willReturn(
+			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(false, "too_dark: std 3.18 < 10.0")));
+
+		poller.reconcile();
+
+		// 콜론 앞 코드만 추출해 사유로 기록 — 진단 수치는 파싱하지 않는다 (FR-1·FR-4)
+		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), "too_dark");
+		verify(aiClient, never()).downloadBlurred(anyString());   // DONE 블록 무진입 — 409 왕복 없음 (FR-6)
+		verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+		verify(statusWriter, never()).markBlurReady(anyLong(), anyString(), anyString(), anyString(), any());
+	}
+
+	@Test
+	void 프리체크_reason이_null이어도_실패_처리는_동작한다() {
+		Video video = blurring(7L, "job-1", LocalDateTime.now());
+		givenBlurring(video);
+		given(aiClient.poll("job-1")).willReturn(
+			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(false, null)));
+
+		poller.reconcile();
+
+		// 계약 위반(탈락인데 사유 없음)이어도 폴백 코드로 시스템 오류(NULL)와는 구분한다 (PRD 엣지, FR-4)
+		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), "precheck_failed");
+	}
+
+	@Test
+	void 프리체크_미지_코드는_원문_그대로_기록한다() {
+		Video video = blurring(7L, "job-1", LocalDateTime.now());
+		givenBlurring(video);
+		given(aiClient.poll("job-1")).willReturn(
+			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(false, "weird_new_code: x")));
+
+		poller.reconcile();
+
+		// BE 에 코드 화이트리스트·enum 매핑 없음 — 매핑 실패가 실패 처리를 막지 않는다 (PRD 엣지)
+		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), "weird_new_code");
+	}
+
+	@Test
+	void 프리체크_사유_코드가_64자를_넘으면_64자로_절단해_기록한다() {
+		Video video = blurring(7L, "job-1", LocalDateTime.now());
+		givenBlurring(video);
+		String longCode = "x".repeat(80);   // 콜론 없는 비정상 장문 reason (성공 기준 5 — 비정상 길이)
+		given(aiClient.poll("job-1")).willReturn(
+			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(false, longCode)));
+
+		poller.reconcile();
+
+		// VARCHAR(64) 초과로 UPDATE 가 터지면 실패 처리 자체가 막힌다 — 절단 방어 (D2)
+		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), "x".repeat(64));
+	}
+
+	@Test
+	void 프리체크_통과면_기존_DONE_경로로_블러본을_소비한다() {
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		given(aiClient.poll("job-1")).willReturn(
+			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(true, null)));
+		given(aiClient.downloadBlurred("job-1")).willReturn("blurred".getBytes());
+		given(statusWriter.markBlurReady(anyLong(), anyString(), anyString(), anyString(), any())).willReturn(true);
+
+		poller.reconcile();
+
+		verify(statusWriter).markBlurReady(7L, "job-1", "videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg", List.of());
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 통과는 실패가 아니다 (FR-2)
+	}
+
+	@Test
+	void precheck가_없으면_기존_타임아웃_경로가_유지된다() {
+		Video video = blurring(7L, "job-1", LocalDateTime.now());   // 타임아웃 한참 전
+		givenBlurring(video);
+		// AI 구버전 응답(precheck 부재) + DONE 인데 완료본 미가용(409 지속) — 기존 `DONE인데_영상이_계속_미가용...`과 쌍
+		given(aiClient.poll("job-1")).willReturn(new AiJobResult(AiJobStatus.DONE, List.of(), false));
+		given(aiClient.downloadBlurred("job-1")).willReturn(null);
+
+		poller.reconcile();
+
+		// 필드 부재 = 판정 안 함 (FR-3) — 즉시 FAILED 가 아니라 타임아웃 경로로, 초과 전이라 BLURRING 유지
+		verify(aiClient).downloadBlurred("job-1");
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());
 	}
 
 	@Test
@@ -386,7 +474,7 @@ class AiBlurPollerTest {
 		poller.reconcile();
 		verify(statusWriter).markBlurReady(7L, "job-new", "videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg",
 			List.of(List.of(0.0, 3.33)));
-		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any());   // 세 주기 어디서도 FAILED 없음
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 세 주기 어디서도 FAILED 없음
 	}
 
 	@Test
@@ -398,7 +486,7 @@ class AiBlurPollerTest {
 
 		verify(videoRepository).findByStatusAndProcessingStatus(VideoStatus.ACTIVE, ProcessingStatus.BLURRING);
 		verify(aiClient).poll("job-1");
-		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any());
+		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());
 		verify(statusWriter, never()).markBlurReady(eq(7L), anyString(), anyString(), anyString(), any());
 	}
 }

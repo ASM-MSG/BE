@@ -93,7 +93,7 @@ class VideoStatusWriterTest {
 		video.markDeleted();   // status=DELETED, processing_status 는 BLURRING 유지
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
-		statusWriter.markBlurFailed(VIDEO_ID, "job-1", video.getBlurringStartedAt());
+		statusWriter.markBlurFailed(VIDEO_ID, "job-1", video.getBlurringStartedAt(), null);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.BLURRING);   // FAILED 로 밀리지 않음
 	}
@@ -105,9 +105,47 @@ class VideoStatusWriterTest {
 		LocalDateTime oldStartedAt = video.getBlurringStartedAt().minusMinutes(40);
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
-		statusWriter.markBlurFailed(VIDEO_ID, null, oldStartedAt);
+		statusWriter.markBlurFailed(VIDEO_ID, null, oldStartedAt, null);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.BLURRING);   // 새 시도는 FAILED 안 됨
+	}
+
+	// ── 프리체크 탈락 사유 기록 (MSG-286) ──
+
+	@Test
+	void 사유와_함께_실패하면_FAILED와_사유_코드가_기록된다() {
+		Video video = blurring("job-1");
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markBlurFailed(VIDEO_ID, "job-1", video.getBlurringStartedAt(), "too_dark");
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.FAILED);
+		assertThat(video.getFailReason()).isEqualTo("too_dark");
+	}
+
+	@Test
+	void 사유_없이_실패하면_failReason은_null이다() {
+		Video video = blurring("job-1");
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markBlurFailed(VIDEO_ID, "job-1", video.getBlurringStartedAt(), null);
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.FAILED);
+		assertThat(video.getFailReason()).isNull();   // NULL = 시스템 오류 실패 (FR-4 구분)
+	}
+
+	@Test
+	void 가드가_거부하면_사유도_기록되지_않는다() {
+		Video video = blurring("job-1");
+		LocalDateTime oldStartedAt = video.getBlurringStartedAt();
+		// 폴러가 탈락을 보고 실패 처리하러 오는 사이 사용자가 교체 → 대상이 아니게 된 영상에 옛 잡 사유를 밀지 않는다
+		video.replaceFile(K2, (short) 8, LocalDateTime.now());
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markBlurFailed(VIDEO_ID, "job-1", oldStartedAt, "too_dark");
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.UPLOADED);   // skip — 새 파일 흐름 유지
+		assertThat(video.getFailReason()).isNull();
 	}
 
 	@Test

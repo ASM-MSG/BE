@@ -48,6 +48,20 @@ class VideoBlurTransitionTest {
 	}
 
 	@Test
+	void 교체하면_실패_사유가_초기화된다() {
+		Video video = newVideo();
+		video.markEncoding();
+		video.markEncoded("videos/encoded/1/7.mp4");
+		video.markFailed("too_dark");   // 프리체크 탈락 (MSG-286)
+
+		video.replaceFile("videos/original/1/y.mp4", (short) 8, LocalDateTime.now());
+
+		// 사유는 원본 파일에서 파생된 값 — 새 시도(UPLOADED 복귀)에 옛 사유가 남으면 안 된다
+		assertThat(video.getFailReason()).isNull();
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.UPLOADED);
+	}
+
+	@Test
 	void recordAiJob은_job_id를_기록한다() {
 		Video video = newVideo();
 		video.markEncoding();

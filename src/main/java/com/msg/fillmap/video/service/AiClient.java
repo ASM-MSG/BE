@@ -60,7 +60,8 @@ public class AiClient {
 				.uri("/jobs/{id}", jobId)
 				.retrieve()
 				.body(JsonNode.class);
-			return new AiJobResult(parseStatus(response.path("status").asString()), highlights(response), false);
+			return new AiJobResult(parseStatus(response.path("status").asString()), highlights(response), false,
+				precheck(response));
 		} catch (HttpClientErrorException.NotFound e) {
 			return new AiJobResult(null, null, true);
 		}
@@ -91,6 +92,26 @@ public class AiClient {
 		}
 	}
 
+	/**
+	 * precheck 판정 (MSG-284 FR-4, MSG-286). 필드 부재(AI 구버전)·null(판정 전)은 null — 계약상 구분할 이유가
+	 * 없다 (FR-3). passed 가 boolean 이 아니면(malformed) null — asBoolean 기본값 false 로 탈락 오판하면 정상
+	 * 영상이 즉시 실패하므로, 판정 불능은 기존 경로로 보낸다 (parseStatus 의 UNKNOWN 방어와 같은 P2-b 계열).
+	 */
+	private Precheck precheck(JsonNode response) {
+		JsonNode node = response.path("precheck");
+		if (node.isMissingNode() || node.isNull()) {
+			return null;
+		}
+		JsonNode passed = node.path("passed");
+		if (!passed.isBoolean()) {
+			log.warn("AI precheck.passed 해석 불가 — 판정 전으로 취급: raw={}", passed);
+			return null;
+		}
+		JsonNode reason = node.path("reason");
+		return new Precheck(passed.asBoolean(),
+			reason.isMissingNode() || reason.isNull() ? null : reason.asString());
+	}
+
 	/** highlights = [[시작초, 끝초], ...] 최대 3구간, 소수점 2자리 (MSG-145). 없으면 null. */
 	private List<List<Double>> highlights(JsonNode response) {
 		JsonNode node = response.path("highlights");
@@ -113,7 +134,17 @@ public class AiClient {
 		UNKNOWN
 	}
 
-	/** 폴링 결과 — status(유실 시 null)·highlights·notFound(404). */
-	public record AiJobResult(AiJobStatus status, List<List<Double>> highlights, boolean notFound) {
+	/** 프리체크 판정 (MSG-284 FR-4). reason 은 계약 원문 그대로 — 코드 추출은 소비 지점(폴러) 몫. */
+	public record Precheck(boolean passed, String reason) {
+	}
+
+	/** 폴링 결과 — status(유실 시 null)·highlights·notFound(404)·precheck(부재/판정 전 null, MSG-286). */
+	public record AiJobResult(AiJobStatus status, List<List<Double>> highlights, boolean notFound,
+		Precheck precheck) {
+
+		/** precheck 부재 호환 생성자 — 기존 생성부(테스트 다수)와 404 경로가 그대로 쓴다. */
+		public AiJobResult(AiJobStatus status, List<List<Double>> highlights, boolean notFound) {
+			this(status, highlights, notFound, null);
+		}
 	}
 }
