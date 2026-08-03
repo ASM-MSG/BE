@@ -63,9 +63,9 @@ class HotZoneControllerTest {
 
 		mockMvc.perform(hotZoneRequest())
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.body.hotZones[0].gridId").value("41642_110458"))
-			.andExpect(jsonPath("$.body.hotZones[0].userId").doesNotExist())
-			.andExpect(jsonPath("$.body.hotZones[0].user_id").doesNotExist());
+			.andExpect(jsonPath("$.data.hotZones[0].gridId").value("41642_110458"))
+			.andExpect(jsonPath("$.data.hotZones[0].userId").doesNotExist())
+			.andExpect(jsonPath("$.data.hotZones[0].user_id").doesNotExist());
 	}
 
 	@Test
@@ -79,12 +79,12 @@ class HotZoneControllerTest {
 		mockMvc.perform(hotZoneRequest())
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.hotZones[0].gridId").value("41677_110443"))
-			.andExpect(jsonPath("$.body.hotZones[0].gridY").value(41677))
-			.andExpect(jsonPath("$.body.hotZones[0].gridX").value(110443))
-			.andExpect(jsonPath("$.body.hotZones[0].score").value(7))
-			.andExpect(jsonPath("$.body.hotZones[1].gridId").value("41642_110458"))
-			.andExpect(jsonPath("$.body.hotZones[1].score").value(5));
+			.andExpect(jsonPath("$.data.hotZones[0].gridId").value("41677_110443"))
+			.andExpect(jsonPath("$.data.hotZones[0].gridY").value(41677))
+			.andExpect(jsonPath("$.data.hotZones[0].gridX").value(110443))
+			.andExpect(jsonPath("$.data.hotZones[0].score").value(7))
+			.andExpect(jsonPath("$.data.hotZones[1].gridId").value("41642_110458"))
+			.andExpect(jsonPath("$.data.hotZones[1].score").value(5));
 	}
 
 	private MockHttpServletRequestBuilder hotZoneRequest() {

@@ -1,5 +1,6 @@
 package com.msg.fillmap.user.entity;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
@@ -24,6 +25,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
+	// 친구 코드 알파벳 — 혼동 문자 I·O·0·1 제외 32종. V18 백필 SQL 과 동일 문자셋 (MSG-185 §D1).
+	private static final String FRIEND_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+	private static final int FRIEND_CODE_LENGTH = 8;
+	private static final SecureRandom FRIEND_CODE_RANDOM = new SecureRandom();
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;
@@ -47,6 +53,10 @@ public class User {
 
 	@Column(name = "profile_image_url", columnDefinition = "text")
 	private String profileImageUrl;
+
+	// 고정 친구 코드 — 가입 시 생성자에서 부여, 전역 유일, 재발급 없음(후속) (V18, MSG-185 §D2).
+	@Column(name = "friend_code", nullable = false, unique = true, length = 8)
+	private String friendCode;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "grid_color", nullable = false, length = 10)
@@ -76,6 +86,18 @@ public class User {
 		this.role = role;
 		this.gridColor = GridColor.BLUE;
 		this.emailVerified = false;
+		this.friendCode = generateFriendCode();
+	}
+
+	// 생성자 한 곳이 팩토리 2개(LOCAL·OAuth)를 전부 커버한다 — 가입 경로별 생성 코드 불요 (§D2).
+	// ponytail: 충돌 재시도 없음 — 32^8(≈1.1조) 공간에서 확률 ~1e-9, DB UNIQUE(uq_users_friend_code)가
+	// 백스톱. 실측 충돌이 나오면 가입 서비스에 재시도 루프 추가.
+	private static String generateFriendCode() {
+		StringBuilder code = new StringBuilder(FRIEND_CODE_LENGTH);
+		for (int i = 0; i < FRIEND_CODE_LENGTH; i++) {
+			code.append(FRIEND_CODE_ALPHABET.charAt(FRIEND_CODE_RANDOM.nextInt(FRIEND_CODE_ALPHABET.length())));
+		}
+		return code.toString();
 	}
 
 	public static User createLocalUser(String email, String encodedPassword, String nickname) {

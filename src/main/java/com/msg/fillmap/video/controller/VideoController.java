@@ -87,7 +87,7 @@ public class VideoController {
 	@Hidden // API 표면이 아닌 내부 심 — OpenAPI 스펙 노출 제외 (MSG-208)
 	@RequestMapping(value = "/{videoId}", method = RequestMethod.HEAD)
 	public SuccessResponse<Void> headPlayback() {
-		return new SuccessResponse<>(null);   // body 없는 성공 — delete 핸들러와 같은 방식
+		return new SuccessResponse<>(null);   // data 없는 성공 — delete 핸들러와 같은 방식
 	}
 
 	@Operation(
@@ -127,6 +127,6 @@ public class VideoController {
 		@Parameter(description = "삭제할 영상 ID", example = "1001") @PathVariable Long videoId
 	) {
 		videoService.deleteVideo(principal.userId(), videoId);
-		return new SuccessResponse<>(null);   // body 없는 성공 — AuthController.logout 과 같은 방식
+		return new SuccessResponse<>(null);   // data 없는 성공 — AuthController.logout 과 같은 방식
 	}
 }

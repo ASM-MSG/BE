@@ -58,8 +58,8 @@ class VideoVisibilityControllerTest {
 				.content("{\"visibility\":\"PUBLIC\"}"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.videoId").value(1042))
-			.andExpect(jsonPath("$.body.visibility").value("PUBLIC"));
+			.andExpect(jsonPath("$.data.videoId").value(1042))
+			.andExpect(jsonPath("$.data.visibility").value("PUBLIC"));
 	}
 
 	@Test

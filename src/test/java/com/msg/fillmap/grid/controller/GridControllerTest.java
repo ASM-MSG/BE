@@ -63,9 +63,9 @@ class GridControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.gridId").value(GRID_ID))
-			.andExpect(jsonPath("$.body.occupied").value(true))
-			.andExpect(jsonPath("$.body.videoCount").value(3));
+			.andExpect(jsonPath("$.data.gridId").value(GRID_ID))
+			.andExpect(jsonPath("$.data.occupied").value(true))
+			.andExpect(jsonPath("$.data.videoCount").value(3));
 	}
 
 	@Test
@@ -89,10 +89,10 @@ class GridControllerTest {
 		mockMvc.perform(viewportRequest())
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.grids[0].gridId").value(GRID_ID))
-			.andExpect(jsonPath("$.body.grids[0].gridY").value(41642))
-			.andExpect(jsonPath("$.body.grids[0].gridX").value(110458))
-			.andExpect(jsonPath("$.body.nextCursor").value("NDE2NDNfMTEwNDYw"));
+			.andExpect(jsonPath("$.data.grids[0].gridId").value(GRID_ID))
+			.andExpect(jsonPath("$.data.grids[0].gridY").value(41642))
+			.andExpect(jsonPath("$.data.grids[0].gridX").value(110458))
+			.andExpect(jsonPath("$.data.nextCursor").value("NDE2NDNfMTEwNDYw"));
 	}
 
 	@Test
@@ -103,7 +103,7 @@ class GridControllerTest {
 
 		mockMvc.perform(viewportRequest())
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.body.nextCursor").value(nullValue()));
+			.andExpect(jsonPath("$.data.nextCursor").value(nullValue()));
 	}
 
 	@Test

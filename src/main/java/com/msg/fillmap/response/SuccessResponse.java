@@ -13,7 +13,7 @@ public class SuccessResponse<T> extends ResponseEntity<ApiResponseDto<T>> {
 			ApiResponseDto.<T>builder()
 				.developCode(SUCCESS_CODE)
 				.message(SUCCESS_MESSAGE)
-				.body(data)
+				.data(data)
 				.build(),
 			HttpStatus.OK
 		);

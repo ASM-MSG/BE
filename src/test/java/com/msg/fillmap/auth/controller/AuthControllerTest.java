@@ -109,9 +109,9 @@ class AuthControllerTest {
 					.content(objectMapper.writeValueAsString(request)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.developCode").value(200))
-				.andExpect(jsonPath("$.body.id").value(1))
-				.andExpect(jsonPath("$.body.email").value("test@example.com"))
-				.andExpect(jsonPath("$.body.nickname").value("테스터"));
+				.andExpect(jsonPath("$.data.id").value(1))
+				.andExpect(jsonPath("$.data.email").value("test@example.com"))
+				.andExpect(jsonPath("$.data.nickname").value("테스터"));
 		}
 
 		@Test
@@ -193,8 +193,8 @@ class AuthControllerTest {
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(objectMapper.writeValueAsString(request)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.body.accessToken").value("access-jwt"))
-				.andExpect(jsonPath("$.body.refreshToken").isEmpty())
+				.andExpect(jsonPath("$.data.accessToken").value("access-jwt"))
+				.andExpect(jsonPath("$.data.refreshToken").isEmpty())
 				.andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("refreshToken=")))
 				.andExpect(header().exists(DEVICE_ID_HEADER));
 		}
@@ -211,8 +211,8 @@ class AuthControllerTest {
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(objectMapper.writeValueAsString(request)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.body.accessToken").value("access-jwt"))
-				.andExpect(jsonPath("$.body.refreshToken").value("refresh-jwt"))
+				.andExpect(jsonPath("$.data.accessToken").value("access-jwt"))
+				.andExpect(jsonPath("$.data.refreshToken").value("refresh-jwt"))
 				.andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 		}
 
@@ -280,8 +280,8 @@ class AuthControllerTest {
 					.content(objectMapper.writeValueAsString(request)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.developCode").value(200))
-				.andExpect(jsonPath("$.body.accessToken").value("jwt-token"))
-				.andExpect(jsonPath("$.body.refreshToken").value("refresh-jwt"));
+				.andExpect(jsonPath("$.data.accessToken").value("jwt-token"))
+				.andExpect(jsonPath("$.data.refreshToken").value("refresh-jwt"));
 		}
 
 		@Test
@@ -339,8 +339,8 @@ class AuthControllerTest {
 			mockMvc.perform(post(REISSUE_URL)
 					.cookie(new Cookie(RefreshTokenCookies.COOKIE_NAME, "refresh-cookie")))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.body.accessToken").value("new-access"))
-				.andExpect(jsonPath("$.body.refreshToken").isEmpty())
+				.andExpect(jsonPath("$.data.accessToken").value("new-access"))
+				.andExpect(jsonPath("$.data.refreshToken").isEmpty())
 				.andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("refreshToken=")))
 				.andExpect(header().string(DEVICE_ID_HEADER, "device-1"));
 
@@ -359,8 +359,8 @@ class AuthControllerTest {
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(objectMapper.writeValueAsString(request)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.body.accessToken").value("new-access"))
-				.andExpect(jsonPath("$.body.refreshToken").value("new-refresh"))
+				.andExpect(jsonPath("$.data.accessToken").value("new-access"))
+				.andExpect(jsonPath("$.data.refreshToken").value("new-refresh"))
 				.andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE));
 
 			verify(refreshTokenService).reissue("refresh-body");

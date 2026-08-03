@@ -62,13 +62,13 @@ class MissionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.length()").value(1))
-			.andExpect(jsonPath("$.body[0].missionId").value(31))
-			.andExpect(jsonPath("$.body[0].type").value("THEME"))
-			.andExpect(jsonPath("$.body[0].title").value("성수 카페 투어"))
-			.andExpect(jsonPath("$.body[0].targetCount").value(5))
-			.andExpect(jsonPath("$.body[0].shape.cells.length()").value(1))
-			.andExpect(jsonPath("$.body[0].shape.cells[0].gridId").value("41642_110458"));
+			.andExpect(jsonPath("$.data.length()").value(1))
+			.andExpect(jsonPath("$.data[0].missionId").value(31))
+			.andExpect(jsonPath("$.data[0].type").value("THEME"))
+			.andExpect(jsonPath("$.data[0].title").value("성수 카페 투어"))
+			.andExpect(jsonPath("$.data[0].targetCount").value(5))
+			.andExpect(jsonPath("$.data[0].shape.cells.length()").value(1))
+			.andExpect(jsonPath("$.data[0].shape.cells[0].gridId").value("41642_110458"));
 	}
 
 	@Test
@@ -84,10 +84,10 @@ class MissionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			// @JsonRawValue — line 이 문자열이 아니라 JSON 객체라 하위 필드로 접근된다(escape 없음).
-			.andExpect(jsonPath("$.body[0].shape.line.type").value("LineString"))
-			.andExpect(jsonPath("$.body[0].shape.line.coordinates.length()").value(2))
-			.andExpect(jsonPath("$.body[0].shape.spots[0].gridId").value("39001_143377"))
-			.andExpect(jsonPath("$.body[0].shape.spots[0].seq").value(1));
+			.andExpect(jsonPath("$.data[0].shape.line.type").value("LineString"))
+			.andExpect(jsonPath("$.data[0].shape.line.coordinates.length()").value(2))
+			.andExpect(jsonPath("$.data[0].shape.spots[0].gridId").value("39001_143377"))
+			.andExpect(jsonPath("$.data[0].shape.spots[0].seq").value(1));
 	}
 
 	@Test
@@ -99,7 +99,7 @@ class MissionControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.body.length()").value(0));
+			.andExpect(jsonPath("$.data.length()").value(0));
 	}
 
 	@Test
