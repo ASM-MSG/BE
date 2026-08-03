@@ -14,6 +14,7 @@ import com.msg.fillmap.auth.exception.AuthErrorCode;
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.notification.service.PushTokenService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.exception.UserErrorCode;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -26,6 +27,8 @@ public class AuthService {
 	private final PasswordEncoder passwordEncoder;
 	private final TokenProvider tokenProvider;
 	private final RefreshTokenService refreshTokenService;
+	// auth → notification 단방향 소비 (MSG-178 logout 통합) — 역방향 참조 금지
+	private final PushTokenService pushTokenService;
 
 	@Transactional
 	public SignupResponseDto signup(SignupRequestDto request) {
@@ -52,10 +55,14 @@ public class AuthService {
 	}
 
 	@Transactional
-	public void logout(String accessToken, String deviceId) {
+	public void logout(String accessToken, String deviceId, String fcmToken) {
 		// 필터가 검증한 것과 같은 토큰이라 principal 재파싱으로 userId 를 얻는다 (SecurityContext 와 동일 값)
 		AuthPrincipal principal = tokenProvider.parseAccessToken(accessToken);
 		tokenProvider.invalidateAccessToken(accessToken);
+		if (fcmToken != null && !fcmToken.isBlank()) {
+			// 세션 삭제와 같은 처리에서 푸시 토큰도 정리 (MSG-178 logout 통합 — 로그아웃 후 401 순서 문제 소멸)
+			pushTokenService.unregister(principal.userId(), fcmToken);
+		}
 		if (deviceId == null || deviceId.isBlank()) {
 			// X-Device-Id 없음 → 로그아웃-올 폴백 (MSG-135 확정 결정 5)
 			refreshTokenService.deleteAll(principal.userId());

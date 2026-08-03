@@ -3,6 +3,7 @@ package com.msg.fillmap.auth.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -30,6 +31,7 @@ import com.msg.fillmap.auth.exception.AuthErrorCode;
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.notification.service.PushTokenService;
 import com.msg.fillmap.user.entity.AuthProvider;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.entity.UserRole;
@@ -51,6 +53,9 @@ class AuthServiceTest {
 
 	@Mock
 	private RefreshTokenService refreshTokenService;
+
+	@Mock
+	private PushTokenService pushTokenService;
 
 	@InjectMocks
 	private AuthService authService;
@@ -178,11 +183,13 @@ class AuthServiceTest {
 		void 로그아웃하면_액세스가_블랙리스트에_오르고_해당_디바이스_리프레시가_삭제된다() {
 			given(tokenProvider.parseAccessToken("jwt-token")).willReturn(new AuthPrincipal(42L, UserRole.USER));
 
-			authService.logout("jwt-token", "device-1");
+			authService.logout("jwt-token", "device-1", null);
 
 			verify(tokenProvider).invalidateAccessToken("jwt-token");
 			verify(refreshTokenService).delete(42L, "device-1");
 			verify(refreshTokenService, never()).deleteAll(any());
+			// fcmToken 이 없으면 푸시 토큰 정리는 호출되지 않는다 (MSG-178 하위 호환)
+			verify(pushTokenService, never()).unregister(anyLong(), any());
 		}
 
 		@Test
@@ -190,11 +197,22 @@ class AuthServiceTest {
 		void 디바이스_id가_없으면_모든_디바이스_리프레시를_삭제한다() {
 			given(tokenProvider.parseAccessToken("jwt-token")).willReturn(new AuthPrincipal(42L, UserRole.USER));
 
-			authService.logout("jwt-token", null);
+			authService.logout("jwt-token", null, null);
 
 			verify(tokenProvider).invalidateAccessToken("jwt-token");
 			verify(refreshTokenService).deleteAll(42L);
 			verify(refreshTokenService, never()).delete(any(), any());
+		}
+
+		@Test
+		@DisplayName("성공: fcmToken 이 있으면 파싱한 userId 로 푸시 토큰도 함께 정리한다 (MSG-178 logout 통합)")
+		void fcmToken이_있으면_푸시_토큰도_함께_정리한다() {
+			given(tokenProvider.parseAccessToken("jwt-token")).willReturn(new AuthPrincipal(42L, UserRole.USER));
+
+			authService.logout("jwt-token", "device-1", "fcm-token-abc");
+
+			verify(pushTokenService).unregister(42L, "fcm-token-abc");
+			verify(refreshTokenService).delete(42L, "device-1");
 		}
 	}
 }

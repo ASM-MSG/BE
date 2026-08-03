@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.dto.LoginRequestDto;
 import com.msg.fillmap.auth.dto.LoginResponseDto;
+import com.msg.fillmap.auth.dto.LogoutRequestDto;
 import com.msg.fillmap.auth.dto.OidcLoginRequestDto;
 import com.msg.fillmap.auth.dto.ReissueRequestDto;
 import com.msg.fillmap.auth.dto.ReissueResponseDto;
@@ -129,19 +130,22 @@ public class AuthController {
 	@Operation(
 		summary = "로그아웃",
 		description = "Authorization 헤더의 액세스 토큰을 무효화하고 해당 디바이스(X-Device-Id)의 리프레시 세션을 삭제한다. "
-			+ "X-Device-Id 가 없으면 해당 유저의 모든 디바이스 세션을 삭제한다."
+			+ "X-Device-Id 가 없으면 해당 유저의 모든 디바이스 세션을 삭제한다. "
+			+ "선택 body 의 fcmToken 이 있으면 해당 FCM 푸시 토큰도 함께 정리된다 (MSG-178 logout 통합)."
 	)
 	@PostMapping("/logout")
 	public SuccessResponse<Void> logout(
 		@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
 		@Parameter(description = "디바이스 식별자. 없으면 모든 디바이스 세션 삭제(로그아웃-올).")
 		@RequestHeader(value = DEVICE_ID_HEADER, required = false) String deviceId,
+		@RequestBody(required = false) LogoutRequestDto request,
 		HttpServletResponse response
 	) {
 		if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
 			throw new ApiException(AuthErrorCode.INVALID_TOKEN);
 		}
-		authService.logout(authorization.substring(BEARER_PREFIX.length()), deviceId);
+		String fcmToken = request != null ? request.fcmToken() : null;
+		authService.logout(authorization.substring(BEARER_PREFIX.length()), deviceId, fcmToken);
 		response.addHeader(HttpHeaders.SET_COOKIE, RefreshTokenCookies.expire());
 		return new SuccessResponse<>(null);
 	}
