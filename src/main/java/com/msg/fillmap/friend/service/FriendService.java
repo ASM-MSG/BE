@@ -3,6 +3,7 @@ package com.msg.fillmap.friend.service;
 import java.util.List;
 
 import com.msg.fillmap.friend.dto.FriendCodeResponseDto;
+import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
 import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
@@ -26,6 +27,12 @@ public interface FriendService {
 
 	/** 받은 대기 요청 목록 (FR-9). 최신 요청 우선, 페이징 없음(소량 천장 — 필요 시 후속). */
 	List<ReceivedFriendRequestResponseDto> getReceivedRequests(Long userId);
+
+	/**
+	 * 친구 목록 (MSG-186 FR-1~4). 방향 무관 ACCEPTED 전체, 페이징 없음. sort 는 null·"recent"(기본,
+	 * 수락 시각 내림차순)·"nickname"(닉네임순)만 허용하고 그 외 값은 9420 이다. 친구 0명은 빈 리스트.
+	 */
+	List<FriendListItemResponseDto> getFriends(Long userId, String sort);
 
 	/** 요청 수락 (FR-10·13). 조회 키 (requesterId, 나)가 수신자 본인 검증을 구조적으로 강제한다. */
 	void accept(Long userId, Long requesterId);

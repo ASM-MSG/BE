@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.friend.dto.FriendCodeResponseDto;
+import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
 import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
@@ -29,6 +30,9 @@ import com.msg.fillmap.user.repository.UserRepository;
 @Service
 @RequiredArgsConstructor
 public class FriendServiceImpl implements FriendService {
+
+	private static final String SORT_RECENT = "recent";
+	private static final String SORT_NICKNAME = "nickname";
 
 	private final UserRepository userRepository;
 	private final FriendshipRepository friendshipRepository;
@@ -76,6 +80,23 @@ public class FriendServiceImpl implements FriendService {
 	@Transactional(readOnly = true)
 	public List<ReceivedFriendRequestResponseDto> getReceivedRequests(Long userId) {
 		return friendshipRepository.findReceivedRequests(userId);
+	}
+
+	/**
+	 * 친구 목록 (MSG-186 D3). 값이 둘뿐이라 enum 없이 분기 2개로 파싱한다 — 알 수 없는 값은
+	 * VideoServiceImpl.parseVisibility(3420) 선례대로 도메인 코드 9420 으로 거른다(조용한 기본값 폴백 금지).
+	 * equalsIgnoreCase 는 로케일 비의존이라 배포 JVM 로케일에 흔들리지 않는다.
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<FriendListItemResponseDto> getFriends(Long userId, String sort) {
+		if (sort == null || SORT_RECENT.equalsIgnoreCase(sort)) {
+			return friendshipRepository.findFriendsOrderByAcceptedAt(userId);
+		}
+		if (SORT_NICKNAME.equalsIgnoreCase(sort)) {
+			return friendshipRepository.findFriendsOrderByNickname(userId);
+		}
+		throw new ApiException(FriendErrorCode.INVALID_FRIEND_SORT);
 	}
 
 	@Override
