@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 import jakarta.persistence.EntityManager;
 
@@ -77,7 +78,7 @@ class VideoServiceIntegrationTest {
 	private VideoUploadRequestDto request(double lat, double lon, String visibility) {
 		return new VideoUploadRequestDto(
 			"videos/pending/" + userId + "/" + java.util.UUID.randomUUID() + ".mp4",
-			lat, lon, (short) 10, LocalDateTime.now(), visibility);
+			lat, lon, (short) 10, LocalDateTime.now(ZoneOffset.UTC), visibility);
 	}
 
 	private String visibilityOf(long videoId) {

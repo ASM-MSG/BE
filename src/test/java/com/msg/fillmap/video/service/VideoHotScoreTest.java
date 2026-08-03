@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -75,20 +76,20 @@ class VideoHotScoreTest {
 
 	private void givenSavedVideo() {
 		Video saved = Video.create(USER_ID, GRID_ID, "videos/original/1/x.mp4", null, (short) 10,
-			LocalDateTime.now(), Visibility.PRIVATE);
+			LocalDateTime.now(ZoneOffset.UTC), Visibility.PRIVATE);
 		ReflectionTestUtils.setField(saved, "id", VIDEO_ID);
 		given(repository.saveAndFlush(any(Video.class))).willReturn(saved);
 	}
 
 	private VideoUploadRequestDto uploadRequest() {
-		return new VideoUploadRequestDto("videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now(),
-			"PRIVATE");
+		return new VideoUploadRequestDto("videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10,
+			LocalDateTime.now(ZoneOffset.UTC), "PRIVATE");
 	}
 
 	/** 이미 확정돼 original 에 있는 영상 — 교체·삭제 대상. */
 	private Video existingVideo() {
 		Video video = Video.create(USER_ID, GRID_ID, "videos/original/1/old.mp4", null, (short) 10,
-			LocalDateTime.now(), Visibility.PRIVATE);
+			LocalDateTime.now(ZoneOffset.UTC), Visibility.PRIVATE);
 		ReflectionTestUtils.setField(video, "id", VIDEO_ID);
 		return video;
 	}
@@ -119,7 +120,8 @@ class VideoHotScoreTest {
 		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(existingVideo()));
 
 		service.replaceVideo(USER_ID, VIDEO_ID,
-			new VideoReplaceRequestDto("videos/pending/1/new.mp4", null, null, (short) 7, LocalDateTime.now()));
+			new VideoReplaceRequestDto("videos/pending/1/new.mp4", null, null, (short) 7,
+				LocalDateTime.now(ZoneOffset.UTC)));
 
 		verifyNoInteractions(hotScoreCommandService);
 	}

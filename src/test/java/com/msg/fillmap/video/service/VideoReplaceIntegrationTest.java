@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
@@ -77,11 +78,11 @@ class VideoReplaceIntegrationTest {
 
 	private long upload() {
 		return videoService.saveVideo(userId, new VideoUploadRequestDto(
-			newKey(), 잠실_LAT, 잠실_LON, (short) 10, LocalDateTime.now(), "PRIVATE")).videoId();
+			newKey(), 잠실_LAT, 잠실_LON, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE")).videoId();
 	}
 
 	private VideoReplaceRequestDto replaceRequest(String s3Key, Double lat, Double lon) {
-		return new VideoReplaceRequestDto(s3Key, lat, lon, (short) 7, LocalDateTime.now());
+		return new VideoReplaceRequestDto(s3Key, lat, lon, (short) 7, LocalDateTime.now(ZoneOffset.UTC));
 	}
 
 	private Object[] videoRow(long videoId) {

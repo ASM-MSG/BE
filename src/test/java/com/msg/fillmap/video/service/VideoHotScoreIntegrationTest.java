@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -82,6 +83,6 @@ class VideoHotScoreIntegrationTest {
 	private VideoUploadRequestDto uploadRequest() {
 		return new VideoUploadRequestDto(
 			"videos/pending/" + userId + "/" + UUID.randomUUID() + ".mp4", 문래_LAT, 문래_LON, (short) 10,
-			LocalDateTime.now(), "PRIVATE");
+			LocalDateTime.now(ZoneOffset.UTC), "PRIVATE");
 	}
 }

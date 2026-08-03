@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.ZoneId;
 import java.util.UUID;
 
@@ -111,14 +112,15 @@ class VideoStreakIntegrationTest {
 		rewindStreakToYesterday(1, 1);
 
 		videoService.replaceVideo(userId, videoId,
-			new VideoReplaceRequestDto(pendingKey(), null, null, (short) 7, LocalDateTime.now()));
+			new VideoReplaceRequestDto(pendingKey(), null, null, (short) 7, LocalDateTime.now(ZoneOffset.UTC)));
 
 		assertThat(currentCount()).isEqualTo(1);
 		assertThat(lastRecordedDate()).isEqualTo(LocalDate.now(KST).minusDays(1));
 	}
 
 	private VideoUploadRequestDto uploadRequest() {
-		return new VideoUploadRequestDto(pendingKey(), 망원_LAT, 망원_LON, (short) 10, LocalDateTime.now(), "PRIVATE");
+		return new VideoUploadRequestDto(pendingKey(), 망원_LAT, 망원_LON, (short) 10, LocalDateTime.now(ZoneOffset.UTC),
+			"PRIVATE");
 	}
 
 	private String pendingKey() {

@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -113,7 +114,7 @@ class VideoRegionStatsAtomicityTest {
 	private VideoUploadRequestDto request() {
 		return new VideoUploadRequestDto(
 			"videos/pending/" + userId + "/" + UUID.randomUUID() + ".mp4",
-			LAT, LON, (short) 10, LocalDateTime.now(), "PRIVATE");
+			LAT, LON, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE");
 	}
 
 	private Integer collectedCount() {

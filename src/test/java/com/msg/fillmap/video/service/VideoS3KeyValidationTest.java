@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 import jakarta.persistence.EntityManager;
 
@@ -71,7 +72,8 @@ class VideoS3KeyValidationTest {
 	}
 
 	private VideoUploadRequestDto request(String s3Key) {
-		return new VideoUploadRequestDto(s3Key, 강남_LAT, 강남_LON, (short) 10, LocalDateTime.now(), "PRIVATE");
+		return new VideoUploadRequestDto(s3Key, 강남_LAT, 강남_LON, (short) 10, LocalDateTime.now(ZoneOffset.UTC),
+			"PRIVATE");
 	}
 
 	private String myKey() {

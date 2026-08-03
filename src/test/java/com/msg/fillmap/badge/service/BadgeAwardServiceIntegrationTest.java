@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -241,7 +242,7 @@ class BadgeAwardServiceIntegrationTest {
 	private VideoUploadRequestDto request(double lat, double lon) {
 		return new VideoUploadRequestDto(
 			"videos/pending/" + userId + "/" + UUID.randomUUID() + ".mp4",
-			lat, lon, (short) 10, LocalDateTime.now(), "PRIVATE");
+			lat, lon, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE");
 	}
 
 	@SuppressWarnings("unchecked")
