@@ -140,8 +140,8 @@ class PushTokenServiceIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("목록 외 platform 은 서비스에서 9400 을 던진다 — Locale.ROOT 파싱 실패 경로 실서비스 실행")
-	void 목록_외_platform은_서비스에서_9400을_던진다() {
+	@DisplayName("목록 외 platform 은 서비스에서 10400 을 던진다 — Locale.ROOT 파싱 실패 경로 실서비스 실행")
+	void 목록_외_platform은_서비스에서_10400을_던진다() {
 		assertThatThrownBy(() -> pushTokenService.register(me, new PushTokenRequestDto(token, "WINDOWS", null)))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", NotificationErrorCode.INVALID_PLATFORM);
