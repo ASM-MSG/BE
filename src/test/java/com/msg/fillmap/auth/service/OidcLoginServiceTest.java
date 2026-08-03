@@ -106,6 +106,29 @@ class OidcLoginServiceTest {
 		}
 
 		@Test
+		@DisplayName("성공: email 클레임이 없으면(null) 중복 검사 없이 email null 로 가입된다 (MSG-310)")
+		void login_newUser_withoutEmail() {
+			OidcUserInfo emailless = new OidcUserInfo("kakao-oid-2", null, "카카오유저");
+			given(kakaoVerifier.verify("id-token")).willReturn(emailless);
+			given(userRepository.findByProviderAndOid(AuthProvider.KAKAO, emailless.oid())).willReturn(Optional.empty());
+			given(userRepository.save(any(User.class))).willAnswer(invocation -> {
+				User saved = invocation.getArgument(0);
+				ReflectionTestUtils.setField(saved, "id", 30L);
+				return saved;
+			});
+			given(tokenProvider.issueAccessToken(30L, UserRole.USER)).willReturn("jwt-token");
+			given(refreshTokenService.issue(30L, "device-1")).willReturn("refresh-token");
+
+			LoginResponseDto response = oidcLoginService.login(AuthProvider.KAKAO, "id-token", "device-1");
+
+			ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+			verify(userRepository).save(captor.capture());
+			assertThat(captor.getValue().getEmail()).isNull();
+			verify(userRepository, never()).existsByEmail(any());
+			assertThat(response.accessToken()).isEqualTo("jwt-token");
+		}
+
+		@Test
 		@DisplayName("실패: 이미 다른 방식으로 가입된 이메일이면 EMAIL_ALREADY_EXISTS ApiException 을 던지고 save 를 호출하지 않는다")
 		void login_emailConflict() {
 			given(kakaoVerifier.verify("id-token")).willReturn(info);
