@@ -106,6 +106,71 @@ class AiClientTest {
 	}
 
 	@Test
+	void 프리체크_탈락_응답이면_passed_false와_reason_원문을_매핑한다() {
+		server.expect(requestTo(BASE_URL + "/jobs/job-1"))
+			.andRespond(withSuccess(
+				"{\"job_id\":\"job-1\",\"status\":\"DONE\",\"highlights\":[],"
+					+ "\"precheck\":{\"passed\":false,\"reason\":\"too_dark: std 3.18 < 10.0\"}}",
+				MediaType.APPLICATION_JSON));
+
+		AiJobResult result = aiClient.poll("job-1");
+
+		assertThat(result.status()).isEqualTo(AiJobStatus.DONE);
+		assertThat(result.precheck().passed()).isFalse();
+		// reason 은 원문 그대로 — 콜론 뒤 진단 수치 파싱은 소비 지점(폴러) 몫 (MSG-284 계약)
+		assertThat(result.precheck().reason()).isEqualTo("too_dark: std 3.18 < 10.0");
+	}
+
+	@Test
+	void 프리체크_통과_응답이면_passed_true_reason_null로_매핑한다() {
+		server.expect(requestTo(BASE_URL + "/jobs/job-1"))
+			.andRespond(withSuccess(
+				"{\"job_id\":\"job-1\",\"status\":\"DONE\",\"highlights\":[[0.0,3.33]],"
+					+ "\"precheck\":{\"passed\":true,\"reason\":null}}",
+				MediaType.APPLICATION_JSON));
+
+		AiJobResult result = aiClient.poll("job-1");
+
+		assertThat(result.precheck().passed()).isTrue();
+		assertThat(result.precheck().reason()).isNull();
+	}
+
+	@Test
+	void precheck_필드가_없으면_null로_매핑한다() {
+		server.expect(requestTo(BASE_URL + "/jobs/job-1"))
+			.andRespond(withSuccess(
+				"{\"job_id\":\"job-1\",\"status\":\"PROCESSING\"}", MediaType.APPLICATION_JSON));
+
+		AiJobResult result = aiClient.poll("job-1");
+
+		assertThat(result.precheck()).isNull();   // 구버전 응답 = 판정 안 함 (FR-3)
+	}
+
+	@Test
+	void precheck가_null이면_판정_전으로_보고_null로_매핑한다() {
+		server.expect(requestTo(BASE_URL + "/jobs/job-1"))
+			.andRespond(withSuccess(
+				"{\"job_id\":\"job-1\",\"status\":\"PROCESSING\",\"precheck\":null}", MediaType.APPLICATION_JSON));
+
+		AiJobResult result = aiClient.poll("job-1");
+
+		assertThat(result.precheck()).isNull();
+	}
+
+	@Test
+	void precheck의_passed가_boolean이_아니면_null로_매핑한다() {
+		server.expect(requestTo(BASE_URL + "/jobs/job-1"))
+			.andRespond(withSuccess(
+				"{\"job_id\":\"job-1\",\"status\":\"DONE\",\"precheck\":{\"reason\":\"x\"}}",
+				MediaType.APPLICATION_JSON));
+
+		AiJobResult result = aiClient.poll("job-1");
+
+		// asBoolean 기본값 false 로 탈락 오판하면 정상 영상이 즉시 실패한다 — 판정 불능은 기존 경로로 (오탐 0 방향)
+		assertThat(result.precheck()).isNull();
+	}
+
+	@Test
 	void 완료본_다운로드는_블러본_바이트를_반환한다() {
 		byte[] blurred = {1, 2, 3, 4};
 		server.expect(requestTo(BASE_URL + "/jobs/job-1/video"))
