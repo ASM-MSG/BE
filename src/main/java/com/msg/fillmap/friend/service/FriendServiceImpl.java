@@ -52,9 +52,9 @@ public class FriendServiceImpl implements FriendService {
 		if (target.getId().equals(userId)) {
 			throw new ApiException(FriendErrorCode.SELF_FRIEND_REQUEST);
 		}
-		// ponytail: 서로 동시에 요청하는 극단 레이스면 A→B·B→A 2행이 생길 수 있다(복합 PK 는 같은
-		// 방향만 차단). 실측 발생 시 UNIQUE (LEAST(requester_id, addressee_id), GREATEST(...))
-		// 인덱스 마이그레이션이 업그레이드 경로.
+		// 상호 동시 요청 레이스의 양방향 2행은 V19 대칭 유니크 인덱스(uq_friendships_pair)가 막는다 —
+		// 늦은 INSERT 는 유니크 위반 500 1회, 재시도가 역방향 PENDING 을 보고 자동 수락으로 수렴.
+		// 방치 시 findPair 의 Optional 단건 계약이 영구 깨져 앱 검증만으론 부족했다 (Codex 리뷰 반영).
 		Optional<Friendship> pair = friendshipRepository.findPair(userId, target.getId());
 		if (pair.isEmpty()) {
 			friendshipRepository.save(Friendship.request(userId, target.getId()));

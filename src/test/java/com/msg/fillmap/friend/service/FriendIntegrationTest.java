@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -264,5 +265,15 @@ class FriendIntegrationTest {
 		assertThatThrownBy(() -> friendService.deleteFriend(me.getId(), other.getId()))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("역방향 중복 행은 DB 대칭 유니크가 거부한다 — V19 백스톱 (Codex 리뷰 반영)")
+	void 역방향_중복_행은_DB_대칭_유니크가_거부한다() {
+		// 상호 동시 요청 레이스를 리포지토리 직접 INSERT 로 재현 — 서비스 검증을 우회해도 DB 가 막는다.
+		friendshipRepository.saveAndFlush(Friendship.request(me.getId(), other.getId()));
+
+		assertThatThrownBy(() -> friendshipRepository.saveAndFlush(Friendship.request(other.getId(), me.getId())))
+			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 }
