@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -13,14 +14,17 @@ import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
+import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.search.dto.PlaceSearchResponseDto;
 import com.msg.fillmap.search.service.PlaceSearchService;
 
 /**
  * 장소 검색 API (MSG-251 · 카카오 로컬 프록시). 3-layer 얇게 — 파싱 + 서비스 호출 + SuccessResponse 변환만.
- * 개인 데이터가 아니라 @AuthenticationPrincipal 미사용(238 선례), 인증은 SecurityConfig anyRequest 로
- * 강제된다(미인증 401 — SecurityConfig 무변경). q 누락 400 은 global 핸들러 소관이라 신규 코드가 없다(§D3).
+ * 검색 결과는 개인 데이터가 아니지만 검색어 집계 dedupe(사용자·검색어당 일 1회, MSG-258 §D1)에 userId 가
+ * 필요해 @AuthenticationPrincipal 로 principal 을 받아 서비스에 넘긴다 — 결과 개인화는 없다. 인증은
+ * SecurityConfig anyRequest 로 강제된다(미인증 401 — SecurityConfig 무변경). q 누락 400 은 global
+ * 핸들러 소관이라 신규 코드가 없다(§D3).
  */
 @Tag(name = "장소 검색 (Search)", description = "장소명 자유 텍스트 검색 — 카카오 로컬 키워드 검색 실시간 프록시 + 격자 ID 합성.")
 @RestController
@@ -38,9 +42,10 @@ public class PlaceSearchController {
 	)
 	@GetMapping("/places")
 	public SuccessResponse<List<PlaceSearchResponseDto>> searchPlaces(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "검색어 (자유 텍스트 장소명)", example = "부산대")
 		@RequestParam String q
 	) {
-		return SuccessResponse.of(placeSearchService.searchPlaces(q));
+		return SuccessResponse.of(placeSearchService.searchPlaces(principal.userId(), q));
 	}
 }
