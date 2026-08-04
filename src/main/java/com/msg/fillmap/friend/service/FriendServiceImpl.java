@@ -3,6 +3,7 @@ package com.msg.fillmap.friend.service;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,11 +22,16 @@ import com.msg.fillmap.friend.entity.FriendshipStatus;
 import com.msg.fillmap.friend.exception.FriendErrorCode;
 import com.msg.fillmap.friend.repository.FriendshipRepository;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.grid.service.GridQueryService;
+import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.exception.UserErrorCode;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
+import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
+import com.msg.fillmap.video.service.VideoService;
 
 /**
  * 친구 관계 수명주기 (MSG-185). 불변식 "행 존재 = 활성 관계"(§D3) — 거절·삭제는 행 DELETE,
@@ -43,6 +49,14 @@ public class FriendServiceImpl implements FriendService {
 	// B-내부 read 소비 (MSG-186 §D5) — 역방향(usergrid → friend) 참조는 없다. 관계 판정은 여기서 끝내고
 	// usergrid 에는 도감 소유자 userId 만 넘긴다.
 	private final UserGridQueryService userGridQueryService;
+	// A 제공 계약의 read 소비 (MSG-187 D2) — 4-인자 시그니처 무변경, 친구 userId 를 넣어 호출한다.
+	private final GridQueryService gridQueryService;
+	// friend ↔ video 상호 의존이라 VideoService 를 그대로 생성자 주입하면 기동이 깨진다
+	// (MSG-285 에서 VideoServiceImpl 이 재생 판정에 FriendService.isFriend 를 쓰기 시작했다 →
+	// BeanCurrentlyInCreationException). ObjectProvider 로 빈 조회를 호출 시점으로 미뤄 생성 순환만 끊는다.
+	// TODO(MSG-312): 상호 의존 자체는 남아 있다 — isFriend 판정을 friendships 만 읽는 leaf 빈
+	// (FriendshipQueryService)으로 분리하면 양쪽이 그것을 참조해 순환이 구조적으로 사라진다.
+	private final ObjectProvider<VideoService> videoServiceProvider;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -115,9 +129,7 @@ public class FriendServiceImpl implements FriendService {
 	@Override
 	@Transactional(readOnly = true)
 	public FriendProfileResponseDto getFriendProfile(Long userId, Long targetUserId) {
-		if (!friendshipRepository.existsAcceptedPair(userId, targetUserId)) {
-			throw new ApiException(FriendErrorCode.FRIENDSHIP_NOT_FOUND);
-		}
+		requireFriend(userId, targetUserId);
 		// 관계 행이 있으면 FK ON DELETE CASCADE 로 계정도 반드시 있다 — 도달 불가 경로지만 은닉 일관을 위해 9424.
 		User friend = userRepository.findById(targetUserId)
 			.orElseThrow(() -> new ApiException(FriendErrorCode.FRIENDSHIP_NOT_FOUND));
@@ -130,6 +142,32 @@ public class FriendServiceImpl implements FriendService {
 				.map(FriendCollectionGridResponseDto::from)
 				.toList()
 		);
+	}
+
+	/**
+	 * 친구 격자 뷰포트 조회 (MSG-187 D2·D3). 친구 판정(9424)이 먼저고, 뷰포트·커서·size 검증은 전부
+	 * GridQueryService 재사용분이 수행한다 — friend 쪽 검증 코드가 0줄이라 내 조회와 규칙·에러가
+	 * 구조적으로 같다(FR-10). 비친구에게는 뷰포트가 유효한지조차 알려주지 않는다(은닉 우선, §D3 순서).
+	 * 계약 시그니처가 이미 대상 userId 를 파라미터로 받으므로 친구 id 를 넣는 것으로 끝난다 — grid 무수정.
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public OccupiedGridPage getFriendGrids(Long userId, Long targetUserId, ViewportBounds bounds, String cursor,
+		int size) {
+		requireFriend(userId, targetUserId);
+		return gridQueryService.getOccupiedInViewport(targetUserId, bounds, cursor, size);
+	}
+
+	/**
+	 * 친구 격자 영상 목록 (MSG-187 D5). 판정은 여기서 끝내고(9424) 데이터 형상은 소유 도메인(video)에
+	 * 위임한다 — getFriendProfile 이 usergrid 에 위임하는 것과 같은 배선이다. 위임 대상은 관계를 다시
+	 * 확인하지 않으므로 이 판정이 유일한 인가 지점이다.
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<FriendGridVideoResponseDto> getFriendGridVideos(Long userId, Long targetUserId, String gridId) {
+		requireFriend(userId, targetUserId);
+		return videoServiceProvider.getObject().getFriendGridVideos(targetUserId, gridId);
 	}
 
 	@Override
@@ -157,6 +195,17 @@ public class FriendServiceImpl implements FriendService {
 	@Transactional(readOnly = true)
 	public boolean isFriend(Long userId, Long otherUserId) {
 		return friendshipRepository.existsAcceptedPair(userId, otherUserId);
+	}
+
+	/**
+	 * 친구 열람 API 공용 인가 가드 (MSG-186 §D4). 무잠금 existsAcceptedPair — findPair 는 PESSIMISTIC_WRITE 라
+	 * readOnly 트랜잭션에서 PostgreSQL 이 거부한다. 실패는 언제나 9424 하나뿐이라 비친구·본인 ID(자기 쌍 행은
+	 * 존재할 수 없어 자연 false)·대기 중 상대·미존재 userId 가 구분되지 않는다.
+	 */
+	private void requireFriend(Long userId, Long targetUserId) {
+		if (!friendshipRepository.existsAcceptedPair(userId, targetUserId)) {
+			throw new ApiException(FriendErrorCode.FRIENDSHIP_NOT_FOUND);
+		}
 	}
 
 	/**

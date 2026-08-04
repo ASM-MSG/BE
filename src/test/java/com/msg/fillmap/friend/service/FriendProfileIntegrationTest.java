@@ -256,6 +256,17 @@ class FriendProfileIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("친구만 보기 영상만 있는 격자도 썸네일이 붙는다 (MSG-187 FR-6)")
+	void FRIENDS_영상만_있는_격자도_친구_프로필에_썸네일이_붙는다() {
+		String gridId = grid(0, 0);
+		// PRIVATE-only 격자가 여전히 null 인지는 위 "비공개 영상만 있는 격자..." 테스트가 그대로 고정한다.
+		long friendsOnly = seedVideo(friend.getId(), gridId, "thumbs/m187-friends.jpg", "FRIENDS", "READY");
+		occupy(friend.getId(), gridId, BASE, BASE, 1, friendsOnly);
+
+		assertThat(firstGrid().thumbnailUrl()).isEqualTo("https://signed/thumbs/m187-friends.jpg");
+	}
+
+	@Test
 	@DisplayName("공개여도 READY 이전 영상은 썸네일 대상이 아니다 (§D6)")
 	void 공개여도_READY_이전_영상은_썸네일_대상이_아니다() {
 		String gridId = grid(0, 0);

@@ -8,6 +8,9 @@ import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
 import com.msg.fillmap.friend.dto.FriendProfileResponseDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
+import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.grid.service.OccupiedGridPage;
+import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 
 public interface FriendService {
 
@@ -41,6 +44,21 @@ public interface FriendService {
 	 * 판정은 요청 시점 실시간이라 친구 삭제 직후 조회도 9424 로 수렴한다.
 	 */
 	FriendProfileResponseDto getFriendProfile(Long userId, Long targetUserId);
+
+	/**
+	 * 친구 격자 뷰포트 조회 (MSG-187 FR-1·3·8·10). ACCEPTED 관계 존재가 열람 조건이라 실패는 프로필과 같은
+	 * 9424 하나다(비친구·본인 ID·대기 중 상대·미존재 userId — 관계·계정 존재 은닉). 판정 통과 후에는 내
+	 * 뷰포트 조회(MSG-90)와 같은 계약을 그대로 재사용하므로 뷰포트·커서·size 검증 규칙과 에러가 동일하다.
+	 * 친구가 그 뷰포트에 점령한 격자가 없으면 빈 페이지다(예외 아님).
+	 */
+	OccupiedGridPage getFriendGrids(Long userId, Long targetUserId, ViewportBounds bounds, String cursor, int size);
+
+	/**
+	 * 친구 격자 영상 목록 (MSG-187 FR-4·5·9). 그 친구가 그 격자에 올린 영상 중 친구에게 허용된
+	 * 공개범위(PUBLIC·FRIENDS)의 ACTIVE·READY 영상만 최신순으로 준다 — PRIVATE 은 제외다. 실패는 9424
+	 * 하나이고, 친구가 점령하지 않은 격자·존재하지 않는 gridId 는 빈 리스트다(예외 아님).
+	 */
+	List<FriendGridVideoResponseDto> getFriendGridVideos(Long userId, Long targetUserId, String gridId);
 
 	/** 요청 수락 (FR-10·13). 조회 키 (requesterId, 나)가 수신자 본인 검증을 구조적으로 강제한다. */
 	void accept(Long userId, Long requesterId);

@@ -50,6 +50,7 @@ import com.msg.fillmap.mission.dto.MissionAwardResult;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
+import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
@@ -110,7 +111,9 @@ public class VideoServiceImpl implements VideoService {
 	private final StreakCommandService streakCommandService;
 	private final MissionAwardService missionAwardService;
 	private final HotScoreCommandService hotScoreCommandService;
-	// 재생 판정의 FRIENDS 분기만 쓰는 B-내부 의존 (MSG-285) — video → friend 단방향, 순환 없음.
+	// 재생 판정의 FRIENDS 분기만 쓰는 B-내부 의존 (MSG-285). MSG-187 D5 에서 friend → video 위임이 생겨
+	// 상호 의존이다 — 생성 순환은 FriendServiceImpl 의 ObjectProvider 지연 조회로 끊었다
+	// (구조적 해소는 MSG-312 leaf 빈 분리).
 	private final FriendService friendService;
 	private final Clock clock;
 
@@ -418,6 +421,20 @@ public class VideoServiceImpl implements VideoService {
 			.findByUserIdAndGridIdAndStatusOrderByCreatedAtDesc(userId, gridId, VideoStatus.ACTIVE)
 			.stream()
 			.map(video -> GridVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl())))
+			.toList();
+	}
+
+	/**
+	 * 친구 격자 영상 목록 (MSG-187 D5). 공개범위·상태 게이트와 정렬은 repository 쿼리가 정본이고,
+	 * 여기서는 항목 presign 과 DTO 매핑만 한다 (getGridVideos 템플릿 동형).
+	 * 친구 판정은 호출자(FriendServiceImpl) 선행 책임이라 여기서 관계를 다시 확인하지 않는다.
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<FriendGridVideoResponseDto> getFriendGridVideos(long ownerUserId, String gridId) {
+		return videoRepository.findFriendGridVideos(ownerUserId, gridId)
+			.stream()
+			.map(video -> FriendGridVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl())))
 			.toList();
 	}
 

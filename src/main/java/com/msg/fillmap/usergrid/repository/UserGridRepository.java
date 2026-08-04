@@ -114,12 +114,13 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 			r.region_name         AS "regionName"
 		FROM user_grids ug
 		LEFT JOIN LATERAL (
-			-- 친구에게 보여줄 썸네일 1건: 재생 허용 영상만(현재 PUBLIC — MSG-285 이후 IN ('PUBLIC','FRIENDS')로
-			-- 이 조건 한 곳만 확장), cover 우선(소유자 선택 존중) → 최신순 폴백. 없으면 NULL(격자 사실만).
+			-- 친구에게 보여줄 썸네일 1건: 재생 허용 영상만(PUBLIC + FRIENDS — MSG-187 D6 에서 MSG-285 재생
+			-- 판정과 정합화, PRIVATE 은 계속 제외), cover 우선(소유자 선택 존중) → 최신순 폴백.
+			-- 없으면 NULL(격자 사실만).
 			SELECT v.thumbnail_url
 			FROM videos v
 			WHERE v.grid_id = ug.grid_id AND v.user_id = ug.user_id
-				AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC'
+				AND v.status = 'ACTIVE' AND v.visibility IN ('PUBLIC', 'FRIENDS')
 				AND v.processing_status = 'READY' AND v.thumbnail_url IS NOT NULL
 			ORDER BY (v.id = ug.cover_video_id) DESC, v.created_at DESC, v.id DESC
 			LIMIT 1
