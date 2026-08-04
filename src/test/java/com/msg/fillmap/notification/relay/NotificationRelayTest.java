@@ -3,7 +3,9 @@ package com.msg.fillmap.notification.relay;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 
 import java.time.Duration;
 import java.util.List;
@@ -116,10 +118,11 @@ class NotificationRelayTest {
 	}
 
 	@Test
-	@DisplayName("발행 실패 시 상태가 유지돼 다음 주기에 재시도된다 — 브로커 오류 주입, PENDING 잔존")
+	@DisplayName("발행 실패 시 상태가 유지돼 다음 주기에 재시도된다 — 브로커 오류 주입 시 배치 중단, PENDING 잔존")
 	@SuppressWarnings("unchecked")
 	void 발행_실패_시_상태가_유지돼_다음_주기에_재시도된다() {
-		long id = newNotification();
+		long first = newNotification();
+		long second = newNotification();
 		KafkaTemplate<String, String> brokenTemplate = mock(KafkaTemplate.class);
 		given(brokenTemplate.send(anyString(), anyString()))
 			.willReturn(CompletableFuture.failedFuture(new KafkaException("브로커 다운")));
@@ -128,11 +131,15 @@ class NotificationRelayTest {
 
 		brokenRelay.relay();
 
-		assertThat(statusOf(id)).isEqualTo("PENDING");
+		assertThat(statusOf(first)).isEqualTo("PENDING");
+		// 실패 지점 이후 배치 중단 — 브로커 다운 시 행별 delivery timeout 대기로 스케줄링 스레드가 잠기지 않는다.
+		assertThat(statusOf(second)).isEqualTo("PENDING");
+		then(brokenTemplate).should(times(1)).send(anyString(), anyString());
 
-		notificationRelay.relay();   // 다음 주기(정상 브로커) — 같은 행이 그대로 재발행된다
+		notificationRelay.relay();   // 다음 주기(정상 브로커) — 같은 행들이 그대로 재발행된다
 
-		assertThat(statusOf(id)).isEqualTo("PUBLISHED");
+		assertThat(statusOf(first)).isEqualTo("PUBLISHED");
+		assertThat(statusOf(second)).isEqualTo("PUBLISHED");
 	}
 
 	@Test
