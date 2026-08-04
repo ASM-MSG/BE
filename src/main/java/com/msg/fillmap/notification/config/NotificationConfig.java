@@ -90,11 +90,17 @@ public class NotificationConfig {
 	ConsumerFactory<String, String> notificationConsumerFactory(
 		@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
 		// earliest — 신규 그룹 최초 기동 시 기존 메시지 유실 방지 (스펙 §설정).
+		// max.poll.* — DefaultErrorHandler 의 기본 BackOffHandler(DefaultBackOffHandler)는 리스너 스레드
+		// sleep(시도당 1회, 단일 최대 128s — spring-kafka 4.1 실측)이라 poll 간 공백 = 백오프 + 레코드
+		// 처리 시간. 기본 max.poll.records(500)에 FCM 지연이 겹치면 기본 max.poll.interval(300s)을 넘겨
+		// 그룹 축출·리밸런스·중복 처리가 가능하다 — 워스트 케이스 위로 상향(600s), poll 당 소량(10) 제한.
 		return new DefaultKafkaConsumerFactory<>(Map.of(
 			ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
 			ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
 			ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
-			ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"));
+			ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
+			ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 600_000,
+			ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10));
 	}
 
 	@Bean
@@ -135,7 +141,11 @@ public class NotificationConfig {
 		backOff.setInitialInterval(RETRY_INITIAL_INTERVAL_MS);
 		backOff.setMultiplier(RETRY_MULTIPLIER);
 		backOff.setMaxInterval(RETRY_MAX_INTERVAL_MS);
-		return new DefaultErrorHandler(notificationDeadRecoverer, backOff);
+		DefaultErrorHandler errorHandler = new DefaultErrorHandler(notificationDeadRecoverer, backOff);
+		// 말폼드 레코드(비숫자 id)는 재시도해도 같은 결과 — 백오프 없이 즉시 recoverer 로 보내 단일
+		// 파티션이 255s 를 낭비하지 않게 한다. recoverer 는 파싱 불가 시 error 후 폐기한다 (재던짐 없음).
+		errorHandler.addNotRetryableExceptions(NumberFormatException.class);
+		return errorHandler;
 	}
 
 	/**

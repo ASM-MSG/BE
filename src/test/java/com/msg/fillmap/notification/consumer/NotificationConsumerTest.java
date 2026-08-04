@@ -103,7 +103,11 @@ class NotificationConsumerTest {
 		@Bean
 		@Primary
 		DefaultErrorHandler fastRetryErrorHandler(ConsumerRecordRecoverer notificationDeadRecoverer) {
-			return new DefaultErrorHandler(notificationDeadRecoverer, new FixedBackOff(0L, 3L));
+			DefaultErrorHandler errorHandler =
+				new DefaultErrorHandler(notificationDeadRecoverer, new FixedBackOff(0L, 3L));
+			// 운영 핸들러(NotificationConfig)와 동일 분류 미러 — 말폼드 즉시 폐기 경로 검증용.
+			errorHandler.addNotRetryableExceptions(NumberFormatException.class);
+			return errorHandler;
 		}
 	}
 
@@ -266,6 +270,19 @@ class NotificationConsumerTest {
 		awaitStatus(id, "DEAD");
 		assertThat(lastErrorOf(id)).contains("FCM 다운");
 		assertThat(retryCountOf(id)).isEqualTo(4);   // 초회 + 재시도 3회 (테스트 핸들러 상한)
+	}
+
+	@Test
+	@DisplayName("말폼드 레코드는 재시도 없이 폐기되고 후속 정상 레코드 처리가 계속된다 — NumberFormatException 비재시도 분류")
+	void 말폼드_레코드는_재시도_없이_폐기되고_후속_정상_레코드_처리가_계속된다() throws Exception {
+		registerToken("ok-" + System.nanoTime());
+		kafkaTemplate.send(properties.topic(), "not-a-number").get();   // 말폼드 — outbox id 가 아닌 페이로드
+		long id = newNotification(NotificationCategory.BADGE, "정상");
+
+		publish(id);
+
+		// 파티션 1 순서 보장 — 말폼드가 파티션을 막았다면(재시도 소진 대기) 후속 행이 SENT 에 못 이른다.
+		awaitStatus(id, "SENT");
 	}
 
 	@Test
