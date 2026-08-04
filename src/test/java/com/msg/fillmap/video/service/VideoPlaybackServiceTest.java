@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -23,6 +24,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.friend.service.FriendService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
@@ -57,6 +59,7 @@ class VideoPlaybackServiceTest {
 
 	private VideoRepository videoRepository;
 	private ThumbnailUrlPresigner thumbnailUrlPresigner;
+	private FriendService friendService;
 	private VideoService videoService;
 
 	@BeforeEach
@@ -70,11 +73,13 @@ class VideoPlaybackServiceTest {
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L));
 		thumbnailUrlPresigner = new ThumbnailUrlPresigner(presigner, properties);
 
+		friendService = mock(FriendService.class);
 		videoService = new VideoServiceImpl(
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), thumbnailUrlPresigner, mock(BadgeAwardService.class),
-			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class));
+			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
+			friendService);
 	}
 
 	/** 모든 상태 축을 명시 지정하는 코어 빌더 — 엔티티에 세터가 없어 리플렉션으로 벌린다. */
@@ -278,5 +283,88 @@ class VideoPlaybackServiceTest {
 		VideoPlaybackResponseDto notIssued = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
 		assertThat(notIssued.playbackUrl()).isNull();
 		assertThat(notIssued.expiresInSec()).isNull();
+	}
+
+	// --- 친구만 공개(FRIENDS) 판정 (MSG-285) — 친구 여부는 mock, 대칭·PENDING·삭제 반영은 FriendIntegrationTest 몫.
+
+	@Test
+	@DisplayName("소유자는 FRIENDS 영상을 재생할 수 있고 친구 조회조차 하지 않는다 (FR-3)")
+	void 소유자는_FRIENDS_영상을_재생할_수_있다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.FRIENDS, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
+
+		assertThat(result.playbackUrl()).startsWith("https://").contains(ENCODED_KEY);
+		assertThat(result.visibility()).isEqualTo("FRIENDS");
+		verifyNoInteractions(friendService);   // 소유자 경로는 친구 쿼리 0회 (성능 비기능)
+	}
+
+	@Test
+	@DisplayName("ACCEPTED 친구는 FRIENDS 영상을 재생할 수 있고 view_count 도 오른다 (FR-4·§D5)")
+	void ACCEPTED_친구는_FRIENDS_영상을_재생할_수_있다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.FRIENDS, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 7L));
+		given(friendService.isFriend(OWNER_ID, OTHER_ID)).willReturn(true);
+
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
+
+		assertThat(result.playbackUrl()).startsWith("https://").contains(ENCODED_KEY);
+		verify(videoRepository).incrementViewCount(VIDEO_ID);
+		// 판정은 소유자·요청자 쌍으로 정확히 1회 — 재생마다 친구 쿼리가 늘어나지 않는다.
+		verify(friendService).isFriend(OWNER_ID, OTHER_ID);
+	}
+
+	@Test
+	@DisplayName("비친구의 FRIENDS 재생은 PRIVATE 와 동일한 403 이고 재생 URL 이 발급되지 않는다 (FR-5 핵심 회귀)")
+	void 비친구의_FRIENDS_재생은_PRIVATE와_동일한_403이고_재생_URL이_발급되지_않는다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.FRIENDS, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(friendService.isFriend(OWNER_ID, OTHER_ID)).willReturn(false);
+
+		// errorCode·메시지 둘 다 PRIVATE 비소유자와 같아야 한다 — 응답 바이트가 동일하다(§D1, 신규 코드 없음).
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_FORBIDDEN)
+			.hasMessage("비공개 영상입니다");
+		// presign 은커녕 조회수도 오르지 않는다 — 거부가 URL 발급보다 먼저다.
+		verify(videoRepository, never()).incrementViewCount(anyLong());
+	}
+
+	@Test
+	@DisplayName("PRIVATE 비소유자 403 은 FRIENDS 도입 후에도 그대로다 (회귀 방어)")
+	void PRIVATE_비소유자_403은_그대로다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PRIVATE, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_FORBIDDEN)
+			.hasMessage("비공개 영상입니다");
+		verifyNoInteractions(friendService);   // PRIVATE 경로는 친구 쿼리 0회
+	}
+
+	@Test
+	@DisplayName("공개 영상을 타인이 조회해도 친구 조회는 하지 않는다 (PUBLIC 경로 쿼리 0회)")
+	void 공개_영상_타인_조회는_친구_쿼리를_하지_않는다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+
+		videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
+
+		verifyNoInteractions(friendService);
+	}
+
+	@Test
+	@DisplayName("블라인드된 FRIENDS 영상은 친구여도 타인에겐 404 다 (판정 순서 유지)")
+	void 블라인드된_FRIENDS_영상은_친구여도_타인에겐_404다() {
+		givenVideo(video(VideoStatus.BLINDED, Visibility.FRIENDS, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(friendService.isFriend(OWNER_ID, OTHER_ID)).willReturn(true);
+
+		// BLINDED 가 visibility 보다 먼저다 — 친구여도 존재 은닉(404)이 이긴다.
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 }

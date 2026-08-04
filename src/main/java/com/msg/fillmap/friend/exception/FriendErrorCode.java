@@ -23,6 +23,7 @@ public enum FriendErrorCode implements ErrorCodeIfs {
 	ALREADY_FRIENDS(9409, HttpStatus.CONFLICT, "이미 친구인 사용자입니다"),
 	FRIEND_REQUEST_ALREADY_PENDING(9410, HttpStatus.CONFLICT, "이미 보낸 친구 요청이 대기 중입니다"),
 	FRIEND_REQUEST_NOT_FOUND(9414, HttpStatus.NOT_FOUND, "해당 친구 요청이 없습니다"),
+	INVALID_FRIEND_SORT(9420, HttpStatus.BAD_REQUEST, "sort 는 recent 또는 nickname 이어야 합니다"),
 	FRIENDSHIP_NOT_FOUND(9424, HttpStatus.NOT_FOUND, "친구 관계가 없습니다"),
 	;
 

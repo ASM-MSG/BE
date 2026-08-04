@@ -22,7 +22,9 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.friend.dto.FriendCodeResponseDto;
+import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
 import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
+import com.msg.fillmap.friend.dto.FriendProfileResponseDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateRequestDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
@@ -31,7 +33,8 @@ import com.msg.fillmap.response.SuccessResponse;
 
 @Tag(
 	name = "친구 (Friend)",
-	description = "고정 친구 코드 기반 친구 관계 API — 요청·수락·거절·삭제 (MSG-185). 인증 필수."
+	description = "고정 친구 코드 기반 친구 관계 API — 코드·요청·수락·거절·삭제 (MSG-185)와 "
+		+ "친구 목록·친구 프로필 조회 (MSG-186). 인증 필수."
 )
 @RestController
 @RequestMapping("/api/friends")
@@ -73,6 +76,35 @@ public class FriendController {
 		@Valid @RequestBody FriendRequestCreateRequestDto request
 	) {
 		return SuccessResponse.of(friendService.request(principal.userId(), request.friendCode()));
+	}
+
+	@Operation(
+		summary = "친구 목록 조회",
+		description = "수락된 친구 전체를 반환한다 — 누가 먼저 요청했는지와 무관하다. 기본 정렬은 친구가 된 "
+			+ "시각 내림차순이고 sort=nickname 이면 닉네임순이다. 친구가 없으면 빈 배열."
+	)
+	@GetMapping
+	public SuccessResponse<List<FriendListItemResponseDto>> getFriends(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "정렬 기준 — recent(기본, 친구가 된 시각 내림차순) 또는 nickname", example = "nickname")
+		@RequestParam(required = false) String sort
+	) {
+		return SuccessResponse.of(friendService.getFriends(principal.userId(), sort));
+	}
+
+	@Operation(
+		summary = "친구 프로필·도감 요약 조회",
+		description = "친구의 프로필(닉네임·프로필 이미지·도감 색상)과 도감 요약(수집 격자 수·영상 총합·"
+			+ "방문 동 수), 최근 수집 격자 최대 30개를 한 번에 반환한다. 도감 요약 수치는 그 친구가 자기 "
+			+ "도감에서 보는 값과 같다. 썸네일은 그 격자에 재생 가능한 공개 영상이 있을 때만 붙는다. "
+			+ "친구가 아닌 사용자·본인·존재하지 않는 사용자 조회는 모두 같은 404 다."
+	)
+	@GetMapping("/{userId}/profile")
+	public SuccessResponse<FriendProfileResponseDto> getFriendProfile(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@PathVariable Long userId
+	) {
+		return SuccessResponse.of(friendService.getFriendProfile(principal.userId(), userId));
 	}
 
 	@Operation(

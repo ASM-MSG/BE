@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import software.amazon.awssdk.services.s3.S3Client;
 
+import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.entity.Friendship;
 import com.msg.fillmap.friend.entity.FriendshipId;
@@ -26,6 +27,7 @@ import com.msg.fillmap.friend.entity.FriendshipStatus;
 import com.msg.fillmap.friend.exception.FriendErrorCode;
 import com.msg.fillmap.friend.repository.FriendshipRepository;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.user.entity.GridColor;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 
@@ -265,6 +267,117 @@ class FriendIntegrationTest {
 		assertThatThrownBy(() -> friendService.deleteFriend(me.getId(), other.getId()))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("친구 목록은 방향 무관하게 수락 시각 내림차순이다 (MSG-186 FR-1·2)")
+	void 친구_목록은_방향_무관하게_수락_시각_내림차순이다() {
+		// 내가 requester 인 관계를 먼저, 내가 addressee 인 관계를 나중에 수락한다 —
+		// 기대 순서(third → other)는 시드 순서·id 오름차순 타이브레이크와 반대라 정렬 키가 respondedAt 임을 가른다.
+		User third = seedUser("세번째");
+		becomeFriends(me, other);
+		becomeFriends(third, me);
+
+		List<FriendListItemResponseDto> friends = friendService.getFriends(me.getId(), null);
+
+		assertThat(friends).hasSize(2);
+		assertThat(friends.get(0).userId()).isEqualTo(third.getId());
+		assertThat(friends.get(0).nickname()).isEqualTo("세번째");
+		assertThat(friends.get(0).profileImageUrl()).isNull();
+		assertThat(friends.get(0).gridColor()).isEqualTo(GridColor.BLUE);
+		assertThat(friends.get(1).userId()).isEqualTo(other.getId());
+	}
+
+	@Test
+	@DisplayName("sort=nickname 이면 닉네임순이고 동명이인은 id 순이다 (FR-2)")
+	void sort_nickname_이면_닉네임순으로_정렬된다() {
+		User bbb = seedUser("BBB");
+		User aaaFirst = seedUser("AAA");
+		User aaaSecond = seedUser("AAA");
+		becomeFriends(me, bbb);
+		becomeFriends(me, aaaFirst);
+		becomeFriends(me, aaaSecond);
+
+		List<FriendListItemResponseDto> friends = friendService.getFriends(me.getId(), "nickname");
+
+		assertThat(friends).extracting(FriendListItemResponseDto::userId)
+			.containsExactly(aaaFirst.getId(), aaaSecond.getId(), bbb.getId());
+		// 대소문자 무시 (§D3) — 같은 정렬로 수렴한다.
+		assertThat(friendService.getFriends(me.getId(), "NICKNAME"))
+			.extracting(FriendListItemResponseDto::userId)
+			.containsExactly(aaaFirst.getId(), aaaSecond.getId(), bbb.getId());
+	}
+
+	@Test
+	@DisplayName("친구가 없으면 빈 목록이다 — 에러 아님 (FR-4)")
+	void 친구가_없으면_빈_목록이다() {
+		assertThat(friendService.getFriends(me.getId(), null)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("대기 중 요청 상대는 친구 목록에 없다 (FR-1)")
+	void 대기중_요청_상대는_친구_목록에_없다() {
+		friendService.request(other.getId(), me.getFriendCode());
+
+		assertThat(friendService.getFriends(me.getId(), null)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("잘못된 sort 값은 9420 이다 (§D3)")
+	void 잘못된_sort_값은_9420을_반환한다() {
+		assertThatThrownBy(() -> friendService.getFriends(me.getId(), "oldest"))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.INVALID_FRIEND_SORT);
+	}
+
+	@Test
+	@DisplayName("친구 삭제 후 목록에서 즉시 사라진다 (FR-8)")
+	void 친구_삭제_후_목록에서_즉시_사라진다() {
+		becomeFriends(me, other);
+
+		friendService.deleteFriend(me.getId(), other.getId());
+
+		assertThat(friendService.getFriends(me.getId(), null)).isEmpty();
+	}
+
+	/** requester 가 요청하고 addressee 가 수락해 ACCEPTED 관계를 만든다. */
+	private void becomeFriends(User requester, User addressee) {
+		friendService.request(requester.getId(), addressee.getFriendCode());
+		friendService.accept(addressee.getId(), requester.getId());
+	}
+
+	@Test
+	@DisplayName("ACCEPTED 행이 있으면 방향과 무관하게 친구다 (MSG-285 FR-4)")
+	void ACCEPTED_행이_있으면_방향과_무관하게_친구다() {
+		friendService.request(me.getId(), other.getFriendCode());
+		friendService.accept(other.getId(), me.getId());
+
+		// 행은 (me → other) 한 방향뿐이지만 판정은 대칭이어야 한다 — 누가 요청했는지는 공개 판정과 무관.
+		assertThat(friendService.isFriend(me.getId(), other.getId())).isTrue();
+		assertThat(friendService.isFriend(other.getId(), me.getId())).isTrue();
+	}
+
+	@Test
+	@DisplayName("PENDING 행이나 행 없음은 친구가 아니다 (MSG-285 FR-4)")
+	void PENDING_행이나_행_없음은_친구가_아니다() {
+		assertThat(friendService.isFriend(me.getId(), other.getId())).as("행 없음").isFalse();
+
+		friendService.request(me.getId(), other.getFriendCode());
+
+		assertThat(friendService.isFriend(me.getId(), other.getId())).as("대기 중 요청").isFalse();
+		assertThat(friendService.isFriend(other.getId(), me.getId())).as("대기 중 요청 역방향").isFalse();
+	}
+
+	@Test
+	@DisplayName("친구 삭제 직후 친구 판정이 즉시 false 가 된다 (MSG-285 FR-6 실시간 판정)")
+	void 친구_삭제_직후_친구_판정은_false다() {
+		friendService.request(me.getId(), other.getFriendCode());
+		friendService.accept(other.getId(), me.getId());
+
+		friendService.deleteFriend(me.getId(), other.getId());
+
+		// 캐시·비정규화가 없어 다음 조회가 곧바로 삭제를 반영한다.
+		assertThat(friendService.isFriend(me.getId(), other.getId())).isFalse();
 	}
 
 	@Test

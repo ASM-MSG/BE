@@ -70,7 +70,7 @@ public class VideoController {
 	@Operation(
 		summary = "단건 영상 재생 조회",
 		description = "영상 하나의 표시용 메타와 재생본 presigned GET URL을 발급한다. 소유자·타인 모두 조회할 수 있으나 "
-			+ "삭제·블라인드(타인)는 404, 비공개(타인)는 403이다. READY가 아니면 playbackUrl은 null이다."
+			+ "삭제·블라인드(타인)는 404, 비공개(타인)·친구만 공개(비친구)는 403이다. READY가 아니면 playbackUrl은 null이다."
 	)
 	@GetMapping("/{videoId}")
 	public SuccessResponse<VideoPlaybackResponseDto> getPlayback(
@@ -106,7 +106,8 @@ public class VideoController {
 
 	@Operation(
 		summary = "영상 공개 범위 전환",
-		description = "본인 영상의 공개 범위를 PUBLIC↔PRIVATE로 전환한다. 전환된 상태를 반환하며, 같은 값 재전환은 멱등하게 성공한다."
+		description = "본인 영상의 공개 범위를 PUBLIC·PRIVATE·FRIENDS 간 전환한다. 전환된 상태를 반환하며, "
+			+ "같은 값 재전환은 멱등하게 성공한다."
 	)
 	@PatchMapping("/{videoId}/visibility")
 	public SuccessResponse<VideoVisibilityResponseDto> setVisibility(

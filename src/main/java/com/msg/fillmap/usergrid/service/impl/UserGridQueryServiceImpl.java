@@ -11,10 +11,12 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
+import com.msg.fillmap.usergrid.repository.FriendCollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.RegionVideoProjection;
 import com.msg.fillmap.usergrid.repository.UserGridRepository;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
+import com.msg.fillmap.usergrid.service.FriendCollectionGridView;
 import com.msg.fillmap.usergrid.service.RegionVideoView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
@@ -84,6 +86,32 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 			projection.getProcessingStatus(),
 			projection.getDurationSec(),
 			projection.getCreatedAt()
+		);
+	}
+
+	@Override
+	public List<FriendCollectionGridView> getCollectionGridsForFriend(long ownerUserId) {
+		return userGridRepository.getCollectionGridsForFriend(ownerUserId).stream()
+			.map(this::toView)
+			.toList();
+	}
+
+	/**
+	 * 본인 갤러리의 toView 와 같은 산식(gridY/gridX 는 GridEncoder.decode, 썸네일 key 는 presign)이되 영상 ID 를
+	 * 담지 않는다 — 친구 응답은 표시 전용이라 비공개 영상의 존재가 id 로 새면 안 된다 (MSG-186 D6).
+	 * thumbnailKey 가 null(재생 허용 영상 없음)이면 presign 이 null 을 그대로 흘려 격자 사실만 남는다.
+	 */
+	private FriendCollectionGridView toView(FriendCollectionGridProjection projection) {
+		GridIndex index = GridEncoder.decode(projection.getGridId());
+		return new FriendCollectionGridView(
+			projection.getGridId(),
+			(int) index.gridY(),
+			(int) index.gridX(),
+			projection.getFirstCollectedAt(),
+			projection.getLastUploadedAt(),
+			projection.getVideoCount(),
+			thumbnailUrlPresigner.presign(projection.getThumbnailKey()),
+			projection.getRegionName()
 		);
 	}
 }
