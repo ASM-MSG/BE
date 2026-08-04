@@ -6,11 +6,12 @@ CREATE TABLE notifications (
 	event_key   VARCHAR(100) NOT NULL,
 	title       VARCHAR(100) NOT NULL,
 	body        VARCHAR(255) NOT NULL,
-	status      VARCHAR(10)  NOT NULL DEFAULT 'PENDING',
-	retry_count INT          NOT NULL DEFAULT 0,
-	last_error  VARCHAR(255),
-	created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	sent_at     TIMESTAMP,
+	status       VARCHAR(10)  NOT NULL DEFAULT 'PENDING',
+	retry_count  INT          NOT NULL DEFAULT 0,
+	last_error   VARCHAR(255),
+	created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	published_at TIMESTAMP,   -- 릴레이 발행 시각(UTC, markPublished 기록) — 스테일 PUBLISHED 재발행 판정 기준
+	sent_at      TIMESTAMP,
 
 	CONSTRAINT chk_notifications_category CHECK (category IN ('BADGE', 'HOTZONE', 'REMIND')),
 	CONSTRAINT chk_notifications_status
@@ -20,5 +21,7 @@ CREATE TABLE notifications (
 
 -- 릴레이 폴링 전용 partial index — PENDING만 스캔 (WHERE status = 'PENDING' ORDER BY id LIMIT n)
 CREATE INDEX idx_notifications_pending ON notifications (id) WHERE status = 'PENDING';
+-- 스테일 PUBLISHED 스윕용 partial index — 정상 상태에선 PUBLISHED ≈ 0행이라 초경량
+CREATE INDEX idx_notifications_published ON notifications (published_at) WHERE status = 'PUBLISHED';
 -- 전송률 제한 카운트(user_id, category, sent_at 조건) + user CASCADE 삭제용 (PG는 FK 인덱스 자동 생성 안 함 — V1 idx_push_tokens_user 선례)
 CREATE INDEX idx_notifications_user ON notifications (user_id);

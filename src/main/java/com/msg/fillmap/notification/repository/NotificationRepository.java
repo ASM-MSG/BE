@@ -43,23 +43,30 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 	/**
 	 * 릴레이 발행 성공 후 전이 (D13) — 컨슈머 종결 전 재발행을 막는다 (D4 PUBLISHED 존재 이유).
 	 * PENDING 가드: send~markPublished 사이에 컨슈머가 먼저 SENT 종결한 행을 역행시키지 않는다 (D4 단방향).
+	 * published_at 은 markSent 와 동일 형상의 UTC 벽시계 — resetStalePublished 판정 기준이라 축자 UTC 필수.
 	 */
 	@Modifying
 	@Query(value = """
-		UPDATE notifications SET status = 'PUBLISHED' WHERE id = :id AND status = 'PENDING'
+		UPDATE notifications
+		SET status = 'PUBLISHED', published_at = statement_timestamp() AT TIME ZONE 'UTC'
+		WHERE id = :id AND status = 'PENDING'
 		""", nativeQuery = true)
 	int markPublished(@Param("id") long id);
 
 	/**
 	 * 스테일 PUBLISHED 자동 복구 (Codex 3R P2) — 컨슈머가 브로커 보존기간보다 오래 다운되면 메시지가
-	 * 소실돼 PUBLISHED 가 영구 잔류한다(릴레이는 PENDING 만 폴링). threshold(now − stale-published-minutes,
-	 * 앱 UTC 계산) 이전 행을 PENDING 으로 되돌려 릴레이가 같은 사이클에 재발행한다. published_at 컬럼
-	 * 없이 created_at 기준 — 정상 경로는 발행 5s 내 소비·백오프 최대 ~4.3분이라 30분 초과 = 컨슈머 미달
-	 * 확정이고, 재발행 중복은 컨슈머 멱등 2차 방어(종결 상태 검사)가 흡수한다.
+	 * 소실돼 PUBLISHED 가 영구 잔류한다(릴레이는 PENDING 만 폴링). 발행 시각(published_at)이
+	 * threshold(now − stale-published-minutes, 앱 UTC 계산) 이전인 행을 PENDING 으로 되돌려 릴레이가
+	 * 같은 사이클에 재발행한다. created_at 기준이 아닌 이유(Codex 4R P1): 기록 30분 경과 후 첫 발행된
+	 * 백로그가 발행 직후 리셋돼 5s 마다 재발행 폭주 + oldest 배치 영구 선점이 되기 때문. 정상 경로는
+	 * 발행 5s 내 소비·백오프 최대 ~4.3분이라 발행 후 30분 초과 = 컨슈머 미달 확정이고, 재발행 중복은
+	 * 컨슈머 멱등 2차 방어(종결 상태 검사)가 흡수한다. idx_notifications_published(partial) 사용.
+	 * published_at 이 NULL 인 PUBLISHED 행은 {@code NULL < threshold} 가 UNKNOWN 이라 자연 제외된다 —
+	 * 운영 경로에선 markPublished 가 전이와 기록을 한 문장으로 하므로 NULL PUBLISHED 자체가 없다(테스트 직조작 한정).
 	 */
 	@Modifying
 	@Query(value = """
-		UPDATE notifications SET status = 'PENDING' WHERE status = 'PUBLISHED' AND created_at < :threshold
+		UPDATE notifications SET status = 'PENDING' WHERE status = 'PUBLISHED' AND published_at < :threshold
 		""", nativeQuery = true)
 	int resetStalePublished(@Param("threshold") LocalDateTime threshold);
 

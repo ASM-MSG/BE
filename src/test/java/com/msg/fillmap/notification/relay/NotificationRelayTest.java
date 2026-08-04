@@ -96,10 +96,10 @@ class NotificationRelayTest {
 	void setUp() {
 		tx = new TransactionTemplate(txManager);
 		tx.executeWithoutResult(status -> {
-			// 공유 로컬 DB 의 잔존 PENDING·PUBLISHED(스테일 리셋 대상)가 배치(오래된 순)를 선점하면
-			// 단언이 흔들린다 — 선정리.
-			em.createNativeQuery("DELETE FROM notifications WHERE status IN ('PENDING', 'PUBLISHED')")
-				.executeUpdate();
+			// 중단된 이전 실행이 남긴 이 클래스 소유 행(RELAY: 키 네임스페이스)만 선정리 — 배치(오래된 순)
+			// 선점 방지. 전역 삭제는 금지: 공유 로컬 DB 의 타 사용자·타 브랜치 행을 지우면 안 된다
+			// (기존 통합 테스트들의 "자기 소유만 정리" 관례 — NotificationCommandServiceIntegrationTest 등).
+			em.createNativeQuery("DELETE FROM notifications WHERE event_key LIKE 'RELAY:%'").executeUpdate();
 			me = userRepository.save(
 				User.createLocalUser("relay-" + System.nanoTime() + "@example.com", "hash", "릴레이테스터")).getId();
 		});
@@ -162,15 +162,15 @@ class NotificationRelayTest {
 	}
 
 	@Test
-	@DisplayName("오래된 PUBLISHED 행은 PENDING 으로 복구돼 재발행된다 — 컨슈머 장기 다운 대비, 최근 행은 리셋 안 됨")
+	@DisplayName("오래된 PUBLISHED 행은 PENDING 으로 복구돼 재발행된다 — 컨슈머 장기 다운 대비, 최근 발행 행은 리셋 안 됨")
 	@SuppressWarnings("unchecked")
 	void 오래된_PUBLISHED_행은_PENDING으로_복구돼_재발행된다() {
 		long stale = newNotification();
 		setStatus(stale, "PUBLISHED");
-		setCreatedAt(stale, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(31));   // threshold(30분) 초과
+		setPublishedAt(stale, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(31));   // 발행 후 threshold(30분) 초과
 		long fresh = newNotification();
 		setStatus(fresh, "PUBLISHED");
-		setCreatedAt(fresh, LocalDateTime.now(ZoneOffset.UTC));                    // threshold 이내
+		setPublishedAt(fresh, LocalDateTime.now(ZoneOffset.UTC));                    // 방금 발행
 		// 발행 기록용 목 템플릿 — 실발행 경로는 위 발행 테스트가 이미 검증, 여기선 "누가 재발행됐나"만 본다.
 		KafkaTemplate<String, String> recordingTemplate = mock(KafkaTemplate.class);
 		given(recordingTemplate.send(anyString(), anyString()))
@@ -185,6 +185,25 @@ class NotificationRelayTest {
 		then(recordingTemplate).should().send(properties.topic(), String.valueOf(stale));
 		assertThat(statusOf(fresh)).isEqualTo("PUBLISHED");
 		then(recordingTemplate).should(never()).send(properties.topic(), String.valueOf(fresh));
+	}
+
+	@Test
+	@DisplayName("백로그 행은 발행 직후 리셋되지 않는다 — created_at 기준이면 5s 재발행 폭주 (Codex 4R P1 회귀 방어)")
+	@SuppressWarnings("unchecked")
+	void 백로그_행은_발행_직후_리셋되지_않는다() {
+		long backlog = newNotification();
+		setCreatedAt(backlog, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(31));   // 기록 30분 경과 후 첫 발행된 백로그
+		setStatus(backlog, "PUBLISHED");
+		setPublishedAt(backlog, LocalDateTime.now(ZoneOffset.UTC));                  // 방금 발행됨
+		KafkaTemplate<String, String> recordingTemplate = mock(KafkaTemplate.class);
+		NotificationRelay relay =
+			new NotificationRelay(notificationRepository, recordingTemplate, properties, txManager);
+
+		relay.relay();
+
+		// created_at 기준 구현이면 리셋 → 재발행(send 발생)으로 실패한다 — 판정은 발행 시각 기준이어야 한다.
+		assertThat(statusOf(backlog)).isEqualTo("PUBLISHED");
+		then(recordingTemplate).should(never()).send(anyString(), anyString());
 	}
 
 	private long newNotification() {
@@ -215,6 +234,14 @@ class NotificationRelayTest {
 		tx.executeWithoutResult(s ->
 			em.createNativeQuery("UPDATE notifications SET created_at = :createdAt WHERE id = :id")
 				.setParameter("createdAt", createdAt)
+				.setParameter("id", id)
+				.executeUpdate());
+	}
+
+	private void setPublishedAt(long id, LocalDateTime publishedAt) {
+		tx.executeWithoutResult(s ->
+			em.createNativeQuery("UPDATE notifications SET published_at = :publishedAt WHERE id = :id")
+				.setParameter("publishedAt", publishedAt)
 				.setParameter("id", id)
 				.executeUpdate());
 	}
