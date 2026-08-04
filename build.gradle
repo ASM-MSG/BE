@@ -52,6 +52,11 @@ dependencies {
 	implementation platform('software.amazon.awssdk:bom:2.48.0')
 	implementation 'software.amazon.awssdk:s3'             // S3Presigner 포함
 
+	// --- 알림 발송 파이프라인 (MSG-179) ---
+	implementation 'org.springframework.kafka:spring-kafka'
+	implementation 'com.google.firebase:firebase-admin:9.9.0'   // BOM 밖 — mavenCentral 최신 9.x (2026-08 실측)
+	testImplementation 'org.springframework.kafka:spring-kafka-test'
+
 	// --- PostgreSQL + PostGIS ---
 	runtimeOnly  'org.postgresql:postgresql'
 	implementation 'org.hibernate.orm:hibernate-spatial'   // Spring Boot 3.x가 버전 관리

@@ -79,8 +79,31 @@ services:
       timeout: 3s
       retries: 10
 
+  # Kafka — 알림 발송 파이프라인 (MSG-179 D1/D2). postgres/redis 와 달리 dev/prod 가 브로커 1개를
+  # 공유한다 — dev EC2(t3.small, 2GB) available 613Mi 실측에 2벌은 물리적으로 불가. 격리는 토픽
+  # prefix(dev./prod.)와 컨슈머 그룹으로 한다. 힙 256MB + 오프힙 여유 = 리밋 512MB — OOM 시 t3.medium 승급 검토.
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: fillmap-kafka
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+
 volumes:
   pgdata_dev:
   pgdata_prod:
   redisdata_dev:
   redisdata_prod:
+  kafkadata:

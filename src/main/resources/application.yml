@@ -21,6 +21,10 @@ spring:
     baseline-version: 0
     validate-on-migrate: true
 
+  # 알림 발송 파이프라인 (MSG-179 D1) — 단일 KRaft 브로커, 앱은 localhost 접속 (postgres·redis 동일 형상)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
 # 관측 (MSG-128) — Actuator/Micrometer Prometheus 엔드포인트.
 # 부하테스트 시 대상 밖 Prometheus 가 /actuator/prometheus 를 원격 scrape 한다.
 management:
@@ -64,6 +68,21 @@ fillmap:
   hotzone:
     top-k: 50
     min-score: 3
+
+  # 알림 발송 파이프라인 (MSG-179) — 기본 off: 로컬·CI 는 Kafka·FCM 없이 그대로 green, dev/prod 만 env 로 on
+  notification:
+    enabled: ${NOTIFICATION_ENABLED:false}
+    topic: notification.send                  # 프로파일이 env prefix 로 오버라이드
+    consumer-group: fillmap-notification
+    relay:
+      poll-interval-ms: 5000
+      batch-size: 100
+    rate-limit:
+      hotzone-per-day: 1                      # FR-12 — BADGE 는 무제한이라 키 자체가 없다
+      remind-per-day: 1
+    stale-token-days: 60
+    fcm:
+      credentials-path: ${FCM_CREDENTIALS_PATH:}
 
 aws:
   region: ${AWS_REGION:ap-northeast-2}
