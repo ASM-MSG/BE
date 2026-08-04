@@ -96,4 +96,39 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 		ORDER BY v.created_at DESC, v.id DESC
 		""", nativeQuery = true)
 	List<RegionVideoProjection> getRegionVideos(@Param("userId") long userId, @Param("regionCode") String regionCode);
+
+	/**
+	 * 친구에게 보여줄 격자 목록 — 격자 사실(수집 시각·방문 시각·영상 수·행정동)은 전부, 썸네일은 그 친구가
+	 * 재생할 수 있는 영상 것만 (MSG-186 D6). 정렬·개수는 본인 갤러리와 동일(first_collected_at DESC,
+	 * grid_id DESC, 최대 30). getCollectionGrids 와 갈리는 지점은 썸네일 선정 한 곳뿐이다 — 본인용은
+	 * cover 를 visibility 무필터로 읽어 PRIVATE 썸네일이 그대로 나가므로 친구에게 재사용할 수 없다.
+	 * LATERAL 은 격자당 최대 1행이라 30격자 × 1건으로 끝난다(재생 허용 영상이 없으면 NULL → 격자 사실만).
+	 */
+	@Query(value = """
+		SELECT
+			ug.grid_id            AS "gridId",
+			ug.first_collected_at AS "firstCollectedAt",
+			ug.last_uploaded_at   AS "lastUploadedAt",
+			ug.video_count        AS "videoCount",
+			t.thumbnail_url       AS "thumbnailKey",
+			r.region_name         AS "regionName"
+		FROM user_grids ug
+		LEFT JOIN LATERAL (
+			-- 친구에게 보여줄 썸네일 1건: 재생 허용 영상만(현재 PUBLIC — MSG-285 이후 IN ('PUBLIC','FRIENDS')로
+			-- 이 조건 한 곳만 확장), cover 우선(소유자 선택 존중) → 최신순 폴백. 없으면 NULL(격자 사실만).
+			SELECT v.thumbnail_url
+			FROM videos v
+			WHERE v.grid_id = ug.grid_id AND v.user_id = ug.user_id
+				AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC'
+				AND v.processing_status = 'READY' AND v.thumbnail_url IS NOT NULL
+			ORDER BY (v.id = ug.cover_video_id) DESC, v.created_at DESC, v.id DESC
+			LIMIT 1
+		) t ON TRUE
+		LEFT JOIN grids g ON g.grid_id = ug.grid_id
+		LEFT JOIN regions r ON r.region_code = g.region_code
+		WHERE ug.user_id = :userId
+		ORDER BY ug.first_collected_at DESC, ug.grid_id DESC
+		LIMIT 30
+		""", nativeQuery = true)
+	List<FriendCollectionGridProjection> getCollectionGridsForFriend(@Param("userId") long userId);
 }

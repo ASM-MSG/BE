@@ -9,7 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.friend.dto.FriendCodeResponseDto;
+import com.msg.fillmap.friend.dto.FriendCollectionGridResponseDto;
+import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
 import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
+import com.msg.fillmap.friend.dto.FriendProfileResponseDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.entity.Friendship;
@@ -21,6 +24,8 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.exception.UserErrorCode;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
+import com.msg.fillmap.usergrid.service.UserGridQueryService;
 
 /**
  * 친구 관계 수명주기 (MSG-185). 불변식 "행 존재 = 활성 관계"(§D3) — 거절·삭제는 행 DELETE,
@@ -30,8 +35,14 @@ import com.msg.fillmap.user.repository.UserRepository;
 @RequiredArgsConstructor
 public class FriendServiceImpl implements FriendService {
 
+	private static final String SORT_RECENT = "recent";
+	private static final String SORT_NICKNAME = "nickname";
+
 	private final UserRepository userRepository;
 	private final FriendshipRepository friendshipRepository;
+	// B-내부 read 소비 (MSG-186 §D5) — 역방향(usergrid → friend) 참조는 없다. 관계 판정은 여기서 끝내고
+	// usergrid 에는 도감 소유자 userId 만 넘긴다.
+	private final UserGridQueryService userGridQueryService;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -76,6 +87,49 @@ public class FriendServiceImpl implements FriendService {
 	@Transactional(readOnly = true)
 	public List<ReceivedFriendRequestResponseDto> getReceivedRequests(Long userId) {
 		return friendshipRepository.findReceivedRequests(userId);
+	}
+
+	/**
+	 * 친구 목록 (MSG-186 D3). 값이 둘뿐이라 enum 없이 분기 2개로 파싱한다 — 알 수 없는 값은
+	 * VideoServiceImpl.parseVisibility(3420) 선례대로 도메인 코드 9420 으로 거른다(조용한 기본값 폴백 금지).
+	 * equalsIgnoreCase 는 로케일 비의존이라 배포 JVM 로케일에 흔들리지 않는다.
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<FriendListItemResponseDto> getFriends(Long userId, String sort) {
+		if (sort == null || SORT_RECENT.equalsIgnoreCase(sort)) {
+			return friendshipRepository.findFriendsOrderByAcceptedAt(userId);
+		}
+		if (SORT_NICKNAME.equalsIgnoreCase(sort)) {
+			return friendshipRepository.findFriendsOrderByNickname(userId);
+		}
+		throw new ApiException(FriendErrorCode.INVALID_FRIEND_SORT);
+	}
+
+	/**
+	 * 친구 프로필 (MSG-186 D4·D5). 실패는 전부 9424 하나다 — 비친구·본인 ID(자기 쌍 행은 존재할 수 없어
+	 * 존재 확인이 자연히 false)·대기 중 상대·미존재 userId 가 같은 응답이라 관계도 계정 존재도 새지 않는다.
+	 * 존재 확인은 무잠금 existsAcceptedPair — findPair 는 PESSIMISTIC_WRITE 라 이 readOnly 트랜잭션에서
+	 * PostgreSQL 이 거부한다. 확인 → 프로필 → 요약 → 격자가 한 트랜잭션이라 삭제 직후 요청은 첫 단계에서 끝난다.
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public FriendProfileResponseDto getFriendProfile(Long userId, Long targetUserId) {
+		if (!friendshipRepository.existsAcceptedPair(userId, targetUserId)) {
+			throw new ApiException(FriendErrorCode.FRIENDSHIP_NOT_FOUND);
+		}
+		// 관계 행이 있으면 FK ON DELETE CASCADE 로 계정도 반드시 있다 — 도달 불가 경로지만 은닉 일관을 위해 9424.
+		User friend = userRepository.findById(targetUserId)
+			.orElseThrow(() -> new ApiException(FriendErrorCode.FRIENDSHIP_NOT_FOUND));
+		return new FriendProfileResponseDto(
+			friend.getNickname(),
+			friend.getProfileImageUrl(),
+			friend.getGridColor(),
+			CollectionSummaryResponseDto.from(userGridQueryService.getCollectionSummary(targetUserId)),
+			userGridQueryService.getCollectionGridsForFriend(targetUserId).stream()
+				.map(FriendCollectionGridResponseDto::from)
+				.toList()
+		);
 	}
 
 	@Override

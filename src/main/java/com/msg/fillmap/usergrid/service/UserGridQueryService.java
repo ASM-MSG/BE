@@ -26,4 +26,13 @@ public interface UserGridQueryService {
 	 * READY 이전은 thumbnailUrl null(presign 이 null key 흡수).
 	 */
 	List<RegionVideoView> getRegionVideos(long userId, String regionCode);
+
+	/**
+	 * 친구에게 보여줄 격자 목록 — 격자 사실은 전부, 썸네일은 재생 허용 공개범위 영상 것만 (MSG-186 D6,
+	 * B-내부 read — friend 도메인만 소비, Owner A 미소비라 non-breaking). 정렬·개수는 본인 갤러리와 동일
+	 * (first_collected_at DESC 최대 30개), 수집 0건이면 빈 리스트. 관계 판정(ACCEPTED 친구인지)은 호출처가
+	 * 끝내고 여기엔 소유자 userId 만 들어온다 — usergrid 는 friend 를 참조하지 않는다. MSG-285 가 FRIENDS
+	 * 공개범위를 추가해도 시그니처는 그대로고 내부 필터만 넓어진다.
+	 */
+	List<FriendCollectionGridView> getCollectionGridsForFriend(long ownerUserId);
 }

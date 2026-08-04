@@ -24,12 +24,17 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.friend.dto.FriendCodeResponseDto;
+import com.msg.fillmap.friend.dto.FriendCollectionGridResponseDto;
+import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
 import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
+import com.msg.fillmap.friend.dto.FriendProfileResponseDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.entity.FriendshipStatus;
 import com.msg.fillmap.friend.service.FriendService;
+import com.msg.fillmap.user.entity.GridColor;
 import com.msg.fillmap.user.entity.UserRole;
+import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
 
 /**
  * 친구 API 7종 컨트롤러 (MSG-185 §D4). UserProfileControllerTest 패턴 미러 — TokenProvider
@@ -116,6 +121,82 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data[0].nickname").value("채우미"))
 			.andExpect(jsonPath("$.data[0].profileImageUrl").value(Matchers.nullValue()))
 			.andExpect(jsonPath("$.data[0].requestedAt").value("2026-08-03T12:00:00"));
+	}
+
+	@Test
+	@DisplayName("친구 목록은 사용자 id·닉네임·프로필 이미지·도감 색상을 담는다 (MSG-186 FR-3)")
+	void 친구_목록은_친구_정보를_담는다() throws Exception {
+		given(friendService.getFriends(USER_ID, null)).willReturn(List.of(
+			new FriendListItemResponseDto(7L, "채우미", "https://cdn.example.com/p.png", GridColor.PINK)));
+
+		mockMvc.perform(get("/api/friends").header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data", Matchers.hasSize(1)))
+			.andExpect(jsonPath("$.data[0].userId").value(7))
+			.andExpect(jsonPath("$.data[0].nickname").value("채우미"))
+			.andExpect(jsonPath("$.data[0].profileImageUrl").value("https://cdn.example.com/p.png"))
+			.andExpect(jsonPath("$.data[0].gridColor").value("PINK"));
+	}
+
+	@Test
+	@DisplayName("sort 파라미터가 서비스로 전달된다 (FR-2)")
+	void sort_파라미터가_서비스로_전달된다() throws Exception {
+		given(friendService.getFriends(USER_ID, "nickname")).willReturn(List.of());
+
+		mockMvc.perform(get("/api/friends")
+				.param("sort", "nickname")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data", Matchers.hasSize(0)));
+
+		verify(friendService).getFriends(USER_ID, "nickname");
+	}
+
+	@Test
+	@DisplayName("친구 목록은 토큰 없이 호출하면 401 이다")
+	void 친구_목록은_토큰_없이_호출하면_401이다() throws Exception {
+		mockMvc.perform(get("/api/friends"))
+			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	@DisplayName("친구 프로필은 프로필·도감 요약·최근 수집 격자를 한 응답에 담는다 (MSG-186 FR-5·6)")
+	void 친구_프로필은_요약과_최근_수집_격자를_담는다() throws Exception {
+		given(friendService.getFriendProfile(USER_ID, 7L)).willReturn(new FriendProfileResponseDto(
+			"채우미", null, GridColor.PINK,
+			new CollectionSummaryResponseDto(15, 42L, 6),
+			List.of(new FriendCollectionGridResponseDto("41642_110458", 41642, 110458,
+				LocalDateTime.of(2026, 7, 20, 18, 3, 11), LocalDateTime.of(2026, 7, 21, 9, 12, 0),
+				3, "https://signed/thumb.jpg", "서울특별시 강남구 역삼1동"))));
+
+		mockMvc.perform(get("/api/friends/7/profile").header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.nickname").value("채우미"))
+			.andExpect(jsonPath("$.data.profileImageUrl").value(Matchers.nullValue()))
+			.andExpect(jsonPath("$.data.gridColor").value("PINK"))
+			.andExpect(jsonPath("$.data.summary.totalGridCount").value(15))
+			.andExpect(jsonPath("$.data.summary.totalVideoCount").value(42))
+			.andExpect(jsonPath("$.data.summary.visitedRegionCount").value(6))
+			.andExpect(jsonPath("$.data.recentGrids", Matchers.hasSize(1)))
+			.andExpect(jsonPath("$.data.recentGrids[0].gridId").value("41642_110458"))
+			.andExpect(jsonPath("$.data.recentGrids[0].gridY").value(41642))
+			.andExpect(jsonPath("$.data.recentGrids[0].gridX").value(110458))
+			.andExpect(jsonPath("$.data.recentGrids[0].firstCollectedAt").value("2026-07-20T18:03:11"))
+			.andExpect(jsonPath("$.data.recentGrids[0].lastUploadedAt").value("2026-07-21T09:12:00"))
+			.andExpect(jsonPath("$.data.recentGrids[0].videoCount").value(3))
+			.andExpect(jsonPath("$.data.recentGrids[0].thumbnailUrl").value("https://signed/thumb.jpg"))
+			.andExpect(jsonPath("$.data.recentGrids[0].regionName").value("서울특별시 강남구 역삼1동"))
+			// 영상 ID 미노출 — 비공개 영상의 존재가 id 로 새지 않아야 한다 (§D6 의도적 델타).
+			.andExpect(jsonPath("$.data.recentGrids[0].coverVideoId").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("친구 프로필은 토큰 없이 호출하면 401 이다")
+	void 친구_프로필은_토큰_없이_호출하면_401이다() throws Exception {
+		mockMvc.perform(get("/api/friends/7/profile"))
+			.andExpect(status().isUnauthorized());
 	}
 
 	@Test
