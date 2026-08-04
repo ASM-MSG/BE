@@ -29,12 +29,18 @@ import com.msg.fillmap.friend.dto.FriendRequestCreateRequestDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.service.FriendService;
+import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.dto.OccupiedGridPageResponseDto;
+import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.grid.exception.GridErrorCode;
+import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.response.SuccessResponse;
+import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 
 @Tag(
 	name = "친구 (Friend)",
-	description = "고정 친구 코드 기반 친구 관계 API — 코드·요청·수락·거절·삭제 (MSG-185)와 "
-		+ "친구 목록·친구 프로필 조회 (MSG-186). 인증 필수."
+	description = "고정 친구 코드 기반 친구 관계 API — 코드·요청·수락·거절·삭제 (MSG-185), "
+		+ "친구 목록·친구 프로필 조회 (MSG-186), 친구 도감 레이어(격자 뷰포트·격자 영상 목록, MSG-187). 인증 필수."
 )
 @RestController
 @RequestMapping("/api/friends")
@@ -108,6 +114,51 @@ public class FriendController {
 	}
 
 	@Operation(
+		summary = "친구 격자 뷰포트 조회",
+		description = "지도 화면 bbox(남서~북동 좌표) 안에서 그 친구가 점령한 격자를 (grid_y, grid_x) 오름차순으로 "
+			+ "반환한다. 응답 형상·검증 규칙·에러는 내 격자 조회(GET /api/grids)와 같다 — 응답의 nextCursor 를 "
+			+ "다음 요청 cursor 에 넣어 이어 조회하고, bbox 한 변의 span 은 최대 0.5도다. 격자 색상은 내려주지 "
+			+ "않는다(FE 단일색 렌더). 친구가 아닌 사용자·본인·존재하지 않는 사용자 조회는 모두 같은 404 다."
+	)
+	@GetMapping("/{userId}/grids")
+	public SuccessResponse<OccupiedGridPageResponseDto> getFriendGrids(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@PathVariable Long userId,
+		@Parameter(description = "남서 모서리 위도", example = "37.50")
+		@RequestParam(required = false) Double swLat,
+		@Parameter(description = "남서 모서리 경도", example = "127.00")
+		@RequestParam(required = false) Double swLng,
+		@Parameter(description = "북동 모서리 위도", example = "37.55")
+		@RequestParam(required = false) Double neLat,
+		@Parameter(description = "북동 모서리 경도", example = "127.05")
+		@RequestParam(required = false) Double neLng,
+		@Parameter(description = "다음 페이지 커서 (직전 응답의 nextCursor). 첫 페이지는 생략", example = "NDE2NDNfMTEwNDYw")
+		@RequestParam(required = false) String cursor,
+		@Parameter(description = "페이지 크기 (기본 1000, 최대 5000)", example = "1000")
+		@RequestParam(required = false, defaultValue = "1000") int size
+	) {
+		ViewportBounds bounds = toBounds(swLat, swLng, neLat, neLng);
+		OccupiedGridPage page = friendService.getFriendGrids(principal.userId(), userId, bounds, cursor, size);
+		return SuccessResponse.of(OccupiedGridPageResponseDto.from(page));
+	}
+
+	@Operation(
+		summary = "친구 격자 영상 목록 조회",
+		description = "그 친구가 해당 격자에 올린 영상을 최근 업로드 순으로 반환한다. 친구에게 공개된 영상"
+			+ "(전체 공개·친구만 보기)만 담기고 비공개 영상은 포함되지 않으며, 삭제·인코딩 미완 영상도 제외된다 "
+			+ "— 목록의 영상은 모두 재생 조회로 바로 진입할 수 있다. 친구가 점령하지 않은 격자·존재하지 않는 "
+			+ "gridId 는 빈 배열이다. 친구가 아닌 사용자·본인·존재하지 않는 사용자 조회는 모두 같은 404 다."
+	)
+	@GetMapping("/{userId}/grids/{gridId}/videos")
+	public SuccessResponse<List<FriendGridVideoResponseDto>> getFriendGridVideos(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@PathVariable Long userId,
+		@Parameter(description = "격자 ID", example = "41642_110458") @PathVariable String gridId
+	) {
+		return SuccessResponse.of(friendService.getFriendGridVideos(principal.userId(), userId, gridId));
+	}
+
+	@Operation(
 		summary = "받은 친구 요청 목록",
 		description = "내가 수신자인 대기 중 요청을 최신순으로 반환한다. 항목의 requesterId 를 "
 			+ "수락/거절 경로 변수로 그대로 쓴다."
@@ -157,5 +208,17 @@ public class FriendController {
 	) {
 		friendService.deleteFriend(principal.userId(), userId);
 		return new SuccessResponse<>(null);
+	}
+
+	/**
+	 * bbox 4파라미터 누락은 4401 — GridController.toBounds 동형 사본이다 (MSG-187 D3-1). FE 가 내 격자 조회와
+	 * 이 API 를 같은 에러 핸들링으로 다뤄야 해서(FR-10) 전역 400 이 아니라 격자 도메인 코드를 쓴다.
+	 * 관계 정보를 누설하지 않으므로 친구 판정(9424)보다 앞서도 은닉이 깨지지 않는다.
+	 */
+	private ViewportBounds toBounds(Double swLat, Double swLng, Double neLat, Double neLng) {
+		if (swLat == null || swLng == null || neLat == null || neLng == null) {
+			throw new ApiException(GridErrorCode.INVALID_VIEWPORT);
+		}
+		return new ViewportBounds(swLat, swLng, neLat, neLng);
 	}
 }
