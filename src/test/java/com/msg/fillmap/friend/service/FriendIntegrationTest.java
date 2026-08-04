@@ -347,6 +347,40 @@ class FriendIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("ACCEPTED 행이 있으면 방향과 무관하게 친구다 (MSG-285 FR-4)")
+	void ACCEPTED_행이_있으면_방향과_무관하게_친구다() {
+		friendService.request(me.getId(), other.getFriendCode());
+		friendService.accept(other.getId(), me.getId());
+
+		// 행은 (me → other) 한 방향뿐이지만 판정은 대칭이어야 한다 — 누가 요청했는지는 공개 판정과 무관.
+		assertThat(friendService.isFriend(me.getId(), other.getId())).isTrue();
+		assertThat(friendService.isFriend(other.getId(), me.getId())).isTrue();
+	}
+
+	@Test
+	@DisplayName("PENDING 행이나 행 없음은 친구가 아니다 (MSG-285 FR-4)")
+	void PENDING_행이나_행_없음은_친구가_아니다() {
+		assertThat(friendService.isFriend(me.getId(), other.getId())).as("행 없음").isFalse();
+
+		friendService.request(me.getId(), other.getFriendCode());
+
+		assertThat(friendService.isFriend(me.getId(), other.getId())).as("대기 중 요청").isFalse();
+		assertThat(friendService.isFriend(other.getId(), me.getId())).as("대기 중 요청 역방향").isFalse();
+	}
+
+	@Test
+	@DisplayName("친구 삭제 직후 친구 판정이 즉시 false 가 된다 (MSG-285 FR-6 실시간 판정)")
+	void 친구_삭제_직후_친구_판정은_false다() {
+		friendService.request(me.getId(), other.getFriendCode());
+		friendService.accept(other.getId(), me.getId());
+
+		friendService.deleteFriend(me.getId(), other.getId());
+
+		// 캐시·비정규화가 없어 다음 조회가 곧바로 삭제를 반영한다.
+		assertThat(friendService.isFriend(me.getId(), other.getId())).isFalse();
+	}
+
+	@Test
 	@DisplayName("역방향 중복 행은 DB 대칭 유니크가 거부한다 — V19 백스톱 (Codex 리뷰 반영)")
 	void 역방향_중복_행은_DB_대칭_유니크가_거부한다() {
 		// 상호 동시 요청 레이스를 리포지토리 직접 INSERT 로 재현 — 서비스 검증을 우회해도 DB 가 막는다.

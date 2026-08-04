@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.friend.service.FriendService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.dto.MissionAwardResult;
@@ -71,7 +72,7 @@ class VideoHotScoreTest {
 			mock(S3Presigner.class), s3Client,
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
-			mock(StreakCommandService.class), missionAwardService, hotScoreCommandService);
+			mock(StreakCommandService.class), missionAwardService, hotScoreCommandService, mock(FriendService.class));
 	}
 
 	private void givenSavedVideo() {

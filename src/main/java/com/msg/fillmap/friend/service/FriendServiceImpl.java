@@ -153,6 +153,12 @@ public class FriendServiceImpl implements FriendService {
 		friendshipRepository.delete(friendship);
 	}
 
+	@Override
+	@Transactional(readOnly = true)
+	public boolean isFriend(Long userId, Long otherUserId) {
+		return friendshipRepository.existsAcceptedPair(userId, otherUserId);
+	}
+
 	/**
 	 * 수락/거절 공용 조회 — 키 (requesterId, 나)라 타인의 요청은 애초에 조회되지 않는다 (FR-13).
 	 * FOR UPDATE 잠금이라 동시 수락/거절/자동수락은 직렬화되고, 늦은 쪽은 갱신된 상태를 읽어

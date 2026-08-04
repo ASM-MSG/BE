@@ -43,8 +43,9 @@ public interface VideoService {
 	/**
 	 * 단건 영상 재생 조회 (MSG-206). 접근 제어를 존재/DELETED → BLINDED → visibility → processing_status
 	 * 순서로 판정한다(first-match, 순서가 곧 정보 노출 정책이다). DELETED·BLINDED(타인)는 VIDEO_NOT_FOUND 로
-	 * 존재를 숨기고, PRIVATE(타인)는 VIDEO_FORBIDDEN 으로 존재는 노출하되 접근만 막는다. 허용된 조회는
-	 * READY 면 재생본(blurred 우선, 없으면 encoded) presigned GET URL 을, 아니면 playbackUrl=null 을 반환한다.
+	 * 존재를 숨기고, PRIVATE(타인)·FRIENDS(비친구)는 VIDEO_FORBIDDEN 으로 존재는 노출하되 접근만 막는다
+	 * (MSG-285 §D1 — 두 실패 응답은 동일하다). 허용된 조회는 READY 면 재생본(blurred 우선, 없으면 encoded)
+	 * presigned GET URL 을, 아니면 playbackUrl=null 을 반환한다.
 	 * 재생 URL 을 실제로 발급했고 소유자가 아닐 때만 view_count 를 원자적으로 +1 하며, 응답 viewCount 는
 	 * 증가 전 스냅샷이다.
 	 */
@@ -73,7 +74,7 @@ public interface VideoService {
 	VideoReplaceResponseDto replaceVideo(long userId, long videoId, VideoReplaceRequestDto request);
 
 	/**
-	 * 본인 영상의 공개 범위(visibility) 를 PUBLIC↔PRIVATE 로 전환한다 (MSG-162). 소유권은 replace·delete 와
+	 * 본인 영상의 공개 범위(visibility) 를 PUBLIC·PRIVATE·FRIENDS 간 전환한다 (MSG-162, MSG-285). 소유권은 replace·delete 와
 	 * 같은 경로로 검증하고, 삭제된 영상은 되살리지 않는다(VIDEO_NOT_FOUND). processing_status 와 무관하게
 	 * 전환을 허용하며, 실제 노출은 read 경로가 READY 로 게이트한다. 같은 값 재전환은 멱등하게 성공한다.
 	 */

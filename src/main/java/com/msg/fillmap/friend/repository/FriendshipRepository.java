@@ -84,9 +84,11 @@ public interface FriendshipRepository extends JpaRepository<Friendship, Friendsh
 	List<FriendListItemResponseDto> findFriendsOrderByNickname(@Param("userId") Long userId);
 
 	/**
-	 * 방향 무관 ACCEPTED 관계 존재 확인 — 무잠금 (MSG-186 D4). findPair 는 PESSIMISTIC_WRITE 라
-	 * readOnly 트랜잭션에서 쓸 수 없어(PostgreSQL 이 read-only 에서 FOR UPDATE 계열을 거부) 조회 전용으로
-	 * 분리했다. 판정은 요청 시점 실시간 — 친구 삭제(행 DELETE) 즉시 false 로 수렴한다 (FR-8).
+	 * 방향 무관 ACCEPTED 관계 존재 확인 — 무잠금 (MSG-186 D4 · MSG-285 §D2 공유). findPair 는
+	 * PESSIMISTIC_WRITE 라 readOnly 트랜잭션에서 쓸 수 없고(PostgreSQL 이 read-only 에서 FOR UPDATE
+	 * 계열을 거부), 재생 판정처럼 잦은 읽기에 쓰면 요청마다 행 잠금이 걸려 조회 전용으로 분리했다.
+	 * OR 두 방향 모두 복합 PK (requester_id, addressee_id) 인덱스 단건 lookup — 판정은 요청 시점
+	 * 실시간이라 친구 삭제(행 DELETE) 즉시 false 로 수렴한다 (FR-8).
 	 */
 	@Query("""
 		SELECT COUNT(f) > 0 FROM Friendship f

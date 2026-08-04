@@ -34,7 +34,7 @@ public record VideoPlaybackResponseDto(
 	@Schema(description = "영상 처리 상태 (UPLOADED/ENCODING/BLURRING/READY/FAILED)", example = "READY")
 	String processingStatus,
 
-	@Schema(description = "공개 범위 (PUBLIC/PRIVATE)", example = "PUBLIC")
+	@Schema(description = "공개 범위 (PUBLIC, PRIVATE, FRIENDS 중 하나)", example = "PUBLIC")
 	String visibility,
 
 	@Schema(description = "영상 상태 (ACTIVE/BLINDED). 소유자가 블라인드 사유를 구분하는 축", example = "ACTIVE")
