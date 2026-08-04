@@ -95,6 +95,9 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      # 이미지 기본 log.dirs 는 /tmp/kraft-combined-logs — 지정 없으면 볼륨 마운트가 무효라
+      # 컨테이너 재생성 시 브로커 데이터가 소실된다 (PUBLISHED 행 영구 미발송).
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
       KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
     ports:
       - "9092:9092"
