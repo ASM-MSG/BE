@@ -1,0 +1,63 @@
+package com.msg.fillmap.notification.relay;
+
+import java.util.List;
+
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import lombok.extern.slf4j.Slf4j;
+
+import com.msg.fillmap.notification.config.NotificationProperties;
+import com.msg.fillmap.notification.entity.Notification;
+import com.msg.fillmap.notification.repository.NotificationRepository;
+
+/**
+ * outbox 릴레이 폴러 (MSG-179 D13, AiBlurPoller 의 fixedDelay 선례 — 폴 중첩 없음). PENDING 을 오래된
+ * 순으로 배치 조회해 행별로 Kafka 발행(send().get() 동기 확인) 후 PUBLISHED 전이한다. 발행 실패(브로커
+ * 다운)면 상태를 유지해 다음 주기에 재시도하고, 행별 catch 로 폴러는 죽지 않는다.
+ *
+ * ponytail: 단일 앱 인스턴스 전제(dev/prod 각 1, systemd 실측)라 FOR UPDATE SKIP LOCKED 를 안 쓴다 —
+ * 앱 스케일아웃 시 폴러 경합이 생기므로 그때 클레임 잠금으로 승격할 것.
+ */
+@Slf4j
+@Component
+@ConditionalOnProperty(prefix = "fillmap.notification", name = "enabled")
+public class NotificationRelay {
+
+	private final NotificationRepository notificationRepository;
+	private final KafkaTemplate<String, String> kafkaTemplate;
+	private final NotificationProperties properties;
+	private final TransactionTemplate tx;
+
+	public NotificationRelay(NotificationRepository notificationRepository,
+		KafkaTemplate<String, String> kafkaTemplate, NotificationProperties properties,
+		PlatformTransactionManager txManager) {
+		this.notificationRepository = notificationRepository;
+		this.kafkaTemplate = kafkaTemplate;
+		this.properties = properties;
+		this.tx = new TransactionTemplate(txManager);
+	}
+
+	@Scheduled(fixedDelayString = "${fillmap.notification.relay.poll-interval-ms:5000}")
+	public void relay() {
+		List<Notification> batch = notificationRepository.findPendingBatch(properties.relay().batchSize());
+		for (Notification notification : batch) {
+			try {
+				// 메시지 = outbox id 문자열 (thin payload) — 컨슈머가 DB 재조회하므로 스키마 진화 문제가 없다.
+				kafkaTemplate.send(properties.topic(), String.valueOf(notification.getId())).get();
+				// 발행 성공 후 갱신 — send~markPublished 사이 크래시는 재발행 1회로 끝나고 컨슈머 멱등(D5)이 흡수.
+				tx.executeWithoutResult(status -> notificationRepository.markPublished(notification.getId()));
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				log.warn("알림 발행 인터럽트 — 잔여 배치 중단, PENDING 유지: notificationId={}", notification.getId(), e);
+				return;
+			} catch (Exception e) {
+				log.warn("알림 발행 실패 — PENDING 유지, 다음 주기 재시도: notificationId={}", notification.getId(), e);
+			}
+		}
+	}
+}
