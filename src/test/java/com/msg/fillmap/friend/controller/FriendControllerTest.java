@@ -32,9 +32,13 @@ import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.entity.FriendshipStatus;
 import com.msg.fillmap.friend.service.FriendService;
+import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.grid.service.OccupiedGridPage;
+import com.msg.fillmap.grid.service.OccupiedGridView;
 import com.msg.fillmap.user.entity.GridColor;
 import com.msg.fillmap.user.entity.UserRole;
 import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
+import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 
 /**
  * 친구 API 7종 컨트롤러 (MSG-185 §D4). UserProfileControllerTest 패턴 미러 — TokenProvider
@@ -190,6 +194,59 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data.recentGrids[0].regionName").value("서울특별시 강남구 역삼1동"))
 			// 영상 ID 미노출 — 비공개 영상의 존재가 id 로 새지 않아야 한다 (§D6 의도적 델타).
 			.andExpect(jsonPath("$.data.recentGrids[0].coverVideoId").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("친구 격자 뷰포트 응답은 내 뷰포트 조회와 같은 형상이고 색상 필드가 없다 (MSG-187 FR-3)")
+	void 응답_형상이_내_뷰포트_조회와_동일하고_색상_필드가_없다() throws Exception {
+		// 형상 보장은 타입 공유(OccupiedGridPageResponseDto — GridController 와 동일 DTO)가 하고,
+		// 이 테스트는 직렬화 결과에 색상 같은 여분 필드가 붙지 않는지만 고정한다.
+		given(friendService.getFriendGrids(USER_ID, 7L, new ViewportBounds(37.50, 127.00, 37.55, 127.05), null, 1000))
+			.willReturn(new OccupiedGridPage(List.of(new OccupiedGridView("41642_110458", 41642, 110458)),
+				"NDE2NDNfMTEwNDYw"));
+
+		mockMvc.perform(get("/api/friends/7/grids")
+				.param("swLat", "37.50")
+				.param("swLng", "127.00")
+				.param("neLat", "37.55")
+				.param("neLng", "127.05")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.grids", Matchers.hasSize(1)))
+			.andExpect(jsonPath("$.data.grids[0].gridId").value("41642_110458"))
+			.andExpect(jsonPath("$.data.grids[0].gridY").value(41642))
+			.andExpect(jsonPath("$.data.grids[0].gridX").value(110458))
+			.andExpect(jsonPath("$.data.grids[0].*", Matchers.hasSize(3)))
+			.andExpect(jsonPath("$.data.nextCursor").value("NDE2NDNfMTEwNDYw"));
+	}
+
+	@Test
+	@DisplayName("뷰포트 파라미터가 빠지면 4401 이다 — 내 격자 조회와 같은 에러 (MSG-187 FR-10)")
+	void 뷰포트_파라미터_누락은_4401이다() throws Exception {
+		mockMvc.perform(get("/api/friends/7/grids")
+				.param("swLat", "37.50")
+				.param("swLng", "127.00")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(4401));
+	}
+
+	@Test
+	@DisplayName("친구 격자 영상 목록은 영상 항목을 담는다 — principal 과 경로 userId 가 서비스로 전달된다 (MSG-187 FR-4)")
+	void 친구_격자_영상_목록은_영상_항목을_담는다() throws Exception {
+		given(friendService.getFriendGridVideos(USER_ID, 7L, "41642_110458")).willReturn(
+			List.of(new FriendGridVideoResponseDto(1042L, "https://signed/thumb.jpg", (short) 12,
+				LocalDateTime.of(2026, 7, 20, 18, 3, 11))));
+
+		mockMvc.perform(get("/api/friends/7/grids/41642_110458/videos")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data", Matchers.hasSize(1)))
+			.andExpect(jsonPath("$.data[0].videoId").value(1042))
+			.andExpect(jsonPath("$.data[0].thumbnailUrl").value("https://signed/thumb.jpg"))
+			.andExpect(jsonPath("$.data[0].durationSec").value(12))
+			.andExpect(jsonPath("$.data[0].createdAt").value("2026-07-20T18:03:11"));
 	}
 
 	@Test

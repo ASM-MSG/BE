@@ -26,6 +26,22 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	List<Video> findByUserIdAndGridIdAndStatusOrderByCreatedAtDesc(Long userId, String gridId, VideoStatus status);
 
 	/**
+	 * 친구 격자 영상 목록 (MSG-187 D5). 친구 판정은 호출자(friend 도메인) 책임 — 이 쿼리는
+	 * "친구에게 허용된 공개범위"만 거른다. PRIVATE 제외(FR-4), ACTIVE 로 DELETED·BLINDED 제외 +
+	 * READY 로 인코딩 미완 제외(FR-9) — 목록의 전 항목이 MSG-285 재생 판정을 통과한다(FR-5).
+	 */
+	@Query("""
+		SELECT v FROM Video v
+		WHERE v.userId = :ownerUserId AND v.gridId = :gridId
+			AND v.status = com.msg.fillmap.video.entity.VideoStatus.ACTIVE
+			AND v.processingStatus = com.msg.fillmap.video.entity.ProcessingStatus.READY
+			AND v.visibility IN (com.msg.fillmap.video.entity.Visibility.PUBLIC,
+				com.msg.fillmap.video.entity.Visibility.FRIENDS)
+		ORDER BY v.createdAt DESC, v.id DESC
+		""")
+	List<Video> findFriendGridVideos(@Param("ownerUserId") Long ownerUserId, @Param("gridId") String gridId);
+
+	/**
 	 * AI 폴러가 처리할 대상 조회 (MSG-149 D3, P2). status=ACTIVE 로 한정해 삭제(DELETED)된 영상을 제외한다 —
 	 * 삭제 후에도 processing_status 는 BLURRING 으로 남으므로, 이 필터가 없으면 폴러가 삭제본을 계속 집어
 	 * 블러본을 S3 에 새로 올려 영구 고아를 만든다. 상태를 DB 에 두므로 서버 재시작 후에도 in-flight 영상이

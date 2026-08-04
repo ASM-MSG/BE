@@ -2,6 +2,7 @@ package com.msg.fillmap.video.service;
 
 import java.util.List;
 
+import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
@@ -23,6 +24,14 @@ public interface VideoService {
 	 * 존재하지 않는 gridId 는 빈 리스트다(예외 아님).
 	 */
 	List<GridVideoResponseDto> getGridVideos(long userId, String gridId);
+
+	/**
+	 * 친구 격자 영상 목록 (MSG-187 D5). ownerUserId 가 gridId 에 올린 영상 중 친구에게 허용된
+	 * 공개범위(PUBLIC·FRIENDS)의 ACTIVE·READY 영상만 created_at DESC 로 돌려준다 — PRIVATE 은 제외다.
+	 * <b>친구 판정은 호출자(friend 도메인) 선행 책임</b>이다 — 이 메서드는 관계를 확인하지 않는다.
+	 * 미점령 격자·존재하지 않는 gridId 는 빈 리스트다(예외 아님).
+	 */
+	List<FriendGridVideoResponseDto> getFriendGridVideos(long ownerUserId, String gridId);
 
 	/**
 	 * 격자 전역 대표 영상 조회 (MSG-87). 그 격자의 공개(PUBLIC)·READY 영상 중 조회수 → 최신 순 1건을
