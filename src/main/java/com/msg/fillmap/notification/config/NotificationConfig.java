@@ -60,6 +60,15 @@ public class NotificationConfig {
 	private static final int RETRY_MAX_RETRIES = 8;
 	private static final long RETRY_MAX_INTERVAL_MS = 128_000L;
 
+	// Codex 5R P1: FirebaseOptions 기본 타임아웃 0(무한) — FCM 이 응답을 멈추면 sendEachForMulticast 가
+	// 유일한 Kafka 리스너 스레드를 영구 블록해 재시도·DEAD 경로가 전부 무력화된다. 유한값으로 hang 을
+	// 예외화한다 (AiConfig 의 hang→타임아웃 예외화와 같은 사정). max.poll.interval(600s) 예산 검증:
+	// poll 간 공백은 한 사이클 기준 — 백오프 합(255s)은 여러 poll 사이클에 분산되고 사이클당 sleep 은
+	// 1회라, 워스트 = max.poll.records 10건 × (connect 10s + read 30s) + 단일 최대 백오프 128s = 528s
+	// < 600s. (10건 전원이 >500 토큰 다중 청크인 경우는 예산 밖 — 비현실적 전제로 수용)
+	private static final int FCM_CONNECT_TIMEOUT_MS = 10_000;
+	private static final int FCM_READ_TIMEOUT_MS = 30_000;
+
 	@Bean
 	KafkaAdmin kafkaAdmin(@Value("${spring.kafka.bootstrap-servers}") String bootstrapServers) {
 		return new KafkaAdmin(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
@@ -161,8 +170,11 @@ public class NotificationConfig {
 				"fillmap.notification.fcm.credentials-path 미설정 — enabled=true 에는 FCM_CREDENTIALS_PATH 가 필수다");
 		}
 		try (FileInputStream credentials = new FileInputStream(path)) {
-			FirebaseApp app = FirebaseApp.initializeApp(
-				FirebaseOptions.builder().setCredentials(GoogleCredentials.fromStream(credentials)).build());
+			FirebaseApp app = FirebaseApp.initializeApp(FirebaseOptions.builder()
+				.setCredentials(GoogleCredentials.fromStream(credentials))
+				.setConnectTimeout(FCM_CONNECT_TIMEOUT_MS)
+				.setReadTimeout(FCM_READ_TIMEOUT_MS)
+				.build());
 			return FirebaseMessaging.getInstance(app);
 		}
 	}
