@@ -43,3 +43,8 @@ fillmap:
   zone:
     seed:
       enabled: true
+
+  # 알림 발송 (MSG-179 D1) — 브로커는 dev/prod 공유(단일 KRaft), 토픽 prefix·컨슈머 그룹으로 격리
+  notification:
+    topic: dev.notification.send
+    consumer-group: fillmap-notification-dev

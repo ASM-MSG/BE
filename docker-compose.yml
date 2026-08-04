@@ -25,8 +25,32 @@ services:
     ports:
       - "6379:6379"
 
+  # 알림 발송 파이프라인 수동 검증용 (MSG-179 D2) — 단일 노드 KRaft.
+  # 기본 notification.enabled=false 라 안 띄워도 앱 기동에는 지장 없다.
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: fillmap-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      # 이미지 기본 log.dirs 는 /tmp/kraft-combined-logs — 지정 없으면 볼륨 마운트가 무효라
+      # 컨테이너 재생성 시 브로커 데이터가 소실된다 (PUBLISHED 행 영구 미발송).
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
 
 volumes:
   postgres_data:
+  kafka_data:
 
 

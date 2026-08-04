@@ -1,5 +1,8 @@
 package com.msg.fillmap.notification.repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -44,4 +47,24 @@ public interface PushTokenRepository extends JpaRepository<PushToken, String> {
 		DELETE FROM push_tokens WHERE fcm_token = :fcmToken AND user_id = :userId
 		""", nativeQuery = true)
 	int deleteByTokenAndUser(@Param("fcmToken") String fcmToken, @Param("userId") long userId);
+
+	/** 발송 대상 토큰 조회 (MSG-179 컨슈머) — idx_push_tokens_user 사용. */
+	List<PushToken> findAllByUserId(long userId);
+
+	/**
+	 * 무효 토큰 시스템 삭제 (MSG-179 FR-5) — FCM UNREGISTERED/INVALID_ARGUMENT 응답 토큰 정리.
+	 * FCM 응답 경로에는 "현재 사용자"가 없어 소유 검증 없음이 의도 — deleteByTokenAndUser 와 다르다.
+	 */
+	@Modifying
+	@Query(value = """
+		DELETE FROM push_tokens WHERE fcm_token = ANY(:tokens)
+		""", nativeQuery = true)
+	int deleteAllByTokens(@Param("tokens") String[] tokens);
+
+	/** 스테일 토큰 일 배치 삭제 (MSG-179 D10) — threshold(now - 60d 등)는 앱에서 계산해 바인딩. */
+	@Modifying
+	@Query(value = """
+		DELETE FROM push_tokens WHERE last_used_at < :threshold
+		""", nativeQuery = true)
+	int deleteStale(@Param("threshold") LocalDateTime threshold);
 }

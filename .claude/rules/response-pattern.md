@@ -42,16 +42,27 @@ public SuccessResponse<SignupResponseDto> signup(@Valid @RequestBody SignupReque
 
 ### developCode 네이밍 규칙
 
-도메인별로 `developCode` 대역을 나눠 쓴다. `AuthErrorCode` 실제 예시 기준:
+도메인별로 `developCode` 대역을 나눠 쓴다. **이 표가 대역 배정의 단일 정본이다** — 새 도메인은
+대역을 쓰기 전에 이 표에 행을 추가하는 커밋을 먼저 넣는다 (병렬 레인이 같은 대역을 동시에 잡는
+경합 방지 — MSG-178/185가 9400을 동시 점유했던 실측 사건, 2026-08-03):
 
 | 대역 | 도메인 | 예시 |
 |---|---|---|
 | `4xx` / `5xx` | 공통(`ErrorCode`) | `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `INTERNAL_SERVER_ERROR` |
+| `1xxx` | user | `1404 USER_NOT_FOUND` |
 | `2xxx` | auth | `2401 INVALID_TOKEN`, `2422 UNSUPPORTED_PROVIDER` |
+| `3xxx` | video | `3420 INVALID_VISIBILITY`, `3424 RECORDED_AT_IN_FUTURE` |
+| `4xxx` | grid | |
+| `5xxx` | search | `5502 SEARCH_PROVIDER_ERROR` |
+| `6xxx` | region | |
+| `7xxx` | badge | |
+| `8xxx` | hotzone | `8400 INVALID_VIEWPORT` |
+| `9xxx` | friend | `9400 SELF_FRIEND_REQUEST` (MSG-185) |
+| `10xxx` | notification | `10400 INVALID_PLATFORM` (MSG-178 — 9xxx 선확정했으나 MSG-185 병렬 경합으로 이동) |
 
 새 도메인 에러 enum 추가 시:
 - 상수명은 `SCREAMING_SNAKE_CASE`
-- `errorCode`는 겹치지 않는 대역에서 부여
+- `errorCode`는 위 표에서 비어 있는 대역을 배정받아 부여 (표 갱신 커밋 선행)
 - `HttpStatus`와 사용자 메시지를 함께 지정
 
 ```java

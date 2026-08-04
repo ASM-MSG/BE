@@ -65,9 +65,9 @@ class PushTokenControllerTest {
 	}
 
 	@Test
-	@DisplayName("platform 이 목록 외면 9400 이다 — 소문자 ios 는 성공(대소문자 무시), WINDOWS 는 9400")
-	void platform이_목록_외면_9400이다() throws Exception {
-		// 파싱은 서비스 몫 — 목록 외 platform 에만 9400 을 스텁해 컨트롤러의 예외 전파를 검증한다.
+	@DisplayName("platform 이 목록 외면 10400 이다 — 소문자 ios 는 성공(대소문자 무시), WINDOWS 는 10400")
+	void platform이_목록_외면_10400이다() throws Exception {
+		// 파싱은 서비스 몫 — 목록 외 platform 에만 10400 을 스텁해 컨트롤러의 예외 전파를 검증한다.
 		willThrow(new ApiException(NotificationErrorCode.INVALID_PLATFORM))
 			.given(pushTokenService)
 			.register(anyLong(), argThat(request -> "WINDOWS".equals(request.platform())));
@@ -84,7 +84,7 @@ class PushTokenControllerTest {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"fcmToken\":\"fcm-token-abc\",\"platform\":\"WINDOWS\"}"))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.developCode").value(9400));
+			.andExpect(jsonPath("$.developCode").value(10400));
 	}
 
 	@Test

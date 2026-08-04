@@ -37,7 +37,7 @@ public class PushTokenController {
 		summary = "FCM 토큰 등록/갱신",
 		description = "디바이스의 FCM 토큰을 현재 계정으로 등록한다(UPSERT). 같은 토큰 재등록은 충돌 없이 "
 			+ "user_id·platform·appVersion·last_used_at 이 갱신된다 — 재로그인·계정 전환 포함. "
-			+ "platform 이 IOS/ANDROID/WEB(대소문자 무시) 외면 9400 이다."
+			+ "platform 이 IOS/ANDROID/WEB(대소문자 무시) 외면 10400 이다."
 	)
 	@PostMapping
 	public SuccessResponse<Void> register(

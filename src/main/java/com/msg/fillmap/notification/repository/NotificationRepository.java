@@ -1,0 +1,120 @@
+package com.msg.fillmap.notification.repository;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.msg.fillmap.notification.entity.Notification;
+
+/**
+ * 알림 outbox 리포지토리 (MSG-179). 쓰기는 전부 native — record INSERT 는 ON CONFLICT DO NOTHING
+ * (FR-6 멱등 1차, PushTokenRepository.upsert 선례), 상태 갱신은 D4 상태 머신의 전이별 1문장.
+ */
+public interface NotificationRepository extends JpaRepository<Notification, Long> {
+
+	/**
+	 * outbox 기록 (FR-3·FR-6). 같은 (user_id, event_key) 재기록은 DO NOTHING 으로 흡수 — 반환 0.
+	 * status·retry_count·created_at 은 DDL DEFAULT (PENDING·0·CURRENT_TIMESTAMP).
+	 */
+	@Modifying
+	@Query(value = """
+		INSERT INTO notifications (user_id, category, event_key, title, body)
+		VALUES (:userId, :category, :eventKey, :title, :body)
+		ON CONFLICT (user_id, event_key) DO NOTHING
+		""", nativeQuery = true)
+	int insert(
+		@Param("userId") long userId,
+		@Param("category") String category,
+		@Param("eventKey") String eventKey,
+		@Param("title") String title,
+		@Param("body") String body
+	);
+
+	/** 릴레이 폴링 배치 (D13) — PENDING 을 오래된 순으로 batch 개. idx_notifications_pending(partial) 사용. */
+	@Query(value = """
+		SELECT * FROM notifications WHERE status = 'PENDING' ORDER BY id LIMIT :limit
+		""", nativeQuery = true)
+	List<Notification> findPendingBatch(@Param("limit") int limit);
+
+	/**
+	 * 릴레이 발행 성공 후 전이 (D13) — 컨슈머 종결 전 재발행을 막는다 (D4 PUBLISHED 존재 이유).
+	 * PENDING 가드: send~markPublished 사이에 컨슈머가 먼저 SENT 종결한 행을 역행시키지 않는다 (D4 단방향).
+	 * published_at 은 markSent 와 동일 형상의 UTC 벽시계 — resetStalePublished 판정 기준이라 축자 UTC 필수.
+	 */
+	@Modifying
+	@Query(value = """
+		UPDATE notifications
+		SET status = 'PUBLISHED', published_at = statement_timestamp() AT TIME ZONE 'UTC'
+		WHERE id = :id AND status = 'PENDING'
+		""", nativeQuery = true)
+	int markPublished(@Param("id") long id);
+
+	/**
+	 * 스테일 PUBLISHED 자동 복구 (Codex 3R P2) — 컨슈머가 브로커 보존기간보다 오래 다운되면 메시지가
+	 * 소실돼 PUBLISHED 가 영구 잔류한다(릴레이는 PENDING 만 폴링). 발행 시각(published_at)이
+	 * threshold(now − stale-published-minutes, 앱 UTC 계산) 이전인 행을 PENDING 으로 되돌려 릴레이가
+	 * 같은 사이클에 재발행한다. created_at 기준이 아닌 이유(Codex 4R P1): 기록 30분 경과 후 첫 발행된
+	 * 백로그가 발행 직후 리셋돼 5s 마다 재발행 폭주 + oldest 배치 영구 선점이 되기 때문. 정상 경로는
+	 * 발행 5s 내 소비·백오프 최대 ~4.3분이라 발행 후 30분 초과 = 컨슈머 미달 확정이고, 재발행 중복은
+	 * 컨슈머 멱등 2차 방어(종결 상태 검사)가 흡수한다. idx_notifications_published(partial) 사용.
+	 * published_at 이 NULL 인 PUBLISHED 행은 {@code NULL < threshold} 가 UNKNOWN 이라 자연 제외된다 —
+	 * 운영 경로에선 markPublished 가 전이와 기록을 한 문장으로 하므로 NULL PUBLISHED 자체가 없다(테스트 직조작 한정).
+	 */
+	@Modifying
+	@Query(value = """
+		UPDATE notifications SET status = 'PENDING' WHERE status = 'PUBLISHED' AND published_at < :threshold
+		""", nativeQuery = true)
+	int resetStalePublished(@Param("threshold") LocalDateTime threshold);
+
+	/** 컨슈머 처리 진입 시 +1 (D4) — 몇 번 만에 성공했는지가 남는다. */
+	@Modifying
+	@Query(value = """
+		UPDATE notifications SET retry_count = retry_count + 1 WHERE id = :id
+		""", nativeQuery = true)
+	int incrementRetryCount(@Param("id") long id);
+
+	/**
+	 * 발송 성공 종결 (D4). sent_at 은 statement_timestamp() AT TIME ZONE 'UTC'
+	 * (StreakRepository.upsertOnUpload updated_at 선례) — now()(timestamptz)는 timestamp 컬럼 대입 시
+	 * 세션 TZ 로 캐스트돼 KST JVM 에서 +9h 저장된다. push_tokens last_used_at 의 now() 는 60일 스테일
+	 * 판정이라 그 오차가 무해했지만, sent_at 은 D8 자정 경계 판정(countSentSince) 입력이라 UTC 축자여야 한다.
+	 */
+	@Modifying
+	@Query(value = """
+		UPDATE notifications SET status = 'SENT', sent_at = statement_timestamp() AT TIME ZONE 'UTC'
+		WHERE id = :id
+		""", nativeQuery = true)
+	int markSent(@Param("id") long id);
+
+	/** 미발송 종결 (D4·FR-8) — 사유(PREF_OFF·RATE_LIMITED·NO_TOKEN)를 last_error 에 남긴다. */
+	@Modifying
+	@Query(value = """
+		UPDATE notifications SET status = 'SKIPPED', last_error = left(:reason, 255) WHERE id = :id
+		""", nativeQuery = true)
+	int markSkipped(@Param("id") long id, @Param("reason") String reason);
+
+	/** 재시도 상한 소진 격리 (FR-4) — left(255): 예외 메시지가 컬럼 폭을 넘어도 DEAD 전이는 성공해야 한다. */
+	@Modifying
+	@Query(value = """
+		UPDATE notifications SET status = 'DEAD', last_error = left(:error, 255) WHERE id = :id
+		""", nativeQuery = true)
+	int markDead(@Param("id") long id, @Param("error") String error);
+
+	/**
+	 * 전송률 제한 카운트 (D8·FR-12). threshold 는 애플리케이션이 KST 오늘 자정을 UTC 로 변환해 바인딩 —
+	 * SQL 세션 TZ 캐스트 금지 (MSG-222 스큐 실측). idx_notifications_user 사용.
+	 */
+	@Query(value = """
+		SELECT count(*) FROM notifications
+		WHERE user_id = :userId AND category = :category AND status = 'SENT' AND sent_at >= :threshold
+		""", nativeQuery = true)
+	long countSentSince(
+		@Param("userId") long userId,
+		@Param("category") String category,
+		@Param("threshold") LocalDateTime threshold
+	);
+}

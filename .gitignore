@@ -40,3 +40,6 @@ out/
 ### 행정동 경계 GeoJSON (MSG-154) — 수십 MB, 커밋하지 않고 scripts/download-region-geojson.sh 로 확보 ###
 /data/region/*.geojson
 .DS_Store
+
+### FCM 서비스 계정 키 (MSG-179 D9) — 레포 커밋 절대 금지, FCM_CREDENTIALS_PATH 로 경로만 주입 ###
+*firebase-adminsdk*.json
