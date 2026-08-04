@@ -88,7 +88,7 @@ class StaleTokenCleanerTest {
 	/** 게이트 밖 직접 생성용 설정 — 기본값과 동일 형상 (stale-token-days 60). */
 	private NotificationProperties properties() {
 		return new NotificationProperties(false, "notification.send", "fillmap-notification",
-			new NotificationProperties.Relay(5000L, 100), new NotificationProperties.RateLimit(1, 1), 60,
+			new NotificationProperties.Relay(5000L, 100, 30), new NotificationProperties.RateLimit(1, 1), 60,
 			new NotificationProperties.Fcm(null));
 	}
 

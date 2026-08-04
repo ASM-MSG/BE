@@ -50,6 +50,19 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 		""", nativeQuery = true)
 	int markPublished(@Param("id") long id);
 
+	/**
+	 * 스테일 PUBLISHED 자동 복구 (Codex 3R P2) — 컨슈머가 브로커 보존기간보다 오래 다운되면 메시지가
+	 * 소실돼 PUBLISHED 가 영구 잔류한다(릴레이는 PENDING 만 폴링). threshold(now − stale-published-minutes,
+	 * 앱 UTC 계산) 이전 행을 PENDING 으로 되돌려 릴레이가 같은 사이클에 재발행한다. published_at 컬럼
+	 * 없이 created_at 기준 — 정상 경로는 발행 5s 내 소비·백오프 최대 ~4.3분이라 30분 초과 = 컨슈머 미달
+	 * 확정이고, 재발행 중복은 컨슈머 멱등 2차 방어(종결 상태 검사)가 흡수한다.
+	 */
+	@Modifying
+	@Query(value = """
+		UPDATE notifications SET status = 'PENDING' WHERE status = 'PUBLISHED' AND created_at < :threshold
+		""", nativeQuery = true)
+	int resetStalePublished(@Param("threshold") LocalDateTime threshold);
+
 	/** 컨슈머 처리 진입 시 +1 (D4) — 몇 번 만에 성공했는지가 남는다. */
 	@Modifying
 	@Query(value = """

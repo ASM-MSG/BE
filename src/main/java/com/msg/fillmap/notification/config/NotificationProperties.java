@@ -23,10 +23,15 @@ public record NotificationProperties(
 	@DefaultValue Fcm fcm
 ) {
 
-	/** 릴레이 폴러 (D13) — fixedDelay 주기와 PENDING 배치 크기. */
+	/**
+	 * 릴레이 폴러 (D13) — fixedDelay 주기와 PENDING 배치 크기. stalePublishedMinutes: 이 시간을 넘긴
+	 * PUBLISHED 를 PENDING 으로 복구해 재발행한다 (컨슈머 장기 다운 → 브로커 보존기간 초과 메시지
+	 * 소실 시 영구 잔류 방지 — Codex 3R P2).
+	 */
 	public record Relay(
 		@DefaultValue("5000") long pollIntervalMs,
-		@DefaultValue("100") int batchSize
+		@DefaultValue("100") int batchSize,
+		@DefaultValue("30") int stalePublishedMinutes
 	) {
 	}
 

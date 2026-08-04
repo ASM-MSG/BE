@@ -1,5 +1,7 @@
 package com.msg.fillmap.notification.relay;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -21,6 +23,10 @@ import com.msg.fillmap.notification.repository.NotificationRepository;
  * 다운)면 상태를 유지하고 **남은 배치를 중단**해 다음 주기에 재시도한다 — 브로커 다운이면 행마다
  * delivery timeout(기본 2분)을 대기해 배치 100행이 스케줄링 스레드(Spring 기본 단일)를 수 시간 점유,
  * StaleTokenCleaner·AiBlurPoller 까지 블록하기 때문. 폴러 자체는 catch 로 죽지 않는다.
+ *
+ * 사이클 첫머리에 스테일 PUBLISHED(기본 30분 초과)를 PENDING 으로 복구한다 — 컨슈머가 브로커
+ * 보존기간보다 오래 다운되면 메시지 소실로 PUBLISHED 가 영구 잔류하기 때문(Codex 3R P2). 복구된
+ * 행은 같은 사이클의 findPendingBatch 가 자연 재발행하고, 중복은 컨슈머 멱등(D5 2차)이 흡수한다.
  *
  * ponytail: 단일 앱 인스턴스 전제(dev/prod 각 1, systemd 실측)라 FOR UPDATE SKIP LOCKED 를 안 쓴다 —
  * 앱 스케일아웃 시 폴러 경합이 생기므로 그때 클레임 잠금으로 승격할 것.
@@ -46,6 +52,7 @@ public class NotificationRelay {
 
 	@Scheduled(fixedDelayString = "${fillmap.notification.relay.poll-interval-ms:5000}")
 	public void relay() {
+		resetStalePublished();
 		List<Notification> batch = notificationRepository.findPendingBatch(properties.relay().batchSize());
 		for (int i = 0; i < batch.size(); i++) {
 			Notification notification = batch.get(i);
@@ -64,6 +71,17 @@ public class NotificationRelay {
 					batch.size() - i, notification.getId(), e);
 				return;
 			}
+		}
+	}
+
+	/** threshold 는 앱 UTC 계산 — 세션 TZ 캐스트 스큐(MSG-222 실측) 재발 방지. 복구 발생 = 컨슈머 미달 운영 신호. */
+	private void resetStalePublished() {
+		LocalDateTime threshold =
+			LocalDateTime.now(ZoneOffset.UTC).minusMinutes(properties.relay().stalePublishedMinutes());
+		Integer reset = tx.execute(status -> notificationRepository.resetStalePublished(threshold));
+		if (reset != null && reset > 0) {
+			log.warn("스테일 PUBLISHED {}건 → PENDING 복구 — 컨슈머 미달 신호, 이번 사이클에 재발행된다 (threshold={})",
+				reset, threshold);
 		}
 	}
 }

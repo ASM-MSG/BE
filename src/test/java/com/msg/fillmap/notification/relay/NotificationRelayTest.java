@@ -5,9 +5,12 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -93,8 +96,10 @@ class NotificationRelayTest {
 	void setUp() {
 		tx = new TransactionTemplate(txManager);
 		tx.executeWithoutResult(status -> {
-			// 공유 로컬 DB 의 잔존 PENDING 이 배치(오래된 순)를 선점하면 단언이 흔들린다 — 선정리.
-			em.createNativeQuery("DELETE FROM notifications WHERE status = 'PENDING'").executeUpdate();
+			// 공유 로컬 DB 의 잔존 PENDING·PUBLISHED(스테일 리셋 대상)가 배치(오래된 순)를 선점하면
+			// 단언이 흔들린다 — 선정리.
+			em.createNativeQuery("DELETE FROM notifications WHERE status IN ('PENDING', 'PUBLISHED')")
+				.executeUpdate();
 			me = userRepository.save(
 				User.createLocalUser("relay-" + System.nanoTime() + "@example.com", "hash", "릴레이테스터")).getId();
 		});
@@ -156,6 +161,32 @@ class NotificationRelayTest {
 		assertThat(statusOf(third)).isEqualTo("PENDING");
 	}
 
+	@Test
+	@DisplayName("오래된 PUBLISHED 행은 PENDING 으로 복구돼 재발행된다 — 컨슈머 장기 다운 대비, 최근 행은 리셋 안 됨")
+	@SuppressWarnings("unchecked")
+	void 오래된_PUBLISHED_행은_PENDING으로_복구돼_재발행된다() {
+		long stale = newNotification();
+		setStatus(stale, "PUBLISHED");
+		setCreatedAt(stale, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(31));   // threshold(30분) 초과
+		long fresh = newNotification();
+		setStatus(fresh, "PUBLISHED");
+		setCreatedAt(fresh, LocalDateTime.now(ZoneOffset.UTC));                    // threshold 이내
+		// 발행 기록용 목 템플릿 — 실발행 경로는 위 발행 테스트가 이미 검증, 여기선 "누가 재발행됐나"만 본다.
+		KafkaTemplate<String, String> recordingTemplate = mock(KafkaTemplate.class);
+		given(recordingTemplate.send(anyString(), anyString()))
+			.willReturn(CompletableFuture.completedFuture(null));
+		NotificationRelay relay =
+			new NotificationRelay(notificationRepository, recordingTemplate, properties, txManager);
+
+		relay.relay();
+
+		// 리셋 → 같은 사이클의 findPendingBatch 가 재발행 → 다시 PUBLISHED 로 도달.
+		assertThat(statusOf(stale)).isEqualTo("PUBLISHED");
+		then(recordingTemplate).should().send(properties.topic(), String.valueOf(stale));
+		assertThat(statusOf(fresh)).isEqualTo("PUBLISHED");
+		then(recordingTemplate).should(never()).send(properties.topic(), String.valueOf(fresh));
+	}
+
 	private long newNotification() {
 		String eventKey = "RELAY:" + System.nanoTime();
 		notificationCommandService.record(me, NotificationCategory.BADGE, eventKey, "제목", "본문");
@@ -170,6 +201,22 @@ class NotificationRelayTest {
 		return (String) em.createNativeQuery("SELECT status FROM notifications WHERE id = :id")
 			.setParameter("id", id)
 			.getSingleResult();
+	}
+
+	private void setStatus(long id, String status) {
+		tx.executeWithoutResult(s ->
+			em.createNativeQuery("UPDATE notifications SET status = :status WHERE id = :id")
+				.setParameter("status", status)
+				.setParameter("id", id)
+				.executeUpdate());
+	}
+
+	private void setCreatedAt(long id, LocalDateTime createdAt) {
+		tx.executeWithoutResult(s ->
+			em.createNativeQuery("UPDATE notifications SET created_at = :createdAt WHERE id = :id")
+				.setParameter("createdAt", createdAt)
+				.setParameter("id", id)
+				.executeUpdate());
 	}
 
 	/** 별도 그룹 + earliest 로 토픽을 처음부터 재소비해 발행 사실을 확인한다 (10초 상한). */
