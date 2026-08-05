@@ -10,11 +10,13 @@ import org.springframework.context.ApplicationContext;
 
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.msg.fillmap.notification.consumer.NotificationConsumer;
+import com.msg.fillmap.notification.relay.HotZoneEntryDetector;
 import com.msg.fillmap.notification.relay.NotificationRelay;
 import com.msg.fillmap.notification.relay.StaleTokenCleaner;
 import com.msg.fillmap.notification.sender.FcmNotificationSender;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.notification.service.NotificationPreferenceService;
+import com.msg.fillmap.streak.service.StreakRemindScheduler;
 
 /**
  * notification 게이트 검증 (MSG-179 D11, AiEnabledContextTest 선례의 반대편). 기본 off 컨텍스트에서
@@ -35,6 +37,12 @@ class NotificationDisabledContextTest {
 		assertThat(context.getBeansOfType(StaleTokenCleaner.class)).isEmpty();
 		assertThat(context.getBeansOfType(FcmNotificationSender.class)).isEmpty();
 		assertThat(context.getBeansOfType(FirebaseMessaging.class)).isEmpty();
+	}
+
+	@Test
+	void notification_비활성이면_검출기와_리마인드_스케줄러_빈이_없다() {
+		assertThat(context.getBeansOfType(HotZoneEntryDetector.class)).isEmpty();
+		assertThat(context.getBeansOfType(StreakRemindScheduler.class)).isEmpty();
 	}
 
 	@Test
