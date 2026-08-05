@@ -228,6 +228,20 @@ class NotificationConsumerTest {
 	}
 
 	@Test
+	@DisplayName("WEEKLY 는 전송률 제한 없이 발송된다 — MSG-315 D6, 이벤트 키가 주 단위라 상한이 불필요")
+	void WEEKLY는_전송률_제한_없이_발송된다() throws Exception {
+		registerToken("ok-" + System.nanoTime());
+		long first = newNotification(NotificationCategory.WEEKLY, "첫째");
+		long second = newNotification(NotificationCategory.WEEKLY, "둘째");
+
+		publish(first);
+		publish(second);
+
+		awaitStatus(first, "SENT");
+		awaitStatus(second, "SENT");
+	}
+
+	@Test
 	@DisplayName("토큰이 없으면 SKIPPED NO_TOKEN 이다")
 	void 토큰이_없으면_SKIPPED_NO_TOKEN이다() throws Exception {
 		long id = newNotification(NotificationCategory.BADGE, "제목");

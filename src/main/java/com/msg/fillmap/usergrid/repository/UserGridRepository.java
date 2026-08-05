@@ -1,5 +1,6 @@
 package com.msg.fillmap.usergrid.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -146,4 +147,33 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 		WHERE ug.grid_id = :gridId
 		""", nativeQuery = true)
 	List<GridOccupantProjection> getGridOccupants(@Param("gridId") String gridId);
+
+	/**
+	 * 주간 요약 대상·수치 동시 집계 (MSG-315 D3). 대상 판정("활동이 있었는가")과 수치("몇 개인가")가 같은
+	 * 재료라 UNION ALL 한 번으로 읽는다 — 결과에 든 사용자가 곧 활동자이므로 FR-6 이 별도 필터 없이 성립한다.
+	 * 임계값 두 개는 호출자가 KST 주 시작을 절대 시각으로 잡아 저장 존(JVM 기본 존)으로 환산해 바인딩한다 —
+	 * 이 두 컬럼은 notifications.created_at 과 달리 UTC 가 아니라 JVM 기본 존 벽시계로 저장되기 때문(D2 표).
+	 * 영상은 status &lt;&gt; 'DELETED'(도감 요약과 같은 기준, MSG-152 D6 — 삭제 제외·블라인드 포함),
+	 * 격자는 별도 필터가 없다(점령 롤백이 행 자체를 지우므로 남은 행이 곧 현재 진실).
+	 * COUNT 계열이 bigint 라 ::int 캐스트로 Integer 프로젝션과 맞춘다(도감 요약 선례).
+	 */
+	@Query(value = """
+		SELECT t.user_id AS "userId",
+			sum(t.grid_delta)::int AS "gridCount",
+			sum(t.video_delta)::int AS "videoCount"
+		FROM (
+			SELECT user_id, 1 AS grid_delta, 0 AS video_delta
+			FROM user_grids
+			WHERE first_collected_at >= :weekStart AND first_collected_at < :now
+			UNION ALL
+			SELECT user_id, 0, 1
+			FROM videos
+			WHERE created_at >= :weekStart AND created_at < :now AND status <> 'DELETED'
+		) t
+		GROUP BY t.user_id
+		""", nativeQuery = true)
+	List<WeeklyActivityProjection> findWeeklyActivity(
+		@Param("weekStart") LocalDateTime weekStart,
+		@Param("now") LocalDateTime now
+	);
 }

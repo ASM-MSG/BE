@@ -95,7 +95,8 @@ class NotificationPreferenceServiceIntegrationTest {
 				tuple(NotificationCategory.BADGE, true),
 				tuple(NotificationCategory.HOTZONE, false),
 				tuple(NotificationCategory.REMIND, true),
-				tuple(NotificationCategory.VIDEO, true));
+				tuple(NotificationCategory.VIDEO, true),
+				tuple(NotificationCategory.WEEKLY, true));
 	}
 
 	@Test
@@ -124,8 +125,8 @@ class NotificationPreferenceServiceIntegrationTest {
 	}
 
 	@Test
-	@DisplayName("조회는 카테고리 4종 전부를 반환한다 — 부재 카테고리 on 합성, enum 선언 순 (MSG-313 VIDEO 포함)")
-	void 조회는_카테고리_4종_전부를_반환한다() {
+	@DisplayName("조회는 카테고리 5종 전부를 반환한다 — 부재 카테고리 on 합성, enum 선언 순 (MSG-315 WEEKLY 포함)")
+	void 조회는_카테고리_5종_전부를_반환한다() {
 		notificationPreferenceService.update(me, "HOTZONE", false);
 
 		NotificationPreferenceResponseDto response = notificationPreferenceService.getPreferences(me);
@@ -136,7 +137,24 @@ class NotificationPreferenceServiceIntegrationTest {
 				tuple(NotificationCategory.BADGE, true),
 				tuple(NotificationCategory.HOTZONE, false),
 				tuple(NotificationCategory.REMIND, true),
-				tuple(NotificationCategory.VIDEO, true));
+				tuple(NotificationCategory.VIDEO, true),
+				tuple(NotificationCategory.WEEKLY, true));
+	}
+
+	@Test
+	@DisplayName("WEEKLY 카테고리를 토글하면 조회에 반영된다 — off/on 왕복 (MSG-315 FR-7)")
+	void WEEKLY_카테고리를_토글하면_조회에_반영된다() {
+		notificationPreferenceService.update(me, "WEEKLY", false);
+		assertThat(notificationPreferenceService.isEnabled(me, NotificationCategory.WEEKLY)).isFalse();
+		assertThat(notificationPreferenceService.getPreferences(me).preferences())
+			.filteredOn(preference -> preference.category() == NotificationCategory.WEEKLY)
+			.extracting(CategoryPreferenceDto::enabled)
+			.containsExactly(false);
+
+		notificationPreferenceService.update(me, "WEEKLY", true);
+
+		assertThat(notificationPreferenceService.isEnabled(me, NotificationCategory.WEEKLY)).isTrue();
+		assertThat(optOutCount(me)).isZero();
 	}
 
 	@Test
