@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import jakarta.persistence.EntityManager;
 
@@ -57,22 +58,25 @@ class StreakRemindSchedulerTest {
 	private TransactionTemplate tx;
 	private StreakRemindScheduler scheduler;
 	private long userId;
+	private long otherUserId;
 
 	@BeforeEach
 	void setUp() {
 		scheduler = new StreakRemindScheduler(streakRepository, notificationCommandService,
 			Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
 		tx = new TransactionTemplate(txManager);
-		String email = "remind-" + System.nanoTime() + "@example.com";
-		tx.executeWithoutResult(status ->
-			userId = userRepository.save(User.createLocalUser(email, "hash", "리마인드테스터")).getId());
+		tx.executeWithoutResult(status -> {
+			userId = newUser("remind");
+			otherUserId = newUser("remind-other");
+		});
 	}
 
 	@AfterEach
 	void tearDown() {
 		tx.executeWithoutResult(status ->
-			em.createNativeQuery("DELETE FROM users WHERE id = :userId")
+			em.createNativeQuery("DELETE FROM users WHERE id IN (:userId, :otherUserId)")
 				.setParameter("userId", userId)
+				.setParameter("otherUserId", otherUserId)
 				.executeUpdate());
 	}
 
@@ -116,22 +120,55 @@ class StreakRemindSchedulerTest {
 		assertThat(notificationCount()).isEqualTo(1);
 	}
 
+	@Test
+	void 한_사용자의_기록_실패가_다른_사용자의_리마인드를_막지_않는다() {
+		seedStreak(userId, 5, TODAY_KST.minusDays(1));
+		seedStreak(otherUserId, 3, TODAY_KST.minusDays(1));
+		// 순회 순서 무관하게 결정적이도록 "첫 호출"에 실패를 주입한다 — record 는 단일 추상 메서드라 람다 위임.
+		AtomicBoolean firstCall = new AtomicBoolean(true);
+		StreakRemindScheduler failingScheduler = new StreakRemindScheduler(streakRepository,
+			(user, category, eventKey, title, body) -> {
+				if (firstCall.getAndSet(false)) {
+					throw new IllegalStateException("주입한 기록 실패");
+				}
+				notificationCommandService.record(user, category, eventKey, title, body);
+			}, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
+
+		failingScheduler.remind();
+
+		// 격리가 없으면 첫 실패가 루프를 끊어 0건 — 나머지 한 명은 기록돼야 한다.
+		assertThat(notificationCount(userId) + notificationCount(otherUserId)).isEqualTo(1);
+	}
+
+	private long newUser(String prefix) {
+		String email = prefix + "-" + System.nanoTime() + "@example.com";
+		return userRepository.save(User.createLocalUser(email, "hash", "리마인드테스터")).getId();
+	}
+
 	private void seedStreak(int currentCount, LocalDate lastRecordedDate) {
+		seedStreak(userId, currentCount, lastRecordedDate);
+	}
+
+	private void seedStreak(long user, int currentCount, LocalDate lastRecordedDate) {
 		tx.executeWithoutResult(status ->
 			em.createNativeQuery("""
 					INSERT INTO streaks (user_id, current_count, max_count, last_recorded_date)
 					VALUES (:userId, :current, :current, CAST(:lastDate AS date))
 					""")
-				.setParameter("userId", userId)
+				.setParameter("userId", user)
 				.setParameter("current", currentCount)
 				.setParameter("lastDate", lastRecordedDate.toString())
 				.executeUpdate());
 	}
 
 	private long notificationCount() {
+		return notificationCount(userId);
+	}
+
+	private long notificationCount(long user) {
 		return ((Number) em.createNativeQuery(
 				"SELECT count(*) FROM notifications WHERE user_id = :userId AND event_key = :eventKey")
-			.setParameter("userId", userId)
+			.setParameter("userId", user)
 			.setParameter("eventKey", EVENT_KEY)
 			.getSingleResult()).longValue();
 	}
