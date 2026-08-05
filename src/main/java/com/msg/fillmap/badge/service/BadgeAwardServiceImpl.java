@@ -14,6 +14,8 @@ import com.msg.fillmap.badge.entity.BadgeConditionType;
 import com.msg.fillmap.badge.repository.BadgeRepository;
 import com.msg.fillmap.badge.repository.EligibleBadgeProjection;
 import com.msg.fillmap.badge.repository.UserBadgeRepository;
+import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.service.NotificationCommandService;
 
 /**
  * 뱃지 판정·지급 엔진 (MSG-239). "조건을 충족했는데 아직 못 받은 뱃지"를 조회한 뒤 지급 INSERT 하는
@@ -29,6 +31,7 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
 
 	private final BadgeRepository badgeRepository;
 	private final UserBadgeRepository userBadgeRepository;
+	private final NotificationCommandService notificationCommandService;
 
 	@Override
 	@Transactional
@@ -57,6 +60,10 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
 		List<EarnedBadgeResponseDto> earned = new ArrayList<>(candidates.size());
 		for (EligibleBadgeProjection candidate : candidates) {
 			if (userBadgeRepository.insertIgnoreConflict(userId, candidate.getBadgeId()) == 1) {
+				// 발급과 같은 커밋에 BADGE 알림 기록 (MSG-181 D1·D2) — 경합 패자(0행)는 record 도 안 탄다.
+				notificationCommandService.record(userId, NotificationCategory.BADGE,
+					"BADGE:" + candidate.getBadgeId(), "새 뱃지 획득",
+					"'" + candidate.getName() + "' 뱃지를 획득했어요");
 				earned.add(EarnedBadgeResponseDto.from(candidate));
 			}
 		}
