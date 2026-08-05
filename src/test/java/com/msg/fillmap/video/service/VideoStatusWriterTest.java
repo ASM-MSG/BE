@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.msg.fillmap.notification.service.NotificationCommandService;
+import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
@@ -39,7 +40,12 @@ class VideoStatusWriterTest {
 	@BeforeEach
 	void setUp() {
 		videoRepository = mock(VideoRepository.class);
-		statusWriter = new VideoStatusWriter(videoRepository, mock(NotificationCommandService.class));
+		UserRepository userRepository = mock(UserRepository.class);
+		// 알림 배선 전이의 users 선취(잠금 순서 통일)가 통과하도록 스텁 — 순서 자체는 통합·리뷰 검증 몫.
+		given(videoRepository.findUserIdById(VIDEO_ID)).willReturn(Optional.of(1L));
+		given(userRepository.findIdForKeyShare(1L)).willReturn(Optional.of(1L));
+		statusWriter = new VideoStatusWriter(videoRepository, userRepository,
+			mock(NotificationCommandService.class));
 	}
 
 	/** BLURRING·ACTIVE 인, 아직 미제출(aiJobId=null) 시도의 영상. */

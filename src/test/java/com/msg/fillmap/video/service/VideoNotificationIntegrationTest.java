@@ -193,6 +193,19 @@ class VideoNotificationIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("영상 행이 없는 전이는 예외 없이 무동작이다 — 탈퇴 CASCADE 이후 지연 도착 재현 (Codex 2R)")
+	void 영상_행이_없는_전이는_예외_없이_무동작이고_알림도_없다() {
+		tx.executeWithoutResult(status ->
+			em.createNativeQuery("DELETE FROM videos WHERE id = :videoId")
+				.setParameter("videoId", videoId)
+				.executeUpdate());
+
+		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY);
+
+		assertThat(notificationCount()).isZero();
+	}
+
+	@Test
 	@DisplayName("잡 유실 복귀는 알림을 기록하지 않는다 — clearAiJob 은 종결이 아니라 재제출 대기")
 	void 잡_유실_복귀는_알림을_기록하지_않는다() {
 		enterBlurring("job-1");

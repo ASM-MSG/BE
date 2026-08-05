@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import com.msg.fillmap.notification.entity.NotificationCategory;
 import com.msg.fillmap.notification.service.NotificationCommandService;
+import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
@@ -45,6 +46,7 @@ public class VideoStatusWriter {
 	private static final int EVENT_KEY_FILE_SUFFIX_MAX = 45;
 
 	private final VideoRepository videoRepository;
+	private final UserRepository userRepository;
 	private final NotificationCommandService notificationCommandService;
 
 	/** 적용 여부를 반환한다 — false 면 태스크 시작 시점부터 스테일(큐 대기 중 교체·삭제됨)이라 ffmpeg 을 돌릴 이유가 없다. */
@@ -61,6 +63,9 @@ public class VideoStatusWriter {
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void markReady(Long videoId, String expectedOriginalKey, String encodedKey, String thumbnailKey) {
+		if (!lockUploaderFirst(videoId)) {
+			return;
+		}
 		videoRepository.findWithLockById(videoId).ifPresent(video -> {
 			if (!isCurrentEncodingAttempt(video, expectedOriginalKey)) {
 				logStaleSkip("인코딩 완료", videoId, expectedOriginalKey, video);
@@ -111,6 +116,9 @@ public class VideoStatusWriter {
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public boolean markBlurReady(Long videoId, String expectedJobId, String blurredS3Key, String thumbnailKey,
 		List<List<Double>> highlights) {
+		if (!lockUploaderFirst(videoId)) {
+			return false;
+		}
 		Video video = videoRepository.findWithLockById(videoId).orElse(null);
 		if (!isCurrentBlurJob(video, expectedJobId)) {
 			logStaleSkip("블러 결과", videoId, expectedJobId, video);
@@ -132,6 +140,9 @@ public class VideoStatusWriter {
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void markBlurFailed(Long videoId, String expectedJobId, LocalDateTime expectedStartedAt,
 		String failReason) {
+		if (!lockUploaderFirst(videoId)) {
+			return;
+		}
 		videoRepository.findWithLockById(videoId).ifPresent(video -> {
 			if (!isCurrentBlurJob(video, expectedJobId)
 				|| !Objects.equals(video.getBlurringStartedAt(), expectedStartedAt)) {
@@ -163,6 +174,9 @@ public class VideoStatusWriter {
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void markFailed(Long videoId, String expectedOriginalKey) {
+		if (!lockUploaderFirst(videoId)) {
+			return;
+		}
 		videoRepository.findWithLockById(videoId).ifPresent(video -> {
 			if (!isCurrentEncodingAttempt(video, expectedOriginalKey)) {
 				// 교체 afterCommit 이 옛 원본을 S3 에서 지워 옛 태스크의 다운로드가 실패하는 게 대표 경로 —
@@ -173,6 +187,21 @@ public class VideoStatusWriter {
 			video.markFailed();
 			recordOutcomeNotification(video, false);
 		});
+	}
+
+	/**
+	 * 알림 배선 4개 전이(markReady·markBlurReady·markFailed·markBlurFailed) 전용 잠금 순서 선취 (Codex 2R) —
+	 * record 의 FK 검사가 users 행 KEY SHARE 를 기다리므로, videos 행 잠금보다 먼저 users 를 잡아 탈퇴
+	 * CASCADE(users 배타 잠금 → videos 행 삭제 대기)와 같은 users → videos 순서로 통일한다. 역순이면 교차
+	 * 대기 사이클로 PostgreSQL 이 한쪽을 abort 시킨다. false = 영상 행 부재(탈퇴 CASCADE 완료) 또는 유저
+	 * 부재(탈퇴 진행) — CASCADE 가 영상을 지우므로 전이·알림 모두 무의미해 조용히 스킵한다(스테일 가드와 같은 결).
+	 */
+	private boolean lockUploaderFirst(Long videoId) {
+		Long userId = videoRepository.findUserIdById(videoId).orElse(null);   // 무잠금 선독 — user_id 불변
+		if (userId == null) {
+			return false;
+		}
+		return userRepository.findIdForKeyShare(userId).isPresent();
 	}
 
 	/**
