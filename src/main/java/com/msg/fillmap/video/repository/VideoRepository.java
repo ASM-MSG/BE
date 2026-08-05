@@ -60,6 +60,13 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	Optional<Video> findWithLockById(@Param("id") Long id);
 
 	/**
+	 * 알림 잠금 순서 선취용 무잠금 선독 (MSG-313 Codex 2R) — user_id 는 불변이라 행 잠금 전에 읽어도
+	 * 안전하다. 빈 결과 = 탈퇴 CASCADE 로 이미 삭제된 영상이라 호출자가 전이를 스킵한다.
+	 */
+	@Query("SELECT v.userId FROM Video v WHERE v.id = :id")
+	Optional<Long> findUserIdById(@Param("id") Long id);
+
+	/**
 	 * 격자 전역 대표 영상 1건 (MSG-87). user_id 조건 없이 그 격자의 모든 공개·READY 영상 중 조회수 →
 	 * 최신 → id 순으로 1건을 뽑는다 — MSG-127 의 개인 격리와 정반대 축(전역, 본인 포함)이다.
 	 * WHERE·ORDER BY 는 idx_videos_grid_popular 부분 인덱스(V1__init.sql:110)와 바이트 단위로 일치시켜
