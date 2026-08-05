@@ -1,5 +1,8 @@
 package com.msg.fillmap.streak.repository;
 
+import java.time.LocalDate;
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -51,4 +54,15 @@ public interface StreakRepository extends JpaRepository<Streak, Long> {
 	/** 갱신 직후 판정 metric 읽기 — 같은 트랜잭션에서 UPSERT 가 행 잠금을 쥔 상태라 읽기 정합 문제 없음(§D5). */
 	@Query(value = "SELECT current_count FROM streaks WHERE user_id = :userId", nativeQuery = true)
 	int findCurrentCount(@Param("userId") long userId);
+
+	/**
+	 * 리마인드 대상 = last_recorded_date 가 KST 어제인 사용자 전원 (MSG-181 D8) — "= 오늘"은 이미 업로드,
+	 * "< 어제"는 이미 끊김이라 한 조건으로 끝난다. 어제 날짜는 앱이 KST 계산해 바인딩 — 세션 TZ 캐스트
+	 * 스큐(MSG-222 실측) 재발 방지. 사용자당 1행 테이블의 일 1회 풀스캔이라 인덱스 불요.
+	 */
+	@Query(value = """
+		SELECT user_id AS "userId", current_count AS "currentCount"
+		FROM streaks WHERE last_recorded_date = :yesterday
+		""", nativeQuery = true)
+	List<StreakRemindProjection> findRemindTargets(@Param("yesterday") LocalDate yesterday);
 }

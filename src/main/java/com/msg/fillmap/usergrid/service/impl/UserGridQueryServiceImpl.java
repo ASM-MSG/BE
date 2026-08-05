@@ -17,6 +17,7 @@ import com.msg.fillmap.usergrid.repository.UserGridRepository;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
 import com.msg.fillmap.usergrid.service.FriendCollectionGridView;
+import com.msg.fillmap.usergrid.service.GridOccupantView;
 import com.msg.fillmap.usergrid.service.RegionVideoView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
@@ -113,5 +114,12 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 			thumbnailUrlPresigner.presign(projection.getThumbnailKey()),
 			projection.getRegionName()
 		);
+	}
+
+	@Override
+	public List<GridOccupantView> getGridOccupants(String gridId) {
+		return userGridRepository.getGridOccupants(gridId).stream()
+			.map(projection -> new GridOccupantView(projection.getUserId(), projection.getRegionName()))
+			.toList();
 	}
 }

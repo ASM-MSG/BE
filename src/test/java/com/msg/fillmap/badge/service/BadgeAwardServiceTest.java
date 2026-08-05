@@ -24,6 +24,7 @@ import com.msg.fillmap.badge.entity.BadgeConditionType;
 import com.msg.fillmap.badge.repository.BadgeRepository;
 import com.msg.fillmap.badge.repository.EligibleBadgeProjection;
 import com.msg.fillmap.badge.repository.UserBadgeRepository;
+import com.msg.fillmap.notification.service.NotificationCommandService;
 
 /**
  * award 의 "INSERT 성공분만 반환" 필터와 행동 단위 메서드(awardUploadBadges·awardCollectionBadges)의
@@ -41,6 +42,9 @@ class BadgeAwardServiceTest {
 
 	@Mock
 	private UserBadgeRepository userBadgeRepository;
+
+	@Mock
+	private NotificationCommandService notificationCommandService;
 
 	@InjectMocks
 	private BadgeAwardServiceImpl badgeAwardService;
