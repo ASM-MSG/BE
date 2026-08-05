@@ -101,13 +101,14 @@ public class NotificationConsumer {
 		tx.executeWithoutResult(status -> notificationRepository.markSent(id));
 	}
 
-	/** 전송률 제한 (D8·FR-12) — HOTZONE·REMIND 일 상한, BADGE·VIDEO 무제한. 카운트는 DB 1문장. */
+	/** 전송률 제한 (D8·FR-12) — HOTZONE·REMIND 일 상한, BADGE·VIDEO·WEEKLY 무제한. 카운트는 DB 1문장. */
 	private boolean rateLimited(Notification notification) {
 		Integer perDay = switch (notification.getCategory()) {
 			case HOTZONE -> properties.rateLimit().hotzonePerDay();
 			case REMIND -> properties.rateLimit().remindPerDay();
 			case BADGE -> null;   // 사용자 액션 직결·희소 — 무제한 (PRD FR-12 확정)
 			case VIDEO -> null;   // 자기 영상 결과 통지 — 업로드 수만큼만 발생, 도배 벡터 없음 (MSG-313 FR-9)
+			case WEEKLY -> null;  // 이벤트 키가 주 단위라 트리거가 주 1건 이상 못 만든다 (MSG-315 D6)
 		};
 		if (perDay == null) {
 			return false;
