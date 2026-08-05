@@ -18,12 +18,14 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
 	/**
 	 * outbox 기록 (FR-3·FR-6). 같은 (user_id, event_key) 재기록은 DO NOTHING 으로 흡수 — 반환 0.
-	 * status·retry_count·created_at 은 DDL DEFAULT (PENDING·0·CURRENT_TIMESTAMP).
+	 * status·retry_count 는 DDL DEFAULT (PENDING·0). created_at 은 DDL DEFAULT(CURRENT_TIMESTAMP)에 맡기지
+	 * 않고 markSent 와 동일 형상의 명시 UTC 로 쓴다 (MSG-314 D4) — timestamptz→timestamp 대입은 세션 TZ
+	 * 캐스트라 KST JVM 에선 +9h 저장돼 countRecordedSince 의 KST 자정 판정이 환경별로 스큐난다.
 	 */
 	@Modifying
 	@Query(value = """
-		INSERT INTO notifications (user_id, category, event_key, title, body)
-		VALUES (:userId, :category, :eventKey, :title, :body)
+		INSERT INTO notifications (user_id, category, event_key, title, body, created_at)
+		VALUES (:userId, :category, :eventKey, :title, :body, statement_timestamp() AT TIME ZONE 'UTC')
 		ON CONFLICT (user_id, event_key) DO NOTHING
 		""", nativeQuery = true)
 	int insert(
@@ -115,6 +117,22 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 	long countSentSince(
 		@Param("userId") long userId,
 		@Param("category") String category,
+		@Param("threshold") LocalDateTime threshold
+	);
+
+	/**
+	 * 기간 내 기록 카운트 (MSG-314 D3) — 임박 알림 하루 1건 상한의 존재 확인. 발송 여부(status)는 보지
+	 * 않는다: 상한은 기록 단계 규칙이므로 발송 실패나 SKIPPED 여부와 무관하게 "오늘 기록했는가"만 센다.
+	 * threshold 는 countSentSince 와 같은 규칙으로 앱이 KST 자정을 UTC 변환해 바인딩 (insert 의 명시 UTC
+	 * created_at 과 자기일관). uq_notifications_user_event(user_id, event_key)가 prefix 검색을 받친다.
+	 */
+	@Query(value = """
+		SELECT count(*) FROM notifications
+		WHERE user_id = :userId AND event_key LIKE :prefix || '%' AND created_at >= :threshold
+		""", nativeQuery = true)
+	long countRecordedSince(
+		@Param("userId") long userId,
+		@Param("prefix") String prefix,
 		@Param("threshold") LocalDateTime threshold
 	);
 }
