@@ -66,17 +66,27 @@ jobs:
 
             컨벤션·네이밍·스타일은 명백한 이탈(공통 응답 패턴 위반, 도메인 경계 침범)만
             지적한다 — 나머지는 로컬 리뷰가 이미 봤다.
-            출력: 발견마다 P1(머지 보류감)/P2(수정 권장)/P3(참고) 라벨을 붙인다. 발견이
-            없으면 "잘된 점" 나열 없이 무엇을 확인했는지 3줄 이내로 끝낸다.
-          # max-turns: 파일 읽기 하나가 턴 하나다. 규칙 문서 통독 지시를 빼고 스펙 1~2개 +
-          # 대역표만 읽게 바꿔 예전(error_max_turns로 전 PR 실패)보다 턴 여유가 생겼다.
-          # 50은 develop 대조 + 스펙 대조 + 중형 PR 리뷰에 충분한 값. 무제한은 폭주 방지로 금지.
+
+            출력 방식:
+            - 발견마다 P1(머지 보류감)/P2(수정 권장)/P3(참고) 라벨을 붙인다.
+            - 라인을 특정할 수 있는 발견은 mcp__github_inline_comment__create_inline_comment 로
+              그 파일 그 라인에 직접 남긴다. 무엇이 문제인지와 어떻게 고치면 되는지를 인라인에 쓴다.
+            - 추적 코멘트에는 확인한 범위와 발견 목록(P라벨 · `파일:라인` · 한 줄 요약)만 쓴다.
+              인라인에 쓴 설명을 그대로 옮겨 적지 않는다 — 같은 글을 두 번 읽게 만들지 말 것.
+            - 라인을 짚을 수 없는 발견(설계 전반·스펙 대비 누락·문서 부재)만 추적 코멘트에 본문으로 쓴다.
+            - 발견이 없으면 인라인 코멘트 없이, "잘된 점" 나열 없이 무엇을 확인했는지 3줄 이내로 끝낸다.
+            - 코드로 확인하지 못하고 추정한 것은 추정이라고 밝힌다.
+          # max-turns: 파일 읽기 하나가 턴 하나고, 인라인 코멘트 한 건도 턴 하나다.
+          # 50 → 70 (MSG-316): 인라인 전환으로 지적 건수만큼 턴이 더 든다. 무제한은 폭주 방지로 금지.
           # allowedTools: Bash 는 기본 차단이라 develop 대조용 읽기 전용 git 명령만 연다.
+          # 인라인 코멘트 도구는 **명시해야 열린다** — 이게 없으면 봇이 라인을 짚어놓고도 추적
+          # 코멘트 하나에 전부 몰아 쓰는 수밖에 없다(MSG-316 이전 상태, FE 레포는 처음부터 열어 둠).
           claude_args: |
-            --max-turns 50
-            --allowedTools "Bash(git diff:*),Bash(git log:*),Bash(git ls-tree:*)"
-          # true 필수: 커스텀 prompt 모드에서 리뷰 결과를 PR에 남기는 유일한 공식 통로다.
+            --max-turns 70
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git ls-tree:*)"
+          # true 필수: 커스텀 prompt 모드에서 요약을 PR에 남기는 통로다.
           # 액션이 추적 코멘트를 만들고 Claude에게 그 코멘트 업데이트 도구를 열어준다.
-          # false면 리뷰가 성공해도 출력이 로그에만 남는다 — Bash(gh pr comment)는 기본
-          # 차단이라 Claude가 직접 코멘트를 달 수도 없다 (permission_denials 9건으로 확인).
+          # false면 요약이 로그에만 남는다 — Bash(gh pr comment)는 기본 차단이라 Claude가
+          # 직접 코멘트를 달 수도 없다 (permission_denials 9건으로 확인).
+          # 인라인 코멘트는 이것과 별개 통로다 (위 allowedTools 참조).
           track_progress: true
