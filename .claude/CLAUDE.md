@@ -90,6 +90,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 | 2026-07-29 | finalize.md에 PR 단계 추가 — 본문은 `.github/PULL_REQUEST_TEMPLATE.md` 구조 강제 | spec-driven-dev | 파이프라인이 커밋 제안에서 끝나 PR 형식 규정이 부재 — 템플릿 미준수 반복 지적(PR #70), 세션마다 재발해 명문화 (MSG-200에 편승) |
 | 2026-08-03 | 작업 로그에 런타임 동작 기록 의무화 — 저장 위치·실행 쿼리·예외 흐름·빈 동작 4항목 (finalize.md 3번 상세) | CLAUDE.md, spec-driven-dev | 사용자 요청 — diff 요약만으론 실행 시점 사실(생성 SQL·핸들러 변환·빈 생명주기)이 안 남아 코드 재독으로도 복원이 어려움 |
 | 2026-08-03 | Codex 리뷰 라운드 상한 확대 — 재리뷰 2회(총 3회) → 3회(총 4회) | spec-driven-dev (codex-review-loop.md) | 사용자 지시 — MSG-183이 4라운드에서 수렴한 실측 반영, 상한 도달 시 사용자 확인 절차는 유지 |
+| 2026-08-05 | PRD·스펙 작성 원칙에 문체·각주 조항 신설 — korean-humanizer 기준(줄표 금지·읽히는 문장) + 전문 용어 3~7개 마크다운 각주, 작성 후 줄표 grep 자가검증. 기존 문서 소급 재작성은 안 함 | prd-writer, agents/spec-writer | 사용자 지시 2건(PRD 먼저, 이어서 스펙 포함) — 두 문서의 독자는 팀원·멘토라 외부 문서 성격인데 레포 관례(줄표·압축체)로 쓰여 왔음. MSG-313 PRD가 적용 선례 |
 
 ## Quick Commands
 
