@@ -86,6 +86,20 @@ public interface UserBadgeRepository extends JpaRepository<UserBadge, UserBadgeI
 		nativeQuery = true)
 	Object acquireFeaturedLock(@Param("userId") long userId);
 
+	/**
+	 * 임박 알림 하루 1건용 사용자 단위 advisory 트랜잭션 잠금 — 비대기 try (docs/MSG-314.md D3).
+	 * notifications 의 유니크 제약은 (user_id, event_key) 하나뿐이라 "오늘 기록 존재 확인 → 기록"이
+	 * select-then-act 로 남는데, 이 잠금을 못 잡은(false) 쪽이 그 시도의 임박 기록을 포기해 상한이 지켜진다.
+	 * 블로킹 방식(acquireFeaturedLock 형)이 아닌 이유: 업로드 트랜잭션은 user_grids → streaks 순으로 행
+	 * 잠금을 잡아 가고 축별 임박 판정이 그 사이에 끼므로, 대기하면 같은 사용자의 동시 업로드 간에
+	 * advisory ↔ streaks 행 잠금의 순서 사이클(데드락)이 성립해 한쪽 업로드가 통째로 abort 된다
+	 * (Codex 교차 리뷰 1R P2). 실패의 손실은 "상한에 밀린 임박은 이월하지 않는다"와 같은 정책이다.
+	 * 같은 세션의 재획득은 성공하며, 키는 'badge_near:' 접두로 분리하고 트랜잭션이 끝나면 자동 해제된다.
+	 */
+	@Query(value = "SELECT pg_try_advisory_xact_lock(hashtextextended('badge_near:' || :userId, 0))",
+		nativeQuery = true)
+	Boolean tryAcquireBadgeNearLock(@Param("userId") long userId);
+
 	/** 대표 뱃지 전부 해제 — 교체의 1단계. IS NOT NULL 가드로 NULL→NULL 무의미 UPDATE 를 만들지 않는다. */
 	@Modifying
 	@Query(value = """
