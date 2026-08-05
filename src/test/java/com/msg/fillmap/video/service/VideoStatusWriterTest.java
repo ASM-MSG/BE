@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
@@ -38,7 +39,7 @@ class VideoStatusWriterTest {
 	@BeforeEach
 	void setUp() {
 		videoRepository = mock(VideoRepository.class);
-		statusWriter = new VideoStatusWriter(videoRepository);
+		statusWriter = new VideoStatusWriter(videoRepository, mock(NotificationCommandService.class));
 	}
 
 	/** BLURRING·ACTIVE 인, 아직 미제출(aiJobId=null) 시도의 영상. */
