@@ -34,4 +34,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Modifying
 	@Query("DELETE FROM User u WHERE u.id = :userId")
 	int deleteUser(@Param("userId") Long userId);
+
+	/**
+	 * users 행 KEY SHARE 선취 (MSG-313 Codex 2R) — notifications FK 검사가 나중에 잡을 잠금을 videos 행
+	 * 잠금보다 먼저 확보해, 탈퇴 CASCADE(users 배타 → videos)와 잠금 순서를 통일한다. 빈 결과 = 탈퇴
+	 * 진행/완료라 호출자가 전이·알림을 스킵한다.
+	 */
+	@Query(value = "SELECT id FROM users WHERE id = :userId FOR KEY SHARE", nativeQuery = true)
+	Optional<Long> findIdForKeyShare(@Param("userId") Long userId);
 }

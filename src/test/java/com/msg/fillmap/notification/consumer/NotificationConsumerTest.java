@@ -214,6 +214,20 @@ class NotificationConsumerTest {
 	}
 
 	@Test
+	@DisplayName("VIDEO 는 전송률 제한 없이 발송된다 — MSG-313 FR-9, 설정 키 자체가 없다")
+	void VIDEO는_전송률_제한_없이_발송된다() throws Exception {
+		registerToken("ok-" + System.nanoTime());
+		long first = newNotification(NotificationCategory.VIDEO, "첫째");
+		long second = newNotification(NotificationCategory.VIDEO, "둘째");
+
+		publish(first);
+		publish(second);
+
+		awaitStatus(first, "SENT");
+		awaitStatus(second, "SENT");
+	}
+
+	@Test
 	@DisplayName("토큰이 없으면 SKIPPED NO_TOKEN 이다")
 	void 토큰이_없으면_SKIPPED_NO_TOKEN이다() throws Exception {
 		long id = newNotification(NotificationCategory.BADGE, "제목");

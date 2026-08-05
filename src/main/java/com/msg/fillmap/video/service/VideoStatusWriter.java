@@ -11,6 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.service.NotificationCommandService;
+import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
@@ -35,7 +38,16 @@ import com.msg.fillmap.video.repository.VideoRepository;
 @RequiredArgsConstructor
 public class VideoStatusWriter {
 
+	/**
+	 * event_key 파일명 꼬리 상한 — notifications.event_key VARCHAR(100)에서 "VIDEO:"(6)+videoId(long 최대
+	 * 19자)+":"(1)을 빼도 항상 한계 내(최대 71자). 확정 키 파일명은 {pendingUuid}-{attemptUuid}.{확장자} 77자라
+	 * (VideoServiceImpl.confirmUpload) 전체를 쓰면 초과 가능. 꼬리 45자는 attemptUuid(36)+확장자를 온전히 담는다.
+	 */
+	private static final int EVENT_KEY_FILE_SUFFIX_MAX = 45;
+
 	private final VideoRepository videoRepository;
+	private final UserRepository userRepository;
+	private final NotificationCommandService notificationCommandService;
 
 	/** 적용 여부를 반환한다 — false 면 태스크 시작 시점부터 스테일(큐 대기 중 교체·삭제됨)이라 ffmpeg 을 돌릴 이유가 없다. */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -51,12 +63,16 @@ public class VideoStatusWriter {
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void markReady(Long videoId, String expectedOriginalKey, String encodedKey, String thumbnailKey) {
+		if (!lockUploaderFirst(videoId)) {
+			return;
+		}
 		videoRepository.findWithLockById(videoId).ifPresent(video -> {
 			if (!isCurrentEncodingAttempt(video, expectedOriginalKey)) {
 				logStaleSkip("인코딩 완료", videoId, expectedOriginalKey, video);
 				return;
 			}
 			video.markReady(encodedKey, thumbnailKey);
+			recordOutcomeNotification(video, true);
 		});
 	}
 
@@ -100,6 +116,9 @@ public class VideoStatusWriter {
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public boolean markBlurReady(Long videoId, String expectedJobId, String blurredS3Key, String thumbnailKey,
 		List<List<Double>> highlights) {
+		if (!lockUploaderFirst(videoId)) {
+			return false;
+		}
 		Video video = videoRepository.findWithLockById(videoId).orElse(null);
 		if (!isCurrentBlurJob(video, expectedJobId)) {
 			logStaleSkip("블러 결과", videoId, expectedJobId, video);
@@ -107,6 +126,7 @@ public class VideoStatusWriter {
 		}
 		video.applyBlurResult(blurredS3Key, highlights);
 		video.markReadyFromBlurring(thumbnailKey);
+		recordOutcomeNotification(video, true);
 		return true;
 	}
 
@@ -120,6 +140,9 @@ public class VideoStatusWriter {
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void markBlurFailed(Long videoId, String expectedJobId, LocalDateTime expectedStartedAt,
 		String failReason) {
+		if (!lockUploaderFirst(videoId)) {
+			return;
+		}
 		videoRepository.findWithLockById(videoId).ifPresent(video -> {
 			if (!isCurrentBlurJob(video, expectedJobId)
 				|| !Objects.equals(video.getBlurringStartedAt(), expectedStartedAt)) {
@@ -127,6 +150,7 @@ public class VideoStatusWriter {
 				return;
 			}
 			video.markFailed(failReason);
+			recordOutcomeNotification(video, false);
 		});
 	}
 
@@ -150,6 +174,9 @@ public class VideoStatusWriter {
 
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void markFailed(Long videoId, String expectedOriginalKey) {
+		if (!lockUploaderFirst(videoId)) {
+			return;
+		}
 		videoRepository.findWithLockById(videoId).ifPresent(video -> {
 			if (!isCurrentEncodingAttempt(video, expectedOriginalKey)) {
 				// 교체 afterCommit 이 옛 원본을 S3 에서 지워 옛 태스크의 다운로드가 실패하는 게 대표 경로 —
@@ -158,7 +185,46 @@ public class VideoStatusWriter {
 				return;
 			}
 			video.markFailed();
+			recordOutcomeNotification(video, false);
 		});
+	}
+
+	/**
+	 * 알림 배선 4개 전이(markReady·markBlurReady·markFailed·markBlurFailed) 전용 잠금 순서 선취 (Codex 2R) —
+	 * record 의 FK 검사가 users 행 KEY SHARE 를 기다리므로, videos 행 잠금보다 먼저 users 를 잡아 탈퇴
+	 * CASCADE(users 배타 잠금 → videos 행 삭제 대기)와 같은 users → videos 순서로 통일한다. 역순이면 교차
+	 * 대기 사이클로 PostgreSQL 이 한쪽을 abort 시킨다. false = 영상 행 부재(탈퇴 CASCADE 완료) 또는 유저
+	 * 부재(탈퇴 진행) — CASCADE 가 영상을 지우므로 전이·알림 모두 무의미해 조용히 스킵한다(스테일 가드와 같은 결).
+	 */
+	private boolean lockUploaderFirst(Long videoId) {
+		Long userId = videoRepository.findUserIdById(videoId).orElse(null);   // 무잠금 선독 — user_id 불변
+		if (userId == null) {
+			return false;
+		}
+		return userRepository.findIdForKeyShare(userId).isPresent();
+	}
+
+	/**
+	 * 처리 종결(READY·FAILED) 알림 outbox 기록 (MSG-313) — 전이 적용 직후에만 호출되므로 스테일 skip 시
+	 * 알림도 함께 skip 된다. record 는 전파 REQUIRED 라 이 REQUIRES_NEW 전이 트랜잭션에 참여한다(원자적).
+	 * event_key 의 시도 식별자는 originalS3Key 파일명 꼬리 — 교체마다 새 attemptUuid 키라 재처리 종결이
+	 * 새 알림이 되고(FR-2), 같은 시도의 중복 발화는 (user_id, event_key) UNIQUE 의 DO NOTHING 이 흡수한다.
+	 * 끝에서 45자로 자른다("마지막 '-' 뒤"는 UUID 내부 하이픈에 걸려 attemptUuid 가 조각나므로 금지).
+	 */
+	private void recordOutcomeNotification(Video video, boolean ready) {
+		String originalKey = video.getOriginalS3Key();
+		String fileName = originalKey.substring(originalKey.lastIndexOf('/') + 1);
+		String suffix = fileName.length() <= EVENT_KEY_FILE_SUFFIX_MAX
+			? fileName
+			: fileName.substring(fileName.length() - EVENT_KEY_FILE_SUFFIX_MAX);
+		String eventKey = "VIDEO:" + video.getId() + ":" + suffix;
+		if (ready) {
+			notificationCommandService.record(video.getUserId(), NotificationCategory.VIDEO, eventKey,
+				"영상이 준비됐어요", "올린 영상 처리가 끝났어요. 지금 확인해 보세요");
+		} else {
+			notificationCommandService.record(video.getUserId(), NotificationCategory.VIDEO, eventKey,
+				"영상 처리에 실패했어요", "올린 영상을 준비하지 못했어요. 영상을 다시 올려 주세요");
+		}
 	}
 
 	/** 이 태스크가 인코딩한 원본과 현재 DB 행이 같은 시도인가 — 교체(키 갱신)/삭제(ACTIVE 이탈)로 벌어진 창을 닫는다. */
