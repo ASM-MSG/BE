@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
@@ -36,6 +38,7 @@ import com.msg.fillmap.video.repository.VideoRepository;
 public class VideoStatusWriter {
 
 	private final VideoRepository videoRepository;
+	private final NotificationCommandService notificationCommandService;
 
 	/** 적용 여부를 반환한다 — false 면 태스크 시작 시점부터 스테일(큐 대기 중 교체·삭제됨)이라 ffmpeg 을 돌릴 이유가 없다. */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -57,6 +60,7 @@ public class VideoStatusWriter {
 				return;
 			}
 			video.markReady(encodedKey, thumbnailKey);
+			recordOutcomeNotification(video, true);
 		});
 	}
 
@@ -107,6 +111,7 @@ public class VideoStatusWriter {
 		}
 		video.applyBlurResult(blurredS3Key, highlights);
 		video.markReadyFromBlurring(thumbnailKey);
+		recordOutcomeNotification(video, true);
 		return true;
 	}
 
@@ -127,6 +132,7 @@ public class VideoStatusWriter {
 				return;
 			}
 			video.markFailed(failReason);
+			recordOutcomeNotification(video, false);
 		});
 	}
 
@@ -158,7 +164,26 @@ public class VideoStatusWriter {
 				return;
 			}
 			video.markFailed();
+			recordOutcomeNotification(video, false);
 		});
+	}
+
+	/**
+	 * 처리 종결(READY·FAILED) 알림 outbox 기록 (MSG-313) — 전이 적용 직후에만 호출되므로 스테일 skip 시
+	 * 알림도 함께 skip 된다. record 는 전파 REQUIRED 라 이 REQUIRES_NEW 전이 트랜잭션에 참여한다(원자적).
+	 * event_key 의 시도 식별자는 originalS3Key 파일명 — 교체마다 새 UUID 키라 재처리 종결이 새 알림이 되고
+	 * (FR-2), 같은 시도의 중복 발화는 (user_id, event_key) UNIQUE 의 DO NOTHING 이 1건으로 흡수한다.
+	 */
+	private void recordOutcomeNotification(Video video, boolean ready) {
+		String originalKey = video.getOriginalS3Key();
+		String eventKey = "VIDEO:" + video.getId() + ":" + originalKey.substring(originalKey.lastIndexOf('/') + 1);
+		if (ready) {
+			notificationCommandService.record(video.getUserId(), NotificationCategory.VIDEO, eventKey,
+				"영상이 준비됐어요", "올린 영상 처리가 끝났어요. 지금 확인해 보세요");
+		} else {
+			notificationCommandService.record(video.getUserId(), NotificationCategory.VIDEO, eventKey,
+				"영상 처리에 실패했어요", "올린 영상을 준비하지 못했어요. 영상을 다시 올려 주세요");
+		}
 	}
 
 	/** 이 태스크가 인코딩한 원본과 현재 DB 행이 같은 시도인가 — 교체(키 갱신)/삭제(ACTIVE 이탈)로 벌어진 창을 닫는다. */
