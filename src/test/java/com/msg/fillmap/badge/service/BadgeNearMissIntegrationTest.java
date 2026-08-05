@@ -186,6 +186,26 @@ class BadgeNearMissIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("SPECIAL 축에서는 임박을 판정하지 않는다 — allowlist 미포함 축 (D1, Codex 1R P2)")
+	void SPECIAL_축에서는_임박을_판정하지_않는다() {
+		// 등식(9 + 1 = 10)이 성립하는 합성 SPECIAL 뱃지를 심는다 — REGION_PERCENT 만 막는 blocklist
+		// 구현이면 숫자 임박 쿼리에 흘러들어 기록돼 버린다. 공유 DB 라 finally 로 반드시 걷어낸다.
+		tx.executeWithoutResult(status -> em.createNativeQuery("""
+				INSERT INTO badges (code, name, description, condition_type, condition_value)
+				VALUES ('SPECIAL_M314_TEST', '임박합성', '테스트 전용', 'SPECIAL', '{"value": 10}')
+				ON CONFLICT (code) DO NOTHING
+				""").executeUpdate());
+		try {
+			award(BadgeConditionType.SPECIAL, 9);
+
+			assertThat(nearCount()).isZero();
+		} finally {
+			tx.executeWithoutResult(status ->
+				em.createNativeQuery("DELETE FROM badges WHERE code = 'SPECIAL_M314_TEST'").executeUpdate());
+		}
+	}
+
+	@Test
 	@DisplayName("임박 후보가 없는 업로드는 잠금 없이 지나간다 — 다수 경로의 비용 상한 (D3)")
 	void 임박_후보가_없는_업로드는_잠금_없이_지나간다() {
 		// advisory xact 잠금은 트랜잭션 끝까지 유지되므로, 같은 트랜잭션 안에서 pg_locks 로 보유 여부를 관찰한다.

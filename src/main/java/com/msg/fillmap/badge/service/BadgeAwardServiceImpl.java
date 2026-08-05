@@ -7,7 +7,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -42,6 +44,11 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
 
 	// 임박 알림 이벤트 키 접두 (MSG-314 D2) — "{접두}{badgeId}" 가 생애 1회 축, 접두 LIKE 검색이 하루 1건 축.
 	private static final String NEAR_EVENT_PREFIX = "BADGE_NEAR:";
+	// 임박 판정 축 allowlist (MSG-314 D1) — 정수 개수 축만. REGION_PERCENT 만 막는 blocklist 면 SPECIAL 이
+	// 숫자 임박 쿼리에 흘러들고, enum 에 축이 추가될 때 기본이 "포함"이 된다 (Codex 교차 리뷰 1R P2).
+	private static final Set<BadgeConditionType> NEAR_MISS_TYPES = EnumSet.of(
+		BadgeConditionType.UPLOAD_COUNT, BadgeConditionType.TOTAL_GRIDS,
+		BadgeConditionType.STREAK_DAYS, BadgeConditionType.MISSION_COUNT);
 	// 일 경계 = KST 자정 (glossary 스트릭 규칙, NotificationConsumer.rateLimited D8 선례).
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -101,20 +108,24 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
 
 	/**
 	 * 뱃지 임박 알림 기록 (docs/MSG-314.md). 생애 1회는 이벤트 키 유니크 + DO NOTHING(D2)이, 하루 1건은
-	 * 사용자 단위 advisory 잠금으로 직렬화한 존재 확인(D3)이 강제한다. 잠금이 존재 확인보다 반드시
-	 * 앞이다 — 뒤집히면 select-then-act 경합이 재발한다 (PR #114). REGION_PERCENT 는 소수 rate 라
-	 * "정확히 1 남음" 등식이 사실상 성립하지 않고, 성립해도 1%p 남음이라는 뜻이라 판정을 건너뛴다(D1).
-	 * 대부분의 업로드는 findNearMiss 0건으로 잠금 없이 끝난다. 상한에 밀린 임박은 이월하지 않는다.
+	 * try 잠금 획득 후의 존재 확인(D3)이 강제한다 — 잠금을 못 잡으면 대기 대신 그 시도만 스킵한다
+	 * (블로킹이면 업로드 트랜잭션의 streaks 행 잠금과 순서 사이클로 데드락, tryAcquireBadgeNearLock 주석).
+	 * 잠금이 존재 확인보다 반드시 앞이다 — 뒤집히면 select-then-act 경합이 재발한다 (PR #114).
+	 * 판정 축은 정수 개수 축 allowlist(D1) — REGION_PERCENT 는 소수 rate 라 "정확히 1 남음" 등식이
+	 * 문구와 어긋나고, SPECIAL 은 수치 진행 축이 아니다. 대부분의 업로드는 findNearMiss 0건으로 잠금
+	 * 없이 끝난다. 상한에 밀린 임박은 이월하지 않는다.
 	 */
 	private void recordNearMiss(long userId, BadgeConditionType type, BigDecimal metric) {
-		if (type == BadgeConditionType.REGION_PERCENT) {
+		if (!NEAR_MISS_TYPES.contains(type)) {
 			return;
 		}
 		List<EligibleBadgeProjection> nearMisses = badgeRepository.findNearMiss(type.name(), metric, userId);
 		if (nearMisses.isEmpty()) {
 			return;
 		}
-		userBadgeRepository.acquireBadgeNearLock(userId);
+		if (!Boolean.TRUE.equals(userBadgeRepository.tryAcquireBadgeNearLock(userId))) {
+			return;
+		}
 		LocalDateTime todayStartUtc = LocalDate.ofInstant(clock.instant(), KST).atStartOfDay(KST)
 			.withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
 		if (notificationRepository.countRecordedSince(userId, NEAR_EVENT_PREFIX, todayStartUtc) > 0) {
