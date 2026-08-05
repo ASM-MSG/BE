@@ -37,6 +37,13 @@ import com.msg.fillmap.video.repository.VideoRepository;
 @RequiredArgsConstructor
 public class VideoStatusWriter {
 
+	/**
+	 * event_key 파일명 꼬리 상한 — notifications.event_key VARCHAR(100)에서 "VIDEO:"(6)+videoId(long 최대
+	 * 19자)+":"(1)을 빼도 항상 한계 내(최대 71자). 확정 키 파일명은 {pendingUuid}-{attemptUuid}.{확장자} 77자라
+	 * (VideoServiceImpl.confirmUpload) 전체를 쓰면 초과 가능. 꼬리 45자는 attemptUuid(36)+확장자를 온전히 담는다.
+	 */
+	private static final int EVENT_KEY_FILE_SUFFIX_MAX = 45;
+
 	private final VideoRepository videoRepository;
 	private final NotificationCommandService notificationCommandService;
 
@@ -171,12 +178,17 @@ public class VideoStatusWriter {
 	/**
 	 * 처리 종결(READY·FAILED) 알림 outbox 기록 (MSG-313) — 전이 적용 직후에만 호출되므로 스테일 skip 시
 	 * 알림도 함께 skip 된다. record 는 전파 REQUIRED 라 이 REQUIRES_NEW 전이 트랜잭션에 참여한다(원자적).
-	 * event_key 의 시도 식별자는 originalS3Key 파일명 — 교체마다 새 UUID 키라 재처리 종결이 새 알림이 되고
-	 * (FR-2), 같은 시도의 중복 발화는 (user_id, event_key) UNIQUE 의 DO NOTHING 이 1건으로 흡수한다.
+	 * event_key 의 시도 식별자는 originalS3Key 파일명 꼬리 — 교체마다 새 attemptUuid 키라 재처리 종결이
+	 * 새 알림이 되고(FR-2), 같은 시도의 중복 발화는 (user_id, event_key) UNIQUE 의 DO NOTHING 이 흡수한다.
+	 * 끝에서 45자로 자른다("마지막 '-' 뒤"는 UUID 내부 하이픈에 걸려 attemptUuid 가 조각나므로 금지).
 	 */
 	private void recordOutcomeNotification(Video video, boolean ready) {
 		String originalKey = video.getOriginalS3Key();
-		String eventKey = "VIDEO:" + video.getId() + ":" + originalKey.substring(originalKey.lastIndexOf('/') + 1);
+		String fileName = originalKey.substring(originalKey.lastIndexOf('/') + 1);
+		String suffix = fileName.length() <= EVENT_KEY_FILE_SUFFIX_MAX
+			? fileName
+			: fileName.substring(fileName.length() - EVENT_KEY_FILE_SUFFIX_MAX);
+		String eventKey = "VIDEO:" + video.getId() + ":" + suffix;
 		if (ready) {
 			notificationCommandService.record(video.getUserId(), NotificationCategory.VIDEO, eventKey,
 				"영상이 준비됐어요", "올린 영상 처리가 끝났어요. 지금 확인해 보세요");

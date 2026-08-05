@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
@@ -171,6 +172,24 @@ class VideoNotificationIntegrationTest {
 		assertThat(notificationCount()).isEqualTo(2);
 		Object[] replaced = notificationRow("VIDEO:" + videoId + ":" + replacedFileName);
 		assertThat(replaced[1]).isEqualTo("영상이 준비됐어요");
+	}
+
+	@Test
+	@DisplayName("확정 흐름 실측 77자 파일명에서도 event_key 는 꼬리 45자로 잘려 100자 이내다 — VARCHAR(100) 상한")
+	void 확정_흐름_실측_77자_파일명에서도_event_key는_100자_이내다() {
+		// confirmUpload 실제 형식: {pendingUuid}-{attemptUuid}.mp4 = 77자
+		String longFileName = UUID.randomUUID() + "-" + UUID.randomUUID() + ".mp4";
+		String longKey = "videos/original/" + userId + "/" + longFileName;
+		tx.executeWithoutResult(status ->
+			videoRepository.findById(videoId).orElseThrow()
+				.replaceFile(longKey, (short) 8, LocalDateTime.now()));
+
+		statusWriter.markReady(videoId, longKey, ENCODED_KEY, THUMBNAIL_KEY);
+
+		// 꼬리 45자 = pendingUuid 끝 4자 + "-" + attemptUuid(36) + ".mp4" — attemptUuid 는 온전히 남는다
+		String expectedKey = "VIDEO:" + videoId + ":" + longFileName.substring(longFileName.length() - 45);
+		assertThat(expectedKey.length()).isLessThanOrEqualTo(100);
+		assertThat(notificationRow(expectedKey)[1]).isEqualTo("영상이 준비됐어요");
 	}
 
 	@Test
