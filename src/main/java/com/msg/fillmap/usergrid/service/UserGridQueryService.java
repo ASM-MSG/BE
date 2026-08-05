@@ -35,4 +35,10 @@ public interface UserGridQueryService {
 	 * 공개범위를 추가해도 시그니처는 그대로고 내부 필터만 넓어진다.
 	 */
 	List<FriendCollectionGridView> getCollectionGridsForFriend(long ownerUserId);
+
+	/**
+	 * 격자를 점령한 사용자 전원 + 격자 행정동 이름 (MSG-181 핫구역 진입 통지용, B-내부 read —
+	 * notification 만 소비, Owner A 미소비라 non-breaking). 행정동 없는 격자(해상 등)는 regionName null.
+	 */
+	List<GridOccupantView> getGridOccupants(String gridId);
 }

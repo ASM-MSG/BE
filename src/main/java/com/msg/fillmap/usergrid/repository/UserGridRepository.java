@@ -132,4 +132,18 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 		LIMIT 30
 		""", nativeQuery = true)
 	List<FriendCollectionGridProjection> getCollectionGridsForFriend(@Param("userId") long userId);
+
+	/**
+	 * 격자 → 점령 사용자 역조회 (MSG-181 D6, 핫구역 진입 통지용). 최초의 grid 축 접근 경로 —
+	 * PK (user_id, grid_id)는 선두가 user_id 라 못 받쳐 V24 idx_user_grids_grid 가 구동한다.
+	 * region_name 은 문구 재료 — 행정동 없는 격자(해상 등)는 LEFT JOIN 으로 null.
+	 */
+	@Query(value = """
+		SELECT ug.user_id AS "userId", r.region_name AS "regionName"
+		FROM user_grids ug
+		LEFT JOIN grids g ON g.grid_id = ug.grid_id
+		LEFT JOIN regions r ON r.region_code = g.region_code
+		WHERE ug.grid_id = :gridId
+		""", nativeQuery = true)
+	List<GridOccupantProjection> getGridOccupants(@Param("gridId") String gridId);
 }
