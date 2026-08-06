@@ -152,7 +152,8 @@ docker compose up -d
 | CI/CD | GitHub Actions → ECR → Systems Manager Run Command |
 | 관측/보안 | CloudWatch Logs+Metrics, Secrets Manager(`/dev/*`, `/prod/*`) |
 
-> 원본 다이어그램: `.claude/docs/diagrams/5_FillMap_CA_v3.drawio.xml` (Component Architecture v3)
+> 원본 다이어그램: `.claude/docs/diagrams/2026-07-21 5_FillMap_CA_v2_draft.drawio.xml`
+> (Component Architecture — 새로 그리며 버전을 v2로 다시 매긴 최신본. 옛 CA v3보다 최신이다)
 
 ### 논리(SysA) → 물리(CA) 매핑
 
@@ -168,8 +169,12 @@ docker compose up -d
 | Message Queue | Apache Kafka (App Tier) |
 | Notification | Firebase FCM (VPC 외부) |
 
-MVP는 논리 서비스 8종을 물리적으로 **EC2 2대(Spring Boot 1 + FastAPI 1)** 에 각 EC2는 1개 인스턴스로 운용한다
+MVP는 논리 서비스 9종을 물리적으로 **EC2 2대(Spring Boot 1 + FastAPI 1)** 에 각 EC2는 1개 인스턴스로 운용한다
 구성이다. 서비스 분리(ECS 등)는 Phase 4 검토 대상.
+
+> CA v2 다이어그램은 **목표 구성**이라 현재와 다르다. 거기엔 Multi-AZ·ALB Active-Active·
+> Spring Boot API 2대·RDS Standby·ElastiCache Replica가 그려져 있지만, 지금 운용은 위 표대로
+> 단일 인스턴스·Single AZ다(Multi-AZ는 Phase 3). 이 절이 현재 실태의 기준이다.
 
 ### DB (RDS PostgreSQL + PostGIS)
 

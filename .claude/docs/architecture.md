@@ -1,6 +1,6 @@
-# Architecture — 서비스 아키텍처 (SA, 정본 · System Architecture v4 · 2026-07)
+# Architecture — 서비스 아키텍처 (SA · SysA v2 논리 뷰 정본 · 2026-07)
 
-> ⚠️ **목표 설계 문서다.** 여기 서술된 8개 서비스 중 코드에 존재하는 것은 일부뿐이다.
+> ⚠️ **목표 설계 문서다.** 여기 서술된 9개 서비스 중 코드에 존재하는 것은 일부뿐이다.
 > 실제 구현 현황은 `status.md` 참조 — 서비스가 코드에 있다고 가정하지 말 것.
 
 FillMap 백엔드의 서비스 수준 아키텍처. 원본은 기획팀이 작성한 다이어그램 4종이며, 이 문서는
@@ -8,21 +8,26 @@ FillMap 백엔드의 서비스 수준 아키텍처. 원본은 기획팀이 작�
 
 1. **유즈케이스 다이어그램** — Actor별 기능(유즈케이스)과 include/extend 관계
 2. **애플리케이션 아키텍처(엔드포인트 상세뷰)** — SA(기능 그룹) ↔ SysA(서비스) 사이 API 엔드포인트
-3. **System Architecture v4** — Client Tier · Backend Service Cluster · Data Tier (정본)
+3. **System Architecture v2 (논리 뷰)** — Client · Gateway · Service · Cache · Queue · Worker ·
+   Scheduler · Data (정본). 역할만 표기하고 기술 선택·구현 상태는 SA v2와 CA v2가 담당한다
 4. **User Journey** — Before/During/After (UX 보조자료, `.claude/docs/ia.md`)
 
-**SA(System Architecture v4)가 정본(canonical)** 이고, User Journey는 UX 참고용 보조자료다.
-이전 버전 SA1은 User Journey 보조자료로 격하, SA2는 폐기됨.
+**SysA v2(논리 뷰)가 정본(canonical)** 이고, User Journey는 UX 참고용 보조자료다.
 
-**원본 다이어그램 (drawio 소스):** `.claude/docs/diagrams/`
-- 유즈케이스 → `0_FillMap_UseCase.drawio.xml`
-- SA(Service Architecture) → `3_SA_v2.drawio.xml`
-- SysA(System Architecture v4, 정본) → `4_FillMap_SysA_v4.drawio.xml`
-- CA(Component Architecture) → `5_FillMap_CA_v3.drawio.xml`
+**원본 다이어그램 (drawio 소스):** `.claude/docs/diagrams/` — 2026-08-06에 최신본으로 교체됐다.
+- 유즈케이스 → `2026-07-21 0_FillMap_UseCase_v2_draft.drawio.xml`
+- SA(애플리케이션 아키텍처) → `2026-07-21 3_FillMap_SA_v2_AppArch_draft.drawio.xml`
+- SysA(System Architecture, 정본) → `2026-07-21 4_FillMap_SysA_v2_draft.drawio.xml`
+- CA(Component Architecture) → `2026-07-21 5_FillMap_CA_v2_draft.drawio.xml`
+- AI 파이프라인 → `2026-07-21 6_FillMap_AI_Pipeline_draft.drawio.xml` (신규)
 
-> 이 문서와 실제 코드가 다르면 **코드가 맞다.** 특히 아직 패키지로 구현되지 않은 도메인(Social·
-> Notification·Moderation·광고)은 "설계상 존재"일 뿐 구현 여부는 `.claude/docs/infrastructure.md`
-> 패키지 구조를 기준으로 판단할 것.
+> **버전 표기 주의**: 새 다이어그램은 전부 새로 그리면서 버전을 v2로 다시 매긴 것이다. 옛 파일의
+> SysA v4·CA v3보다 낮은 번호지만 **이쪽이 최신**이다. 본문은 2026-08-06에 SysA v2 기준으로
+> 맞췄다(서비스 9종·Worker/Cache 계층 분리·AI의 Worker 이동).
+
+> 이 문서와 실제 코드가 다르면 **코드가 맞다.** 구현 현황의 단일 진실 원천은
+> `.claude/docs/status.md`다. (예전 이 자리에 "Social·Notification·Moderation·광고는 미구현"이라
+> 적혀 있었으나 `friend`·`notification`·`moderation`은 이미 구현됐다 — 광고만 여전히 없다.)
 
 ## Actor 3종 (표준)
 
@@ -32,23 +37,25 @@ FillMap 백엔드의 서비스 수준 아키텍처. 원본은 기획팀이 작�
 | 스폰서 (광고주·기업고객, 가게 주인) | 캠페인 관리, 스폰서 격자 지정, 성과 리포트 조회 (신규 갈래) |
 | 운영자 (관리자) | 신고 처리, Trust Score 관리, 영상 강제 비공개, 사용자 정지·블랙리스트, 통계·모니터링 (Admin Zone) |
 
-## 표준 서비스 8종
+## 표준 서비스 9종
 
 | 서비스 | 역할 |
 |---|---|
 | Auth | 로그인/회원가입, 카카오 OIDC, JWT 발급·Refresh Token 회전, 권한·위치 정보 |
 | Video | 영상 촬영·업로드, Presigned URL, 메타데이터 저장, GPS 스푸핑 검증 |
 | Grid | 격자 조회(viewport), 격자 자동 매핑, 핫존 랭킹(Redis ZSET), 태그 필터링 |
+| Region | 행정동 역지오코딩, 탐험률(region_stats), 지역 탐색 |
 | Collection | 개인 도감(점령 격자 조회), 뱃지 지급 로직, 랭킹 집계, 초대 코드/그룹 공유 |
+| Mission | 축제·팝업·코스·테마 미션 조회, 스탬프 판정 (SysA v2 신규) |
 | Social | 친구 관리, 친구 활동 알림, 친구 도감 조회 |
 | Notification | 친구 활동·뱃지·랭킹·핫존 알림 Push (Firebase FCM) |
 | Moderation | 신고 접수, 사용자 차단, 블랙리스트, 관리자 신고 처리 대시보드 |
-| AI Highlight-Blur | 하이라이트 추천 + 민감정보 자동 블러 (FastAPI, 단일 논리 서비스) |
 
-이 저장소(Spring Boot)는 위 서비스 중 **Auth·Video·Grid·Collection·Social·Notification·Moderation**의
-API 서버 역할을 하고(단일 Spring Boot 컨테이너 내 7개 서비스), **AI Highlight-Blur는 별도 Python FastAPI
-서버**로 분리되어 있다 (`.claude/docs/infrastructure.md` 참조 — App Tier에 Spring Boot API Server와
-Python FastAPI AI Server가 나란히 배치).
+**AI Highlight-Blur는 SysA v2에서 Service가 아니라 Worker 계층으로 이동했다** (아래 "Worker ·
+Cache · Queue" 참조). 별도 Python FastAPI 서버로 도는 것은 그대로다.
+
+이 저장소(Spring Boot)는 위 9개 서비스의 API 서버 역할을 하고(단일 Spring Boot 컨테이너),
+AI만 별도 FastAPI 서버로 분리돼 있다 (`.claude/docs/infrastructure.md` 참조).
 
 ### SA(기능 그룹) ↔ SysA(서비스) 매핑
 
@@ -58,10 +65,12 @@ Python FastAPI AI Server가 나란히 배치).
 | 탐색 | Grid |
 | 촬영·업로드 | Video |
 | 도감 | Collection |
+| 지역·탐험률 | Region |
+| 미션·스탬프 | Mission |
 | 소셜 | Social |
 | 알림 | Notification |
 | 신고·차단 | Moderation |
-| AI | AI Highlight-Blur |
+| AI | AI Highlight·Blur Worker (Service 아님) |
 
 > SysA 다이어그램에서 각 서비스 카드 상단의 SA3 컬러 스트립이 위 매핑을 1:1로 표현한다
 > (같은 색·이름 = 같은 서비스). SysA는 SA와 같은 시스템의 다른 줌 레벨이다.
@@ -75,15 +84,32 @@ Python FastAPI AI Server가 나란히 배치).
 | Auth | 세션·프로필 | JWT Refresh | — | Spring Boot |
 | Grid | 격자 | Hot ZSET(핫존 랭킹) | — | Spring Boot |
 | Video | 메타데이터 | — | 원본·인코딩본 | Spring Boot |
+| Region | 행정동·region_stats | — | — | Spring Boot |
 | Collection | 도감 | — | — | Spring Boot |
+| Mission | 미션·스탬프 | Mission Cache(1h) | — | Spring Boot |
 | Social | 소셜(친구·그룹) | — | — | Spring Boot |
-| Notification | — | — | — | Spring Boot (FCM 외부 호출) |
+| Notification | 알림 outbox | — | — | Spring Boot (FCM 외부 호출) |
 | Moderation | 신고 | — | — | Spring Boot |
-| AI Highlight-Blur | — | — | 인코딩본 | Python FastAPI |
+| AI Highlight·Blur (Worker) | — | — | 인코딩본 | Python FastAPI |
 
 **Kafka 비동기 파이프라인** (점선 = 비동기): `Video → enqueue → Kafka → consume →
-AI Highlight-Blur → S3(인코딩본) → Video(처리 완료 응답)`. Spring Boot 7종 + FastAPI 1종이
-Kafka로 영상/AI 파이프라인을 비동기 연결한다.
+AI Highlight·Blur Worker → S3(인코딩본) → Video(처리 완료 응답)`.
+
+## Worker · Cache · Queue (SysA v2에서 명시된 계층)
+
+SysA v2는 서비스와 별개로 비동기 처리 계층을 갈라 그린다.
+
+| 계층 | 구성 | 비고 |
+|---|---|---|
+| Message Queue | Event Queue | 업로드 이벤트를 워커로 넘긴다 |
+| Scheduler | Batch Scheduler | 주기 실행 트리거 |
+| Worker (이벤트 구동) | Encoding Worker, AI Highlight·Blur Worker | 업로드 이벤트로 깨어난다 |
+| Worker (배치) | Badge·Streak Batch, Region Stats Batch, Mission Sync(축제·코스) | 스케줄러가 돌린다 |
+| Cache | Token Cache, Hot Zone Cache, Mission Cache | 전부 Redis 한 인스턴스 위 논리 분리 |
+
+> 코드에서는 배치 워커가 별도 프로세스가 아니라 같은 Spring Boot 안의 `@Scheduled`다
+> (`WeeklySummaryScheduler`·`StreakRemindScheduler`·`NotificationRelay`·`HotZoneEntryDetector`).
+> 다이어그램은 역할 분리를 그린 것이고 물리 배치는 CA v2를 따른다.
 
 ## Client Tier (클라이언트 4종)
 
@@ -103,17 +129,19 @@ Kafka로 영상/AI 파이프라인을 비동기 연결한다.
 |---|---|---|
 | Auth | `auth` | 구현됨 (Owner B) |
 | Video | `video` | 구현됨 (Owner B) |
-| Grid | `grid`, `region` | 구현됨 (Owner A) |
-| Collection | `usergrid` | 구현됨 (Owner B) |
-| Social | — | **미구현** (친구 관리 패키지 없음) |
-| Notification | — | **미구현** (Push 발송 패키지 없음) |
-| Moderation | — | **미구현** (신고/차단/관리자 도구 패키지 없음) |
+| Grid | `grid`, `hotzone`, `search`, `zone` | 구현됨 (Owner A) |
+| Region | `region` | 구현됨 (Owner A) |
+| Collection | `usergrid`, `badge`, `streak` | 구현됨 (Owner B) |
+| Mission | `mission` | 구현됨 (Owner B) |
+| Social | `friend` | 구현됨 (Owner B — MSG-185·186·187) |
+| Notification | `notification` | 구현됨 (Owner B — MSG-178~181, 313~315) |
+| Moderation | `moderation` | 부분 — 신고 접수만(MSG-192), 관리자 처리 API 없음(MSG-195) |
 | 광고주·기업고객 (스폰서 격자) | — | **미구현** (신규 도메인, 패키지 없음) |
-| AI Highlight-Blur | — | 별도 리포지토리/서버 (FastAPI), 이 Java 리포지토리 범위 밖 |
+| AI Highlight·Blur | — | 별도 리포지토리/서버 (FastAPI), 이 Java 리포지토리 범위 밖 |
 
-> SA 다이어그램에는 있지만 아직 패키지가 없는 도메인(Social/Notification/Moderation/광고)은
-> MSG-XX 티켓으로 들어올 때 Owner A/B 중 누가 맡을지 먼저 정하고 `infrastructure.md`의
-> 패키지 구조·계약 인터페이스 표에 추가해야 한다.
+> 남은 미구현은 **스폰서/광고 하나**다. 새로 들어올 때 Owner A/B 중 누가 맡을지 먼저 정하고
+> `infrastructure.md`의 패키지 구조·계약 인터페이스 표에 추가한다. 패키지별 실제 진척은
+> `status.md`가 정본이다.
 
 ## 인증 흐름
 

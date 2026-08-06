@@ -23,7 +23,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 - `@.claude/docs/grid-system.md` — 100×100m 격자 시스템
 - `@.claude/docs/infrastructure.md` — 패키지 구조 · 로컬 DB 세팅 · AWS 인프라
 - `@.claude/docs/deploy.md` — 프로파일 · 환경변수 · 배포 설정
-- `@.claude/docs/architecture.md` — 서비스 아키텍처(SA, 정본) · 8개 서비스 · AI Highlight-Blur
+- `@.claude/docs/architecture.md` — 서비스 아키텍처(SysA v2 정본) · 9개 서비스 · Worker·Cache 계층
 - `@.claude/docs/ia.md` — 화면 구조(IA) · User Journey · 구현 갭
 - **피그마 디자인 정본** — fileKey `CpqOlgayviFOG0WXTBUfpp`, 최신 정본 2개 (2026-08-06 성민 확인)
   - 웹 `14062:10362` "필맵 웹 디자인 ver 9_마지막버전" (1440×900)

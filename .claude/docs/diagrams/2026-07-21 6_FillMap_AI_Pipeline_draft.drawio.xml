@@ -1,0 +1,138 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="+ AI Pipeline Architecture" id="ai-pipeline">
+    <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1660" pageHeight="636" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="c1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;verticalAlign=top;fontStyle=1;fontSize=11;" value="Source&#xa;(사용자 영상)" vertex="1">
+          <mxGeometry height="160" width="220" x="40" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="c2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="모바일 촬영 (격자 내 GPS)" vertex="1">
+          <mxGeometry height="30" width="196" x="52" y="184" as="geometry" />
+        </mxCell>
+        <mxCell id="c3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="갤러리 선택 (mp4·mov)" vertex="1">
+          <mxGeometry height="30" width="196" x="52" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="c4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="1~30초 · 검증된 s3Key" vertex="1">
+          <mxGeometry height="30" width="196" x="52" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="c5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=1;fontSize=11;" value="Ingestion&#xa;(적재 · 원본 불변)" vertex="1">
+          <mxGeometry height="160" width="220" x="320" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="c6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="presigned PUT → S3 pending/" vertex="1">
+          <mxGeometry height="30" width="196" x="332" y="184" as="geometry" />
+        </mxCell>
+        <mxCell id="c7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="메타 저장 (videos row)" vertex="1">
+          <mxGeometry height="30" width="196" x="332" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="c8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="상태 = UPLOADED" vertex="1">
+          <mxGeometry height="30" width="196" x="332" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="c9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;verticalAlign=top;fontStyle=1;fontSize=11;" value="Preprocess&#xa;(전처리)" vertex="1">
+          <mxGeometry height="160" width="220" x="600" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="c10" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" value="1080p·30fps 다운스케일 — 필수 전제" vertex="1">
+          <mxGeometry height="30" width="196" x="612" y="184" as="geometry" />
+        </mxCell>
+        <mxCell id="c11" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="FFmpeg 인코딩·썸네일 추출" vertex="1">
+          <mxGeometry height="30" width="196" x="612" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="c12" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="상태 = ENCODING" vertex="1">
+          <mxGeometry height="30" width="196" x="612" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="c13" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d0e8e4;strokeColor=#4a9086;verticalAlign=top;fontStyle=1;fontSize=11;" value="AI Analyze&#xa;(분석)" vertex="1">
+          <mxGeometry height="236" width="220" x="880" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="c14" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="PySceneDetect 장면 분할" vertex="1">
+          <mxGeometry height="30" width="196" x="892" y="184" as="geometry" />
+        </mxCell>
+        <mxCell id="c15" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="CLIP 하이라이트 스코어링" vertex="1">
+          <mxGeometry height="30" width="196" x="892" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="c16" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="YOLO 얼굴·차량번호 탐지 → 블러" vertex="1">
+          <mxGeometry height="30" width="196" x="892" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="c17" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="pHash 중복 검사" vertex="1">
+          <mxGeometry height="30" width="196" x="892" y="298" as="geometry" />
+        </mxCell>
+        <mxCell id="c18" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="상태 = BLURRING" vertex="1">
+          <mxGeometry height="30" width="196" x="892" y="336" as="geometry" />
+        </mxCell>
+        <mxCell id="c19" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontStyle=1;fontSize=11;" value="Output&#xa;(산출)" vertex="1">
+          <mxGeometry height="160" width="220" x="1160" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="c20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="인코딩본·썸네일 S3 저장" vertex="1">
+          <mxGeometry height="30" width="196" x="1172" y="184" as="geometry" />
+        </mxCell>
+        <mxCell id="c21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="하이라이트 구간 메타 갱신" vertex="1">
+          <mxGeometry height="30" width="196" x="1172" y="222" as="geometry" />
+        </mxCell>
+        <mxCell id="c22" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;" value="상태 = READY (실패 시 FAILED)" vertex="1">
+          <mxGeometry height="30" width="196" x="1172" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="c27" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;fontStyle=1;fontSize=11;" value="제어 — 상시 Python FastAPI AI 서버 (Lambda·GPU 대안 기각)" vertex="1">
+          <mxGeometry height="70" width="1340" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="c28" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=10;" value="Kafka video.uploaded 컨슈머" vertex="1">
+          <mxGeometry height="30" width="230" x="52" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c29" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=10;" value="상태 머신 UPLOADED→ENCODING→BLURRING→READY/FAILED" vertex="1">
+          <mxGeometry height="30" width="420" x="302" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c30" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=10;" value="실패 시 재시도·FAILED 마킹" vertex="1">
+          <mxGeometry height="30" width="220" x="742" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c31" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=10;fontStyle=2;" value="실측 (dev EC2): 1080p 30초 E2E 4.3분" vertex="1">
+          <mxGeometry height="30" width="300" x="982" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c33" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;verticalAlign=top;fontStyle=1;fontSize=11;" value="저장 계층" vertex="1">
+          <mxGeometry height="90" width="1340" x="40" y="456" as="geometry" />
+        </mxCell>
+        <mxCell id="c34" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;" value="S3 pending/ (원본 · 불변)" vertex="1">
+          <mxGeometry height="40" width="230" x="52" y="488" as="geometry" />
+        </mxCell>
+        <mxCell id="c35" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" value="S3 encoded/ · thumbnails/" vertex="1">
+          <mxGeometry height="40" width="230" x="342" y="488" as="geometry" />
+        </mxCell>
+        <mxCell id="c36" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" value="PostgreSQL videos (상태·메타)" vertex="1">
+          <mxGeometry height="40" width="240" x="632" y="488" as="geometry" />
+        </mxCell>
+        <mxCell id="c40" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#ffffff;strokeColor=#666666;fontSize=10;verticalAlign=top;" value="소비자&#xa;앱 재생 (presigned GET)&#xa;격자 썸네일 · 하이라이트 확인" vertex="1">
+          <mxGeometry height="80" width="200" x="1410" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="e23" edge="1" parent="1" source="c1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;jumpStyle=arc;jumpSize=8;exitX=1;exitY=0.5;entryX=0;entryY=0.5;endArrow=block;strokeWidth=2;" target="c5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e24" edge="1" parent="1" source="c5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;jumpStyle=arc;jumpSize=8;exitX=1;exitY=0.5;entryX=0;entryY=0.5;endArrow=block;strokeWidth=2;" target="c9">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e25" edge="1" parent="1" source="c9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;jumpStyle=arc;jumpSize=8;exitX=1;exitY=0.5;entryX=0;entryY=0.5;endArrow=block;strokeWidth=2;" target="c13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e26" edge="1" parent="1" source="c13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;jumpStyle=arc;jumpSize=8;exitX=1;exitY=0.5;entryX=0;entryY=0.5;endArrow=block;strokeWidth=2;" target="c19">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e32" edge="1" parent="1" source="c27" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;jumpStyle=arc;jumpSize=8;exitX=0.5;exitY=1;entryX=0.5;entryY=0;dashed=1;endArrow=open;" target="c9" value="트리거">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e37" edge="1" parent="1" source="c5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;jumpStyle=arc;jumpSize=8;exitX=0.5;exitY=1;entryX=0.5;entryY=0;endArrow=open;" target="c34" value="load">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e38" edge="1" parent="1" source="c19" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;jumpStyle=arc;jumpSize=8;exitX=0.5;exitY=1;entryX=0.5;entryY=0;endArrow=open;" target="c35" value="write">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e39" edge="1" parent="1" source="c19" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;jumpStyle=arc;jumpSize=8;exitX=0.7;exitY=1;entryX=0.5;entryY=0;endArrow=open;" target="c36" value="READY 갱신">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e41" edge="1" parent="1" source="c35" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#666666;fontSize=9;fontColor=#666666;jumpStyle=arc;jumpSize=8;exitX=0.5;exitY=1;entryX=0.5;entryY=1;dashed=1;endArrow=open;" target="c40" value="read">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="457" y="571" />
+              <mxPoint x="1510" y="571" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
