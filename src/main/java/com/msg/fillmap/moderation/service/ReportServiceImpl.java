@@ -40,7 +40,10 @@ public class ReportServiceImpl implements ReportService {
 			throw new ApiException(ReportErrorCode.DETAIL_REQUIRED);
 		}
 
-		Video video = videoRepository.findById(videoId)
+		// 행 잠금 조회: 무잠금이면 검증과 저장 사이에 삭제·블라인드 트랜잭션이 커밋될 수 있어, 방금 DELETED·
+		// BLINDED 가 된 영상에 신고 행이 생긴다(404 적격성 검사 우회). 삭제(MSG-243)·블라인드 경로와 같은
+		// 잠금이라 모든 경로가 video 행을 먼저 잠그고, 잠금 순서가 하나뿐이라 데드락이 없다 (Codex 교차 리뷰 반영).
+		Video video = videoRepository.findWithLockById(videoId)
 			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
 		// DELETED·BLINDED 는 재생 경로(MSG-206)와 같은 404 존재 은닉이다. 소유자 예외는 두지 않는다 —
 		// 자기 영상 신고 자체가 불가라 소유자·타인을 구분할 이유가 없다.
