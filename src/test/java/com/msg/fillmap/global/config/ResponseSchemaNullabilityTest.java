@@ -3,8 +3,8 @@ package com.msg.fillmap.global.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.RecordComponent;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -36,9 +36,11 @@ import org.springframework.core.type.filter.RegexPatternTypeFilter;
  * 붙여야 한다. 둘 중 하나만 고르는 것이 아니다 — 초판에서 이 둘을 배타로 다뤘다가 Codex 리뷰에서
  * 잡혔고, 그 실수가 남으면 클라이언트가 "없을 수도 있는 키"로 오해한다.
  *
- * <p>검사 대상은 `*ResponseDto` 를 진입점으로 <b>필드 타입을 따라간 모든 record</b> 다. 중첩 record,
+ * <p>검사 대상은 `*ResponseDto` 를 진입점으로 <b>필드 타입을 따라간 모든 타입</b>이다. 중첩 record,
  * 리스트 원소 타입, sealed 인터페이스의 구현체까지 훑는다 — `MissionResponseDto` → `MissionShape`
  * → `RegionShape` 처럼 이름이 `*ResponseDto` 가 아닌 타입도 클라이언트가 보는 스키마이기 때문이다.
+ * record 가 아닌 클래스도 본다 — 모든 응답을 감싸는 `ApiResponseDto` 가 Lombok 클래스라
+ * record 만 보면 정작 제일 중요한 스키마가 빠진다(Codex 리뷰 반영).
  * 요청 DTO 는 대상이 아니다 — `@NotNull`·`@NotBlank` 로 springdoc 이 required 를 자동 도출하고,
  * 안 보내도 되는 필드는 아무것도 안 붙이는 게 정확한 명세다.
  *
@@ -68,7 +70,7 @@ class ResponseSchemaNullabilityTest {
 			.isEmpty();
 	}
 
-	/** record 를 훑고, 필드 타입을 따라 참조된 record·sealed 구현체까지 재귀한다. */
+	/** 타입의 인스턴스 필드를 훑고, 필드 타입을 따라 참조된 타입·sealed 구현체까지 재귀한다. */
 	private void collectUndeclared(Class<?> type, Set<Class<?>> visited, List<String> sink) {
 		if (type == null || !type.getName().startsWith(BASE_PACKAGE) || !visited.add(type)) {
 			return;
@@ -81,15 +83,25 @@ class ResponseSchemaNullabilityTest {
 		for (Class<?> nested : type.getDeclaredClasses()) {
 			collectUndeclared(nested, visited, sink);
 		}
-		if (!type.isRecord()) {
+		if (type.isEnum()) {
+			return;   // enum 은 값 목록이지 속성 집합이 아니다 — 상수 필드를 속성으로 오인하지 않는다
+		}
+		if (!type.isRecord() && type.getAnnotation(Schema.class) == null) {
+			// 응답으로 나가는 클래스는 레포 관례상 클래스 레벨 @Schema 를 단다. 그게 없는 비-record 는
+			// 와이어 스키마가 아니다 — Lombok 이 생성하는 ApiResponseDtoBuilder 같은 내부 헬퍼가 여기 걸린다.
 			return;
 		}
+		// record 든 일반 클래스든 인스턴스 필드가 곧 직렬화되는 속성이다. record 만 보면
+		// ApiResponseDto(모든 응답을 감싸는 Lombok 클래스)가 통째로 빠진다 (Codex 리뷰 반영).
 		Set<String> required = requiredProperties(type);
-		for (RecordComponent component : type.getRecordComponents()) {
-			if (!required.contains(component.getName()) && !isRequiredOnField(type, component)) {
-				sink.add(type.getSimpleName() + "::" + component.getName());
+		for (Field field : type.getDeclaredFields()) {
+			if (field.isSynthetic() || Modifier.isStatic(field.getModifiers())) {
+				continue;
 			}
-			for (Class<?> referenced : referencedTypes(component)) {
+			if (!required.contains(field.getName()) && !isRequiredOnField(field)) {
+				sink.add(type.getSimpleName() + "::" + field.getName());
+			}
+			for (Class<?> referenced : referencedTypes(field)) {
 				collectUndeclared(referenced, visited, sink);
 			}
 		}
@@ -101,25 +113,19 @@ class ResponseSchemaNullabilityTest {
 	}
 
 	/**
-	 * 필드 레벨 `requiredMode = REQUIRED` 도 인정한다. 애노테이션은 record component 가 아니라
-	 * <b>필드</b>에서 읽는다 — `@Schema` 는 RECORD_COMPONENT 를 @Target 에 두지 않아
-	 * `RecordComponent#getAnnotation` 이 항상 null 을 준다.
+	 * 필드 레벨 `requiredMode = REQUIRED` 도 인정한다. record 라도 애노테이션은 <b>필드</b>에서 읽는다 —
+	 * `@Schema` 는 RECORD_COMPONENT 를 @Target 에 두지 않아 `RecordComponent#getAnnotation` 은 항상 null 이다.
 	 */
-	private boolean isRequiredOnField(Class<?> type, RecordComponent component) {
-		try {
-			Field field = type.getDeclaredField(component.getName());
-			Schema schema = field.getAnnotation(Schema.class);
-			return schema != null && schema.requiredMode() == Schema.RequiredMode.REQUIRED;
-		} catch (NoSuchFieldException e) {
-			throw new IllegalStateException("record component 에 대응하는 필드가 없다: " + component, e);
-		}
+	private boolean isRequiredOnField(Field field) {
+		Schema schema = field.getAnnotation(Schema.class);
+		return schema != null && schema.requiredMode() == Schema.RequiredMode.REQUIRED;
 	}
 
-	/** 컴포넌트 타입 자체 + 제네릭 인자(List&lt;Spot&gt; 의 Spot 등)를 모두 후보로 낸다. */
-	private List<Class<?>> referencedTypes(RecordComponent component) {
+	/** 필드 타입 자체 + 제네릭 인자(List&lt;Spot&gt; 의 Spot 등)를 모두 후보로 낸다. */
+	private List<Class<?>> referencedTypes(Field field) {
 		List<Class<?>> types = new ArrayList<>();
-		types.add(component.getType());
-		collectGenericArguments(component.getGenericType(), types);
+		types.add(field.getType());
+		collectGenericArguments(field.getGenericType(), types);
 		return types;
 	}
 
@@ -149,7 +155,6 @@ class ResponseSchemaNullabilityTest {
 		List<Class<?>> found = scanner.findCandidateComponents(BASE_PACKAGE).stream()
 			.map(BeanDefinition::getBeanClassName)
 			.map(ResponseSchemaNullabilityTest::load)
-			.filter(Class::isRecord)
 			.toList();
 
 		assertThat(found)
@@ -180,7 +185,7 @@ class ResponseSchemaNullabilityTest {
 		}
 
 		List<String> names = visited.stream().map(Class::getSimpleName).toList();
-		assertThat(names).contains("MissionShape", "RegionShape", "CategoryPreferenceDto");
+		assertThat(names).contains("MissionShape", "RegionShape", "CategoryPreferenceDto", "ApiResponseDto");
 
 		List<String> domains = visited.stream()
 			.map(type -> type.getPackageName().replace(BASE_PACKAGE + ".", "").split("\\.")[0])
