@@ -25,6 +25,13 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 - `@.claude/docs/deploy.md` — 프로파일 · 환경변수 · 배포 설정
 - `@.claude/docs/architecture.md` — 서비스 아키텍처(SA, 정본) · 8개 서비스 · AI Highlight-Blur
 - `@.claude/docs/ia.md` — 화면 구조(IA) · User Journey · 구현 갭
+- **피그마 디자인 정본** — fileKey `CpqOlgayviFOG0WXTBUfpp`, 최신 정본 2개 (2026-08-06 성민 확인)
+  - 웹 `14062:10362` "필맵 웹 디자인 ver 9_마지막버전" (1440×900)
+  - 앱 `14176:6312` "필맵 앱 디자인 MVP ver 5" (390×844)
+
+  화면이 있는 작업에서 Figma MCP로 **해당 화면 노드만** 조회한다. 페이지를 통째로 열면 응답이
+  18만 자를 넘는다. `get_metadata`를 fileKey만으로 부르면 **앱 페이지가 목록에 안 잡히니**
+  위 노드 ID를 직접 넘긴다. 서버 내부 작업(로깅·성능·마이그레이션)은 해당 없음
 
 ## 팀 LLM 위키 (../LLM-WIKI)
 
@@ -91,6 +98,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 | 2026-08-03 | 작업 로그에 런타임 동작 기록 의무화 — 저장 위치·실행 쿼리·예외 흐름·빈 동작 4항목 (finalize.md 3번 상세) | CLAUDE.md, spec-driven-dev | 사용자 요청 — diff 요약만으론 실행 시점 사실(생성 SQL·핸들러 변환·빈 생명주기)이 안 남아 코드 재독으로도 복원이 어려움 |
 | 2026-08-03 | Codex 리뷰 라운드 상한 확대 — 재리뷰 2회(총 3회) → 3회(총 4회) | spec-driven-dev (codex-review-loop.md) | 사용자 지시 — MSG-183이 4라운드에서 수렴한 실측 반영, 상한 도달 시 사용자 확인 절차는 유지 |
 | 2026-08-05 | PRD·스펙 작성 원칙에 문체·각주 조항 신설 — korean-humanizer 기준(줄표 금지·읽히는 문장) + 전문 용어 3~7개 마크다운 각주, 작성 후 줄표 grep 자가검증. 기존 문서 소급 재작성은 안 함 | prd-writer, agents/spec-writer | 사용자 지시 2건(PRD 먼저, 이어서 스펙 포함) — 두 문서의 독자는 팀원·멘토라 외부 문서 성격인데 레포 관례(줄표·압축체)로 쓰여 왔음. MSG-313 PRD가 적용 선례 |
+| 2026-08-06 | prd-writer 리서치 단계에 피그마 정본 참조 추가(화면 있는 작업 한정, 해당 노드만 조회), CLAUDE.md Reference에 fileKey·정본 페이지 명시 | prd-writer, CLAUDE.md | 피그마가 스킬·규칙 어디에서도 참조되지 않아 설계 입력에서 통째로 빠져 있었음 — glossary의 "피그마 ver8 실측" 같은 결과만 사후 인용되던 상태. 위키 폴더명도 같은 날 `fillmap-wiki` → `LLM-WIKI`로 바꿔 문서가 가리키던 `../LLM-WIKI`를 실재하게 함 (MSG-331) |
 
 ## Quick Commands
 
