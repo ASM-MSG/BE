@@ -16,20 +16,20 @@ public sealed interface MissionShape
 	permits MissionShape.PathShape, MissionShape.BoxShape, MissionShape.CellsShape, MissionShape.RegionShape {
 
 	/** 좌표 한 점 (경계 폴리곤 꼭짓점). */
-	@Schema(description = "좌표 한 점", requiredProperties = {"lat", "lon"})
-	record LatLng(double lat, double lon) {
+	@Schema(description = "좌표 한 점", requiredProperties = {"lat", "lng"})
+	record LatLng(double lat, double lng) {
 	}
 
 	/** 코스 포토스팟 마커 (격자 중심점 + gridId + seq). */
-	@Schema(description = "코스 포토스팟 마커", requiredProperties = {"gridId", "lat", "lon", "seq"})
-	record Spot(String gridId, double lat, double lon,
+	@Schema(description = "코스 포토스팟 마커", requiredProperties = {"gridId", "lat", "lng", "seq"})
+	record Spot(String gridId, double lat, double lng,
 		@Schema(description = "코스 내 순번 — mission_grids.seq 는 NULL 허용 컬럼이라 없을 수 있다", nullable = true)
 		Integer seq) {
 	}
 
 	/** 격자 중심점 (gridId 포함). */
-	@Schema(description = "격자 중심점", requiredProperties = {"gridId", "lat", "lon"})
-	record Cell(String gridId, double lat, double lon) {
+	@Schema(description = "격자 중심점", requiredProperties = {"gridId", "lat", "lng"})
+	record Cell(String gridId, double lat, double lng) {
 	}
 
 	/**

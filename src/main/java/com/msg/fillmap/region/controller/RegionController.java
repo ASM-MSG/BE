@@ -46,12 +46,12 @@ public class RegionController {
 		@Parameter(description = "위도", required = true, example = "37.4979")
 		@RequestParam(required = false) Double lat,
 		@Parameter(description = "경도", required = true, example = "127.0276")
-		@RequestParam(required = false) Double lon
+		@RequestParam(required = false) Double lng
 	) {
-		if (lat == null || lon == null) {
+		if (lat == null || lng == null) {
 			throw new ApiException(RegionErrorCode.INVALID_COORDINATE);
 		}
-		RegionResponseDto body = regionQueryService.resolveByPoint(lat, lon)
+		RegionResponseDto body = regionQueryService.resolveByPoint(lat, lng)
 			.map(RegionResponseDto::from)
 			.orElse(null);
 		return SuccessResponse.of(body);
@@ -89,12 +89,12 @@ public class RegionController {
 		@Parameter(description = "위도", required = true, example = "37.4979")
 		@RequestParam(required = false) Double lat,
 		@Parameter(description = "경도", required = true, example = "127.0276")
-		@RequestParam(required = false) Double lon
+		@RequestParam(required = false) Double lng
 	) {
-		if (lat == null || lon == null) {
+		if (lat == null || lng == null) {
 			throw new ApiException(RegionErrorCode.INVALID_COORDINATE);
 		}
-		RegionStatResponseDto body = regionStatsQueryService.findStatByPoint(principal.userId(), lat, lon)
+		RegionStatResponseDto body = regionStatsQueryService.findStatByPoint(principal.userId(), lat, lng)
 			.map(RegionStatResponseDto::from)
 			.orElse(null);
 		return SuccessResponse.of(body);

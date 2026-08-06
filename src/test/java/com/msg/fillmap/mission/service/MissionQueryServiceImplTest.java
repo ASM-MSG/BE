@@ -122,7 +122,7 @@ class MissionQueryServiceImplTest {
 		assertThat(shape.spots()).extracting(Spot::gridId).containsExactly(first, second);
 		GridPoint firstCenter = GridEncoder.center(first);
 		assertThat(shape.spots().get(0).lat()).isEqualTo(firstCenter.lat());
-		assertThat(shape.spots().get(0).lon()).isEqualTo(firstCenter.lon());
+		assertThat(shape.spots().get(0).lng()).isEqualTo(firstCenter.lon());
 	}
 
 	@Test
@@ -176,7 +176,7 @@ class MissionQueryServiceImplTest {
 		assertThat(shape.polygon()).hasSize(5);
 		for (int i = 0; i < 5; i++) {
 			assertThat(shape.polygon().get(i).lat()).isEqualTo(cellBbox.get(i).lat());
-			assertThat(shape.polygon().get(i).lon()).isEqualTo(cellBbox.get(i).lon());
+			assertThat(shape.polygon().get(i).lng()).isEqualTo(cellBbox.get(i).lon());
 		}
 	}
 
@@ -221,7 +221,7 @@ class MissionQueryServiceImplTest {
 		Cell cellA = shape.cells().stream().filter(c -> c.gridId().equals(a)).findFirst().orElseThrow();
 		GridPoint centerA = GridEncoder.center(a);
 		assertThat(cellA.lat()).isEqualTo(centerA.lat());
-		assertThat(cellA.lon()).isEqualTo(centerA.lon());
+		assertThat(cellA.lng()).isEqualTo(centerA.lon());
 	}
 
 	@Test
@@ -274,9 +274,9 @@ class MissionQueryServiceImplTest {
 		Cell cell = ((CellsShape) findMission(theme).shape()).cells().get(0);
 
 		assertThat(spot.lat()).isEqualTo(center.lat());
-		assertThat(spot.lon()).isEqualTo(center.lon());
+		assertThat(spot.lng()).isEqualTo(center.lon());
 		assertThat(cell.lat()).isEqualTo(center.lat());
-		assertThat(cell.lon()).isEqualTo(center.lon());
+		assertThat(cell.lng()).isEqualTo(center.lon());
 	}
 
 	@Test

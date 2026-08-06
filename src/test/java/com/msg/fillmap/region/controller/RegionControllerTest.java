@@ -72,7 +72,7 @@ class RegionControllerTest {
 
 		mockMvc.perform(get("/api/regions/reverse-geocode")
 				.param("lat", "37.4979")
-				.param("lon", "127.0276")
+				.param("lng", "127.0276")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
@@ -88,7 +88,7 @@ class RegionControllerTest {
 
 		mockMvc.perform(get("/api/regions/reverse-geocode")
 				.param("lat", "38.0")
-				.param("lon", "130.0")
+				.param("lng", "130.0")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
@@ -103,15 +103,15 @@ class RegionControllerTest {
 
 		mockMvc.perform(get("/api/regions/reverse-geocode")
 				.param("lat", "10.0")
-				.param("lon", "100.0")
+				.param("lng", "100.0")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.developCode").value(6400));
 	}
 
 	@Test
-	@DisplayName("lat 또는 lon 이 없으면 400 이다 (검증)")
-	void lat_또는_lon이_없으면_400이다() throws Exception {
+	@DisplayName("lat 또는 lng 이 없으면 400 이다 (검증)")
+	void lat_또는_lng이_없으면_400이다() throws Exception {
 		mockMvc.perform(get("/api/regions/reverse-geocode")
 				.param("lat", "37.4979")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -183,7 +183,7 @@ class RegionControllerTest {
 
 		mockMvc.perform(get("/api/regions/stats/by-point")
 				.param("lat", "37.4979")
-				.param("lon", "127.0276")
+				.param("lng", "127.0276")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
@@ -200,7 +200,7 @@ class RegionControllerTest {
 
 		mockMvc.perform(get("/api/regions/stats/by-point")
 				.param("lat", "38.0")
-				.param("lon", "130.0")
+				.param("lng", "130.0")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
@@ -225,7 +225,7 @@ class RegionControllerTest {
 
 		mockMvc.perform(get("/api/regions/stats/by-point")
 				.param("lat", "10.0")
-				.param("lon", "100.0")
+				.param("lng", "100.0")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.developCode").value(6400));
