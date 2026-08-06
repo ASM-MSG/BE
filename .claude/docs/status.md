@@ -25,6 +25,7 @@
 - 기본 골격: `controller`(+`/reissue`), `service`(AuthService·OidcLoginService·RefreshTokenService), `dto`(+Reissue*), `jwt`(TokenProvider·필터·JwtProperties·RefreshTokenProvider/Store·RedisInvalidatedTokenStore), `oidc`(Kakao OIDC), `support/RefreshTokenCookies`, `exception/AuthErrorCode`
 - MSG-135: 리프레시 토큰(디바이스별 Redis `refresh:{userId}:{deviceId}`, 2주 슬라이딩, 로테이션+재사용감지)·블랙리스트 Redis 이관·하이브리드 전송(웹 쿠키/앱 body)
 - MSG-178: logout에 `LogoutRequestDto`(fcmToken 선택, `@RequestBody(required = false)` — body 없는 기존 호출 하위 호환) — 세션 삭제와 같은 처리에서 `PushTokenService.unregister(userId, fcmToken)` 호출(auth → notification 단방향 주입, 공유 기기 알림 잔존 P1 차단)
+- MSG-195: `jwt/CustomAccessDeniedHandler` 신설(403 공통 응답 형식 — EntryPoint 미러) + SecurityConfig `/api/admin/**` `hasRole("ADMIN")` matcher — **코드베이스 최초 role 인가 지점**(배관은 V1부터 완비돼 있었고 검사 지점만 신설)
 
 ### `user` (Owner B) — 🟡 부분
 - `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode`
@@ -149,7 +150,8 @@
 
 ### `moderation` (Owner B) — 🟡 부분
 - MSG-192: 영상 신고 접수 — `POST /api/videos/{videoId}/reports`(`ReportController`, AuthPrincipal 패턴·SecurityConfig 무변경), `entity/Report`(사용 컬럼만 매핑 — reviewed_by/reviewed_at은 MSG-195 몫 D6)·`ReportReason` 5종·`ReportStatus` 4종(V1 CHECK 문자열 일치), `ReportServiceImpl` **검증 순서가 계약**: reason 파싱 11400 → OTHER 상세 11401 → 영상 `findWithLockById` 행 잠금 후 없음·DELETED·BLINDED 3404 은닉(검증과 저장 사이 삭제·블라인드 커밋 창 차단 — Codex 교차 리뷰 수용, D8) → 자기 영상 11402 → 중복 exists 11409 → `saveAndFlush`+`DataIntegrityViolationException` catch 11409(동시 신고 레이스 수렴). **V27**(detail VARCHAR(500) + `uq_reports_reporter_video` — status 무관 전체 유니크 D3, 처리 후 재신고도 불가), `ReportErrorCode` **11xxx 대역**(대역표 행 추가 커밋 선행)
-- **없는 것**: 관리자 신고 처리 API(MSG-195 — reports 상태 갱신·블라인드 트리거·reviewed_by 매핑·관리자 인증), 신고 rate limit(같은 사용자의 다수 영상 연속 신고 — 요구 생기면 PRD부터), 사용자 신고(대상은 영상만 2026-08-06 확정 — 사용자 대응은 차단 MSG-194)
+- MSG-195: 관리자 신고 처리 — `controller/AdminReportController`(`/api/admin` 5종: 신고 목록 GET(상태 필터 기본 PENDING·**오프셋 페이징 PageRequest 첫 도입** — 관리자 전용 소량 데이터 예외, 사용자향 커서 관례 불변·닉네임 2종 세타 조인)·승인/기각 POST(reports 행 잠금 → PENDING 확인 11410 → videos 행 잠금 → ACTIVE만 blind 위임 — 잠금 순서 reports→videos 고정 D3, 이미 BLINDED/DELETED는 신고만 종결 FR-5)·해제 POST(unblind 위임, principal 미수취 §D4)·단건 영상 확인 GET(상태·공개범위 무관 재생 URL — 블러본 우선, 조회수·은닉 없음)), `service/AdminReportService`(+Impl), `Report` reviewed_by/reviewed_at 매핑 완성+`resolve`/`reject`(MSG-192 §D6 예약 이행), `ReportErrorCode` +4(11404·11410·11420·11421), DTO 4종(MSG-319 계약), 극단 page 오버플로 11421 가드(Codex 1R). 마이그레이션 0(컬럼 V1 기존재·목록은 `idx_reports_pending` 커버). 관리자 계정 생성 코드 없음 — DB 수동 승격 절차 deploy.md(§D8)
+- **없는 것**: 신고 rate limit(같은 사용자의 다수 영상 연속 신고 — 요구 생기면 PRD부터), 사용자 신고(대상은 영상만 2026-08-06 확정 — 사용자 차단 MSG-194는 제품 범위 제외로 종결 2026-08-06), 신고자 처리 결과 알림(후속 논의)
 
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
@@ -186,7 +188,7 @@
 | `push_tokens` | `notification/entity/PushToken` | ✅ (MSG-178 — 전 컬럼 매핑, 쓰기는 native UPSERT/DELETE 전용) |
 | `notifications` | `notification/entity/Notification` | ✅ (MSG-179 — V21 신설, 전 컬럼 매핑. 쓰기는 native 전용 — 기록 ON CONFLICT·상태 전이·UTC published_at/sent_at) |
 | `notification_opt_outs` | `notification/entity/NotificationOptOut` | ✅ (MSG-180 — V22 신설, `@EmbeddedId` 복합 키. 쓰기는 native 전용 — off INSERT ON CONFLICT·on DELETE) |
-| `reports` | — | ❌ 엔티티 없음 |
+| `reports` | `moderation/entity/Report` | ✅ (MSG-192 접수 컬럼 → MSG-195 reviewed_by·reviewed_at 매핑 완성, 전이 `resolve`/`reject`. V27 detail+유니크) |
 | `sponsor_ads` | — | ❌ 엔티티 없음 |
 | `streaks` | `streak/entity/Streak` | ✅ (MSG-200 — 전 컬럼 매핑, 쓰기는 native UPSERT 전용) |
 | `missions` | `mission/entity/Mission` | ✅ (MSG-222 조회 매핑 → MSG-224 쓰기 경로: 시드 `@Builder`·`source`(V13)·created_at DB DEFAULT 위임. path JSONB 미매핑 — COURSE 시드는 MSG-225. MSG-235 `sourceKey`(V14) 매핑·빌더 8필드) |
