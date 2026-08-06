@@ -4,15 +4,17 @@
 # hotzone:{bucketId} Sorted Set 8개(조회가 룩백하는 창 그대로)에 격자를 흩뿌린다.
 # bucketId = epochSeconds / 21600 — HotZoneServiceImpl 과 같은 UTC 6h 고정 버킷.
 #
-# 사용: ./load-test/seed-hotzone.sh [격자수]        (기본 1000)
+# 사용: ./load-test/seed-hotzone.sh [좌표 표본 수]     (기본 1000)
 #       GRIDS=100000 ./load-test/seed-hotzone.sh
+#       FORCE=1 ./load-test/seed-hotzone.sh 1000      (기존 키 확인 없이 삭제)
 #
-# 격자 수를 바꿔가며 재실행하면 ZUNIONSTORE 비용의 규모 감도를 볼 수 있다.
-# 상위 K(50) 캡 때문에 응답 크기는 규모와 무관하게 최대 50개다 — 커지는 건 합산 비용뿐이다.
+# 인자는 "격자 수"가 아니라 뽑을 좌표 표본 수다. 난수 좌표를 복원추출하므로 서로 다른
+# 격자 수는 그보다 적다(같은 셀이 여러 번 뽑힌다). 실제 고유 격자 수는 아래 출력의
+# "합산 고유 격자"를 볼 것 — 문서·표에는 그 값을 써야 한다.
 set -euo pipefail
 
 REDIS_CONTAINER="${REDIS_CONTAINER:-fillmap-local-redis}"
-GRIDS="${1:-${GRIDS:-1000}}"
+SAMPLES="${1:-${GRIDS:-1000}}"
 BUCKET_SECONDS=21600
 LOOKBACK=8
 
@@ -27,24 +29,33 @@ now=$(date +%s)
 current_bucket=$((now / BUCKET_SECONDS))
 first_bucket=$((current_bucket - LOOKBACK + 1))
 
-echo "격자 ${GRIDS}개를 버킷 ${first_bucket}~${current_bucket} (8개)에 시드합니다..."
-
 # 기존 핫구역 키 제거 — 이전 회차의 격자가 남으면 규모 감도 측정이 오염된다.
+# 다만 REDIS_CONTAINER 를 잘못 주면 실제 핫스코어를 날린다. 이미 쌓인 게 많으면 멈춘다.
+existing=$(docker exec "$REDIS_CONTAINER" sh -c \
+	'redis-cli --scan --pattern "hotzone:*" | wc -l' | tr -d ' ')
+if [ "$existing" -gt 100 ] && [ "${FORCE:-0}" != "1" ]; then
+	echo "중단: '$REDIS_CONTAINER' 에 hotzone 키가 ${existing}개 있습니다." >&2
+	echo "      테스트용 Redis 가 맞는지 확인하고, 맞으면 FORCE=1 로 다시 실행하세요." >&2
+	exit 1
+fi
 docker exec "$REDIS_CONTAINER" sh -c \
 	'redis-cli --scan --pattern "hotzone:*" | xargs -r redis-cli DEL' >/dev/null
 
+echo "좌표 ${SAMPLES}개를 버킷 ${first_bucket}~${current_bucket} (8개)에 시드합니다..."
+
 # ZADD 명령을 만들어 redis-cli --pipe 로 한 번에 밀어넣는다 (건당 왕복이면 10만 건에 수 분).
-awk -v grids="$GRIDS" -v first="$first_bucket" -v lookback="$LOOKBACK" \
+awk -v samples="$SAMPLES" -v first="$first_bucket" -v lookback="$LOOKBACK" \
 	-v latmin="$LAT_MIN" -v latmax="$LAT_MAX" -v lngmin="$LNG_MIN" -v lngmax="$LNG_MAX" \
 	-v latstep="$LAT_STEP" -v lngstep="$LNG_STEP" '
+# GridEncoder 는 Math.floor 를 쓴다. awk int() 는 0 방향 절단이라 음수에서 갈린다
+# (-0.5 → int 0, floor -1). 지금 시드 범위는 양수뿐이지만 규칙 자체를 맞춰 둔다.
+function floor(x) { return (x >= 0 || x == int(x)) ? int(x) : int(x) - 1 }
 BEGIN {
 	srand(42)   # 회차 간 같은 격자 집합을 쓰도록 고정 시드 — 규모만 변수로 남긴다
-	for (i = 0; i < grids; i++) {
+	for (i = 0; i < samples; i++) {
 		lat = latmin + rand() * (latmax - latmin)
 		lng = lngmin + rand() * (lngmax - lngmin)
-		gridY = int(lat / latstep)
-		gridX = int(lng / lngstep)
-		gridId = gridY "_" gridX
+		gridId = floor(lat / latstep) "_" floor(lng / lngstep)
 
 		# 상위 K(50) 판정이 실제로 갈리도록 스코어를 치우치게 준다:
 		# 대부분은 1~2(임계 3 미만이라 탈락), 5%만 5~30(핫구역 후보).
@@ -76,7 +87,8 @@ keys=""
 for ((b = first_bucket; b <= current_bucket; b++)); do keys="$keys hotzone:$b"; done
 # shellcheck disable=SC2086
 docker exec "$REDIS_CONTAINER" redis-cli ZUNIONSTORE hotzone:preview "$LOOKBACK" $keys >/dev/null
+unique=$(docker exec "$REDIS_CONTAINER" redis-cli ZCARD hotzone:preview)
 echo
-echo "  합산 격자 $(docker exec "$REDIS_CONTAINER" redis-cli ZCARD hotzone:preview)개"
+echo "  좌표 표본 ${SAMPLES}개 → 합산 고유 격자 ${unique}개  (문서에는 이 값을 쓸 것)"
 echo "  상위 50 중 임계(3) 이상: $(docker exec "$REDIS_CONTAINER" redis-cli ZREVRANGEBYSCORE hotzone:preview +inf 3 LIMIT 0 50 | wc -l | tr -d ' ')개"
 docker exec "$REDIS_CONTAINER" redis-cli DEL hotzone:preview >/dev/null
