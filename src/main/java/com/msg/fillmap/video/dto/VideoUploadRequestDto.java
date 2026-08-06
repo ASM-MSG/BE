@@ -26,7 +26,7 @@ public record VideoUploadRequestDto(
 
 	@Schema(description = "촬영 위치 경도 (격자 매핑에 사용)", example = "126.9780")
 	@NotNull
-	Double lon,
+	Double lng,
 
 	@Schema(description = "영상 길이(초). 1~30초", example = "15")
 	@NotNull

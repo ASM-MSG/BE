@@ -143,7 +143,7 @@ public class VideoServiceImpl implements VideoService {
 			? Visibility.PUBLIC
 			: parseVisibility(request.visibility());
 		double lat = request.lat();
-		double lon = request.lon();
+		double lon = request.lng();
 		validateCoordinate(lat, lon);
 		validateRecordedAt(request.recordedAt());
 		String originalKey = confirmUpload(userId, request.s3Key());
@@ -253,13 +253,13 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	private void validateSameGrid(Video video, VideoReplaceRequestDto request) {
 		if (request.hasPartialCoordinate()) {
-			throw new ApiException(VideoErrorCode.INVALID_COORDINATE);   // lat/lon 은 쌍으로만
+			throw new ApiException(VideoErrorCode.INVALID_COORDINATE);   // lat/lng 은 쌍으로만
 		}
 		if (!request.hasCoordinate()) {
 			return;
 		}
-		validateCoordinate(request.lat(), request.lon());
-		if (!GridEncoder.encode(request.lat(), request.lon()).equals(video.getGridId())) {
+		validateCoordinate(request.lat(), request.lng());
+		if (!GridEncoder.encode(request.lat(), request.lng()).equals(video.getGridId())) {
 			throw new ApiException(VideoErrorCode.GRID_MISMATCH);
 		}
 	}
