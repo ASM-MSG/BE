@@ -35,6 +35,14 @@ management:
   metrics:
     tags:
       application: fillmap
+    distribution:
+      # 지연 백분위(p95·p99)를 Prometheus 쪽에서 histogram_quantile 로 뽑기 위한 버킷 (MSG-321).
+      # percentiles-histogram: true 는 쓰지 않는다 — 그건 기본 버킷 수십 개를 uri 마다 만들어
+      # 시계열이 한 자리 수 배로 늘어난다. 관측에 필요한 경계만 직접 준다.
+      # 경계는 실측에 맞췄다: 평시가 1~3ms 라 저구간을 촘촘히, 캐시 재계산 스파이크(80~190ms)가
+      # 어느 칸에 떨어지는지 보이게 100~300ms 를 남겼다. 300ms 는 MSG-134 가 정한 SLO 선이다.
+      slo:
+        http.server.requests: 1ms,2ms,3ms,5ms,8ms,10ms,15ms,25ms,50ms,75ms,100ms,150ms,200ms,300ms,500ms,1s
 
 # API 문서 (MSG-131) — Swagger UI: /swagger-ui.html, OpenAPI 스펙: /v3/api-docs
 springdoc:
