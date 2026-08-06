@@ -37,12 +37,17 @@ management:
       application: fillmap
     distribution:
       # 지연 백분위(p95·p99)를 Prometheus 쪽에서 histogram_quantile 로 뽑기 위한 버킷 (MSG-321).
-      # percentiles-histogram: true 는 쓰지 않는다 — 그건 기본 버킷 수십 개를 uri 마다 만들어
-      # 시계열이 한 자리 수 배로 늘어난다. 관측에 필요한 경계만 직접 준다.
-      # 경계는 실측에 맞췄다: 평시가 1~3ms 라 저구간을 촘촘히, 캐시 재계산 스파이크(80~190ms)가
-      # 어느 칸에 떨어지는지 보이게 100~300ms 를 남겼다. 300ms 는 MSG-134 가 정한 SLO 선이다.
+      # percentiles-histogram: true 는 쓰지 않는다 — 그건 기본 버킷 수십 개를 만들어 시계열이
+      # 한 자리 수 배로 늘어난다. 관측에 필요한 경계만 직접 준다.
+      # 경계는 실측에 맞췄다: 평시가 1~3ms 라 저구간을 촘촘히, 캐시 만료 시점의 지연(40~190ms)이
+      # 어느 칸에 떨어지는지 보이게 100~300ms 를 남겼다. 300ms·800ms 는 MSG-134 가 정한 SLO 선
+      # (p95<300ms, p99<800ms) — 경계가 없으면 준수 여부가 구간 보간에 좌우된다.
+      #
+      # 비용: 이 설정은 http.server.requests 전체에 걸린다(uri 별 지정이 아니다). Prometheus 에는
+      # +Inf 가 더해져 uri·method·status·outcome 조합마다 18개 bucket 시계열이 생긴다.
+      # 지금 API 수에서는 감당 가능하다고 보고 켰다 — 늘어나면 uri 별 MeterFilter 로 좁힌다.
       slo:
-        http.server.requests: 1ms,2ms,3ms,5ms,8ms,10ms,15ms,25ms,50ms,75ms,100ms,150ms,200ms,300ms,500ms,1s
+        http.server.requests: 1ms,2ms,3ms,5ms,8ms,10ms,15ms,25ms,50ms,75ms,100ms,150ms,200ms,300ms,500ms,800ms,1s
 
 # API 문서 (MSG-131) — Swagger UI: /swagger-ui.html, OpenAPI 스펙: /v3/api-docs
 springdoc:
