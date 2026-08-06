@@ -136,6 +136,10 @@ Controller → Service → Repository → DB
 3. **N+1 · LAZY 프록시 함정 원천 차단**: 조회는 프로젝션·native로 명시적으로 짠다.
 4. **무결성은 DB 소유**: FK 제약·ON DELETE는 Flyway DDL이 보장한다 (JPA는 `validate`만).
 
+**예외 (애그리거트 내부)**: 동일 패키지·동일 Owner에서 생명주기를 공유하는 부모-자식
+(예: Mission↔MissionGrid 류)은 근거를 주석과 PR에 남기고 연관관계를 쓸 수 있다.
+도메인·Owner 경계를 넘는 참조는 예외 없이 id 보관.
+
 조인이 필요하면 **세타 조인 + 생성자 프로젝션**으로 쓴다
 (`FROM Report r, User ru WHERE ru.id = r.reporterId` — Friendship·Report 리포지토리 선례).
 
