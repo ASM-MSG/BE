@@ -28,12 +28,17 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.moderation.dto.AdminReportItemResponseDto;
 import com.msg.fillmap.moderation.dto.AdminReportListResponseDto;
 import com.msg.fillmap.moderation.dto.AdminReportProcessResponseDto;
+import com.msg.fillmap.moderation.dto.AdminVideoReviewResponseDto;
+import com.msg.fillmap.moderation.dto.AdminVideoUnblindResponseDto;
 import com.msg.fillmap.moderation.entity.ReportReason;
 import com.msg.fillmap.moderation.entity.ReportStatus;
 import com.msg.fillmap.moderation.exception.ReportErrorCode;
 import com.msg.fillmap.moderation.service.AdminReportService;
 import com.msg.fillmap.user.entity.UserRole;
+import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.VideoStatus;
+import com.msg.fillmap.video.entity.Visibility;
+import com.msg.fillmap.video.exception.VideoErrorCode;
 
 /**
  * 관리자 신고 처리 컨트롤러 (MSG-195). ReportControllerTest 패턴 미러 — TokenProvider 실 Bearer +
@@ -48,6 +53,7 @@ class AdminReportControllerTest {
 
 	private static final long ADMIN_ID = 8801L;
 	private static final String REPORTS_URL = "/api/admin/reports";
+	private static final String VIDEOS_URL = "/api/admin/videos";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -212,6 +218,67 @@ class AdminReportControllerTest {
 		mockMvc.perform(post(REPORTS_URL + "/7/reject").header(HttpHeaders.AUTHORIZATION, adminBearer()))
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.developCode").value(11410))
+			.andExpect(jsonPath("$.data").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("블라인드 해제는 200 과 ACTIVE 를 반환한다 (FR-8)")
+	void 블라인드_해제는_200과_ACTIVE를_반환한다() throws Exception {
+		given(adminReportService.unblindVideo(anyLong()))
+			.willReturn(new AdminVideoUnblindResponseDto(1042L, VideoStatus.ACTIVE));
+
+		mockMvc.perform(post(VIDEOS_URL + "/1042/unblind").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.videoId").value(1042))
+			.andExpect(jsonPath("$.data.status").value("ACTIVE"));
+
+		then(adminReportService).should().unblindVideo(1042L);
+	}
+
+	@Test
+	@DisplayName("이미 ACTIVE 인 영상의 해제는 409 · developCode 3409 다")
+	void 이미_ACTIVE인_영상의_해제는_409와_3409를_반환한다() throws Exception {
+		given(adminReportService.unblindVideo(anyLong()))
+			.willThrow(new ApiException(VideoErrorCode.ALREADY_IN_TARGET_STATUS));
+
+		mockMvc.perform(post(VIDEOS_URL + "/1042/unblind").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.developCode").value(3409))
+			.andExpect(jsonPath("$.data").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("단건 확인은 200 과 영상 메타·재생 URL 을 반환한다 (FR-3)")
+	void 단건_확인은_200과_영상_메타와_재생_URL을_반환한다() throws Exception {
+		given(adminReportService.getVideoForReview(anyLong())).willReturn(new AdminVideoReviewResponseDto(
+			1042L, VideoStatus.BLINDED, ProcessingStatus.READY, Visibility.PRIVATE, (short) 12,
+			LocalDateTime.of(2026, 7, 20, 18, 3, 11), "https://signed/play", "https://signed/thumb", 600L));
+
+		mockMvc.perform(get(VIDEOS_URL + "/1042").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.videoId").value(1042))
+			.andExpect(jsonPath("$.data.status").value("BLINDED"))
+			.andExpect(jsonPath("$.data.processingStatus").value("READY"))
+			.andExpect(jsonPath("$.data.visibility").value("PRIVATE"))
+			.andExpect(jsonPath("$.data.durationSec").value(12))
+			.andExpect(jsonPath("$.data.playbackUrl").value("https://signed/play"))
+			.andExpect(jsonPath("$.data.thumbnailUrl").value("https://signed/thumb"))
+			.andExpect(jsonPath("$.data.expiresInSec").value(600));
+
+		then(adminReportService).should().getVideoForReview(1042L);
+	}
+
+	@Test
+	@DisplayName("없는 영상의 확인은 404 · developCode 3404 다")
+	void 없는_영상의_확인은_404와_3404를_반환한다() throws Exception {
+		given(adminReportService.getVideoForReview(anyLong()))
+			.willThrow(new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
+
+		mockMvc.perform(get(VIDEOS_URL + "/999").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.developCode").value(3404))
 			.andExpect(jsonPath("$.data").doesNotExist());
 	}
 }

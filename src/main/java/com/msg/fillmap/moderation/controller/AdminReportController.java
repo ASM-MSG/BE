@@ -17,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.moderation.dto.AdminReportListResponseDto;
 import com.msg.fillmap.moderation.dto.AdminReportProcessResponseDto;
+import com.msg.fillmap.moderation.dto.AdminVideoReviewResponseDto;
+import com.msg.fillmap.moderation.dto.AdminVideoUnblindResponseDto;
 import com.msg.fillmap.moderation.service.AdminReportService;
 import com.msg.fillmap.response.SuccessResponse;
 
@@ -85,5 +87,30 @@ public class AdminReportController {
 		@Parameter(description = "기각할 신고 ID", example = "7") @PathVariable Long reportId
 	) {
 		return SuccessResponse.of(adminReportService.reject(principal.userId(), reportId));
+	}
+
+	@Operation(
+		summary = "블라인드 해제",
+		description = "BLINDED 영상을 ACTIVE 로 복구한다. 오판 복구용이며 그 신고의 RESOLVED 는 되돌리지 않는다. "
+			+ "없는 영상과 삭제된 영상은 404(3404), 이미 ACTIVE 면 409(3409) 다."
+	)
+	@PostMapping("/videos/{videoId}/unblind")
+	public SuccessResponse<AdminVideoUnblindResponseDto> unblindVideo(
+		@Parameter(description = "해제할 영상 ID", example = "1042") @PathVariable Long videoId
+	) {
+		return SuccessResponse.of(adminReportService.unblindVideo(videoId));
+	}
+
+	@Operation(
+		summary = "관리자 단건 영상 확인",
+		description = "신고 판단용으로 영상 하나를 확인한다 — 공개범위와 상태(BLINDED 포함)를 무시하고 요청 시점에 "
+			+ "재생·썸네일 presigned URL 을 발급하며, 조회수를 올리지 않는다. 처리 상태가 READY 가 아니면 "
+			+ "playbackUrl 과 expiresInSec 은 null 이다. 없는 영상과 삭제된 영상은 404(3404) 다."
+	)
+	@GetMapping("/videos/{videoId}")
+	public SuccessResponse<AdminVideoReviewResponseDto> getVideoForReview(
+		@Parameter(description = "확인할 영상 ID", example = "1042") @PathVariable Long videoId
+	) {
+		return SuccessResponse.of(adminReportService.getVideoForReview(videoId));
 	}
 }
