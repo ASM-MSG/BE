@@ -105,7 +105,7 @@ server:
   # nginx가 https를 종단하므로 X-Forwarded-Proto/Host를 존중해야 springdoc·리다이렉트가 https URL을 만든다 (MSG-266)
   forward-headers-strategy: framework
   # 응답 압축 (MSG-318). 좌표·필드명이 수만 번 반복되는 JSON 이라 압축이 잘 듣는다 —
-  # GET /api/missions/active 실측 520,007 → 117,277 bytes (77% 감소).
+  # GET /api/missions/active 실측 520,007 → 118,082 bytes (77% 감소, 서버 응답 수신 기준).
   # 2KB 미만은 제외한다: 압축 CPU 와 Content-Encoding 왕복이 절감분보다 커지는 구간이다.
   compression:
     enabled: true

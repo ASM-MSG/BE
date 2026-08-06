@@ -41,10 +41,12 @@ import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 @DisplayName("업로드 훅 미션 판정 배선 (실 PostGIS)")
 class VideoMissionIntegrationTest {
 
-	// 다른 테스트(성수·잠실·뚝섬·망원·연희)와 겹치지 않는 좌표 (연남).
-	private static final double 연남_LAT = 37.5622;
-	private static final double 연남_LON = 126.9255;
-	// 미션이 있을 수 없는 외딴 좌표 (지리산 자락) — 미해당 경로의 빈 배열 단언용.
+	// 미션을 붙일 격자. 도심 좌표(연남)를 쓰면 시드를 적재한 로컬 DB 에서 그 격자에 진짜 축제·팝업이
+	// 겹친다. 좌표를 산간으로 옮긴 건 겹칠 확률을 줄이는 것일 뿐이라, 단언 쪽도 내가 만든 미션만
+	// 보도록 해 뒀다(아래 contains) — 언젠가 이 격자에 시드가 들어와도 테스트는 그대로 통과한다.
+	private static final double 미션격자_LAT = 35.3600;
+	private static final double 미션격자_LON = 127.7400;
+	// 미션이 있을 수 없는 외딴 좌표 (지리산 자락) — 미해당 경로의 빈 배열 단언용. 위 격자와 겹치지 않는다.
 	private static final double 산간_LAT = 35.3500;
 	private static final double 산간_LON = 127.7300;
 
@@ -68,19 +70,21 @@ class VideoMissionIntegrationTest {
 		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
 		String email = "video-mission-" + System.nanoTime() + "@example.com";
 		userId = userRepository.save(User.createLocalUser(email, "hash", "미션훅테스터")).getId();
-		missionGridId = GridEncoder.encode(연남_LAT, 연남_LON);
+		missionGridId = GridEncoder.encode(미션격자_LAT, 미션격자_LON);
 	}
 
 	@Test
 	@DisplayName("미션 격자 업로드 응답에 completedMissions 가 동봉된다 (FR-19)")
 	void 미션_격자_업로드_응답에_completedMissions가_동봉된다() {
-		long mission = insertActiveMission("연남 골목 축제");
+		long mission = insertActiveMission("시험용 축제");
 		insertMissionGrid(mission, missionGridId);
 
-		VideoUploadResponseDto response = videoService.saveVideo(userId, uploadRequest(연남_LAT, 연남_LON));
+		VideoUploadResponseDto response = videoService.saveVideo(userId, uploadRequest(미션격자_LAT, 미션격자_LON));
 
+		// contains 인 이유: 같은 격자에 다른 미션이 걸려 있으면 그것도 함께 완료되는 게 옳은 동작이라,
+		// "정확히 이것만"은 DB 상태에 기대는 단언이 된다. 이 테스트가 책임지는 건 내가 만든 미션의 동봉이다.
 		assertThat(response.completedMissions())
-			.containsExactly(new CompletedMissionResponseDto(mission, "연남 골목 축제", "EVENT"));
+			.contains(new CompletedMissionResponseDto(mission, "시험용 축제", "EVENT"));
 		assertThat(stampCount(mission)).isEqualTo(1);
 	}
 
@@ -95,9 +99,9 @@ class VideoMissionIntegrationTest {
 	@Test
 	@DisplayName("미션 뱃지가 newBadges 에 합류한다 — 기존 뱃지와 한 배열 (FR-17·19)")
 	void 미션_뱃지가_newBadges에_합류한다() {
-		insertMissionGrid(insertActiveMission("연남 골목 축제"), missionGridId);
+		insertMissionGrid(insertActiveMission("시험용 축제"), missionGridId);
 
-		VideoUploadResponseDto response = videoService.saveVideo(userId, uploadRequest(연남_LAT, 연남_LON));
+		VideoUploadResponseDto response = videoService.saveVideo(userId, uploadRequest(미션격자_LAT, 미션격자_LON));
 
 		// 첫 업로드라 첫 발자국(EXPLORER_1)과 첫 스탬프(MISSION_1)가 한 응답에 실린다.
 		assertThat(response.newBadges()).extracting(EarnedBadgeResponseDto::code)
@@ -107,12 +111,12 @@ class VideoMissionIntegrationTest {
 	@Test
 	@DisplayName("미션 판정은 user_grids 를 변경하지 않는다 — 도감은 기존 upsertUserGrid 1회뿐 (FR-16)")
 	void 미션_판정은_user_grids를_변경하지_않는다() {
-		long mission = insertActiveMission("연남 골목 축제");
+		long mission = insertActiveMission("시험용 축제");
 		insertMissionGrid(mission, missionGridId);
 		// 방문하지 않을 대상 격자 — 판정이 도감에 손대면 이 격자의 가짜 row 로 드러난다.
-		insertMissionGrid(mission, GridEncoder.encode(연남_LAT + 0.001, 연남_LON));
+		insertMissionGrid(mission, GridEncoder.encode(미션격자_LAT + 0.001, 미션격자_LON));
 
-		videoService.saveVideo(userId, uploadRequest(연남_LAT, 연남_LON));
+		videoService.saveVideo(userId, uploadRequest(미션격자_LAT, 미션격자_LON));
 
 		assertThat(myGridRows()).containsExactly(missionGridId + ":1");
 	}
@@ -120,9 +124,9 @@ class VideoMissionIntegrationTest {
 	@Test
 	@DisplayName("영상을 삭제해도 스탬프는 유지된다 — 비회수, 삭제 경로 무변경 (FR-15)")
 	void 영상을_삭제해도_스탬프는_유지된다() {
-		long mission = insertActiveMission("연남 골목 축제");
+		long mission = insertActiveMission("시험용 축제");
 		insertMissionGrid(mission, missionGridId);
-		long videoId = videoService.saveVideo(userId, uploadRequest(연남_LAT, 연남_LON)).videoId();
+		long videoId = videoService.saveVideo(userId, uploadRequest(미션격자_LAT, 미션격자_LON)).videoId();
 
 		videoService.deleteVideo(userId, videoId);
 

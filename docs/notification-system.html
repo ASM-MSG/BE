@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>알림 시스템: 설계와 고쳐 온 것들 (MSG-178~181 · 313~315)</title>
+<style>
+	:root {
+		--bg: #ffffff;
+		--bg-soft: #f6f7f9;
+		--bg-code: #f2f4f7;
+		--fg: #1b1f24;
+		--fg-soft: #5b6673;
+		--line: #dfe3e8;
+		--accent: #2d6cdf;
+		--accent-soft: #eaf1fd;
+		--warn: #b4690e;
+		--warn-soft: #fdf3e3;
+		--danger: #c0392b;
+		--danger-soft: #fdeeec;
+		--ok: #1f7a4d;
+		--ok-soft: #e9f6ef;
+		--mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #0f1216;
+			--bg-soft: #161a20;
+			--bg-code: #1a1f26;
+			--fg: #e6e9ed;
+			--fg-soft: #9aa4b2;
+			--line: #2a313a;
+			--accent: #6ea8ff;
+			--accent-soft: #16233a;
+			--warn: #e0a44a;
+			--warn-soft: #2a2113;
+			--danger: #f0796b;
+			--danger-soft: #2d1917;
+			--ok: #5fc38d;
+			--ok-soft: #12251b;
+		}
+	}
+
+	:root[data-theme="dark"] {
+		--bg: #0f1216;
+		--bg-soft: #161a20;
+		--bg-code: #1a1f26;
+		--fg: #e6e9ed;
+		--fg-soft: #9aa4b2;
+		--line: #2a313a;
+		--accent: #6ea8ff;
+		--accent-soft: #16233a;
+		--warn: #e0a44a;
+		--warn-soft: #2a2113;
+		--danger: #f0796b;
+		--danger-soft: #2d1917;
+		--ok: #5fc38d;
+		--ok-soft: #12251b;
+	}
+
+	:root[data-theme="light"] {
+		--bg: #ffffff;
+		--bg-soft: #f6f7f9;
+		--bg-code: #f2f4f7;
+		--fg: #1b1f24;
+		--fg-soft: #5b6673;
+		--line: #dfe3e8;
+		--accent: #2d6cdf;
+		--accent-soft: #eaf1fd;
+		--warn: #b4690e;
+		--warn-soft: #fdf3e3;
+		--danger: #c0392b;
+		--danger-soft: #fdeeec;
+		--ok: #1f7a4d;
+		--ok-soft: #e9f6ef;
+	}
+
+	* { box-sizing: border-box; }
+
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--fg);
+		font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard",
+			"Malgun Gothic", sans-serif;
+		overflow-wrap: break-word;
+	}
+
+	.wrap {
+		display: grid;
+		grid-template-columns: 240px minmax(0, 1fr);
+		gap: 48px;
+		max-width: 1180px;
+		margin: 0 auto;
+		padding: 40px 24px 96px;
+		align-items: start;
+	}
+
+	@media (max-width: 900px) {
+		.wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+		nav.toc { position: static !important; }
+	}
+
+	nav.toc {
+		position: sticky;
+		top: 24px;
+		font-size: 14px;
+		border-left: 2px solid var(--line);
+		padding-left: 16px;
+	}
+	nav.toc p {
+		margin: 0 0 10px;
+		font-weight: 700;
+		font-size: 12px;
+		letter-spacing: .08em;
+		color: var(--fg-soft);
+		text-transform: uppercase;
+	}
+	nav.toc a {
+		display: block;
+		padding: 4px 0;
+		color: var(--fg-soft);
+		text-decoration: none;
+	}
+	nav.toc a:hover { color: var(--accent); }
+	nav.toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	nav.toc .sub2 { padding-left: 10px; font-size: 13px; }
+	nav.toc .rel { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+	header.title { margin-bottom: 8px; }
+	h1 { font-size: 30px; line-height: 1.3; margin: 0 0 8px; letter-spacing: -.02em; text-wrap: balance; }
+	.sub { color: var(--fg-soft); margin: 0 0 4px; }
+
+	h2 {
+		font-size: 22px;
+		margin: 56px 0 12px;
+		padding-top: 20px;
+		border-top: 1px solid var(--line);
+		letter-spacing: -.01em;
+		scroll-margin-top: 20px;
+	}
+	h3 { font-size: 17px; margin: 28px 0 8px; scroll-margin-top: 20px; }
+	p { margin: 0 0 14px; }
+	ul, ol { margin: 0 0 14px; padding-left: 20px; }
+	li { margin-bottom: 6px; }
+	a { color: var(--accent); }
+
+	code {
+		font-family: var(--mono);
+		font-size: .88em;
+		background: var(--bg-code);
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		padding: 1px 5px;
+	}
+	pre {
+		background: var(--bg-code);
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		padding: 14px 16px;
+		overflow-x: auto;
+		margin: 0 0 16px;
+	}
+	pre code { background: none; border: 0; padding: 0; font-size: 13px; line-height: 1.6; }
+
+	.badge {
+		display: inline-block;
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: .04em;
+		padding: 2px 7px;
+		border-radius: 999px;
+		vertical-align: middle;
+		border: 1px solid transparent;
+	}
+	.badge.new { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+	.badge.done { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+	.badge.bad { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+
+	.note {
+		border: 1px solid var(--line);
+		border-left: 4px solid var(--accent);
+		background: var(--accent-soft);
+		border-radius: 0 8px 8px 0;
+		padding: 12px 16px;
+		margin: 0 0 18px;
+	}
+	.note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+	.note.danger { border-left-color: var(--danger); background: var(--danger-soft); }
+	.note.ok { border-left-color: var(--ok); background: var(--ok-soft); }
+	.note > :last-child { margin-bottom: 0; }
+	.note strong { display: block; margin-bottom: 4px; }
+
+	table { border-collapse: collapse; width: 100%; margin: 0 0 18px; font-size: 14px; }
+	th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+	th { background: var(--bg-soft); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+	.scroll-x { overflow-x: auto; margin: 0 0 18px; }
+	.scroll-x table { margin: 0; min-width: 560px; }
+	td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+	/* --- 지표 스트립 --- */
+	.metrics {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 12px;
+		margin: 24px 0 8px;
+	}
+	@media (max-width: 520px) { .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+	.metric {
+		border: 1px solid var(--line);
+		background: var(--bg-soft);
+		border-radius: 8px;
+		padding: 12px 14px;
+	}
+	.metric b {
+		display: block;
+		font-size: 26px;
+		line-height: 1.2;
+		letter-spacing: -.02em;
+		font-variant-numeric: tabular-nums;
+	}
+	.metric span { display: block; font-size: 12.5px; color: var(--fg-soft); margin-top: 2px; }
+
+	/* --- 파이프라인 도해 --- */
+	.diagram { overflow-x: auto; margin: 0 0 20px; }
+	.diagram svg { display: block; min-width: 720px; font-family: inherit; }
+	.diagram text { fill: var(--fg); }
+	.diagram text.soft { fill: var(--fg-soft); }
+	.diagram rect.box { fill: var(--bg-soft); stroke: var(--line); }
+	.diagram rect.hl { fill: var(--accent-soft); stroke: var(--accent); }
+	.diagram path, .diagram line { stroke: var(--fg-soft); fill: none; }
+	.diagram path.recover { stroke: var(--warn); stroke-dasharray: 5 4; }
+	.diagram text.recover { fill: var(--warn); }
+
+	/* --- 결함 카드 --- */
+	.case {
+		border: 1px solid var(--line);
+		border-left: 4px solid var(--fg-soft);
+		border-radius: 0 8px 8px 0;
+		padding: 14px 16px 4px;
+		margin: 0 0 16px;
+		background: var(--bg-soft);
+	}
+	.case.high { border-left-color: var(--danger); }
+	.case.mid { border-left-color: var(--warn); }
+	.case h4 {
+		margin: 0 0 10px;
+		font-size: 16px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		align-items: baseline;
+	}
+	.case h4 .src {
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: .03em;
+		color: var(--fg-soft);
+		border: 1px solid var(--line);
+		background: var(--bg);
+		border-radius: 999px;
+		padding: 1px 8px;
+	}
+	.case dl { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 4px 12px; margin: 0 0 12px; }
+	.case dt {
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: .04em;
+		color: var(--fg-soft);
+		padding-top: 3px;
+	}
+	.case dd { margin: 0; font-size: 15px; }
+	.case dd:last-of-type { color: var(--fg); }
+	.case dt.fix { color: var(--ok); }
+	@media (max-width: 560px) {
+		.case dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+		.case dt { padding-top: 8px; }
+	}
+
+	.foot { color: var(--fg-soft); font-size: 13px; margin-top: 56px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+	<p>목차</p>
+	<a href="#summary">0. 한눈에</a>
+	<a href="#design">1. 설계</a>
+	<a href="#design-why" class="sub2">1.1 왜 outbox인가</a>
+	<a href="#design-pipe" class="sub2">1.2 파이프라인 5단계</a>
+	<a href="#design-state" class="sub2">1.3 상태 머신</a>
+	<a href="#design-idem" class="sub2">1.4 멱등 2중 방어</a>
+	<a href="#design-kinds" class="sub2">1.5 알림 5종</a>
+	<a href="#design-gate" class="sub2">1.6 게이트와 격리</a>
+	<a href="#cases">2. 결함 기록</a>
+	<a href="#case-stop" class="sub2">A. 유실과 정지</a>
+	<a href="#case-time" class="sub2">B. 시간대와 정합</a>
+	<a href="#case-lock" class="sub2">C. 동시성과 잠금</a>
+	<a href="#case-team" class="sub2">D. 협업과 운영</a>
+	<a href="#numbers">3. 숫자로 본 결과</a>
+	<a href="#ceiling">4. 남은 천장</a>
+	<a href="#glossary">5. 용어</a>
+	<p class="rel" style="margin-bottom:4px">관련</p>
+	<a href="MSG-132-troubleshooting.html">트러블슈팅: 격자 점령 (MSG-132)</a>
+	<a href="MSG-179.md">발송 파이프라인 스펙 (MSG-179)</a>
+	<a href="prd/MSG-313-prd.md">알림 다양화 PRD (MSG-313)</a>
+</nav>
+
+<main>
+<header class="title">
+	<h1>알림 시스템: 설계와 고쳐 온 것들</h1>
+	<p class="sub">outbox에서 FCM까지, 그리고 그 사이에서 실제로 부러졌던 지점들</p>
+	<p class="sub">
+		<span class="badge new">MSG-178~181</span>
+		<span class="badge new">MSG-313~315</span>
+		<span class="badge done">전부 머지 완료</span>
+		· 대상: 백엔드 팀원 · 2026-08-05
+	</p>
+</header>
+
+<h2 id="summary">0. 한눈에</h2>
+
+<p>
+	FillMap 백엔드에 푸시 알림을 붙이는 작업은 티켓 7개로 나뉘어 진행됐다. 토큰 수집(MSG-178),
+	발송 파이프라인(MSG-179), 수신 설정(MSG-180), 트리거 연동(MSG-181)이 뼈대를 세웠고,
+	영상 준비 완료(MSG-313), 뱃지 임박(MSG-314), 주간 요약(MSG-315)이 알림 종류를 늘렸다.
+</p>
+
+<div class="metrics">
+	<div class="metric"><b>5종</b><span>알림 카테고리</span></div>
+	<div class="metric"><b>5건</b><span>마이그레이션 (V21·22·24·25·26)</span></div>
+	<div class="metric"><b>16R</b><span>교차 리뷰 라운드</span></div>
+	<div class="metric"><b>16건</b><span>리뷰가 잡은 결함</span></div>
+	<div class="metric"><b>1,127</b><span>전체 테스트 (907에서)</span></div>
+	<div class="metric"><b>93.1%</b><span>커버리지 (변경분 100%)</span></div>
+</div>
+
+<div class="note">
+	<strong>이 문서가 다루는 것</strong>
+	1장은 지금 돌고 있는 구조다. 2장은 그 구조에 도달하기까지 부러졌던 지점을 증상, 원인,
+	해결로 적은 기록이다. 24건 중 13건은 자동 리뷰가 머지 전에 잡았고(Codex 교차 리뷰 12건,
+	PR 리뷰 봇 1건), 나머지는 코드나 인프라 실측, 아니면 실제로 무언가 깨진 뒤에 드러났다.
+</div>
+
+<h2 id="design">1. 설계</h2>
+
+<h3 id="design-why">1.1 왜 outbox인가</h3>
+
+<p>
+	가장 단순한 구현은 업로드가 끝나는 자리에서 FCM을 바로 호출하는 것이다. 이걸 안 쓴 이유는
+	<strong>이중 쓰기 문제</strong> 때문이다. DB 커밋과 외부 호출은 하나의 트랜잭션으로 묶이지 않아서,
+	커밋은 됐는데 발송 직전에 프로세스가 죽으면 알림이 사라지고, 발송은 됐는데 커밋이 롤백되면
+	있지도 않은 사건의 알림이 나간다.
+</p>
+
+<p>
+	그래서 알림 요청을 <strong>비즈니스 트랜잭션과 같은 커밋으로 DB 테이블에 먼저 적는다</strong>.
+	<code>NotificationCommandService.record()</code>가 전파 REQUIRED라 호출자의 트랜잭션에 그대로
+	참여한다. 커밋되면 알림은 반드시 남고, 롤백되면 알림도 없던 일이 된다. 발송은 그 뒤에
+	별도 릴레이가 맡는다.
+</p>
+
+<pre><code>void record(Long userId, NotificationCategory category, String eventKey, String title, String body);
+// 반드시 호출자의 비즈니스 트랜잭션 안에서 호출할 것. 같은 커밋이어야 원자성이 성립한다.</code></pre>
+
+<p>
+	전달 보장 수준은 <strong>at-least-once와 멱등 dedupe</strong>다. 분산 환경에서 exactly-once는
+	현실적이지 않아서 추구하지 않고, 대신 중복이 와도 한 건으로 접히게 만들었다.
+</p>
+
+<h3 id="design-pipe">1.2 파이프라인 5단계</h3>
+
+<div class="diagram">
+<svg viewBox="0 0 940 250" role="img" aria-label="알림 파이프라인 도해: 비즈니스 트랜잭션에서 outbox에 기록하고, 릴레이가 5초마다 폴링해 Kafka로 발행하며, 컨슈머가 필터를 거쳐 FCM으로 발송한다">
+	<defs>
+		<marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+			<path d="M0,0 L7,3.2 L0,6.4" stroke-width="1.4"/>
+		</marker>
+		<marker id="ahw" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto">
+			<path class="recover" d="M0,0 L7,3.2 L0,6.4" stroke-width="1.4" stroke-dasharray="none"/>
+		</marker>
+	</defs>
+
+	<g color="var(--fg-soft)">
+		<rect class="box" x="8" y="60" width="150" height="56" rx="8"/>
+		<text x="83" y="83" text-anchor="middle" font-size="13" font-weight="700">비즈니스 트랜잭션</text>
+		<text x="83" y="101" text-anchor="middle" font-size="11.5" class="soft">업로드 · 뱃지 · 배치</text>
+
+		<rect class="hl" x="205" y="60" width="150" height="56" rx="8"/>
+		<text x="280" y="83" text-anchor="middle" font-size="13" font-weight="700">notifications</text>
+		<text x="280" y="101" text-anchor="middle" font-size="11.5" class="soft">outbox 겸 발송 기록</text>
+
+		<rect class="box" x="402" y="60" width="150" height="56" rx="8"/>
+		<text x="477" y="83" text-anchor="middle" font-size="13" font-weight="700">Kafka</text>
+		<text x="477" y="101" text-anchor="middle" font-size="11.5" class="soft">파티션 1 · 보존 7일</text>
+
+		<rect class="box" x="599" y="60" width="150" height="56" rx="8"/>
+		<text x="674" y="83" text-anchor="middle" font-size="13" font-weight="700">컨슈머</text>
+		<text x="674" y="101" text-anchor="middle" font-size="11.5" class="soft">필터 4단 · 재시도</text>
+
+		<rect class="box" x="796" y="60" width="136" height="56" rx="8"/>
+		<text x="864" y="83" text-anchor="middle" font-size="13" font-weight="700">FCM</text>
+		<text x="864" y="101" text-anchor="middle" font-size="11.5" class="soft">500 단위 청크</text>
+
+		<line x1="160" y1="88" x2="199" y2="88" stroke-width="1.4" marker-end="url(#ah)"/>
+		<line x1="357" y1="88" x2="396" y2="88" stroke-width="1.4" marker-end="url(#ah)"/>
+		<line x1="554" y1="88" x2="593" y2="88" stroke-width="1.4" marker-end="url(#ah)"/>
+		<line x1="751" y1="88" x2="790" y2="88" stroke-width="1.4" marker-end="url(#ah)"/>
+
+		<text x="180" y="46" text-anchor="middle" font-size="10.5" class="soft">같은 커밋</text>
+		<text x="377" y="40" text-anchor="middle" font-size="10.5" class="soft">릴레이 5초</text>
+		<text x="377" y="53" text-anchor="middle" font-size="10.5" class="soft">배치 100건</text>
+		<text x="574" y="46" text-anchor="middle" font-size="10.5" class="soft">리스너 1</text>
+		<text x="771" y="46" text-anchor="middle" font-size="10.5" class="soft">멀티캐스트</text>
+
+		<path class="recover" d="M477,124 L477,168 L280,168 L280,122" stroke-width="1.4" marker-end="url(#ahw)"/>
+		<text x="378" y="186" text-anchor="middle" font-size="11" class="recover">PUBLISHED가 30분 넘게 남아 있으면 PENDING으로 되돌려 재발행</text>
+
+		<text x="674" y="140" text-anchor="middle" font-size="11" class="soft">설정 off → SKIPPED · 상한 초과 → SKIPPED</text>
+		<text x="674" y="156" text-anchor="middle" font-size="11" class="soft">토큰 없음 → SKIPPED · 재시도 소진 → DEAD</text>
+		<text x="674" y="172" text-anchor="middle" font-size="11" class="soft">무효 토큰은 push_tokens에서 즉시 삭제</text>
+
+		<text x="470" y="222" text-anchor="middle" font-size="11.5" class="soft">전달 보장: at-least-once + (user_id, event_key) 멱등 dedupe</text>
+	</g>
+</svg>
+</div>
+
+<p>
+	릴레이가 Kafka로 보내는 메시지는 <strong>outbox 행의 id 문자열 하나뿐</strong>이다. 컨슈머가 그
+	id로 DB를 다시 읽으므로 페이로드 스키마가 진화할 일이 없고, 읽는 김에 멱등 검사도 자연스럽게 된다.
+</p>
+
+<h3 id="design-state">1.3 상태 머신</h3>
+
+<pre><code>PENDING ──릴레이 발행──▶ PUBLISHED ──컨슈머──▶ SENT     발송 성공, sent_at 기록
+                                       ├──▶ SKIPPED  설정 off · 상한 초과 · 토큰 없음
+                                       └──▶ DEAD     재시도 상한 소진, last_error에 원인</code></pre>
+
+<p>
+	<code>PUBLISHED</code>가 따로 있는 이유는 이게 없으면 릴레이가 컨슈머 종결 전까지 매 주기 같은 행을
+	다시 발행하기 때문이다. 컨슈머가 밀리는 순간 중복이 폭증한다. 대신 발행 성공과 상태 갱신 사이에
+	크래시가 나면 1회 재발행이 가능한데, 이건 컨슈머 멱등이 흡수한다.
+</p>
+
+<p>
+	죽은 편지함을 별도 토픽으로 만들지 않았다. <strong>outbox 행 자체가 DLQ</strong>다. 상태가 DEAD인
+	행을 세면 그게 곧 실패 목록이고, 운영 가시성도 한 문장으로 끝난다.
+</p>
+
+<pre><code>SELECT status, count(*) FROM notifications GROUP BY status;
+-- 성공률 = SENT / (SENT + DEAD)</code></pre>
+
+<h3 id="design-idem">1.4 멱등 2중 방어</h3>
+
+<p>같은 사건이 거듭 기록되거나 거듭 소비되는 경로를 기록 시점과 소비 시점 양쪽에서 접는다.</p>
+
+<ol>
+	<li><strong>기록 시</strong>: <code>INSERT ... ON CONFLICT (user_id, event_key) DO NOTHING</code>.
+		트리거가 같은 사건을 중복 기록해도 DB가 1행으로 접는다.</li>
+	<li><strong>소비 시</strong>: 행을 읽어 이미 종결 상태(SENT, SKIPPED, DEAD)면 즉시 ack하고 끝낸다.
+		리밸런싱이나 오프셋 커밋 전 크래시로 인한 재전달이 재발송으로 이어지지 않는다.</li>
+</ol>
+
+<div class="note warn">
+	<strong>이 둘이 중복 발송을 없애지는 않는다.</strong> 컨슈머는 FCM 호출이 끝난 뒤 별도 트랜잭션으로
+	<code>markSent</code>를 찍는다. 그 사이에 프로세스가 죽으면 행은 종결 전 상태로 남는다. 릴레이가 발행
+	직후 찍은 PUBLISHED가 보통이고, 발행과 <code>markPublished</code> 사이에 컨슈머가 먼저 집었다면 PENDING이다.
+	2번 방어는 이 둘을 모두 진행 대상으로 보므로, 오프셋도 커밋되지 않은 그 메시지가 재전달될 때 그대로
+	통과해 <strong>같은 알림이 한 번 더 나간다</strong>.
+	전달 보장이 at-least-once인 이유가 이것이고, 없앨 방법은 발송과 상태 기록을 한 트랜잭션에 묶는 것인데
+	외부 HTTP 호출이라 불가능하다. 창을 좁히려면 발송 직전에 SENDING 같은 중간 상태를 찍어야 하는데,
+	그건 쓰기가 한 번 더 늘고 그 상태에 멈춘 행을 되살리는 스윕이 또 필요해서 MVP 규모에는 과하다고 봤다.
+</div>
+
+<p>
+	이 설계의 진짜 이득은 <strong>재시도 코드를 따로 안 써도 된다는 점</strong>이다. 스케줄러를 하루에
+	네 번 발화시키거나 배치를 30분 뒤에 한 번 더 돌리면, 이미 기록된 대상은 ON CONFLICT가 0행으로
+	흡수하므로 재발화가 곧 재시도가 된다.
+</p>
+
+<p>이벤트 키는 사건의 자연 식별자를 쓴다. 종류마다 "같은 사건"의 정의가 다르다.</p>
+
+<div class="scroll-x">
+<table>
+	<tr><th>알림</th><th>event_key</th><th>이 키가 강제하는 것</th></tr>
+	<tr><td>뱃지 획득</td><td><code>BADGE:{badgeId}</code></td><td>뱃지는 생애 1회 지급이라 날짜가 필요 없다</td></tr>
+	<tr><td>뱃지 임박</td><td><code>BADGE_NEAR:{badgeId}</code></td><td>같은 뱃지 임박은 생애 1회. 롤백 후 재진입도 흡수</td></tr>
+	<tr><td>핫구역 진입</td><td><code>HOTZONE:{KST일자}:{gridId}</code></td><td>같은 날 이탈 후 재진입은 1건, 다른 날은 새 사건</td></tr>
+	<tr><td>스트릭 리마인드</td><td><code>REMIND:{KST일자}</code></td><td>20시부터 23시까지 네 번 발화해도 하루 1건</td></tr>
+	<tr><td>영상 준비 완료</td><td><code>VIDEO:{videoId}:{원본키 꼬리 45자}</code></td><td>처리 시도 단위. 교체 업로드는 키가 달라져 새 알림</td></tr>
+	<tr><td>주간 요약</td><td><code>WEEKLY:{ISO 주 기반 연도}-W{주차}</code></td><td>19시와 19시 30분 발화가 같은 키</td></tr>
+</table>
+</div>
+
+<h3 id="design-kinds">1.5 알림 5종</h3>
+
+<div class="scroll-x">
+<table>
+	<tr><th>카테고리</th><th>발화 방식</th><th>발화 지점</th><th>전송률 상한</th></tr>
+	<tr>
+		<td><code>BADGE</code></td>
+		<td>동기, 업로드 트랜잭션 안</td>
+		<td><code>BadgeAwardServiceImpl.award()</code> 한 곳. 축이 늘어도 배선이 자동 커버된다</td>
+		<td>획득은 무제한, 임박은 하루 1건</td>
+	</tr>
+	<tr>
+		<td><code>HOTZONE</code></td>
+		<td>10분 주기 스냅숏 비교</td>
+		<td><code>HotZoneEntryDetector</code>. Redis SET과 현재 집합의 차집합이 신규 진입</td>
+		<td>하루 1건</td>
+	</tr>
+	<tr>
+		<td><code>REMIND</code></td>
+		<td>cron 20~23시 매시</td>
+		<td><code>StreakRemindScheduler</code>. <code>last_recorded_date = 어제</code> 한 조건</td>
+		<td>하루 1건</td>
+	</tr>
+	<tr>
+		<td><code>VIDEO</code></td>
+		<td>상태 전이 시점</td>
+		<td><code>VideoStatusWriter</code>의 종결 전이 4개. 완료 2, 실패 2</td>
+		<td>없음</td>
+	</tr>
+	<tr>
+		<td><code>WEEKLY</code></td>
+		<td>cron 일요일 19시, 19시 30분</td>
+		<td><code>WeeklySummaryScheduler</code>. 대상 판정과 집계가 한 쿼리</td>
+		<td>없음</td>
+	</tr>
+</table>
+</div>
+
+<p>
+	전송률 상한 판정은 컨슈머의 <code>switch</code> 하나에 모여 있고 이 switch가 exhaustive다.
+	카테고리를 추가하면 컴파일이 깨지므로, <strong>상한 정책을 안 정한 채 새 알림이 발송 경로로
+	흘러드는 일이 구조적으로 막힌다</strong>. VIDEO와 WEEKLY를 추가할 때 실제로 이 컴파일 에러가
+	먼저 났다.
+</p>
+
+<h3 id="design-gate">1.6 게이트와 격리</h3>
+
+<p>
+	발송 관련 빈은 전부 <code>fillmap.notification.enabled</code> 게이트 안에 있고 기본값이 off다.
+	로컬과 CI는 Kafka 없이 그대로 green이고, 컨텍스트 테스트가 "비활성이면 릴레이와 컨슈머 빈이
+	없다"를 실증한다. 반대로 <code>record()</code>와 설정 서비스는 게이트 밖 상시 빈이다.
+	기록은 DB insert뿐이라 무해하고, 발송이 꺼져 있어도 이력은 쌓이며, 켜는 순간 릴레이가 밀린
+	PENDING을 발행한다.
+</p>
+
+<p>
+	dev와 prod 격리는 <strong>토픽 prefix와 컨슈머 그룹</strong>으로 한다.
+	<code>dev.notification.send</code>와 <code>prod.notification.send</code>, 그리고
+	<code>fillmap-notification-dev</code>와 <code>-prod</code>다. postgres와 redis는 컨테이너를 두 벌
+	띄워 물리 격리했는데 Kafka만 논리 격리인 이유는 <a href="#case-team">2장 D3</a>에 있다.
+</p>
+
+<h2 id="cases">2. 결함 기록</h2>
+
+<p>
+	아래는 시간순이 아니라 <strong>고장 성격별</strong>로 묶었다. 각 항목의 출처 표시는
+	<code>Codex</code>가 자동 교차 리뷰, <code>리뷰 봇</code>이 PR 리뷰 워크플로,
+	<code>실측</code>이 코드나 인프라를 직접 확인하다 발견한 것, <code>사고</code>가 실제로 무언가
+	깨진 뒤 알게 된 것이다. P1은 반드시 고쳐야 할 것, P2와 P3은 그보다 낮은 등급이다.
+</p>
+
+<h3 id="case-stop">A. 유실과 정지 (파이프라인이 멈추는 것들)</h3>
+
+<div class="case high">
+	<h4>A1. Kafka 볼륨을 붙였는데 데이터가 안 남는다 <span class="src">Codex 1R P1</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>compose에 <code>kafkadata:/var/lib/kafka/data</code> 볼륨을 마운트했는데 컨테이너를 재기동하면
+			토픽과 미소비 메시지가 사라진다.</dd>
+		<dt>원인</dt>
+		<dd><code>apache/kafka</code> 이미지의 기본 로그 디렉터리는
+			<code>/tmp/kraft-combined-logs</code>다. 볼륨은 아무도 안 쓰는 경로에 붙어 있었고 실제 데이터는
+			컨테이너 임시 계층에 쌓이고 있었다.</dd>
+		<dt class="fix">해결</dt>
+		<dd><code>KAFKA_LOG_DIRS: /var/lib/kafka/data</code>를 명시했다. 이미지 기본값을 확인하지 않고
+			관례적인 경로를 가정한 것이 문제였다.</dd>
+	</dl>
+</div>
+
+<div class="case high">
+	<h4>A2. 브로커가 죽으면 스케줄러 스레드가 통째로 잠긴다 <span class="src">Codex 1R P1</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>Kafka가 내려간 동안 릴레이뿐 아니라 무관한 배치(스테일 토큰 정리, AI 블러 폴러)까지 멈춘다.</dd>
+		<dt>원인</dt>
+		<dd>릴레이가 배치 100건을 돌며 <code>send().get()</code>으로 동기 확인을 한다. 브로커가 없으면
+			건당 delivery timeout 기본 2분을 기다린다. 100건이면 최대 200분인데, 스프링 기본 TaskScheduler는
+			<strong>단일 스레드</strong>라 그 시간 동안 다른 스케줄 작업이 전부 대기한다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>첫 발행이 실패하면 경고 로그만 남기고 <strong>남은 배치를 즉시 중단</strong>한다. 나머지 행은
+			PENDING으로 남아 다음 5초 주기가 자연스럽게 재시도한다.</dd>
+	</dl>
+</div>
+
+<div class="case mid">
+	<h4>A3. FCM 멀티캐스트의 토큰 500개 하드 리밋 <span class="src">Codex 1R P2</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>디바이스 토큰이 많은 사용자에게 보낼 때 요청 자체가 거부되어, 재시도를 다 소진하고 DEAD가 된다.</dd>
+		<dt>원인</dt>
+		<dd><code>sendEachForMulticast</code>는 토큰 500개가 상한이고 초과하면 요청을 받지 않는다.
+			<code>push_tokens</code>에는 사용자당 등록 개수 상한이 없어서 이론상 언제든 넘을 수 있다.
+			초안에는 "사용자당 토큰 수 대비 1콜로 충분"이라고 적혀 있었다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>500개 단위로 잘라 호출하고 <code>SendResult</code>를 합산한다.</dd>
+	</dl>
+</div>
+
+<div class="case high">
+	<h4>A4. 컨슈머가 그룹에서 축출되어 같은 알림을 다시 처리한다 <span class="src">Codex 2R P1</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>FCM이 느린 구간에서 리밸런스가 일어나고, 오프셋을 커밋하지 못한 메시지가 재처리된다.</dd>
+		<dt>원인</dt>
+		<dd>spring-kafka 4.1.0 소스를 직접 확인한 결과, 2-인자 <code>DefaultErrorHandler</code>의 기본
+			백오프 핸들러는 파티션을 pause하지 않고 <strong>리스너 스레드를 sleep</strong>시킨다.
+			백오프만으로는 <code>max.poll.interval.ms</code> 기본 300초에 못 미치지만, 기본
+			<code>max.poll.records</code> 500건에 FCM 지연이 겹치면 넘어간다.</dd>
+		<dt class="fix">해결</dt>
+		<dd><code>max.poll.interval.ms=600000</code>, <code>max.poll.records=10</code>을 명시했다.
+			워스트 케이스를 계산해 10건 × 40초 + 최대 백오프 128초 = 528초로 600초 안에 든다는 것까지 검증했다.</dd>
+	</dl>
+</div>
+
+<div class="case mid">
+	<h4>A5. 깨진 메시지 하나가 파티션을 4분씩 막는다 <span class="src">Codex 2R P2</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>숫자가 아닌 페이로드가 토픽에 들어오면 뒤따르는 정상 알림이 전부 지연된다.</dd>
+		<dt>원인</dt>
+		<dd><code>NumberFormatException</code>은 몇 번을 재시도해도 결과가 같은 결정적 실패인데,
+			기본 에러 핸들러가 이걸 일반 실패와 똑같이 취급해 8회 백오프를 다 돈다. 파티션이 1개라
+			그동안 큐 전체가 정지한다.</dd>
+		<dt class="fix">해결</dt>
+		<dd><code>addNotRetryableExceptions</code>에 등록해 백오프 없이 즉시 recoverer로 보낸다.
+			recoverer는 id를 파싱할 수 없으므로 error 로그를 남기고 폐기한다.</dd>
+	</dl>
+</div>
+
+<div class="case high">
+	<h4>A6. PUBLISHED로 영원히 남는 행 <span class="src">Codex 3R P2</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>"유실 0"을 성공 기준으로 잡았는데, 컨슈머가 오래 죽어 있으면 그 기준이 조용히 깨진다.</dd>
+		<dt>원인</dt>
+		<dd>릴레이는 발행 직후 상태를 PUBLISHED로 바꾼다. 컨슈머가 브로커 보존기간 7일보다 오래 다운되면
+			메시지 자체가 사라지고, 그 행은 아무도 다시 건드리지 않아 <strong>영구히 PUBLISHED</strong>에
+			멈춘다. PENDING만 감시하는 설계에는 이 구멍이 안 보인다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>릴레이 사이클 첫머리에 30분 넘은 PUBLISHED를 PENDING으로 되돌리는 스윕을 넣었다. 재발행
+			중복은 컨슈머 멱등이 흡수한다. 토픽을 무한 보존하는 대안은 EC2 디스크 상한 때문에 기각했다.</dd>
+	</dl>
+</div>
+
+<div class="case high">
+	<h4>A7. 그 복구 장치가 스스로 폭주할 뻔했다 <span class="src">Codex 4R P1</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>A6의 스윕을 <code>created_at</code> 기준으로 짰는데, 게이트를 켜는 순간 같은 행이 5초마다
+			리셋되고 재발행되는 무한 루프가 된다.</dd>
+		<dt>원인</dt>
+		<dd>게이트가 off인 동안 쌓인 백로그는 "기록된 지 30분이 지난 뒤에야 처음 발행되는" 행이다.
+			created_at 기준이면 <strong>발행하자마자 stale로 오판</strong>된다. 게다가 릴레이가 id 오름차순으로
+			읽으므로 가장 오래된 배치가 영구히 앞자리를 차지해 뒤의 알림은 영영 못 나간다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>판정 기준을 <code>published_at</code>으로 바꾸고, 발행 시각을
+			<code>statement_timestamp() AT TIME ZONE 'UTC'</code>로 명시 기록했다. 스윕용 partial index도
+			같이 넣어 풀스캔을 막았다. 정상 상태에선 PUBLISHED 행이 거의 0건이라 인덱스가 매우 가볍다.</dd>
+	</dl>
+</div>
+
+<div class="case high">
+	<h4>A8. FCM 타임아웃이 무한이라 재시도 경로가 무력화된다 <span class="src">Codex 5R P1</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>FCM이 응답을 멈추면 재시도도 DEAD 격리도 일어나지 않고 그냥 멈춘다.</dd>
+		<dt>원인</dt>
+		<dd>firebase-admin의 기본 connect와 read 타임아웃이 <strong>0, 즉 무한</strong>이다. 리스너
+			스레드가 하나뿐이라 그 스레드가 영구 블록되면 공들여 만든 백오프와 DEAD 격리가 전부 도달
+			불가능해진다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>connect 10초, read 30초로 유한화했다. 이 값이 poll 예산 안에 드는지도 계산으로 확인했다
+			(A4의 528초). 참고로 Codex가 제시한 615초 산식은 백오프를 이중 계상한 것이라 반박했고,
+			근거를 대고 값을 유지했다.</dd>
+	</dl>
+</div>
+
+<div class="case mid">
+	<h4>A9. 리마인드 20시 단발은 실패하면 그날이 끝이다 <span class="src">Codex 1R P2</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>스트릭 리마인드는 자정에 끊기기 전에 도착해야 의미가 있는데, 20시 배치가 부분 실패하면
+			그날은 아무도 다시 시도하지 않는다.</dd>
+		<dt>원인</dt>
+		<dd>cron이 <code>0 0 20 * * *</code> 단발이었다. 시간에 민감한 알림에 재실행 주체를 안 둔 설계다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>cron을 <code>0 0 20-23 * * *</code>로 바꿔 네 번 발화시키고, 루프에 per-recipient try-catch를
+			넣었다. <strong>재시도 코드는 한 줄도 안 늘었다.</strong> 이미 기록된 대상은 event_key 멱등이
+			흡수하므로 재발화가 곧 재시도가 된다. 추가 비용은 1행짜리 테이블 풀스캔 3회뿐이다.</dd>
+	</dl>
+</div>
+
+<div class="case high">
+	<h4>A10. 이벤트 키가 길어서 영상이 영원히 처리 중에 머문다 <span class="src">Codex 1R P3</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>영상 준비 완료 알림을 붙였더니, 특정 영상이 READY로도 FAILED로도 넘어가지 않고 계속
+			처리 중 상태로 남는다.</dd>
+		<dt>원인</dt>
+		<dd>키를 <code>VIDEO:{videoId}:{원본 파일명}</code>으로 잡았는데, 확정 업로드의 실제 파일명은
+			UUID 하나가 아니라 <code>{pendingUuid}-{attemptUuid}.{확장자}</code> 연결이라 <strong>77자</strong>다.
+			최대 103자가 되어 <code>event_key VARCHAR(100)</code>을 넘고, insert 실패가 같은 트랜잭션의
+			<strong>상태 전이까지 롤백</strong>시킨다. 알림 하나 실패가 영상 파이프라인을 망가뜨린 셈이다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>파일명 꼬리 45자만 쓴다. 키가 최대 71자로 항상 한계 안이면서 attemptUuid 36자와 확장자는
+			온전히 남아 시도 정체성이 보존된다. 잘리는 앞부분은 videoId가 이미 식별한다. "마지막 하이픈 뒤"로
+			자르는 방식은 UUID 내부 하이픈에 걸려 쓰지 않았다.</dd>
+	</dl>
+</div>
+
+<h3 id="case-time">B. 시간대와 정합</h3>
+
+<div class="note warn">
+	<strong>이 그룹은 한 뿌리에서 나왔다</strong>
+	PostgreSQL은 timestamptz 값을 timestamp 컬럼에 넣을 때 접속 세션의 타임존으로 벽시계를 환산한다.
+	JDBC 세션은 JVM 기본 타임존을 따르므로, <strong>같은 코드가 UTC 서버와 KST 서버에서 9시간 다른 값을
+	저장한다.</strong> 이 프로젝트는 과거 MSG-222에서 같은 함정을 한 번 밟은 적이 있다.
+</div>
+
+<div class="case mid">
+	<h4>B1. 하루 상한 판정이 환경마다 9시간씩 어긋난다 <span class="src">실측</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>뱃지 임박의 "하루 1건" 판정이 <code>notifications.created_at</code>을 읽는데, KST로 도는
+			배포에서만 경계가 밀린다.</dd>
+		<dt>원인</dt>
+		<dd><code>created_at</code>이 DDL의 <code>DEFAULT CURRENT_TIMESTAMP</code>로 채워지고 있었다.
+			같은 테이블의 <code>sent_at</code>과 <code>published_at</code>은 이 함정을 알고 명시 UTC로
+			기록하고 있었는데 created_at만 빠져 있었다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>insert 문에 <code>created_at</code>을 명시하고
+			<code>statement_timestamp() AT TIME ZONE 'UTC'</code>를 넣었다. 판정 대상 행이 전부 이 수정
+			이후에 쓰이므로 자기일관이고, created_at을 조건으로 읽는 다른 코드가 없어 부작용도 없었다.</dd>
+	</dl>
+</div>
+
+<div class="case mid">
+	<h4>B2. 이번엔 반대로, UTC로 바인딩하면 틀린다 <span class="src">실측</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>주간 요약의 집계 창을 레포 관례대로 UTC로 바인딩하려다, 그러면 KST 배포에서 창이 9시간
+			어긋난다는 걸 발견했다.</dd>
+		<dt>원인</dt>
+		<dd>집계 재료인 두 컬럼은 UTC가 아니다. <code>videos.created_at</code>은 Hibernate
+			<code>@CreationTimestamp</code>가 JVM 기본 존 벽시계로 쓰고,
+			<code>user_grids.first_collected_at</code>은 <code>now()</code>가 세션 타임존 캐스트를 거쳐
+			역시 JVM 기본 존으로 저장된다. B1이 UTC로 고친 것은 <code>notifications.created_at</code>
+			하나뿐이라 <strong>테이블마다 관례가 다르다.</strong></dd>
+		<dt class="fix">해결</dt>
+		<dd>KST 주 시작을 절대 시각으로 잡은 뒤 <code>ZoneId.systemDefault()</code>로 환산해 바인딩한다.
+			UTC로 도는 배포에서는 이 환산이 항등이다. 원본 컬럼의 쓰기 경로를 UTC로 통일하는 근본 수정은
+			기존 행이 어느 존으로 쓰였는지 행마다 달라 소급 해석이 불가능해서 범위 밖으로 뒀고,
+			<a href="#ceiling">남은 천장</a>에 적었다.</dd>
+	</dl>
+</div>
+
+<div class="case">
+	<h4>B3. 연말에 같은 주가 두 번 발송될 뻔했다 <span class="src">실측</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>주간 요약 키를 달력 연도로 만들면 연말 경계에서 같은 주가 두 개의 키로 쪼개진다.</dd>
+		<dt>원인</dt>
+		<dd>2026-12-28과 2027-01-01은 ISO 기준 같은 주인데 달력 연도가 다르다. 키가 갈리면 멱등이
+			성립하지 않아 한 주에 두 번 발송된다.</dd>
+		<dt class="fix">해결</dt>
+		<dd><code>IsoFields.WEEK_BASED_YEAR</code>와 <code>WEEK_OF_WEEK_BASED_YEAR</code>를 쓴다.
+			두 날짜 모두 <code>2026-W53</code>이 된다. 주차는 두 자리로 제로패딩한다.</dd>
+	</dl>
+</div>
+
+<h3 id="case-lock">C. 동시성과 잠금</h3>
+
+<div class="case mid">
+	<h4>C1. 조회로 확인하고 쓰면 상한이 뚫린다 <span class="src">리뷰 봇 P2</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>뱃지 임박의 "하루 1건"을 조회 후 기록으로 구현했더니, 같은 사용자의 동시 업로드 둘이
+			둘 다 조회를 통과해 2건이 남을 수 있다.</dd>
+		<dt>원인</dt>
+		<dd>select-then-act다. 그리고 더 근본적으로, 이 기능은 <strong>제약이 두 축</strong>이다.
+			"같은 뱃지 생애 1회"와 "하루 전체 1건"인데, notifications의 유니크 제약은
+			(user_id, event_key) 하나뿐이라 키 하나로 두 축을 동시에 표현할 수 없다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>축을 나눴다. 생애 축은 <code>BADGE_NEAR:{badgeId}</code> 키가 DB 제약으로 강제하고,
+			하루 축은 사용자 단위 advisory 트랜잭션 잠금으로 직렬화한다.</dd>
+	</dl>
+</div>
+
+<div class="case high">
+	<h4>C2. 그 잠금이 업로드를 통째로 abort시킬 수 있었다 <span class="src">Codex 1R P2</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>C1의 해결로 넣은 블로킹 advisory 잠금이 데드락을 만든다.</dd>
+		<dt>원인</dt>
+		<dd>업로드 트랜잭션의 자원 획득 순서는 user_grids 삽입, 격자 수 판정, streaks 행 UPDATE,
+			스트릭 판정이다. tx1이 격자 수 임박으로 advisory 잠금을 선취한 뒤 streaks 행에서 대기하고,
+			tx2가 streaks 행을 쥔 채 스트릭 임박에서 advisory 잠금을 기다리면 <strong>잠금 순서
+			사이클</strong>이 성립한다. PostgreSQL은 한쪽 업로드를 통째로 abort시킨다. 알림 하나 때문에
+			영상 업로드가 실패하는 셈이다.</dd>
+		<dt class="fix">해결</dt>
+		<dd><code>pg_advisory_xact_lock</code>을 <code>pg_try_advisory_xact_lock</code>으로 바꿨다.
+			대기 자체가 없으니 사이클이 성립할 수 없고, 못 잡은 쪽은 그 시도의 임박 기록만 조용히 건너뛴다.
+			하루 1건이 목표라 동시 후보 중 하나만 남으면 되므로 손실이 정책과 맞는다.</dd>
+	</dl>
+</div>
+
+<div class="case high">
+	<h4>C3. 알림 insert와 회원 탈퇴가 서로를 기다린다 <span class="src">Codex 2R P2</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>영상 상태 전이에 알림을 배선하자, 회원 탈퇴와 동시에 일어날 때 한쪽이 abort된다.</dd>
+		<dt>원인</dt>
+		<dd>알림 insert는 FK 검사 때문에 users 행의 KEY SHARE를 기다린다. 회원 탈퇴는 users 배타 잠금을
+			쥔 채 CASCADE로 videos 행 삭제를 기다린다. 전이 트랜잭션이 videos 행 잠금을 쥔 채 알림을 쓰면
+			<strong>videos → users와 users → videos가 맞물린 사이클</strong>이 된다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>잠금 순서를 한 방향으로 통일했다. 배선된 4개 메서드는 videos 행을 잠그기 전에 무잠금 선독으로
+			userId를 얻고(<code>findUserIdById</code>, user_id는 불변) users 행의 KEY SHARE를 선취한다
+			(<code>findIdForKeyShare</code>). 두 트랜잭션 모두 users 다음 videos가 되어 사이클이 성립하지
+			않는다. 행이 없으면 탈퇴 중이라는 뜻이므로 전이 자체를 스킵한다.</dd>
+	</dl>
+</div>
+
+<div class="case mid">
+	<h4>C4. 제외 목록은 새 값이 생기면 조용히 새는 구조다 <span class="src">Codex 1R P2</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>임박 판정에서 수집률 축만 제외하는 blocklist를 썼는데, 기념 뱃지 축이 숫자 임박 쿼리로
+			흘러들어간다.</dd>
+		<dt>원인</dt>
+		<dd>blocklist는 <strong>기본값이 "포함"</strong>이다. 지금 당장 SPECIAL이 새는 것도 문제지만,
+			나중에 enum에 축이 추가돼도 아무 경고 없이 자동 포함된다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>4축 EnumSet allowlist로 뒤집었다. 기본값이 "제외"가 되어 새 축은 명시적으로 넣어야만 들어온다.</dd>
+	</dl>
+</div>
+
+<h3 id="case-team">D. 협업과 운영</h3>
+
+<div class="case mid">
+	<h4>D1. 병렬 레인 둘이 같은 에러 코드 대역을 잡았다 <span class="src">사고</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>notification이 9400을, friend가 9400을 각각 확정하고 둘 다 develop에 머지되어 충돌했다.</dd>
+		<dt>원인</dt>
+		<dd>대역 배정에 <strong>정본이 없었다.</strong> 각 티켓이 자기 스펙에서 "비어 보이는 대역"을 골랐고,
+			서로의 스펙을 볼 이유가 없었다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>notification을 10xxx로 옮기고(<code>INVALID_PLATFORM</code> 9400 → 10400),
+			<code>response-pattern.md</code>에 대역 배정표를 정본으로 신설했다. 규칙도 같이 넣었다.
+			<strong>새 도메인은 대역을 쓰기 전에 표에 행을 추가하는 커밋을 먼저 넣는다.</strong>
+			선점을 코드가 아니라 문서 커밋으로 만들어 충돌을 머지 전에 드러나게 한 것이다.</dd>
+	</dl>
+</div>
+
+<div class="case mid">
+	<h4>D2. 마이그레이션 번호는 재확인해도 못 막는 창이 있다 <span class="src">사고</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd><code>V20__notifications.sql</code>로 PR을 열었는데, 다른 레인이 <code>V20</code>을 먼저 머지해
+			충돌했다.</dd>
+		<dt>원인</dt>
+		<dd>"PR 직전에 develop 최신 번호를 재확인한다"는 규칙을 지켰는데도 발생했다.
+			<strong>PR을 연 시점부터 머지되는 시점까지의 창</strong>은 재확인으로 덮을 수 없다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>V21로 리네임하고 로컬 DB 이력을 정리했다. 이건 예방보다 탐지가 답이라는 결론이라,
+			머지 결과의 CI와 충돌을 최후 방어선으로 인정하고 스펙에 경고 문구로 남겼다. 이후 MSG-313의
+			V25와 MSG-315의 V26은 이 경고 덕분에 순차 처리로 계획해 충돌이 없었다.</dd>
+	</dl>
+</div>
+
+<div class="case">
+	<h4>D3. 브로커를 두 벌 띄울 메모리가 없다 <span class="src">실측</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>postgres와 redis는 dev/prod 컨테이너를 두 벌 띄워 물리 격리했는데, Kafka는 같은 방식이 불가능했다.</dd>
+		<dt>원인</dt>
+		<dd>dev EC2가 t3.small 2GB이고 <code>available</code> 실측이 <strong>613Mi</strong>였다.
+			512MB 리밋 브로커 두 개는 물리적으로 안 들어간다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>KRaft 단일 브로커를 공유하고 토픽 prefix와 컨슈머 그룹으로 논리 격리했다. 힙 256MB에
+			컨테이너 리밋 512MB, 잔여 약 100Mi다. 격리 수준이 낮아진 대신 근거를 명시했다.
+			브로커는 id를 전달하는 통로일 뿐이고 <strong>데이터 자체는 이미 물리 분리된 DB에 있어서</strong>,
+			교차 오염이 나도 컨슈머의 DB 조회는 자기 환경 데이터만 본다. OOM이 나면 t3.medium 승급이 다음 수순이다.</dd>
+	</dl>
+</div>
+
+<div class="case mid">
+	<h4>D4. 내 테스트가 남의 테스트를 깨뜨렸다 <span class="src">사고</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>주간 요약 테스트를 추가한 뒤 Owner A의 <code>GridRegionCodeBackfillTest</code> 2건이 실패했다.</dd>
+		<dt>원인</dt>
+		<dd>테스트가 <code>grid_y=39500</code> 격자를 커밋해 남겼는데, 그 대역을 쓰는 다른 테스트가
+			UPDATE 행 수를 단언하고 있었다. 통합 테스트가 공유 로컬 DB를 쓰고, <strong>격자 좌표 대역
+			배정표가 각 테스트 주석에 흩어져 있는 것</strong>이 근본 원인이다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>대역을 39900으로 옮기고 tearDown에서 격자를 지웠다. 잔존 행 0건을 확인했다.
+			대역표를 한 곳에 모으는 일은 후속 판단으로 올렸다.</dd>
+	</dl>
+</div>
+
+<div class="case">
+	<h4>D5. 부분 테스트 실행이 조용히 일부를 건너뛴다 <span class="src">실측</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd><code>--tests '*Notification*'</code>로 돌리면 초록불인데 실제로는
+			<code>HotZoneEntryDetectorTest</code>가 안 돌았다.</dd>
+		<dt>원인</dt>
+		<dd>Gradle의 <code>--tests</code> 패턴은 클래스명만 매칭한다. 알림 기능이지만 클래스 이름에
+			Notification이 없는 테스트는 잡히지 않는다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>부분 실행 시 패턴을 병기하도록 리뷰 기록에 남겼다. 이후 리뷰는 gradle 캐시가
+			<code>UP-TO-DATE</code>로 건너뛰는 것도 초록불로 오인될 수 있어 <code>cleanTest test</code>를
+			강제한다.</dd>
+	</dl>
+</div>
+
+<div class="case mid">
+	<h4>D6. 리뷰 봇이 인라인 코멘트를 못 달던 이유 <span class="src">실측</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>프런트엔드 레포는 PR 리뷰가 문제 라인에 직접 달리는데, 백엔드는 요약 코멘트 하나만 달렸다.</dd>
+		<dt>원인</dt>
+		<dd>프롬프트 문제가 아니라 <strong>도구 권한</strong>이었다. 워크플로의
+			<code>--allowedTools</code>에 <code>mcp__github_inline_comment__create_inline_comment</code>가
+			없어 도구 자체가 차단돼 있었다. 봇이 "이 라인이 문제"라고 판단해도 남길 방법이 없었던 것이다.</dd>
+		<dt class="fix">해결</dt>
+		<dd>allowedTools에 인라인 도구와 Read/Grep/Glob를 명시하고, 인라인 코멘트 1건이 턴 1개를 쓰므로
+			<code>--max-turns</code>를 50에서 70으로 올렸다. 프롬프트에는 "라인이 특정되는 지적은 인라인,
+			요약에는 목록만"을 넣어 같은 설명이 두 번 나오지 않게 했다(MSG-316).</dd>
+	</dl>
+</div>
+
+<div class="case">
+	<h4>D7. 워크트리 레인을 옮기면 다른 레인의 쓰기가 막힌다 <span class="src">사고</span></h4>
+	<dl>
+		<dt>증상</dt>
+		<dd>MSG-313과 MSG-314를 병렬 워크트리로 동시에 구현하다가, 두 번째 레인으로 옮기는 순간
+			첫 레인 에이전트의 파일 쓰기가 전부 거부됐다.</dd>
+		<dt>원인</dt>
+		<dd>서브에이전트의 쓰기 격리 범위가 스폰 시점에 고정되는 게 아니라
+			<strong>세션의 현재 워크트리 앵커를 실시간으로 따라간다.</strong></dd>
+		<dt class="fix">해결</dt>
+		<dd>손실은 0파일이었고 완성된 설계를 반환받아 재스폰으로 복구했다. 이후 구현 쓰기는 한 번에 한
+			레인만 진행한다. 스펙 작성이나 리뷰처럼 읽기 위주 작업은 병렬로 둬도 무방하다.</dd>
+	</dl>
+</div>
+
+<h2 id="numbers">3. 숫자로 본 결과</h2>
+
+<h3>처리량 예산</h3>
+
+<p>
+	주간 요약은 다른 알림과 성질이 다르다. 나머지는 사용자 행동을 따라 흩어져 발생하는데 이것만
+	한 시점에 전 사용자 몫이 쏟아진다. 그래서 발송 시각을 정하기 전에 파이프라인이 얼마나 소화하는지
+	계산했다.
+</p>
+
+<div class="scroll-x">
+<table>
+	<tr><th>구간</th><th>설정</th><th>처리량</th></tr>
+	<tr><td>릴레이 발행</td><td>5초 고정 지연, 배치 100건</td><td class="num">분당 1,200건</td></tr>
+	<tr><td>컨슈머 소비</td><td>파티션 1, 리스너 1, max.poll.records 10</td><td class="num">분당 약 300건</td></tr>
+	<tr><td>병목</td><td>FCM 왕복 200ms 가정</td><td class="num">컨슈머 쪽</td></tr>
+</table>
+</div>
+
+<ul>
+	<li>대상 <strong>1,000명이면 3~4분</strong>, <strong>10,000명이면 30분 남짓</strong>에 걸쳐 빠진다.</li>
+	<li>토픽이 단일 파티션이라 요약 물량 뒤에 들어온 알림은 기다린다(선두 차단). 발송을 일요일
+		19시로 잡은 것이 여기서 이득인데, 20시 리마인드 창까지 <strong>1시간 예산</strong>이 있고
+		그 시간이면 위 속도로 <strong>약 18,000건</strong>을 소화한다.</li>
+	<li>재시도 백오프는 초기 1초에 배수 2로 8회, 총 약 4분이다. 워스트 케이스 poll 공백은
+		<strong>528초로 상한 600초 안</strong>에 든다.</li>
+</ul>
+
+<h3>티켓별 검증</h3>
+
+<div class="scroll-x">
+<table>
+	<tr><th>티켓</th><th>내용</th><th class="num">교차 리뷰</th><th class="num">반영</th><th class="num">신규 테스트</th><th class="num">전체 테스트</th></tr>
+	<tr><td>MSG-178</td><td>토큰 수집 API</td><td class="num">2R</td><td class="num">3건</td><td class="num">18건</td><td class="num">907</td></tr>
+	<tr><td>MSG-179</td><td>발송 파이프라인</td><td class="num">5R</td><td class="num">8건</td><td class="num">29건</td><td class="num">970</td></tr>
+	<tr><td>MSG-180</td><td>수신 설정 API</td><td class="num">1R</td><td class="num">0건</td><td class="num">11건</td><td class="num">기록 없음</td></tr>
+	<tr><td>MSG-181</td><td>트리거 3종 연동</td><td class="num">2R</td><td class="num">1건</td><td class="num">15건</td><td class="num">1,093</td></tr>
+	<tr><td>MSG-313</td><td>영상 준비 완료/실패</td><td class="num">3R</td><td class="num">2건</td><td class="num">12건</td><td class="num">1,117</td></tr>
+	<tr><td>MSG-314</td><td>뱃지 임박</td><td class="num">2R</td><td class="num">2건</td><td class="num">11건</td><td class="num">1,117</td></tr>
+	<tr><td>MSG-315</td><td>주간 요약</td><td class="num">1R</td><td class="num">0건</td><td class="num">10건</td><td class="num">1,127</td></tr>
+</table>
+</div>
+
+<p class="sub" style="font-size:13.5px">
+	MSG-180은 작업 로그에 전체 건수를 남기지 않았다. 1,117은 MSG-313과 MSG-314를 병합한 트리에서
+	잰 값이라 두 행에 같이 적었다. "교차 리뷰"는 Codex 라운드 수, "반영"은 그중 실제로 코드가 바뀐 지적 수다.
+</p>
+
+<div class="note ok">
+	<strong>라운드 수가 줄어드는 게 신호다</strong>
+	MSG-179가 5라운드로 가장 길었고 그중 반드시 고쳐야 할 P1이 5건이었다. 이후 티켓들은 179가 만든 규약(멱등 키 관례,
+	게이트 경계, 시간대 바인딩 규칙, 사용자 단위 예외 격리)을 그대로 승계하면서 1~3라운드에 수렴했다.
+	마지막 MSG-315는 리뷰어 사전 경고 5건을 선반영한 덕에 교차 리뷰에서 신규 지적이 0건이었다.
+</div>
+
+<p>
+	커버리지는 전체 <strong>93.14%</strong>, 마지막 PR의 변경 파일은 <strong>100%</strong>다.
+	notification 패키지는 <strong>30파일 1,603줄</strong>이다. 스키마 변경은 5건인데 번호가 이어지지 않는다.
+	V21(notifications), V22(notification_opt_outs), V24(핫구역 진입 통지용 격자 역조회 인덱스),
+	V25(VIDEO CHECK), V26(WEEKLY CHECK)이고 <strong>V23은 검색 도메인 티켓 것</strong>이다.
+	병렬 레인이 번호를 나눠 쓴 흔적이 그대로 남아 있다.
+</p>
+
+<h2 id="ceiling">4. 남은 천장</h2>
+
+<div class="note danger">
+	<strong>알면서 남겨 둔 것들이다</strong>
+	MVP 규모에서 비용이 이득보다 커서 미룬 것이지, 못 본 것이 아니다. 각 항목에 승격 경로를 같이 적었다.
+</div>
+
+<div class="scroll-x">
+<table>
+	<tr><th>천장</th><th>지금 괜찮은 이유</th><th>넘어가면 할 일</th></tr>
+	<tr>
+		<td>중복 발송 가능 (at-least-once)</td>
+		<td>FCM 호출과 markSent 사이에 죽으면 재전달분이 한 번 더 나간다(§1.4). 다중 디바이스 부분 실패
+			시에도 성공했던 토큰에 중복이 간다. 둘 다 창이 좁고 알림 한 건이 더 가는 정도의 피해다</td>
+		<td>발송 직전 SENDING 상태 + 멈춘 행 스윕. 다중 디바이스는 토큰별 상태 추적. 지금은 과설계</td>
+	</tr>
+	<tr>
+		<td>단일 브로커, 단일 파티션</td>
+		<td>메모리 예산 613Mi. 저처리량이라 순서 보장을 덤으로 얻는다</td>
+		<td>OOM이면 t3.medium 승급, 물량이면 파티션 증설과 컨슈머 병렬화</td>
+	</tr>
+	<tr>
+		<td>원본 컬럼 시간대 관례 불일치</td>
+		<td>UTC 배포에서는 환산이 항등이라 지금 배포에 영향이 없다</td>
+		<td>배포 시간대를 바꾸면 그 주 집계가 한 번 어긋난다. 근본 수정은 기존 행의 소급 해석 문제라 별도 티켓</td>
+	</tr>
+	<tr>
+		<td>단일 앱 인스턴스 전제</td>
+		<td>릴레이 폴러가 하나뿐이라 <code>FOR UPDATE SKIP LOCKED</code>가 없다</td>
+		<td>스케일아웃 시 SKIP LOCKED 추가 (코드에 <code>ponytail:</code> 주석으로 표시됨)</td>
+	</tr>
+	<tr>
+		<td>인덱스 없는 배치 스캔</td>
+		<td>streaks는 1인 1행이고, 주간 집계는 주 2회만 돈다</td>
+		<td>videos가 수백만 행이 되면 <code>created_at</code> 인덱스, 사용자 수십만이면 streaks 인덱스</td>
+	</tr>
+	<tr>
+		<td>대상 목록을 메모리에 한 번에</td>
+		<td>사용자 1만 명이면 수백 KB다</td>
+		<td>십만 단위부터 커서 페이징</td>
+	</tr>
+	<tr>
+		<td>일요일 19시 이후 5시간 사각지대</td>
+		<td>그 시간 활동은 어떤 주간 요약에도 안 잡힌다. 넛지는 보장이 아니라 기회다</td>
+		<td>도감과 스트릭 같은 실제 기록에는 정상 반영되므로 그대로 둔다</td>
+	</tr>
+</table>
+</div>
+
+<h2 id="glossary">5. 용어</h2>
+
+<div class="scroll-x">
+<table>
+	<tr><th>용어</th><th>뜻</th></tr>
+	<tr>
+		<td>outbox</td>
+		<td>알림을 외부로 바로 쏘지 않고 비즈니스 트랜잭션과 같은 커밋으로 DB 테이블에 먼저 적는 패턴.
+			커밋되면 알림이 반드시 남고, 롤백되면 알림도 없던 일이 된다</td>
+	</tr>
+	<tr>
+		<td>멱등 (idempotent)</td>
+		<td>같은 작업을 여러 번 해도 결과가 한 번 한 것과 같은 성질. 여기서는 (user_id, event_key)
+			유니크 제약과 ON CONFLICT DO NOTHING이 그 역할을 한다</td>
+	</tr>
+	<tr>
+		<td>at-least-once</td>
+		<td>메시지가 최소 한 번은 전달되지만 중복될 수 있는 보장 수준. 분산 환경에서 정확히 한 번은
+			현실적이지 않아 중복을 멱등으로 접는 쪽을 택했다</td>
+	</tr>
+	<tr>
+		<td>세션 타임존 캐스트</td>
+		<td>timestamptz 값을 timestamp 컬럼에 넣을 때 PostgreSQL이 접속 세션의 타임존으로 벽시계를
+			환산하는 동작. JDBC 세션이 JVM 기본 존을 따르므로 같은 코드가 서버마다 다른 값을 저장한다</td>
+	</tr>
+	<tr>
+		<td>advisory 잠금</td>
+		<td>테이블 행이 아니라 임의의 숫자 키를 잠그는 PostgreSQL 기능. <code>try</code> 변형은 이미
+			누가 쥐고 있으면 대기 대신 즉시 false를 반환해 잠금 순서 사이클이 생기지 않는다</td>
+	</tr>
+	<tr>
+		<td>select-then-act</td>
+		<td>조건을 조회로 확인한 뒤 별도 문장으로 쓰는 2단 패턴. 두 트랜잭션이 동시에 조회를 통과하면
+			둘 다 조건을 만족한다고 믿고 써 버려 상한이 뚫린다</td>
+	</tr>
+	<tr>
+		<td>exhaustive switch</td>
+		<td>enum의 모든 값을 다뤘는지 컴파일러가 검사하는 switch 식. 카테고리를 추가하면 컴파일이
+			깨지므로 정책 결정을 빠뜨릴 수 없다</td>
+	</tr>
+	<tr>
+		<td>선두 차단 (head-of-line blocking)</td>
+		<td>한 줄로 처리되는 큐에서 앞의 항목이 오래 걸리면 뒤의 항목이 준비돼 있어도 기다리는 현상</td>
+	</tr>
+	<tr>
+		<td>KRaft</td>
+		<td>Kafka가 ZooKeeper 없이 자체적으로 메타데이터를 관리하는 모드. 컨테이너 하나로 단일 노드
+			브로커를 띄울 수 있어 메모리 예산이 빠듯한 환경에 맞는다</td>
+	</tr>
+</table>
+</div>
+
+<p class="foot">
+	스펙 문서: <code>docs/MSG-178.md</code>(토큰) · <code>docs/MSG-179.md</code>(파이프라인) ·
+	<code>docs/MSG-180.md</code>(설정) · <code>docs/MSG-181.md</code>(트리거) ·
+	<code>docs/MSG-313.md</code>(영상) · <code>docs/MSG-314.md</code>(뱃지 임박) ·
+	<code>docs/MSG-315.md</code>(주간 요약)<br>
+	요구사항 정본: <code>docs/prd/MSG-178-prd.md</code> · <code>docs/prd/MSG-313-prd.md</code><br>
+	핵심 코드: <code>com.msg.fillmap.notification</code>(30파일) ·
+	<code>VideoStatusWriter</code> · <code>BadgeAwardServiceImpl</code> ·
+	<code>StreakRemindScheduler</code> · <code>WeeklySummaryScheduler</code><br>
+	PR: #109(179) · #115(314) · #116(313) · #117(316) · #118(315)
+</p>
+
+</main>
+</div>
+</body>
+</html>
