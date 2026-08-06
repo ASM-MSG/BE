@@ -68,7 +68,7 @@ MSG-93은 아래를 **주어진 것으로 전제**한다. 본 티켓에서 만�
 
 ## 성공 기준 (관찰 가능)
 
-1. `GET /api/regions/reverse-geocode?lat=..&lon=..` 가 그 좌표를 포함하는 행정동 1건
+1. `GET /api/regions/reverse-geocode?lat=..&lng=..` 가 그 좌표를 포함하는 행정동 1건
    (`regionCode`, `regionName`, `parentCode`)을 `SuccessResponse`(200)로 반환한다.
 2. 강남역 좌표 등 **알려진 지점**이 그 지점의 실제 행정동으로 매핑된다(시드 데이터 기준 sanity).
 3. **어느 행정동에도 속하지 않는 좌표**(바다·국외 등, 단 서비스 좌표 범위 내)는 **200 + `region: null`**
@@ -180,7 +180,7 @@ MSG-93은 아래를 **주어진 것으로 전제**한다. 본 티켓에서 만�
 
 **요청/응답 예시**
 ```
-GET /api/regions/reverse-geocode?lat=37.4979&lon=127.0276
+GET /api/regions/reverse-geocode?lat=37.4979&lng=127.0276
 ```
 ```json
 { "developCode": 200, "httpStatus": "OK", "message": "성공",

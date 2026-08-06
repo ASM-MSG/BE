@@ -91,7 +91,7 @@
 {
   "s3Key": "videos/original/{userId}/{uuid}.mp4",  // MSG-64 응답값, @NotBlank
   "lat": 37.5012,        // @NotNull, 위도
-  "lon": 127.0396,       // @NotNull, 경도
+  "lng": 127.0396,       // @NotNull, 경도
   "durationSec": 12,     // @NotNull, 1~30 (@Min(1) @Max(30))
   "recordedAt": "2026-07-13T14:20:00"  // @NotNull
 }
