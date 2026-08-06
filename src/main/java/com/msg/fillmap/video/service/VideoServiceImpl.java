@@ -38,7 +38,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 
 import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
 import com.msg.fillmap.badge.service.BadgeAwardService;
-import com.msg.fillmap.friend.service.FriendService;
+import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.geo.KoreaCoordinates;
@@ -111,10 +111,9 @@ public class VideoServiceImpl implements VideoService {
 	private final StreakCommandService streakCommandService;
 	private final MissionAwardService missionAwardService;
 	private final HotScoreCommandService hotScoreCommandService;
-	// 재생 판정의 FRIENDS 분기만 쓰는 B-내부 의존 (MSG-285). MSG-187 D5 에서 friend → video 위임이 생겨
-	// 상호 의존이다 — 생성 순환은 FriendServiceImpl 의 ObjectProvider 지연 조회로 끊었다
-	// (구조적 해소는 MSG-312 leaf 빈 분리).
-	private final FriendService friendService;
+	// 재생 판정의 FRIENDS 분기만 쓰는 B-내부 의존 (MSG-285). friendships 만 읽는 leaf 라 friend 서비스를
+	// 거치지 않는다 — MSG-187 D5 의 friend → video 위임과 맞물려도 순환이 생기지 않는다 (MSG-312).
+	private final FriendshipQueryService friendshipQueryService;
 	private final Clock clock;
 
 	/**
@@ -129,10 +128,10 @@ public class VideoServiceImpl implements VideoService {
 		RegionStatsCommandService regionStatsCommandService, ThumbnailUrlPresigner thumbnailUrlPresigner,
 		BadgeAwardService badgeAwardService, StreakCommandService streakCommandService,
 		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService,
-		FriendService friendService) {
+		FriendshipQueryService friendshipQueryService) {
 		this(videoRepository, videoEncodingService, videoStatusWriter, s3Presigner, s3Client, awsProperties,
 			regionStatsCommandService, thumbnailUrlPresigner, badgeAwardService, streakCommandService,
-			missionAwardService, hotScoreCommandService, friendService, Clock.systemUTC());
+			missionAwardService, hotScoreCommandService, friendshipQueryService, Clock.systemUTC());
 	}
 
 	@Override
@@ -521,7 +520,7 @@ public class VideoServiceImpl implements VideoService {
 				case PUBLIC -> true;
 				// 친구 조회는 이 분기에서만 1회 — PUBLIC·PRIVATE·소유자 경로는 쿼리 0회다.
 				// 캐시 없는 요청 시점 판정이라 친구 삭제가 다음 요청부터 즉시 반영된다 (FR-6).
-				case FRIENDS -> friendService.isFriend(video.getUserId(), userId);
+				case FRIENDS -> friendshipQueryService.isFriend(video.getUserId(), userId);
 				case PRIVATE -> false;
 			};
 			if (!visible) {
