@@ -23,6 +23,7 @@ import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.moderation.dto.AdminReportItemResponseDto;
 import com.msg.fillmap.moderation.dto.AdminReportListResponseDto;
+import com.msg.fillmap.moderation.dto.AdminReportProcessResponseDto;
 import com.msg.fillmap.moderation.entity.Report;
 import com.msg.fillmap.moderation.entity.ReportReason;
 import com.msg.fillmap.moderation.entity.ReportStatus;
@@ -37,8 +38,9 @@ import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 
 /**
- * 관리자 신고 목록 조회 (MSG-195, 실 DB). @Transactional 롤백 격리 + UUID 이메일 시드로 공유 로컬 DB 에
- * 잔여 행을 남기지 않는다 (ReportIntegrationTest 패턴).
+ * 관리자 신고 처리 — 목록 조회·승인·기각 (MSG-195, 실 DB). @Transactional 롤백 격리 + UUID 이메일 시드로
+ * 공유 로컬 DB 에 잔여 행을 남기지 않는다 (ReportIntegrationTest 패턴). 동시 처리 직렬화(FR-10)만
+ * 커밋이 필요해 AdminReportApproveConcurrencyTest 로 분리했다.
  *
  * <p>목록은 테이블 전체를 상태로 거르므로 다른 브랜치·수동 작업이 남긴 행이 같은 페이지에 섞일 수 있다.
  * 그래서 전체 건수나 절대 위치가 아니라 "내가 만든 신고들"만 골라 필드와 상대 순서를 본다 — 공유 DB 의
@@ -46,7 +48,7 @@ import com.msg.fillmap.video.support.GeoSupport;
  */
 @SpringBootTest
 @Transactional
-@DisplayName("관리자 신고 목록 조회 (실 DB)")
+@DisplayName("관리자 신고 처리 (실 DB)")
 class AdminReportIntegrationTest {
 
 	/** 이 티켓 전용 좌표 — 다른 통합 테스트(성수·여의도·MSG-192 신고)와 격자를 공유하지 않는다. */
@@ -227,5 +229,122 @@ class AdminReportIntegrationTest {
 		assertThatThrownBy(() -> adminReportService.getReports("PENDING", -1, 20))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.INVALID_PAGE_REQUEST);
+	}
+
+	@Test
+	@DisplayName("승인하면 신고가 RESOLVED, 영상이 BLINDED 가 된다 (FR-4)")
+	void 승인하면_신고가_RESOLVED_영상이_BLINDED가_된다() {
+		Long reportId = seedReport(reporterId, videoId, ReportReason.INAPPROPRIATE, null);
+
+		AdminReportProcessResponseDto response = adminReportService.approve(adminId, reportId);
+
+		assertThat(response.reportId()).isEqualTo(reportId);
+		assertThat(response.status()).isEqualTo(ReportStatus.RESOLVED);
+		assertThat(response.videoId()).isEqualTo(videoId);
+		assertThat(response.videoStatus()).isEqualTo(VideoStatus.BLINDED);
+		assertThat(reportRepository.findById(reportId).orElseThrow().getStatus()).isEqualTo(ReportStatus.RESOLVED);
+		assertThat(videoRepository.findById(videoId).orElseThrow().getStatus()).isEqualTo(VideoStatus.BLINDED);
+	}
+
+	@Test
+	@DisplayName("승인 시 처리자와 처리 시각이 기록된다 (FR-4)")
+	void 승인_시_처리자와_처리_시각이_기록된다() {
+		Long reportId = seedReport(reporterId, videoId, ReportReason.SPAM, null);
+
+		AdminReportProcessResponseDto response = adminReportService.approve(adminId, reportId);
+
+		Report processed = reportRepository.findById(reportId).orElseThrow();
+		assertThat(processed.getReviewedBy()).isEqualTo(adminId);
+		// reviewedAt 은 LocalDateTime.now()(JVM 기본 존)라 UTC 기준 시각과 값 비교하면 존 차이만큼 어긋난다.
+		assertThat(processed.getReviewedAt()).isNotNull();
+		assertThat(response.reviewedAt()).isNotNull();
+	}
+
+	@Test
+	@DisplayName("이미 블라인드된 영상의 신고 승인은 영상 전이 없이 신고만 종결한다 (FR-5)")
+	void 이미_블라인드된_영상의_신고_승인은_영상_전이_없이_신고만_종결한다() {
+		Long reportId = seedReport(reporterId, videoId, ReportReason.PRIVACY, null);
+		videoRepository.findById(videoId).orElseThrow().markBlinded();
+		em.flush();
+
+		AdminReportProcessResponseDto response = adminReportService.approve(adminId, reportId);
+
+		assertThat(response.status()).isEqualTo(ReportStatus.RESOLVED);
+		assertThat(response.videoStatus()).isEqualTo(VideoStatus.BLINDED);
+		assertThat(reportRepository.findById(reportId).orElseThrow().getStatus()).isEqualTo(ReportStatus.RESOLVED);
+	}
+
+	@Test
+	@DisplayName("삭제된 영상의 신고 승인도 신고만 종결한다 (FR-5)")
+	void 삭제된_영상의_신고_승인도_신고만_종결한다() {
+		Long reportId = seedReport(reporterId, videoId, ReportReason.COPYRIGHT, null);
+		videoRepository.findById(videoId).orElseThrow().markDeleted();
+		em.flush();
+
+		AdminReportProcessResponseDto response = adminReportService.approve(adminId, reportId);
+
+		assertThat(response.status()).isEqualTo(ReportStatus.RESOLVED);
+		assertThat(response.videoStatus()).isEqualTo(VideoStatus.DELETED);
+		assertThat(videoRepository.findById(videoId).orElseThrow().getStatus())
+			.as("삭제 영상은 블라인드로 되살리지 않는다").isEqualTo(VideoStatus.DELETED);
+	}
+
+	@Test
+	@DisplayName("없는 신고의 승인·기각은 404 다 (11404)")
+	void 없는_신고의_승인은_404다() {
+		assertThatThrownBy(() -> adminReportService.approve(adminId, -1L))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_NOT_FOUND);
+		assertThatThrownBy(() -> adminReportService.reject(adminId, -1L))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("이미 처리된 신고의 재승인·재기각은 409 다 (FR-7, 11410)")
+	void 이미_처리된_신고의_재승인은_409다() {
+		Long reportId = seedReport(reporterId, videoId, ReportReason.SPAM, null);
+		adminReportService.approve(adminId, reportId);
+
+		assertThatThrownBy(() -> adminReportService.approve(adminId, reportId))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.ALREADY_PROCESSED_REPORT);
+		assertThatThrownBy(() -> adminReportService.reject(adminId, reportId))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.ALREADY_PROCESSED_REPORT);
+	}
+
+	@Test
+	@DisplayName("기각하면 신고만 REJECTED 가 되고 영상은 그대로다 (FR-6)")
+	void 기각하면_신고만_REJECTED가_되고_영상은_그대로다() {
+		Long reportId = seedReport(reporterId, videoId, ReportReason.SPAM, null);
+
+		AdminReportProcessResponseDto response = adminReportService.reject(adminId, reportId);
+
+		assertThat(response.status()).isEqualTo(ReportStatus.REJECTED);
+		assertThat(response.videoStatus()).isEqualTo(VideoStatus.ACTIVE);
+		Report processed = reportRepository.findById(reportId).orElseThrow();
+		assertThat(processed.getStatus()).isEqualTo(ReportStatus.REJECTED);
+		assertThat(processed.getReviewedBy()).isEqualTo(adminId);
+		assertThat(processed.getReviewedAt()).isNotNull();
+		assertThat(videoRepository.findById(videoId).orElseThrow().getStatus()).isEqualTo(VideoStatus.ACTIVE);
+	}
+
+	@Test
+	@DisplayName("대표 영상 신고 승인 시 남은 ACTIVE 영상으로 대표가 재선정된다 (blind 위임 확인)")
+	void 대표_영상_신고_승인_시_남은_ACTIVE_영상으로_대표가_재선정된다() {
+		Long secondVideoId = seedVideo(ownerId);
+		String gridId = GridEncoder.encode(관리자_LAT, 관리자_LON);
+		videoRepository.upsertUserGrid(ownerId, gridId, videoId);        // 첫 점령: count=1, cover=첫 영상
+		videoRepository.upsertUserGrid(ownerId, gridId, secondVideoId);  // 재방문: count=2, cover 유지
+		Long reportId = seedReport(reporterId, videoId, ReportReason.INAPPROPRIATE, null);
+
+		adminReportService.approve(adminId, reportId);
+
+		// 상태를 직접 뒤집는 게 아니라 blind 에 위임했음을 대표 재선정 부수효과로 확인한다.
+		Number cover = (Number) em.createNativeQuery(
+				"SELECT cover_video_id FROM user_grids WHERE user_id = :u AND grid_id = :g")
+			.setParameter("u", ownerId).setParameter("g", gridId).getSingleResult();
+		assertThat(cover.longValue()).isEqualTo(secondVideoId);
 	}
 }
