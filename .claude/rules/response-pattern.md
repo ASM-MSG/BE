@@ -59,6 +59,7 @@ public SuccessResponse<SignupResponseDto> signup(@Valid @RequestBody SignupReque
 | `8xxx` | hotzone | `8400 INVALID_VIEWPORT` |
 | `9xxx` | friend | `9400 SELF_FRIEND_REQUEST` (MSG-185) |
 | `10xxx` | notification | `10400 INVALID_PLATFORM` (MSG-178 — 9xxx 선확정했으나 MSG-185 병렬 경합으로 이동) |
+| `11xxx` | moderation | `11409 DUPLICATE_REPORT` (MSG-192) |
 
 새 도메인 에러 enum 추가 시:
 - 상수명은 `SCREAMING_SNAKE_CASE`
