@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.task.TaskRejectedException;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
-import com.msg.fillmap.friend.service.FriendService;
+import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.dto.MissionAwardResult;
@@ -67,7 +67,7 @@ class VideoEncodingTriggerTest {
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
-			mock(FriendService.class));
+			mock(FriendshipQueryService.class));
 
 		VideoUploadRequestDto request = new VideoUploadRequestDto(
 			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE");

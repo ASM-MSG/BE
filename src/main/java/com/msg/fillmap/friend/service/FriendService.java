@@ -68,10 +68,4 @@ public interface FriendService {
 
 	/** 친구 삭제 (FR-12·13). 방향 무관 ACCEPTED 행 DELETE — 대기 중 요청은 대상이 아니다(9424). */
 	void deleteFriend(Long userId, Long friendUserId);
-
-	/**
-	 * 두 사용자가 ACCEPTED 친구인가 — 방향 무관 대칭 판정 (MSG-285 FR-4·6). 요청 시점 실시간 조회라
-	 * 친구 삭제가 다음 요청부터 즉시 반영된다(캐시·비정규화 없음). PENDING 은 친구가 아니다.
-	 */
-	boolean isFriend(Long userId, Long otherUserId);
 }

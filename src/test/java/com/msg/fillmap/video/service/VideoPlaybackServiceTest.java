@@ -24,7 +24,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
-import com.msg.fillmap.friend.service.FriendService;
+import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
@@ -59,7 +59,7 @@ class VideoPlaybackServiceTest {
 
 	private VideoRepository videoRepository;
 	private ThumbnailUrlPresigner thumbnailUrlPresigner;
-	private FriendService friendService;
+	private FriendshipQueryService friendshipQueryService;
 	private VideoService videoService;
 
 	@BeforeEach
@@ -73,13 +73,13 @@ class VideoPlaybackServiceTest {
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L));
 		thumbnailUrlPresigner = new ThumbnailUrlPresigner(presigner, properties);
 
-		friendService = mock(FriendService.class);
+		friendshipQueryService = mock(FriendshipQueryService.class);
 		videoService = new VideoServiceImpl(
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), thumbnailUrlPresigner, mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
-			friendService);
+			friendshipQueryService);
 	}
 
 	/** 모든 상태 축을 명시 지정하는 코어 빌더 — 엔티티에 세터가 없어 리플렉션으로 벌린다. */
@@ -297,7 +297,7 @@ class VideoPlaybackServiceTest {
 
 		assertThat(result.playbackUrl()).startsWith("https://").contains(ENCODED_KEY);
 		assertThat(result.visibility()).isEqualTo("FRIENDS");
-		verifyNoInteractions(friendService);   // 소유자 경로는 친구 쿼리 0회 (성능 비기능)
+		verifyNoInteractions(friendshipQueryService);   // 소유자 경로는 친구 쿼리 0회 (성능 비기능)
 	}
 
 	@Test
@@ -305,14 +305,14 @@ class VideoPlaybackServiceTest {
 	void ACCEPTED_친구는_FRIENDS_영상을_재생할_수_있다() {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.FRIENDS, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 7L));
-		given(friendService.isFriend(OWNER_ID, OTHER_ID)).willReturn(true);
+		given(friendshipQueryService.isFriend(OWNER_ID, OTHER_ID)).willReturn(true);
 
 		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
 
 		assertThat(result.playbackUrl()).startsWith("https://").contains(ENCODED_KEY);
 		verify(videoRepository).incrementViewCount(VIDEO_ID);
 		// 판정은 소유자·요청자 쌍으로 정확히 1회 — 재생마다 친구 쿼리가 늘어나지 않는다.
-		verify(friendService).isFriend(OWNER_ID, OTHER_ID);
+		verify(friendshipQueryService).isFriend(OWNER_ID, OTHER_ID);
 	}
 
 	@Test
@@ -320,7 +320,7 @@ class VideoPlaybackServiceTest {
 	void 비친구의_FRIENDS_재생은_PRIVATE와_동일한_403이고_재생_URL이_발급되지_않는다() {
 		givenVideo(video(VideoStatus.ACTIVE, Visibility.FRIENDS, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 0L));
-		given(friendService.isFriend(OWNER_ID, OTHER_ID)).willReturn(false);
+		given(friendshipQueryService.isFriend(OWNER_ID, OTHER_ID)).willReturn(false);
 
 		// errorCode·메시지 둘 다 PRIVATE 비소유자와 같아야 한다 — 응답 바이트가 동일하다(§D1, 신규 코드 없음).
 		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
@@ -341,7 +341,7 @@ class VideoPlaybackServiceTest {
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_FORBIDDEN)
 			.hasMessage("비공개 영상입니다");
-		verifyNoInteractions(friendService);   // PRIVATE 경로는 친구 쿼리 0회
+		verifyNoInteractions(friendshipQueryService);   // PRIVATE 경로는 친구 쿼리 0회
 	}
 
 	@Test
@@ -352,7 +352,7 @@ class VideoPlaybackServiceTest {
 
 		videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
 
-		verifyNoInteractions(friendService);
+		verifyNoInteractions(friendshipQueryService);
 	}
 
 	@Test
@@ -360,7 +360,7 @@ class VideoPlaybackServiceTest {
 	void 블라인드된_FRIENDS_영상은_친구여도_타인에겐_404다() {
 		givenVideo(video(VideoStatus.BLINDED, Visibility.FRIENDS, ProcessingStatus.READY,
 			ENCODED_KEY, null, THUMB_KEY, 0L));
-		given(friendService.isFriend(OWNER_ID, OTHER_ID)).willReturn(true);
+		given(friendshipQueryService.isFriend(OWNER_ID, OTHER_ID)).willReturn(true);
 
 		// BLINDED 가 visibility 보다 먼저다 — 친구여도 존재 은닉(404)이 이긴다.
 		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))

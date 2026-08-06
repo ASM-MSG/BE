@@ -22,7 +22,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
-import com.msg.fillmap.friend.service.FriendService;
+import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.service.MissionAwardService;
@@ -63,7 +63,7 @@ class VideoGlobalCoverServiceTest {
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
-			mock(HotScoreCommandService.class), mock(FriendService.class));
+			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class));
 	}
 
 	private Video readyVideo(long id, String thumbKey, LocalDateTime recordedAt, long viewCount) {
