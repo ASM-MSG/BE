@@ -64,13 +64,21 @@ com.msg.fillmap
 │   ├── dto/
 │   └── exception/
 │
-└── usergrid/                     # 개인 도감 조회 계약 (Owner B) — 엔티티는 grid/entity/UserGrid (Owner A, MSG-78 D6)
+├── usergrid/                     # 개인 도감 조회 계약 (Owner B) — 엔티티는 grid/entity/UserGrid (Owner A, MSG-78 D6)
+│   ├── repository/
+│   ├── service/
+│   │   └── UserGridQueryService # ← 인터페이스 (Owner A 소비)
+│   ├── controller/
+│   ├── dto/
+│   └── exception/
+│
+└── moderation/                   # 신고 (Owner B, MSG-192) — 영상 검증은 VideoRepository 직접 주입 (둘 다 Owner B)
+    ├── entity/                  # Report · ReportReason · ReportStatus (reports 테이블, V1 CHECK 값과 일치)
     ├── repository/
     ├── service/
-    │   └── UserGridQueryService # ← 인터페이스 (Owner A 소비)
     ├── controller/
     ├── dto/
-    └── exception/
+    └── exception/               # ReportErrorCode (developCode 11xxx)
 ```
 
 ## 도메인 오너십 원칙
