@@ -236,6 +236,16 @@ public class Video {
 		this.status = VideoStatus.DELETED;
 	}
 
+	/** ACTIVE → BLINDED (MSG-193). 전이 가드는 VideoModerationService 가 잠금 아래에서 수행한다. */
+	public void markBlinded() {
+		this.status = VideoStatus.BLINDED;
+	}
+
+	/** BLINDED → ACTIVE 해제 (MSG-193). */
+	public void markActive() {
+		this.status = VideoStatus.ACTIVE;
+	}
+
 	public boolean isDeleted() {
 		return this.status == VideoStatus.DELETED;
 	}
