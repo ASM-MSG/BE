@@ -11,15 +11,19 @@ import lombok.RequiredArgsConstructor;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.moderation.dto.AdminReportListResponseDto;
 import com.msg.fillmap.moderation.dto.AdminReportProcessResponseDto;
+import com.msg.fillmap.moderation.dto.AdminVideoReviewResponseDto;
+import com.msg.fillmap.moderation.dto.AdminVideoUnblindResponseDto;
 import com.msg.fillmap.moderation.entity.Report;
 import com.msg.fillmap.moderation.entity.ReportStatus;
 import com.msg.fillmap.moderation.exception.ReportErrorCode;
 import com.msg.fillmap.moderation.repository.ReportRepository;
+import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.service.VideoModerationService;
+import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
 /**
  * 관리자 신고 처리 (MSG-195). VideoRepository 직접 주입은 MSG-192 §D4 선례다 — moderation 과 video 는
@@ -36,6 +40,7 @@ public class AdminReportServiceImpl implements AdminReportService {
 	private final ReportRepository reportRepository;
 	private final VideoRepository videoRepository;
 	private final VideoModerationService videoModerationService;
+	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
 
 	@Override
 	@Transactional(readOnly = true)
@@ -80,6 +85,42 @@ public class AdminReportServiceImpl implements AdminReportService {
 			.map(Video::getStatus)
 			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
 		return AdminReportProcessResponseDto.of(report, videoStatus);
+	}
+
+	@Override
+	public AdminVideoUnblindResponseDto unblindVideo(Long videoId) {
+		// 위임 한 줄 (MSG-193 §D6 그대로) — 가드(3404·3409)와 잠금·트랜잭션은 unblind 가 이미 갖췄고,
+		// 신고 상태는 되돌리지 않으므로(FR-8) 신고 축은 조회조차 하지 않는다. 감사도 별도 기록 없이
+		// 접근 로그로 갈음한다 (§D4) — 그래서 관리자 식별자를 받지 않는다.
+		videoModerationService.unblind(videoId);
+		// unblind 성공 = ACTIVE 확정이다 (다른 종료 상태는 전부 예외로 나간다) — 재조회 없이 채운다.
+		return new AdminVideoUnblindResponseDto(videoId, VideoStatus.ACTIVE);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public AdminVideoReviewResponseDto getVideoForReview(Long videoId) {
+		Video video = videoRepository.findById(videoId)
+			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
+		if (video.isDeleted()) {
+			// DELETED 만 거부한다 — 삭제 경로(MSG-133)가 커밋 후 S3 객체를 지우므로 발급해도 재생할 파일이 없다.
+			throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);
+		}
+		// 사용자 재생 경로(getVideoPlayback)를 호출하지 않는다 — 그쪽의 소유자 분기·친구 판정·조회수 증가·
+		// BLINDED 은닉이 전부 관리자 맥락에 부적합해서다. status·visibility 는 무시하고 발급한다 (FR-3).
+		// 재생 소스 선택 규칙만 MSG-206 과 같다: READY 일 때 블러본이 있으면 블러본, 없으면 인코딩본.
+		String playbackUrl = null;
+		Long expiresInSec = null;
+		if (video.getProcessingStatus() == ProcessingStatus.READY) {
+			String playbackKey = video.getBlurredS3Key() != null ? video.getBlurredS3Key() : video.getEncodedUrl();
+			playbackUrl = thumbnailUrlPresigner.presign(playbackKey);
+			// key 가 null 인 기형 READY 행이면 presign 이 null — playbackUrl 없이 TTL 만 남는 걸 막는다 (MSG-206 선례).
+			if (playbackUrl != null) {
+				expiresInSec = thumbnailUrlPresigner.ttlSeconds();
+			}
+		}
+		String thumbnailUrl = thumbnailUrlPresigner.presign(video.getThumbnailUrl());
+		return AdminVideoReviewResponseDto.of(video, playbackUrl, thumbnailUrl, expiresInSec);
 	}
 
 	/**

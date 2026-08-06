@@ -2,6 +2,8 @@ package com.msg.fillmap.moderation.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.global.exception.ApiException;
@@ -24,6 +27,8 @@ import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.moderation.dto.AdminReportItemResponseDto;
 import com.msg.fillmap.moderation.dto.AdminReportListResponseDto;
 import com.msg.fillmap.moderation.dto.AdminReportProcessResponseDto;
+import com.msg.fillmap.moderation.dto.AdminVideoReviewResponseDto;
+import com.msg.fillmap.moderation.dto.AdminVideoUnblindResponseDto;
 import com.msg.fillmap.moderation.entity.Report;
 import com.msg.fillmap.moderation.entity.ReportReason;
 import com.msg.fillmap.moderation.entity.ReportStatus;
@@ -31,16 +36,21 @@ import com.msg.fillmap.moderation.exception.ReportErrorCode;
 import com.msg.fillmap.moderation.repository.ReportRepository;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.entity.Visibility;
+import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
+import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 
 /**
- * 관리자 신고 처리 — 목록 조회·승인·기각 (MSG-195, 실 DB). @Transactional 롤백 격리 + UUID 이메일 시드로
- * 공유 로컬 DB 에 잔여 행을 남기지 않는다 (ReportIntegrationTest 패턴). 동시 처리 직렬화(FR-10)만
- * 커밋이 필요해 AdminReportApproveConcurrencyTest 로 분리했다.
+ * 관리자 신고 처리 — 목록 조회·승인·기각·블라인드 해제·단건 확인 (MSG-195, 실 DB). @Transactional 롤백
+ * 격리 + UUID 이메일 시드로 공유 로컬 DB 에 잔여 행을 남기지 않는다 (ReportIntegrationTest 패턴).
+ * 동시 처리 직렬화(FR-10)만 커밋이 필요해 AdminReportApproveConcurrencyTest 로 분리했다.
+ * presign 은 AWS 자격증명 의존을 피해 mock 으로 대체하고, key → URL 에코 스텁으로 재생 소스 선택
+ * (블러본 우선)까지 검증한다 (VideoGlobalListViewCountIntegrationTest 선례).
  *
  * <p>목록은 테이블 전체를 상태로 거르므로 다른 브랜치·수동 작업이 남긴 행이 같은 페이지에 섞일 수 있다.
  * 그래서 전체 건수나 절대 위치가 아니라 "내가 만든 신고들"만 골라 필드와 상대 순서를 본다 — 공유 DB 의
@@ -69,6 +79,9 @@ class AdminReportIntegrationTest {
 
 	@Autowired
 	private EntityManager em;
+
+	@MockitoBean
+	private ThumbnailUrlPresigner thumbnailUrlPresigner;
 
 	private Long reporterId;
 	private Long ownerId;
@@ -346,5 +359,118 @@ class AdminReportIntegrationTest {
 				"SELECT cover_video_id FROM user_grids WHERE user_id = :u AND grid_id = :g")
 			.setParameter("u", ownerId).setParameter("g", gridId).getSingleResult();
 		assertThat(cover.longValue()).isEqualTo(secondVideoId);
+	}
+
+	@Test
+	@DisplayName("해제하면 영상이 ACTIVE 로 돌아오고 신고는 RESOLVED 로 남는다 (FR-8)")
+	void 해제하면_영상이_ACTIVE로_돌아오고_신고는_RESOLVED로_남는다() {
+		Long reportId = seedReport(reporterId, videoId, ReportReason.INAPPROPRIATE, null);
+		adminReportService.approve(adminId, reportId);
+
+		AdminVideoUnblindResponseDto response = adminReportService.unblindVideo(videoId);
+
+		assertThat(response.videoId()).isEqualTo(videoId);
+		assertThat(response.status()).isEqualTo(VideoStatus.ACTIVE);
+		assertThat(videoRepository.findById(videoId).orElseThrow().getStatus()).isEqualTo(VideoStatus.ACTIVE);
+		assertThat(reportRepository.findById(reportId).orElseThrow().getStatus())
+			.as("해제는 신고 상태를 되돌리지 않는다").isEqualTo(ReportStatus.RESOLVED);
+	}
+
+	@Test
+	@DisplayName("이미 ACTIVE 인 영상의 해제는 409 다 (3409)")
+	void 이미_ACTIVE인_영상의_해제는_409다() {
+		assertThatThrownBy(() -> adminReportService.unblindVideo(videoId))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.ALREADY_IN_TARGET_STATUS);
+	}
+
+	@Test
+	@DisplayName("삭제된 영상의 해제는 404 다 (3404)")
+	void 삭제된_영상의_해제는_404다() {
+		videoRepository.findById(videoId).orElseThrow().markDeleted();
+		em.flush();
+
+		assertThatThrownBy(() -> adminReportService.unblindVideo(videoId))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("BLINDED 영상에도 재생 URL 이 발급되고, 블러본이 있으면 블러본을 서명한다 (FR-3)")
+	void BLINDED_영상에도_재생_URL이_발급된다() {
+		Video video = videoRepository.findById(videoId).orElseThrow();
+		video.markReady("videos/encoded/m195.mp4", "videos/thumb/m195.jpg");
+		video.applyBlurResult("videos/blurred/m195.mp4", null);
+		video.markBlinded();
+		em.flush();
+		stubPresignEcho();
+
+		AdminVideoReviewResponseDto response = adminReportService.getVideoForReview(videoId);
+
+		assertThat(response.status()).isEqualTo(VideoStatus.BLINDED);
+		assertThat(response.processingStatus()).isEqualTo(ProcessingStatus.READY);
+		// 재생 소스 선택은 MSG-206 규칙 그대로 — 블러본 키가 있으면 인코딩본이 아니라 블러본을 서명한다.
+		assertThat(response.playbackUrl()).isEqualTo("https://signed/videos/blurred/m195.mp4");
+		assertThat(response.thumbnailUrl()).isEqualTo("https://signed/videos/thumb/m195.jpg");
+		assertThat(response.expiresInSec()).isEqualTo(600L);
+	}
+
+	@Test
+	@DisplayName("PRIVATE 영상도 관리자는 확인할 수 있다 — 블러본이 없으면 인코딩본 폴백 (FR-3)")
+	void PRIVATE_영상도_관리자는_확인할_수_있다() {
+		Video video = videoRepository.findById(videoId).orElseThrow();
+		video.changeVisibility(Visibility.PRIVATE);
+		video.markReady("videos/encoded/m195.mp4", "videos/thumb/m195.jpg");
+		em.flush();
+		stubPresignEcho();
+
+		AdminVideoReviewResponseDto response = adminReportService.getVideoForReview(videoId);
+
+		assertThat(response.visibility()).isEqualTo(Visibility.PRIVATE);
+		assertThat(response.playbackUrl()).isEqualTo("https://signed/videos/encoded/m195.mp4");
+	}
+
+	@Test
+	@DisplayName("관리자 확인은 조회수를 올리지 않는다 (FR-3)")
+	void 관리자_확인은_조회수를_올리지_않는다() {
+		videoRepository.findById(videoId).orElseThrow().markReady("videos/encoded/m195.mp4", "videos/thumb/m195.jpg");
+		em.flush();
+		stubPresignEcho();
+
+		adminReportService.getVideoForReview(videoId);
+
+		// 조회수 증가는 native UPDATE 라 엔티티가 아니라 DB 행으로 확인한다.
+		Number viewCount = (Number) em.createNativeQuery("SELECT view_count FROM videos WHERE id = :v")
+			.setParameter("v", videoId).getSingleResult();
+		assertThat(viewCount.longValue()).isZero();
+	}
+
+	@Test
+	@DisplayName("READY 이전 영상은 재생 URL 이 null 이다 (FR-3)")
+	void READY_이전_영상은_재생_URL이_null이다() {
+		// 시드 기본 상태가 UPLOADED — presign mock 은 스텁 없이 null 을 돌려준다 (key 도 null 이라 정합).
+		AdminVideoReviewResponseDto response = adminReportService.getVideoForReview(videoId);
+
+		assertThat(response.processingStatus()).isEqualTo(ProcessingStatus.UPLOADED);
+		assertThat(response.playbackUrl()).isNull();
+		assertThat(response.thumbnailUrl()).isNull();
+		assertThat(response.expiresInSec()).isNull();
+	}
+
+	@Test
+	@DisplayName("삭제된 영상의 확인은 404 다 (FR-3)")
+	void 삭제된_영상의_확인은_404다() {
+		videoRepository.findById(videoId).orElseThrow().markDeleted();
+		em.flush();
+
+		assertThatThrownBy(() -> adminReportService.getVideoForReview(videoId))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
+	}
+
+	/** presign 을 key 에코 스텁으로 — 어떤 key 를 서명했는지(재생 소스 선택)까지 URL 로 드러난다. */
+	private void stubPresignEcho() {
+		given(thumbnailUrlPresigner.presign(anyString())).willAnswer(inv -> "https://signed/" + inv.getArgument(0));
+		given(thumbnailUrlPresigner.ttlSeconds()).willReturn(600L);
 	}
 }

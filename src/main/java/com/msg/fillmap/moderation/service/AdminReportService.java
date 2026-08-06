@@ -2,6 +2,8 @@ package com.msg.fillmap.moderation.service;
 
 import com.msg.fillmap.moderation.dto.AdminReportListResponseDto;
 import com.msg.fillmap.moderation.dto.AdminReportProcessResponseDto;
+import com.msg.fillmap.moderation.dto.AdminVideoReviewResponseDto;
+import com.msg.fillmap.moderation.dto.AdminVideoUnblindResponseDto;
 
 /**
  * 관리자 신고 처리 (MSG-195). 접수(ReportService)로 쌓인 PENDING 신고를 관리자가 열람하고 종결하는 축이다.
@@ -33,4 +35,18 @@ public interface AdminReportService {
 	 * @param adminId 처리하는 관리자의 사용자 id — reviewed_by 에 기록된다
 	 */
 	AdminReportProcessResponseDto reject(Long adminId, Long reportId);
+
+	/**
+	 * 블라인드 해제 (FR-8). BLINDED 영상을 ACTIVE 로 복구한다 — 그 신고의 RESOLVED 는 되돌리지 않는다
+	 * (2026-08-06 확정). 실패는 VideoModerationService 의 기존 가드가 그대로 올라온다:
+	 * 없는 영상과 DELETED 는 3404, 이미 ACTIVE 면 3409.
+	 */
+	AdminVideoUnblindResponseDto unblindVideo(Long videoId);
+
+	/**
+	 * 관리자 단건 영상 확인 (FR-3). status(BLINDED 포함)·visibility 를 무시하고 확인 요청 시점에 재생
+	 * URL 을 발급한다. 단 DELETED 는 3404 다 — 삭제 경로가 커밋 후 S3 객체를 지워 재생할 파일이 없다.
+	 * 사용자 재생 경로와 달리 조회수를 올리지 않고, 소유자·친구 판정이 없다.
+	 */
+	AdminVideoReviewResponseDto getVideoForReview(Long videoId);
 }
