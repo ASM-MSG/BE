@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 @Schema(
 	description = "받은 친구 요청 응답 — 최신 요청 우선 정렬.",
-	requiredProperties = {"requesterId", "nickname", "requestedAt"}
+	requiredProperties = {"requesterId", "nickname", "requestedAt", "profileImageUrl"}
 )
 public record ReceivedFriendRequestResponseDto(
 	@Schema(description = "보낸 사용자 id — 수락/거절 호출의 경로 변수로 그대로 쓴다", example = "3")

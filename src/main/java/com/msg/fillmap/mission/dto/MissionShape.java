@@ -21,8 +21,10 @@ public sealed interface MissionShape
 	}
 
 	/** 코스 포토스팟 마커 (격자 중심점 + gridId + seq). */
-	@Schema(description = "코스 포토스팟 마커", requiredProperties = {"gridId", "lat", "lon"})
-	record Spot(String gridId, double lat, double lon, Integer seq) {
+	@Schema(description = "코스 포토스팟 마커", requiredProperties = {"gridId", "lat", "lon", "seq"})
+	record Spot(String gridId, double lat, double lon,
+		@Schema(description = "코스 내 순번 — mission_grids.seq 는 NULL 허용 컬럼이라 없을 수 있다", nullable = true)
+		Integer seq) {
 	}
 
 	/** 격자 중심점 (gridId 포함). */
@@ -35,9 +37,10 @@ public sealed interface MissionShape
 	 * 재발행한다(@JsonRawValue, §설계 D7) — 따옴표 escape 없이 JSON 객체로 나간다. spots 는 seq 오름차순.
 	 */
 	@Schema(description = "코스(COURSE) — GeoJSON LineString + seq순 포토스팟 마커",
-		requiredProperties = {"spots"})
+		requiredProperties = {"spots", "line"})
 	record PathShape(
-		@Schema(description = "코스 라인 GeoJSON LineString 원문", type = "object")
+		@Schema(description = "코스 라인 GeoJSON LineString 원문 — missions.path 는 NULL 허용 컬럼이라 없을 수 있다",
+			type = "object", nullable = true)
 		@JsonRawValue String line,
 		List<Spot> spots
 	) implements MissionShape {
@@ -57,7 +60,10 @@ public sealed interface MissionShape
 	}
 
 	/** REGION (AREA) — region_code 만(경계 지오메트리 미반환, §설계 D5. FE 가 region API 로 별도 조회). */
-	@Schema(description = "구역(AREA) — region_code 만(경계는 region API 로 별도 조회)")
-	record RegionShape(String regionCode) implements MissionShape {
+	@Schema(description = "구역(AREA) — region_code 만(경계는 region API 로 별도 조회)",
+		requiredProperties = {"regionCode"})
+	record RegionShape(
+		@Schema(description = "행정동 코드 — missions.region_code 는 NULL 허용 컬럼이라 없을 수 있다", nullable = true)
+		String regionCode) implements MissionShape {
 	}
 }

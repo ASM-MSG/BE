@@ -12,7 +12,8 @@ import com.msg.fillmap.badge.repository.MyBadgeProjection;
  * 진열장은 FE 가 earned true 를 earnedAt 내림차순 정렬해 파생한다(§D4) — 별도 필드 없음.
  */
 @Schema(description = "내 뱃지 목록 행 — 획득+미획득 전체",
-	requiredProperties = {"badgeId", "code", "name", "earned", "isNew"})
+	requiredProperties = {"badgeId", "code", "name", "earned", "isNew", "description", "iconUrl", "earnedAt",
+		"featuredRank"})
 public record MyBadgeResponseDto(
 	@Schema(description = "뱃지 ID", example = "2")
 	Long badgeId,

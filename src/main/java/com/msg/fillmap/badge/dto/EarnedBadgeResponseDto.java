@@ -8,7 +8,7 @@ import com.msg.fillmap.badge.repository.EligibleBadgeProjection;
  * 새로 획득한 뱃지 (업로드 응답 동봉용 — FR-9). conditionType·condition_value 는 노출하지 않는다
  * (위키 방침·FE 불요, MSG-239 §API 명세).
  */
-@Schema(description = "이번 행동으로 새로 획득한 뱃지", requiredProperties = {"badgeId", "code", "name"})
+@Schema(description = "이번 행동으로 새로 획득한 뱃지", requiredProperties = {"badgeId", "code", "name", "description", "iconUrl"})
 public record EarnedBadgeResponseDto(
 	@Schema(description = "뱃지 ID", example = "1")
 	Long badgeId,

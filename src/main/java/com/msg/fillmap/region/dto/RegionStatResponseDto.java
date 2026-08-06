@@ -12,7 +12,8 @@ import com.msg.fillmap.region.service.RegionStatView;
  * progressRate 는 표시 100 clamp 값(§D4), updatedAt 은 region_stats 캐시 기준 시각.
  */
 @Schema(description = "한 행정동의 수집률. 사용자가 그 행정동에서 점령(수집)한 격자 수와 진행률.",
-	requiredProperties = {"regionCode", "regionName", "collectedCount", "totalCount", "progressRate", "updatedAt"})
+	requiredProperties = {"regionCode", "regionName", "collectedCount", "totalCount", "progressRate", "updatedAt",
+		"parentCode"})
 public record RegionStatResponseDto(
 	@Schema(description = "행정동 코드 (region_stats.region_code)", example = "1168051500")
 	String regionCode,

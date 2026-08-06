@@ -13,7 +13,7 @@ import com.msg.fillmap.usergrid.service.RegionVideoView;
  * gridId 불요). thumbnailUrl 은 presigned GET URL 이며 READY 이전(썸네일 key 없음)이면 null 이다.
  */
 @Schema(description = "동 단위 내 영상 리스트 항목 — 그 행정동 격자들에 올린 내 영상 하나.",
-	requiredProperties = {"videoId", "gridId", "processingStatus", "durationSec", "createdAt"})
+	requiredProperties = {"videoId", "gridId", "processingStatus", "durationSec", "createdAt", "thumbnailUrl"})
 public record RegionVideoResponseDto(
 	@Schema(description = "영상(방문 이벤트) ID. 개별 재생·교체·삭제 진입 키", example = "1042")
 	Long videoId,

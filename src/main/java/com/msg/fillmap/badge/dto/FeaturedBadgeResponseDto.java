@@ -7,7 +7,7 @@ import com.msg.fillmap.badge.repository.FeaturedBadgeProjection;
 /**
  * 적용된 대표 뱃지 (PUT /api/badges/featured 응답 — MSG-239 §API 명세). rank = 표시 순서(1·2).
  */
-@Schema(description = "적용된 대표 뱃지", requiredProperties = {"badgeId", "code", "name", "rank"})
+@Schema(description = "적용된 대표 뱃지", requiredProperties = {"badgeId", "code", "name", "rank", "iconUrl"})
 public record FeaturedBadgeResponseDto(
 	@Schema(description = "뱃지 ID", example = "3")
 	Long badgeId,

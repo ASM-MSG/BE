@@ -11,7 +11,7 @@ import com.msg.fillmap.video.repository.ExploreGridProjection;
  * 조합한다. coverVideoId 미포함 — 카드 탭은 격자 진입(MSG-237)이지 재생이 아니다(§D7).
  */
 @Schema(description = "전역 탐색 격자 카드",
-	requiredProperties = {"gridId", "gridY", "gridX", "videoCount", "coverDurationSec"})
+	requiredProperties = {"gridId", "gridY", "gridX", "videoCount", "coverDurationSec", "coverThumbnailUrl"})
 public record ExploreGridResponseDto(
 	@Schema(description = "격자 ID — 카드 탭 시 격자 전역 영상 목록(MSG-237) 진입 키", example = "38879_112390")
 	String gridId,
