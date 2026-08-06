@@ -59,13 +59,13 @@ public class GridController {
 	@GetMapping
 	public SuccessResponse<OccupiedGridPageResponseDto> getOccupiedInViewport(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
-		@Parameter(description = "남서 모서리 위도", example = "37.50")
+		@Parameter(description = "남서 모서리 위도", required = true, example = "37.50")
 		@RequestParam(required = false) Double swLat,
-		@Parameter(description = "남서 모서리 경도", example = "127.00")
+		@Parameter(description = "남서 모서리 경도", required = true, example = "127.00")
 		@RequestParam(required = false) Double swLng,
-		@Parameter(description = "북동 모서리 위도", example = "37.55")
+		@Parameter(description = "북동 모서리 위도", required = true, example = "37.55")
 		@RequestParam(required = false) Double neLat,
-		@Parameter(description = "북동 모서리 경도", example = "127.05")
+		@Parameter(description = "북동 모서리 경도", required = true, example = "127.05")
 		@RequestParam(required = false) Double neLng,
 		@Parameter(description = "다음 페이지 커서 (직전 응답의 nextCursor). 첫 페이지는 생략", example = "NDE2NDNfMTEwNDYw")
 		@RequestParam(required = false) String cursor,

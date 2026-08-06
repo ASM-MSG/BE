@@ -43,9 +43,9 @@ public class RegionController {
 	)
 	@GetMapping("/reverse-geocode")
 	public SuccessResponse<RegionResponseDto> reverseGeocode(
-		@Parameter(description = "위도", example = "37.4979")
+		@Parameter(description = "위도", required = true, example = "37.4979")
 		@RequestParam(required = false) Double lat,
-		@Parameter(description = "경도", example = "127.0276")
+		@Parameter(description = "경도", required = true, example = "127.0276")
 		@RequestParam(required = false) Double lon
 	) {
 		if (lat == null || lon == null) {
@@ -86,9 +86,9 @@ public class RegionController {
 	@GetMapping("/stats/by-point")
 	public SuccessResponse<RegionStatResponseDto> getStatByPoint(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
-		@Parameter(description = "위도", example = "37.4979")
+		@Parameter(description = "위도", required = true, example = "37.4979")
 		@RequestParam(required = false) Double lat,
-		@Parameter(description = "경도", example = "127.0276")
+		@Parameter(description = "경도", required = true, example = "127.0276")
 		@RequestParam(required = false) Double lon
 	) {
 		if (lat == null || lon == null) {
@@ -108,7 +108,7 @@ public class RegionController {
 	@GetMapping("/stats/by-grid")
 	public SuccessResponse<RegionStatResponseDto> getStatByGrid(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
-		@Parameter(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "41642_110458")
+		@Parameter(description = "격자 ID \"{grid_y}_{grid_x}\"", required = true, example = "41642_110458")
 		@RequestParam(required = false) String gridId
 	) {
 		RegionStatResponseDto body = regionStatsQueryService.findStatByGrid(principal.userId(), gridId)
