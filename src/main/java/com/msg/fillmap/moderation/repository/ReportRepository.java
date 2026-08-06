@@ -1,8 +1,13 @@
 package com.msg.fillmap.moderation.repository;
 
+import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -17,6 +22,14 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 	 * V27 유니크 제약(uq_reports_reporter_video)이 만든 인덱스를 탄다.
 	 */
 	boolean existsByReporterIdAndVideoId(Long reporterId, Long videoId);
+
+	/**
+	 * 승인·기각용 신고 행 잠금 조회 (MSG-195 FR-10). SELECT ... FOR UPDATE 로 같은 신고의 동시 처리를
+	 * 직렬화한다 — 늦은 트랜잭션은 잠금 대기 후 이미 처리된 상태를 읽고 11410 으로 걸린다
+	 * (FriendshipRepository.findWithLockById 선례의 파생 쿼리 + @Lock 방식).
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	Optional<Report> findWithLockById(Long id);
 
 	/**
 	 * 관리자 신고 목록 (MSG-195 FR-1·FR-2). 신고자·영상·영상 소유자를 FK 매핑 없이 id 로 잇는 세타 조인
