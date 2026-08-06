@@ -91,7 +91,7 @@ MSG-72 D2 가 이미 "S3 파일 즉시 삭제 안 함"을 수용한 범주이고
 {
   "s3Key": "videos/original/42/newuuid.mp4",  // @NotBlank, MSG-64 재발급 값
   "durationSec": 15,                          // @NotNull 1~30
-  "lat": 37.5012, "lon": 127.0396,            // 선택 — 있으면 D3 격자 일치 검증
+  "lat": 37.5012, "lng": 127.0396,            // 선택 — 있으면 D3 격자 일치 검증
   "recordedAt": "2026-07-13T15:00:00"
 }
 ```

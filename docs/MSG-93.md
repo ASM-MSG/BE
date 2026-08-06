@@ -68,7 +68,7 @@ MSG-93은 아래를 **주어진 것으로 전제**한다. 본 티켓에서 만�
 
 ## 성공 기준 (관찰 가능)
 
-1. `GET /api/regions/reverse-geocode?lat=..&lon=..` 가 그 좌표를 포함하는 행정동 1건
+1. `GET /api/regions/reverse-geocode?lat=..&lng=..` 가 그 좌표를 포함하는 행정동 1건
    (`regionCode`, `regionName`, `parentCode`)을 `SuccessResponse`(200)로 반환한다.
 2. 강남역 좌표 등 **알려진 지점**이 그 지점의 실제 행정동으로 매핑된다(시드 데이터 기준 sanity).
 3. **어느 행정동에도 속하지 않는 좌표**(바다·국외 등, 단 서비스 좌표 범위 내)는 **200 + `region: null`**
@@ -165,7 +165,7 @@ MSG-93은 아래를 **주어진 것으로 전제**한다. 본 티켓에서 만�
 | 파라미터 | 타입 | 필수 | 의미 |
 |---|---|---|---|
 | `lat` | double | ✅ | 위도 |
-| `lon` | double | ✅ | 경도 |
+| `lng` | double | ✅ | 경도 |
 
 - 성공 200 `body` = `RegionResponseDto`(포함 행정동 없으면 `null`):
 
@@ -180,7 +180,7 @@ MSG-93은 아래를 **주어진 것으로 전제**한다. 본 티켓에서 만�
 
 **요청/응답 예시**
 ```
-GET /api/regions/reverse-geocode?lat=37.4979&lon=127.0276
+GET /api/regions/reverse-geocode?lat=37.4979&lng=127.0276
 ```
 ```json
 { "developCode": 200, "httpStatus": "OK", "message": "성공",
@@ -192,8 +192,8 @@ GET /api/regions/reverse-geocode?lat=37.4979&lon=127.0276
 
 | 조건 | 코드 |
 |---|---|
-| `lat`/`lon` 누락 | `INVALID_COORDINATE`(6400) — 검증 실패 |
-| lat/lon 유효범위·서비스범위 밖 | `INVALID_COORDINATE`(6400, 400) |
+| `lat`/`lng` 누락 | `INVALID_COORDINATE`(6400) — 검증 실패 |
+| lat/lng 유효범위·서비스범위 밖 | `INVALID_COORDINATE`(6400, 400) |
 
 > 정방향 검색(행정동 이름 → 위치)을 채택할 경우(Open Q1-b/c) 별도 엔드포인트
 > `GET /api/regions/search?query=성수동`(name LIKE → 후보 리스트 + 대표점/`bbox`)을 추가한다. 이 경우 "이름 없음"은

@@ -78,7 +78,7 @@ classDiagram
         <<record>>
         +String s3Key
         +Double lat
-        +Double lon
+        +Double lng
         +Short durationSec
         +LocalDateTime recordedAt
         +String visibility  «신규 · null 허용»
