@@ -8,7 +8,7 @@ public record ReissueResponseDto(
 	String accessToken,
 	@Schema(description = "회전된 새 리프레시 토큰. 앱(X-Client-Type: app)만 값이 채워지고, "
 		+ "웹은 HttpOnly 쿠키(Set-Cookie)로 재설정되므로 null 이다.",
-		example = "eyJhbGciOiJIUzI1NiJ9...")
+		example = "eyJhbGciOiJIUzI1NiJ9...", nullable = true)
 	String refreshToken
 ) {
 }

@@ -25,7 +25,8 @@ public record ExploreGridResponseDto(
 	@Schema(description = "그 격자의 게이트 통과 영상 수 — \"N개 영상\"", example = "138")
 	Integer videoCount,
 
-	@Schema(description = "커버 썸네일 presigned GET URL. READY 게이트라 non-null 기대(null 이면 null 통과)")
+	@Schema(description = "커버 썸네일 presigned GET URL. READY 게이트라 non-null 기대(null 이면 null 통과)",
+		nullable = true)
 	String coverThumbnailUrl,
 
 	@Schema(description = "커버 영상 길이(초) — duration 뱃지", example = "12")

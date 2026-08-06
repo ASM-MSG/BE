@@ -19,10 +19,11 @@ public record EarnedBadgeResponseDto(
 	@Schema(description = "표시명", example = "첫 발자국")
 	String name,
 
-	@Schema(description = "설명", example = "첫 격자를 수집했어요")
+	@Schema(description = "설명 — badges.description 은 NULL 허용 컬럼이다", example = "첫 격자를 수집했어요",
+		nullable = true)
 	String description,
 
-	@Schema(description = "아이콘 URL (에셋 확정 전 null)", example = "null")
+	@Schema(description = "아이콘 URL (에셋 확정 전 null)", example = "null", nullable = true)
 	String iconUrl
 ) {
 

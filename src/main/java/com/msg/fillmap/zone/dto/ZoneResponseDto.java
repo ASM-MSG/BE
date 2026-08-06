@@ -17,7 +17,8 @@ public record ZoneResponseDto(
 	@Schema(description = "구역명 (zones.name)", example = "서면")
 	String name,
 
-	@Schema(description = "소속 행정동 코드 (zones.region_code, nullable)", example = "2623051000")
+	@Schema(description = "소속 행정동 코드 (zones.region_code, nullable)", example = "2623051000",
+		nullable = true)
 	String regionCode,
 
 	@Schema(description = "사각형 남단 행 (zones.min_grid_y)", example = "39710")

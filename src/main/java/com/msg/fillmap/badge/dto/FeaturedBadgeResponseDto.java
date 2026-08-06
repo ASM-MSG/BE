@@ -18,7 +18,7 @@ public record FeaturedBadgeResponseDto(
 	@Schema(description = "표시명", example = "탐험가 II")
 	String name,
 
-	@Schema(description = "아이콘 URL (에셋 확정 전 null)", example = "null")
+	@Schema(description = "아이콘 URL (에셋 확정 전 null)", example = "null", nullable = true)
 	String iconUrl,
 
 	@Schema(description = "표시 순서 (1·2)", example = "1")

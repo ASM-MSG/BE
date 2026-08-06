@@ -17,7 +17,8 @@ public record RegionResponseDto(
 	@Schema(description = "행정동 이름 (regions.region_name = adm_nm)", example = "서울특별시 강남구 역삼1동")
 	String regionName,
 
-	@Schema(description = "상위 시군구 코드 (regions.parent_code)", example = "11680")
+	@Schema(description = "상위 시군구 코드 (regions.parent_code) — NULL 허용 컬럼이라 최상위 행은 null",
+		example = "11680", nullable = true)
 	String parentCode
 ) {
 
