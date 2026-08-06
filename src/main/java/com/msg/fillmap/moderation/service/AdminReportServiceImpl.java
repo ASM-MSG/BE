@@ -47,8 +47,10 @@ public class AdminReportServiceImpl implements AdminReportService {
 	public AdminReportListResponseDto getReports(String status, int page, int size) {
 		ReportStatus filter = parseStatus(status);
 		// PageRequest.of 에 그냥 넘기면 IllegalArgumentException 이 catch-all 핸들러에서 500 이 된다 —
-		// 잘못된 페이지 요청은 클라이언트 잘못이므로 400 으로 먼저 거른다.
-		if (page < 0 || size < MIN_PAGE_SIZE || size > MAX_PAGE_SIZE) {
+		// 잘못된 페이지 요청은 클라이언트 잘못이므로 400 으로 먼저 거른다. 오프셋(page*size)이 int 를 넘는
+		// 극단 양수도 같다 — JPA firstResult 가 int 라 Spring Data 가 변환 예외를 던져 500 이 된다 (Codex 1R).
+		if (page < 0 || size < MIN_PAGE_SIZE || size > MAX_PAGE_SIZE
+			|| (long) page * size > Integer.MAX_VALUE) {
 			throw new ApiException(ReportErrorCode.INVALID_PAGE_REQUEST);
 		}
 		// 정렬 없는 PageRequest — 정렬은 쿼리의 ORDER BY 고정이라 Pageable 이 덧붙이면 안 된다.

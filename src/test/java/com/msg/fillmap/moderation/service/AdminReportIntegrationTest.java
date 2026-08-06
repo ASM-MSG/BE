@@ -245,6 +245,14 @@ class AdminReportIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("오프셋이 int 를 넘는 극단 page 도 400 이다 (11421 — 500 회귀 방지, Codex 1R)")
+	void 오프셋이_int를_넘는_극단_page도_400이다() {
+		assertThatThrownBy(() -> adminReportService.getReports("PENDING", Integer.MAX_VALUE, 100))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.INVALID_PAGE_REQUEST);
+	}
+
+	@Test
 	@DisplayName("승인하면 신고가 RESOLVED, 영상이 BLINDED 가 된다 (FR-4)")
 	void 승인하면_신고가_RESOLVED_영상이_BLINDED가_된다() {
 		Long reportId = seedReport(reporterId, videoId, ReportReason.INAPPROPRIATE, null);
