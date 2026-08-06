@@ -1,11 +1,13 @@
 package com.msg.fillmap.moderation.controller;
 
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -25,6 +27,7 @@ import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.moderation.dto.AdminReportItemResponseDto;
 import com.msg.fillmap.moderation.dto.AdminReportListResponseDto;
+import com.msg.fillmap.moderation.dto.AdminReportProcessResponseDto;
 import com.msg.fillmap.moderation.entity.ReportReason;
 import com.msg.fillmap.moderation.entity.ReportStatus;
 import com.msg.fillmap.moderation.exception.ReportErrorCode;
@@ -150,5 +153,65 @@ class AdminReportControllerTest {
 				.header(HttpHeaders.AUTHORIZATION, adminBearer()))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.developCode").value(400));
+	}
+
+	@Test
+	@DisplayName("승인은 200 과 처리 결과를 반환하고, 처리자는 토큰의 사용자 id 다 (FR-4)")
+	void 승인은_200과_처리_결과를_반환한다() throws Exception {
+		given(adminReportService.approve(anyLong(), anyLong())).willReturn(
+			new AdminReportProcessResponseDto(7L, ReportStatus.RESOLVED, 1042L, VideoStatus.BLINDED,
+				LocalDateTime.of(2026, 8, 6, 11, 0)));
+
+		mockMvc.perform(post(REPORTS_URL + "/7/approve").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.reportId").value(7))
+			.andExpect(jsonPath("$.data.status").value("RESOLVED"))
+			.andExpect(jsonPath("$.data.videoId").value(1042))
+			.andExpect(jsonPath("$.data.videoStatus").value("BLINDED"))
+			.andExpect(jsonPath("$.data.reviewedAt").exists());
+
+		// @AuthenticationPrincipal 배선 확인 — 처리자 id 는 토큰 주체다.
+		then(adminReportService).should().approve(ADMIN_ID, 7L);
+	}
+
+	@Test
+	@DisplayName("기각은 200 과 REJECTED, 손대지 않은 영상 상태를 반환한다 (FR-6)")
+	void 기각은_200과_REJECTED를_반환한다() throws Exception {
+		given(adminReportService.reject(anyLong(), anyLong())).willReturn(
+			new AdminReportProcessResponseDto(7L, ReportStatus.REJECTED, 1042L, VideoStatus.ACTIVE,
+				LocalDateTime.of(2026, 8, 6, 11, 0)));
+
+		mockMvc.perform(post(REPORTS_URL + "/7/reject").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.status").value("REJECTED"))
+			.andExpect(jsonPath("$.data.videoStatus").value("ACTIVE"));
+
+		then(adminReportService).should().reject(ADMIN_ID, 7L);
+	}
+
+	@Test
+	@DisplayName("없는 신고의 처리는 404 · developCode 11404 다")
+	void 없는_신고의_처리는_404와_11404를_반환한다() throws Exception {
+		given(adminReportService.approve(anyLong(), anyLong()))
+			.willThrow(new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
+
+		mockMvc.perform(post(REPORTS_URL + "/999/approve").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.developCode").value(11404))
+			.andExpect(jsonPath("$.data").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("이미 처리된 신고는 409 · developCode 11410 이다")
+	void 이미_처리된_신고는_409와_11410을_반환한다() throws Exception {
+		given(adminReportService.reject(anyLong(), anyLong()))
+			.willThrow(new ApiException(ReportErrorCode.ALREADY_PROCESSED_REPORT));
+
+		mockMvc.perform(post(REPORTS_URL + "/7/reject").header(HttpHeaders.AUTHORIZATION, adminBearer()))
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.developCode").value(11410))
+			.andExpect(jsonPath("$.data").doesNotExist());
 	}
 }

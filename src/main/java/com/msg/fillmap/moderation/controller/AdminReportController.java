@@ -4,14 +4,19 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
+import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.moderation.dto.AdminReportListResponseDto;
+import com.msg.fillmap.moderation.dto.AdminReportProcessResponseDto;
 import com.msg.fillmap.moderation.service.AdminReportService;
 import com.msg.fillmap.response.SuccessResponse;
 
@@ -53,5 +58,32 @@ public class AdminReportController {
 		@RequestParam(defaultValue = "20") int size
 	) {
 		return SuccessResponse.of(adminReportService.getReports(status, page, size));
+	}
+
+	@Operation(
+		summary = "신고 승인",
+		description = "신고를 RESOLVED 로 종결하고 대상 영상을 블라인드한다 — 한 트랜잭션이다. 영상이 이미 "
+			+ "BLINDED 거나 DELETED 면 영상 전이 없이 신고만 종결하며, 응답의 videoStatus 로 구분할 수 있다. "
+			+ "없는 신고는 404(11404), 이미 처리된 신고와 동시 처리의 늦은 쪽은 409(11410) 다."
+	)
+	@PostMapping("/reports/{reportId}/approve")
+	public SuccessResponse<AdminReportProcessResponseDto> approve(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "승인할 신고 ID", example = "7") @PathVariable Long reportId
+	) {
+		return SuccessResponse.of(adminReportService.approve(principal.userId(), reportId));
+	}
+
+	@Operation(
+		summary = "신고 기각",
+		description = "신고를 REJECTED 로 종결한다. 영상에는 아무 영향이 없고 응답의 videoStatus 는 현재 상태 "
+			+ "그대로다. 없는 신고는 404(11404), 이미 처리된 신고는 409(11410) 다."
+	)
+	@PostMapping("/reports/{reportId}/reject")
+	public SuccessResponse<AdminReportProcessResponseDto> reject(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "기각할 신고 ID", example = "7") @PathVariable Long reportId
+	) {
+		return SuccessResponse.of(adminReportService.reject(principal.userId(), reportId));
 	}
 }
