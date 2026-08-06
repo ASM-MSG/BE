@@ -43,3 +43,6 @@ out/
 
 ### FCM 서비스 계정 키 (MSG-179 D9) — 레포 커밋 절대 금지, FCM_CREDENTIALS_PATH 로 경로만 주입 ###
 *firebase-adminsdk*.json
+
+### 파이썬 캐시 (load-test 분석 스크립트) ###
+__pycache__/
