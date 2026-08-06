@@ -13,8 +13,8 @@ import com.msg.fillmap.video.entity.Video;
  * playbackUrl=null 만으로 구분 못 하는 걸 해소하는 축이다(§설계 M5).
  */
 @Schema(description = "단건 영상 재생 조회 응답",
-	requiredProperties = {"videoId", "gridId", "durationSec", "processingStatus", "visibility", "status", "viewCount",
-		"recordedAt"})
+	requiredProperties = {"videoId", "gridId", "durationSec", "processingStatus", "visibility", "status",
+		"viewCount", "recordedAt", "playbackUrl", "thumbnailUrl", "expiresInSec"})
 public record VideoPlaybackResponseDto(
 	@Schema(description = "영상(방문 이벤트) ID", example = "1042")
 	Long videoId,

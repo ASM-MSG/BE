@@ -13,7 +13,8 @@ import com.msg.fillmap.usergrid.service.CollectionGridView;
  * id 만 있고 url 이 null 인 게 정상 상태다 — FE 는 url null 을 플레이스홀더로 처리한다.
  */
 @Schema(description = "갤러리 격자 항목 — 내가 수집한 격자 하나와 cover 썸네일.",
-	requiredProperties = {"gridId", "gridY", "gridX", "firstCollectedAt", "lastUploadedAt", "videoCount"})
+	requiredProperties = {"gridId", "gridY", "gridX", "firstCollectedAt", "lastUploadedAt", "videoCount",
+		"coverVideoId", "coverThumbnailUrl", "regionName"})
 public record CollectionGridResponseDto(
 	@Schema(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "41642_110458")
 	String gridId,

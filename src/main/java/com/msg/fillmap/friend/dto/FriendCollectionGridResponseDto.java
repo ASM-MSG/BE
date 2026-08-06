@@ -13,7 +13,8 @@ import com.msg.fillmap.usergrid.service.FriendCollectionGridView;
  * (비공개 포함 전체)이라 그대로 내려간다 — 개수는 요약이 이미 공개하는 정보다.
  */
 @Schema(description = "친구가 수집한 격자 하나 — 썸네일은 재생 허용 영상이 있을 때만 붙는다.",
-	requiredProperties = {"gridId", "gridY", "gridX", "firstCollectedAt", "lastUploadedAt", "videoCount"})
+	requiredProperties = {"gridId", "gridY", "gridX", "firstCollectedAt", "lastUploadedAt", "videoCount",
+		"thumbnailUrl", "regionName"})
 public record FriendCollectionGridResponseDto(
 	@Schema(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "41642_110458")
 	String gridId,

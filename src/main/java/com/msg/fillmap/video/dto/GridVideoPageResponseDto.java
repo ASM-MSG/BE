@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * 총계(total)는 담지 않는다 — Slice 의미(§D6, MSG-90/156 no-total 선례).
  */
 @Schema(description = "격자 전역 영상 목록 페이지 응답 (keyset 커서 페이지네이션)",
-	requiredProperties = {"videos", "hasNext"})
+	requiredProperties = {"videos", "hasNext", "nextCursor"})
 public record GridVideoPageResponseDto(
 	@Schema(description = "이 페이지의 전역 공개·READY 영상 (인기순). 없으면 빈 배열")
 	List<GridGlobalVideoResponseDto> videos,

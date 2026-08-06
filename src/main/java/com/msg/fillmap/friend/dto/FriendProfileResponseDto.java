@@ -13,7 +13,7 @@ import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
  * 달라지지 않아야 해서 복제하지 않고 중첩 재사용한다. 수집 0건 친구는 summary 3필드 0 + 빈 recentGrids.
  */
 @Schema(description = "친구 프로필 — 프로필 정보와 도감 요약·최근 수집 격자.",
-	requiredProperties = {"nickname", "gridColor", "summary", "recentGrids"})
+	requiredProperties = {"nickname", "gridColor", "summary", "recentGrids", "profileImageUrl"})
 public record FriendProfileResponseDto(
 	@Schema(description = "친구의 닉네임", example = "채우미")
 	String nickname,

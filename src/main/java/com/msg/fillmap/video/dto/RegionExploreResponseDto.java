@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * 카드 집합이 항상 같은 정의다(§D1). 미존재/무콘텐츠 regionCode 는 에러가 아니라 0·빈 배열이다(§D2).
  */
 @Schema(description = "행정동 격자 카드 리스트 + 헤더 카운트",
-	requiredProperties = {"regionCode", "gridCount", "videoCount", "grids"})
+	requiredProperties = {"regionCode", "gridCount", "videoCount", "grids", "regionName"})
 public record RegionExploreResponseDto(
 	@Schema(description = "행정동 코드 (요청 에코)", example = "2644056000")
 	String regionCode,

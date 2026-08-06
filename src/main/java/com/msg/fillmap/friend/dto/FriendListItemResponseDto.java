@@ -11,7 +11,7 @@ import com.msg.fillmap.user.entity.GridColor;
  */
 @Schema(
 	description = "친구 목록 항목 — 수락된 친구 한 명.",
-	requiredProperties = {"userId", "nickname", "gridColor"}
+	requiredProperties = {"userId", "nickname", "gridColor", "profileImageUrl"}
 )
 public record FriendListItemResponseDto(
 	@Schema(description = "친구의 사용자 id — 프로필 조회·친구 삭제 경로 변수로 그대로 쓴다", example = "7")

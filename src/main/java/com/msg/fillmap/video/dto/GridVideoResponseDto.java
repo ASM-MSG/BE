@@ -11,7 +11,7 @@ import com.msg.fillmap.video.entity.Video;
  * thumbnailUrl 은 S3 key 가 아니라 발급된 presigned GET URL 이며, READY 이전(썸네일 key 없음)이면 null 이다.
  */
 @Schema(description = "격자별 내 영상 리스트 항목",
-	requiredProperties = {"videoId", "processingStatus", "durationSec", "createdAt"})
+	requiredProperties = {"videoId", "processingStatus", "durationSec", "createdAt", "thumbnailUrl"})
 public record GridVideoResponseDto(
 	@Schema(description = "영상(방문 이벤트) ID. 개별 재생·교체·삭제 진입 키", example = "1042")
 	Long videoId,

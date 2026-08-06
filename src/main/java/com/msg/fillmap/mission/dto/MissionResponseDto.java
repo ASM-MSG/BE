@@ -11,7 +11,7 @@ import com.msg.fillmap.mission.entity.Mission;
  * 스위치한다(면/폴리라인/점/경계). per-user 필드 없음 — 모든 사용자에게 동일해 전역 캐시가 성립한다(§개요).
  */
 @Schema(description = "활성 미션 하나 — 공통 필드 + 유형별 렌더 shape",
-	requiredProperties = {"missionId", "type", "title", "targetCount", "shape"})
+	requiredProperties = {"missionId", "type", "title", "targetCount", "shape", "startAt", "endAt"})
 public record MissionResponseDto(
 	@Schema(description = "미션 id (missions.id)", example = "12")
 	Long missionId,
@@ -26,10 +26,10 @@ public record MissionResponseDto(
 	@Schema(description = "완료에 필요한 distinct 방문 격자 수(표시·판정 힌트, 판정은 MSG-223)", example = "3")
 	Integer targetCount,
 
-	@Schema(description = "시작 시각. NULL = 무기간(상시)", example = "2026-11-01T00:00:00")
+	@Schema(description = "시작 시각. NULL = 무기간(상시)", example = "2026-11-01T00:00:00", nullable = true)
 	LocalDateTime startAt,
 
-	@Schema(description = "종료 시각. NULL = 무기간(상시)", example = "2026-11-01T23:59:59")
+	@Schema(description = "종료 시각. NULL = 무기간(상시)", example = "2026-11-01T23:59:59", nullable = true)
 	LocalDateTime endAt,
 
 	@Schema(description = "유형별 렌더 shape 하나(type 에 대응하는 PATH/BOX/CELLS/REGION)")

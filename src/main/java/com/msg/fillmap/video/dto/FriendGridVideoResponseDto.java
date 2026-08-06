@@ -11,7 +11,7 @@ import com.msg.fillmap.video.entity.Video;
  * 표현한다. 목록에는 재생 가능한 영상(ACTIVE·READY·PUBLIC/FRIENDS)만 담기므로 processingStatus 는
  * 항상 READY 라 계약에서 뺐다. thumbnailUrl 은 S3 key 가 아니라 발급된 presigned GET URL 이다.
  */
-@Schema(description = "친구 격자 영상 리스트 항목", requiredProperties = {"videoId", "durationSec", "createdAt"})
+@Schema(description = "친구 격자 영상 리스트 항목", requiredProperties = {"videoId", "durationSec", "createdAt", "thumbnailUrl"})
 public record FriendGridVideoResponseDto(
 	@Schema(description = "영상(방문 이벤트) ID. 재생 조회 진입 키", example = "1042")
 	Long videoId,
