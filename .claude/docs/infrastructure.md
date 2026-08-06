@@ -88,11 +88,16 @@ com.msg.fillmap
 
 ## 로컬 DB (Docker)
 
-PostgreSQL + PostGIS는 Docker로 로컬 실행. `application-local.yml` 참조.
+PostgreSQL + PostGIS는 Docker로 로컬 실행.
+
+로컬 설정 파일 `application-local.yml`은 `.gitignore` 대상이라 레포에 없다. 처음 받았으면
+템플릿을 복사해 값을 채운다 — 필수 키가 하나라도 비면 앱이 기동하지 않는다 (MSG-318).
 
 ### 실행
 
 ```bash
+cp src/main/resources/application-local.yml.example \
+   src/main/resources/application-local.yml      # 최초 1회, 이후 CHANGE_ME 값 채우기
 docker compose up -d          # postgres 컨테이너 기동
 docker compose ps             # 상태 확인
 ./gradlew bootRun             # 앱 실행 (Flyway 자동 마이그레이션)

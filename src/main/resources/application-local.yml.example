@@ -1,0 +1,39 @@
+# 로컬 개발 설정 템플릿 (MSG-318).
+#
+#   cp application-local.yml.example application-local.yml
+#
+# application-local.yml 은 .gitignore 대상이라 레포에 없다 — 각자 이 파일을 복사해 값을 채운다.
+# 여기 있는 키가 전부 필요하다. 하나라도 비면 앱이 기동하지 않는다(JwtProperties 는 @NotBlank·@NotNull
+# 검증이라 바인딩 단계에서 죽는다). 새 필수 키를 추가할 때 이 템플릿도 같이 갱신한다.
+spring:
+  datasource:
+    # docker-compose.yml 의 postgres 컨테이너 기본값 그대로다
+    url: jdbc:postgresql://localhost:5432/fillmap
+    username: user
+    password: user1234
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    show-sql: true                 # 로컬에서만 SQL 출력
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+    org.flywaydb: INFO
+    com.fillmap: DEBUG
+
+jwt:
+  # 둘 다 HMAC 서명 키다. 서로 다른 값을 쓴다 — 같으면 액세스 토큰을 리프레시 토큰으로 통과시킬 수 있다.
+  # 아래 CHANGE_ME 는 일부러 32바이트에 못 미친다. 안 바꾸면 HS256 최소 키 길이에 걸려 기동이 실패한다.
+  # 값 생성: openssl rand -base64 64
+  secret: CHANGE_ME_32_BYTES_OR_LONGER
+  refresh-secret: CHANGE_ME_ANOTHER_32_BYTES_OR_LONGER
+
+oauth:
+  kakao:
+    # 카카오 개발자 콘솔 > 내 애플리케이션 > 앱 키 > REST API 키
+    client-id: CHANGE_ME_KAKAO_CLIENT_ID
