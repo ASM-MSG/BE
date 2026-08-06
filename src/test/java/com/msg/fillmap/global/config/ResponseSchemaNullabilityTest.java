@@ -94,15 +94,25 @@ class ResponseSchemaNullabilityTest {
 		// record 든 일반 클래스든 인스턴스 필드가 곧 직렬화되는 속성이다. record 만 보면
 		// ApiResponseDto(모든 응답을 감싸는 Lombok 클래스)가 통째로 빠진다 (Codex 리뷰 반영).
 		Set<String> required = requiredProperties(type);
+		Set<String> fieldNames = new LinkedHashSet<>();
 		for (Field field : type.getDeclaredFields()) {
 			if (field.isSynthetic() || Modifier.isStatic(field.getModifiers())) {
 				continue;
 			}
+			fieldNames.add(field.getName());
 			if (!required.contains(field.getName()) && !isRequiredOnField(field)) {
 				sink.add(type.getSimpleName() + "::" + field.getName());
 			}
 			for (Class<?> referenced : referencedTypes(field)) {
 				collectUndeclared(referenced, visited, sink);
+			}
+		}
+		// 역방향 검사 — requiredProperties 에만 있고 실제 필드가 없는 이름은 유령 스키마다.
+		// 필드 리네임 뒤 낡은 이름이 남으면 새 이름 누락은 위에서 잡혀도 유령은 조용히 스키마에
+		// required 로 계속 나간다 (Codex 리뷰 반영).
+		for (String name : required) {
+			if (!fieldNames.contains(name)) {
+				sink.add(type.getSimpleName() + "::" + name + " (requiredProperties 오타/잔재 — 실제 필드 없음)");
 			}
 		}
 	}
