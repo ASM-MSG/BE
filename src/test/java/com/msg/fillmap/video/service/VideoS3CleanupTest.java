@@ -48,6 +48,7 @@ import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * S3 미사용 객체 정리 — 어떤 키가 복사·삭제되는지 (MSG-133).
@@ -92,7 +93,7 @@ class VideoS3CleanupTest {
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
-			mock(FriendshipQueryService.class));
+			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
 	}
 
 	@AfterEach

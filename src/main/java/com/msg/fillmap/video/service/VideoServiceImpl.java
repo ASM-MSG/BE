@@ -73,6 +73,8 @@ import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.video.support.VideoCursor;
+import com.msg.fillmap.zone.service.ZoneCellName;
+import com.msg.fillmap.zone.service.ZoneNameQueryService;
 
 // ponytail: presign 을 VideoServiceImpl 에 합침. MSG-71 에서 S3 관심사가 2개째면 PresignedUrlService 로 분리.
 @Slf4j
@@ -114,6 +116,8 @@ public class VideoServiceImpl implements VideoService {
 	// 재생 판정의 FRIENDS 분기만 쓰는 B-내부 의존 (MSG-285). friendships 만 읽는 leaf 라 friend 서비스를
 	// 거치지 않는다 — MSG-187 D5 의 friend → video 위임과 맞물려도 순환이 생기지 않는다 (MSG-312).
 	private final FriendshipQueryService friendshipQueryService;
+	// 업로드 확정·재생 응답의 격자 표시명 (MSG-341). 단건 경로라 리졸버를 응답 조립 직전에 1회 받는다.
+	private final ZoneNameQueryService zoneNameQueryService;
 	private final Clock clock;
 
 	/**
@@ -128,10 +132,11 @@ public class VideoServiceImpl implements VideoService {
 		RegionStatsCommandService regionStatsCommandService, ThumbnailUrlPresigner thumbnailUrlPresigner,
 		BadgeAwardService badgeAwardService, StreakCommandService streakCommandService,
 		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService,
-		FriendshipQueryService friendshipQueryService) {
+		FriendshipQueryService friendshipQueryService, ZoneNameQueryService zoneNameQueryService) {
 		this(videoRepository, videoEncodingService, videoStatusWriter, s3Presigner, s3Client, awsProperties,
 			regionStatsCommandService, thumbnailUrlPresigner, badgeAwardService, streakCommandService,
-			missionAwardService, hotScoreCommandService, friendshipQueryService, Clock.systemUTC());
+			missionAwardService, hotScoreCommandService, friendshipQueryService, zoneNameQueryService,
+			Clock.systemUTC());
 	}
 
 	@Override
@@ -184,9 +189,28 @@ public class VideoServiceImpl implements VideoService {
 		afterCommit(() -> hotScoreCommandService.recordUpload(gridId));
 		triggerEncodingAfterCommit(video.getId(), originalKey);
 
+		// 격자 표시명 (MSG-341). 구역 이름은 순수 산술이고, 행정동 이름은 upsertGrid 가 방금 저장한 라벨을
+		// 읽는다 — 좌표 재판정이 아니라 저장 라벨이라야 도감·카드 리스트의 regionName 과 같은 동이 나온다(D-6).
+		ZoneCellName zoneCellName = zoneName(gridId);
 		return new VideoUploadResponseDto(
 			video.getId(), gridId, video.getProcessingStatus().name(), !alreadyOccupied, newBadges,
-			missionAward.completedMissions());
+			missionAward.completedMissions(),
+			zoneCellName.zoneName(), zoneCellName.zoneCell(), findRegionName(gridId));
+	}
+
+	/**
+	 * 격자 표시명의 구역 부분 (MSG-341). 업로드 확정·재생 둘 다 격자 1건이라 여기서 리졸버를 받아 바로 쓴다 —
+	 * 호출당 zones 로드 1회로 D-1 의 "요청당 상수 회"를 만족한다(목록 경로처럼 루프 밖으로 끌어낼 대상이 없다).
+	 * 매칭 없으면 NONE 이라 호출부에 null 분기가 없다.
+	 */
+	private ZoneCellName zoneName(String gridId) {
+		GridIndex index = GridEncoder.decode(gridId);
+		return zoneNameQueryService.resolver().name(index.gridY(), index.gridX());
+	}
+
+	/** 격자 저장 라벨의 행정동 이름 — 무귀속(해상)이거나 grids row 부재면 null (MSG-341 D-6). */
+	private String findRegionName(String gridId) {
+		return videoRepository.findRegionNameByGridId(gridId).orElse(null);
 	}
 
 	@Override
@@ -550,8 +574,13 @@ public class VideoServiceImpl implements VideoService {
 			videoRepository.incrementViewCount(video.getId());
 		}
 
+		// 6. 격자 표시명 (MSG-341). 재생 경로엔 좌표가 없어 gridId 가 유일한 입력이다 — 구역은 gridId 디코드
+		// 산술로, 행정동은 격자 저장 라벨 조회로 얻는다(D-6). 접근이 거부된 요청은 위에서 이미 던져졌으므로
+		// 이름 계산·조회는 응답을 실제로 내려주는 경로에서만 돈다.
+		ZoneCellName zoneCellName = zoneName(video.getGridId());
 		// viewCount 는 증가 전 스냅샷 — native UPDATE 는 로드된 엔티티 필드를 건드리지 않는다(§설계 M7).
-		return VideoPlaybackResponseDto.of(video, playbackUrl, thumbnailUrl, expiresInSec);
+		return VideoPlaybackResponseDto.of(video, playbackUrl, thumbnailUrl, expiresInSec,
+			zoneCellName.zoneName(), zoneCellName.zoneCell(), findRegionName(video.getGridId()));
 	}
 
 	private void validateCoordinate(double lat, double lon) {

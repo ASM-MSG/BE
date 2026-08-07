@@ -14,7 +14,8 @@ import com.msg.fillmap.video.entity.Video;
  */
 @Schema(description = "단건 영상 재생 조회 응답",
 	requiredProperties = {"videoId", "gridId", "durationSec", "processingStatus", "visibility", "status",
-		"viewCount", "recordedAt", "playbackUrl", "thumbnailUrl", "expiresInSec"})
+		"viewCount", "recordedAt", "playbackUrl", "thumbnailUrl", "expiresInSec",
+		"zoneName", "zoneCell", "regionName"})
 public record VideoPlaybackResponseDto(
 	@Schema(description = "영상(방문 이벤트) ID", example = "1042")
 	Long videoId,
@@ -47,11 +48,28 @@ public record VideoPlaybackResponseDto(
 	LocalDateTime recordedAt,
 
 	@Schema(description = "playbackUrl presign TTL(초). playbackUrl=null 이면 null", nullable = true)
-	Long expiresInSec
+	Long expiresInSec,
+
+	@Schema(description = "격자가 속한 구역 이름 (예 \"서면\"). 구역 밖 격자면 null — 이때 라벨은 regionName 이다",
+		example = "서면", nullable = true)
+	String zoneName,
+
+	@Schema(description = "구역 내 위치 코드 \"{행}-{열}\" (행 A 는 구역 북단, 열 1 은 서단). zoneName 과 항상 "
+		+ "쌍이라 구역 밖이면 함께 null", example = "I-6", nullable = true)
+	String zoneCell,
+
+	@Schema(description = "격자 중심점 행정동 이름 — 구역 밖 격자의 폴백 라벨. 무귀속(해상 등)이거나 "
+		+ "미판정이면 null", example = "서울특별시 강남구 역삼1동", nullable = true)
+	String regionName
 ) {
 
-	/** 재생/썸네일 presigned GET URL 과 TTL 은 서비스가 발급해 넘긴다 (엔티티엔 S3 key 만 있어서다). */
-	public static VideoPlaybackResponseDto of(Video video, String playbackUrl, String thumbnailUrl, Long expiresInSec) {
+	/**
+	 * 재생/썸네일 presigned GET URL 과 TTL 은 서비스가 발급해 넘긴다 (엔티티엔 S3 key 만 있어서다).
+	 * 격자 표시명 3필드(MSG-341)도 같은 결이다 — 구역 이름은 요청당 1회 받은 리졸버(D-1)로, 행정동 이름은
+	 * 격자 저장 라벨 조회(D-6)로 서비스가 구해 넘긴다. 엔티티엔 gridId 만 있어 DTO 혼자서는 못 만든다.
+	 */
+	public static VideoPlaybackResponseDto of(Video video, String playbackUrl, String thumbnailUrl, Long expiresInSec,
+		String zoneName, String zoneCell, String regionName) {
 		return new VideoPlaybackResponseDto(
 			video.getId(),
 			playbackUrl,
@@ -63,6 +81,9 @@ public record VideoPlaybackResponseDto(
 			video.getStatus().name(),
 			video.getViewCount(),
 			video.getRecordedAt(),
-			expiresInSec);
+			expiresInSec,
+			zoneName,
+			zoneCell,
+			regionName);
 	}
 }

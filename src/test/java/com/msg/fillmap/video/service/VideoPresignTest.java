@@ -32,6 +32,7 @@ import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * presign 은 네트워크 호출 없는 순수 로컬 서명 연산이라 더미 자격증명으로 실제 S3Presigner 를 쓴다.
@@ -60,7 +61,7 @@ class VideoPresignTest {
 			presigner, mock(software.amazon.awssdk.services.s3.S3Client.class), properties,
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
-			mock(FriendshipQueryService.class));
+			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
 	}
 
 	@Test

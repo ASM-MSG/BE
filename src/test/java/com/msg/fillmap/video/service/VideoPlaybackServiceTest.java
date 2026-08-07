@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +40,8 @@ import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.zone.entity.Zone;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * 단건 재생 조회 접근 제어 매트릭스(MSG-206 §접근 제어 매트릭스) 를 서비스 단위로 커버한다. presign 은
@@ -56,6 +59,12 @@ class VideoPlaybackServiceTest {
 	private static final String BLURRED_KEY = "videos/blurred/1042.mp4";
 	private static final String THUMB_KEY = "videos/thumb/1042.jpg";
 	private static final LocalDateTime RECORDED_AT = LocalDateTime.of(2026, 7, 20, 18, 3, 11);
+	/** GRID_ID(41642_110458)를 덮는 구역 — 행 = 'A' + (41650 − 41642) = 'I', 열 = 110458 − 110450 + 1 = 9. */
+	private static final Zone SEOMYEON = Zone.builder()
+		.zoneKey("seomyeon").name("서면")
+		.minGridY(41640).maxGridY(41650).minGridX(110450).maxGridX(110460)
+		.priority(0)
+		.build();
 
 	private VideoRepository videoRepository;
 	private ThumbnailUrlPresigner thumbnailUrlPresigner;
@@ -79,7 +88,7 @@ class VideoPlaybackServiceTest {
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), thumbnailUrlPresigner, mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
-			friendshipQueryService);
+			friendshipQueryService, () -> new ZoneNameResolver(List.of(SEOMYEON)));
 	}
 
 	/** 모든 상태 축을 명시 지정하는 코어 빌더 — 엔티티에 세터가 없어 리플렉션으로 벌린다. */
@@ -366,5 +375,35 @@ class VideoPlaybackServiceTest {
 		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("재생 응답에 구역 이름과 행정동 이름이 붙는다")
+	void 재생_응답에_구역_이름과_행정동_이름이_붙는다() {
+		// MSG-341: 재생 경로엔 좌표가 없어 gridId 가 유일한 입력이다. 구역은 gridId 디코드 산술로,
+		// 행정동은 격자 저장 라벨 조회(D-6)로 온다 — 좌표 재판정(resolveByPoint)을 하지 않는다.
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(videoRepository.findRegionNameByGridId(GRID_ID)).willReturn(Optional.of("부산광역시 부산진구 부전2동"));
+
+		VideoPlaybackResponseDto response = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
+
+		assertThat(response.zoneName()).isEqualTo("서면");
+		assertThat(response.zoneCell()).isEqualTo("I-9");
+		assertThat(response.regionName()).isEqualTo("부산광역시 부산진구 부전2동");
+	}
+
+	@Test
+	@DisplayName("무귀속 격자의 재생 응답은 regionName 이 null 이다")
+	void 무귀속_격자의_재생_응답은_regionName이_null이다() {
+		// 저장 라벨이 없는 격자(해상 등)는 조회가 empty — 예외가 아니라 null 필드다 (MSG-341 D-6).
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(videoRepository.findRegionNameByGridId(GRID_ID)).willReturn(Optional.empty());
+
+		VideoPlaybackResponseDto response = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
+
+		assertThat(response.regionName()).isNull();
+		assertThat(response.zoneName()).isEqualTo("서면");   // 구역은 산술이라 행정동 라벨과 무관하게 나온다
 	}
 }

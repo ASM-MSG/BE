@@ -14,6 +14,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,7 @@ import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
@@ -72,7 +74,8 @@ class VideoRecordedAtValidationTest {
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
-			mock(FriendshipQueryService.class), Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
+			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
+			Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
 	}
 
 	@Test

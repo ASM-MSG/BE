@@ -55,7 +55,8 @@ class VideoPlaybackControllerTest {
 		given(videoService.getVideoPlayback(anyLong(), anyLong())).willReturn(new VideoPlaybackResponseDto(
 			VIDEO_ID, "https://bucket.s3/play.mp4?X-Amz-Signature=abc",
 			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "41642_110458", (short) 12,
-			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L));
+			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
+			"서면", "I-9", "서울특별시 강남구 역삼1동"));
 
 		mockMvc.perform(get(URL, VIDEO_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -66,7 +67,10 @@ class VideoPlaybackControllerTest {
 			.andExpect(jsonPath("$.data.processingStatus").value("READY"))
 			.andExpect(jsonPath("$.data.status").value("ACTIVE"))
 			.andExpect(jsonPath("$.data.viewCount").value(37))
-			.andExpect(jsonPath("$.data.expiresInSec").value(600));
+			.andExpect(jsonPath("$.data.expiresInSec").value(600))
+			.andExpect(jsonPath("$.data.zoneName").value("서면"))
+			.andExpect(jsonPath("$.data.zoneCell").value("I-9"))
+			.andExpect(jsonPath("$.data.regionName").value("서울특별시 강남구 역삼1동"));
 	}
 
 	@Test
