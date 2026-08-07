@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -201,6 +202,26 @@ class HotScoreCommandServiceImplTest {
 
 		saturatedService.shutdown();
 
+		assertThat(logAppender.list).hasSize(2);
+		assertThat(logAppender.list.get(1).getFormattedMessage()).contains("종료 시점 잔여분").contains("1건");
+	}
+
+	@Test
+	void 드레인_도중_거부된_신호도_종료_로그에_잡힌다() throws InterruptedException {
+		ExecutorService drainingExecutor = mock(ExecutorService.class);
+		HotScoreCommandServiceImpl drainingService = new HotScoreCommandServiceImpl(
+			redisTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC), drainingExecutor);
+		doThrow(new RejectedExecutionException("종료 중")).when(drainingExecutor).execute(any());
+		// executor 를 닫은 뒤 아직 처리 중이던 요청이 신호를 밀어넣는 상황 — 전부 거부된다
+		when(drainingExecutor.awaitTermination(anyLong(), any())).thenAnswer(invocation -> {
+			drainingService.recordUpload(GRID_ID);   // 첫 폐기 — 즉시 요약 1줄
+			drainingService.recordUpload(GRID_ID);   // 주기 안이라 쌓이기만 한다
+			return true;
+		});
+
+		drainingService.shutdown();
+
+		// flush 가 드레인보다 앞서면 이 1건이 통째로 빠진다 (PR #129 리뷰)
 		assertThat(logAppender.list).hasSize(2);
 		assertThat(logAppender.list.get(1).getFormattedMessage()).contains("종료 시점 잔여분").contains("1건");
 	}

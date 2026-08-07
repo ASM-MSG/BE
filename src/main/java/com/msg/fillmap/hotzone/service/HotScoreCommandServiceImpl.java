@@ -118,23 +118,23 @@ public class HotScoreCommandServiceImpl implements HotScoreCommandService {
 
 	@PreDestroy
 	void shutdown() {
-		// 주기를 못 채운 잔여분을 여기서 마저 남긴다 — 정상 배포·재기동이면 총계가 로그에 온전히 남는다
+		if (executor instanceof ExecutorService executorService) {
+			// 수락된 신호는 커밋된 업로드다 — 일상 배포에선 드레인하고, 타임아웃·인터럽트에서만 유실 허용(D4)
+			executorService.shutdown();
+			try {
+				if (!executorService.awaitTermination(DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+					log.warn("핫스코어 드레인 타임아웃 — 잔여 신호 {}건 유실 허용", executorService.shutdownNow().size());
+				}
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				log.warn("핫스코어 드레인 인터럽트 — 잔여 신호 {}건 유실 허용", executorService.shutdownNow().size());
+			}
+		}
+		// 드레인 뒤에 남긴다 — executor 를 닫은 뒤 들어온 호출도 거부돼 카운터를 올리므로, 앞에서 남기면
+		// 그만큼이 빠진다. 이 flush 이후 프로세스가 죽기까지의 짧은 창은 여전히 못 덮는다 (PR #129 리뷰)
 		long pendingDiscards = discardedSinceLastLog.getAndSet(0);
 		if (pendingDiscards > 0) {
 			log.warn("핫스코어 대기열 포화 — 신호 {}건 폐기 (유실 허용, 종료 시점 잔여분)", pendingDiscards);
-		}
-		if (!(executor instanceof ExecutorService executorService)) {
-			return;
-		}
-		// 수락된 신호는 커밋된 업로드다 — 일상 배포에선 드레인하고, 타임아웃·인터럽트에서만 유실 허용(D4)
-		executorService.shutdown();
-		try {
-			if (!executorService.awaitTermination(DRAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-				log.warn("핫스코어 드레인 타임아웃 — 잔여 신호 {}건 유실 허용", executorService.shutdownNow().size());
-			}
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
-			log.warn("핫스코어 드레인 인터럽트 — 잔여 신호 {}건 유실 허용", executorService.shutdownNow().size());
 		}
 	}
 
