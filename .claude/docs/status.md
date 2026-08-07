@@ -68,8 +68,9 @@
 - **없는 것**: 시/도 상위 레벨 집계 (MVP 이후 별도 티켓)
 
 ### `zone` (Owner A) — 🟡 부분
-- MSG-234: 격자 표시명 구역 — `entity/Zone`(V8 `zones` 전 컬럼 매핑)·`repository/ZoneRepository`, `GET /api/zones` 전체 목록(`service/ZoneQueryService`(+impl)·`controller/ZoneController`·`dto/ZoneResponseDto`), `seed/{ZoneSeed,ZoneSeeder}`(플래그 게이트 `fillmap.zone.seed.enabled` 기본 off, `resources/seed/zones.json` `zone_key` UPSERT 멱등). 표시명("서면 A-14") 계산은 FE-local(§D3) — 서버는 데이터만. 장소 검색은 카카오 프록시 MSG-251 이관(2단 폴백 구현분 제거, §D6)
+- MSG-234: 격자 표시명 구역 — `entity/Zone`(V8 `zones` 전 컬럼 매핑)·`repository/ZoneRepository`, `GET /api/zones` 전체 목록(`service/ZoneQueryService`(+impl)·`controller/ZoneController`·`dto/ZoneResponseDto`), `seed/{ZoneSeed,ZoneSeeder}`(플래그 게이트 `fillmap.zone.seed.enabled` 기본 off, `resources/seed/zones.json` `zone_key` UPSERT 멱등). 표시명("서면 A-14") 계산은 당초 FE-local(§D3)이었으나 MSG-341로 서버 계산 전환. 장소 검색은 카카오 프록시 MSG-251 이관(2단 폴백 구현분 제거, §D6)
 - MSG-259: zones 실데이터 48건 주입(`seed/zones.json` — 공공 상권 17 + 수동 작도 31, 전국·검증기 PASS)·prod/dev 시더 상시 on·명명 계약 언어 중립 픽스처(`src/test/resources/fixtures/zone-naming.json`, `ZoneNamingContractTest` 픽스처 로드 리팩터)·glossary 구역/표시명 등재
+- MSG-341: 격자 표시명 서버 계산 전환(MSG-234 §D3 결정 변경) — `service/ZoneNameQueryService`(계약 인터페이스, A 제공·B 소비)·`ZoneNameResolver`(요청 스코프 불변 스냅샷, 매 요청 findAll·캐시 없음, 정렬 1회로 priority DESC·zoneKey ASC 타이브레이크)·`ZoneCellName`(NONE 상수, 쌍 불변식 생성자 강제). 격자 담는 조회 응답 9종에 zoneName·zoneCell 통과(뷰 7종 필드 추가), 업로드 확정·재생엔 regionName도(`VideoRepository.findRegionNameByGridId` — grids.region_code equi 조회). 픽스처 분리 기대값(expectedZoneName/expectedZoneCell) 가산, ZoneNamingContractTest 참조 구현을 실물 승격
 - **없는 것**: 장소 검색(MSG-251 카카오 프록시 — 구현 완료로 이관)
 
 ### `video` (Owner B) — 🟡 부분
