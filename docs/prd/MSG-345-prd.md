@@ -29,19 +29,20 @@
 
 | ID | 요구사항 | 우선순위 |
 |----|----------|----------|
-| FR-1 | 웹 클라이언트는 카카오 인가 코드와 redirect URI를 보내 로그인 또는 가입할 수 있다. 전용 엔드포인트로 받는다(FE 제안: `POST /api/auth/oauth/kakao/code`, 최종 경로는 스펙에서 확정). | Must |
+| FR-1 | 웹 클라이언트는 카카오 인가 코드, redirect URI, 인가 요청에 사용한 nonce를 보내 로그인 또는 가입할 수 있다. 전용 엔드포인트로 받는다(FE 제안: `POST /api/auth/oauth/kakao/code`, 최종 경로는 스펙에서 확정). | Must |
 | FR-2 | 성공 응답의 형태와 전송 방식은 기존 소셜 로그인과 같다. 액세스 토큰은 body, 웹(X-Client-Type: web, 기본)은 리프레시가 HttpOnly 쿠키[^4], X-Device-Id 발급 규칙도 동일하다. | Must |
 | FR-3 | 서버는 REST API 키로 카카오 토큰 엔드포인트를 호출해 ID 토큰을 얻고, 기존 ID 토큰 검증(서명, issuer, audience)과 가입 경로를 그대로 태운다. 검증 완화 없음. | Must |
 | FR-4 | redirect URI는 요청 body로 받아 교환 호출에 그대로 사용한다. 서버 고정값을 두지 않는다(dev와 운영의 프론트 도메인이 다르다). 서버측 별도 화이트리스트도 두지 않는다. 카카오가 콘솔 등록 목록과 정확 일치를 검증하는 주체다. | Must |
 | FR-5 | 무효한 인가 코드(만료, 재사용, redirect URI 불일치)로는 로그인할 수 없고, 이 계열의 교환 실패는 401 도메인 에러 하나로 응답한다. 사용자가 다시 로그인해도 해소되지 않는 카카오 거절(레이트 리밋, 앱 설정 오류)은 FR-7의 제공자 오류로 분류한다. 카카오의 상세 사유(KOE 코드[^5])는 서버 로그에만 남긴다. | Must |
 | FR-6 | 카카오 토큰 응답에 ID 토큰이 없으면(인가 요청에 `scope=openid` 누락) FR-5와 같은 401 에러로 응답한다. | Must |
 | FR-7 | 카카오 서버 무응답, 5xx, 그리고 사용자 입력과 무관한 교환 거절 시 제공자 오류를 뜻하는 5xx 대역 에러로 응답한다. 타임아웃 없이 무한 대기하지 않는다. | Must |
+| FR-8 | 서버는 교환으로 얻은 ID 토큰의 nonce 클레임을 요청의 nonce와 대조한다. 불일치하거나 없으면 FR-5와 같은 401로 거절한다. 재생 공격과 코드 주입을 서버 층에서 잡는 심층 방어다 (2026-08-08 리뷰 반영). | Must |
 
 ## 4. 비기능 요구사항
 
 | 분류 | 요구사항 |
 |------|----------|
-| 보안 | REST API 키(그리고 도입 시 client_secret[^6])는 서버 환경변수로만 보관한다. 인가 코드, ID 토큰, 액세스 토큰 원문을 로그에 남기지 않는다. 로그인 CSRF 방어의 state 생성과 콜백 대조는 콜백을 소유한 FE 책임이고, nonce는 도입하지 않는다(ID 토큰이 브라우저를 경유하지 않는 서버 교환 설계). |
+| 보안 | REST API 키(그리고 도입 시 client_secret[^6])는 서버 환경변수로만 보관한다. 인가 코드, ID 토큰, 액세스 토큰 원문을 로그에 남기지 않는다. 로그인 CSRF 방어의 state 생성과 콜백 대조는 콜백을 소유한 FE 책임이다. 재생 공격 방지의 nonce는 FE가 발급하고 서버가 ID 토큰 클레임과 대조한다(FR-8). |
 | 성능 | 로그인 1회당 카카오 왕복 1회가 추가된다. 연결과 읽기 타임아웃을 둬 카카오 지연이 서버 스레드 고갈로 번지지 않게 한다. |
 | 운영 | DB 변경 없음. 신규 설정(토큰 엔드포인트 URI 등)은 프로파일 4종과 배포 문서에 반영한다. |
 
@@ -57,7 +58,7 @@ sequenceDiagram
 
     W->>K: 인가 요청 (scope=openid)
     K-->>W: 콜백 리다이렉트 (인가 코드)
-    W->>API: POST /api/auth/oauth/kakao/code {code, redirectUri}
+    W->>API: POST /api/auth/oauth/kakao/code {code, redirectUri, nonce}
     API->>X: 코드 교환 요청
     X->>K: POST /oauth/token (REST API 키)
     K-->>X: 토큰 응답 (id_token 포함)
@@ -75,7 +76,7 @@ classDiagram
     }
     class KakaoAuthCodeExchanger {
         <<신규, 이름은 스펙에서 확정>>
-        +exchange(code, redirectUri) idToken
+        +exchange(code, redirectUri, nonce) idToken
     }
     class OidcLoginService {
         변경 없음, 재사용
