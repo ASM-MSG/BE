@@ -67,6 +67,8 @@ oauth:
   kakao:
     issuer: https://kauth.kakao.com
     jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
+    token-uri: https://kauth.kakao.com/oauth/token    # 웹 인가 코드 → ID Token 교환 (MSG-345)
+    nonce-cookie-secure: true                         # nonce 쿠키를 Secure; SameSite=None 로 (http 로컬만 false)
     # client-id(카카오 REST API 키) 는 application-local.yml (로컬) / KAKAO_CLIENT_ID 환경변수 (운영) 로 주입한다.
 
 # 장소 검색 — 카카오 로컬 키워드 검색 프록시 (MSG-251). rest-api-key 는 OAuth 로그인과 같은 "필맵" 카카오 앱의
