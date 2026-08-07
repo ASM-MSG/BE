@@ -8,7 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * 표시 정보 중복 + 결과당 geospatial 1회 비용으로 기각(§D2), 필요 시 필드 추가만으로 확장한다(Open Q1).
  */
 @Schema(description = "장소 검색 결과 1건. 선택 시 lat/lng 로 지도 이동 + gridId 로 격자 하이라이트를 한 번에 처리한다.",
-	requiredProperties = {"name", "address", "lat", "lng", "gridId"})
+	requiredProperties = {"name", "address", "lat", "lng", "gridId", "zoneName", "zoneCell"})
 public record PlaceSearchResponseDto(
 	@Schema(description = "장소명 (카카오 place_name)", example = "부산대학교")
 	String name,
@@ -23,6 +23,16 @@ public record PlaceSearchResponseDto(
 	double lng,
 
 	@Schema(description = "그 좌표의 격자 ID — FE 격자 하이라이트 키 (즉석 계산, 저장 아님)", example = "39147_112245")
-	String gridId
+	String gridId,
+
+	@Schema(description = "격자가 속한 구역 이름. 구역 밖이면 null — 표시 라벨은 address 가 맡으므로 "
+		+ "행정동 폴백 재료를 싣지 않는다(§D2 유지).",
+		example = "서면", nullable = true)
+	String zoneName,
+
+	@Schema(description = "구역 내 위치 코드 \"{행}-{열}\" (행 A는 구역 북단, 열 1은 서단). "
+		+ "zoneName 과 항상 쌍이라 구역 밖이면 함께 null 이다.",
+		example = "I-6", nullable = true)
+	String zoneCell
 ) {
 }

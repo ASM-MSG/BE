@@ -52,7 +52,7 @@ class PlaceSearchControllerTest {
 	@DisplayName("성공은 SuccessResponse 포맷으로 장소 리스트를 반환한다")
 	void 성공은_SuccessResponse_포맷으로_장소_리스트를_반환한다() throws Exception {
 		given(placeSearchService.searchPlaces(USER_ID, "부산대")).willReturn(List.of(new PlaceSearchResponseDto(
-			"부산대학교", "부산 금정구 부산대학로 63번길 2", 35.23272, 129.08246, "39147_112245")));
+			"부산대학교", "부산 금정구 부산대학로 63번길 2", 35.23272, 129.08246, "39147_112245", "부산대", "B-3")));
 
 		mockMvc.perform(get("/api/search/places")
 				.param("q", "부산대")
@@ -64,7 +64,9 @@ class PlaceSearchControllerTest {
 			.andExpect(jsonPath("$.data[0].address").value("부산 금정구 부산대학로 63번길 2"))
 			.andExpect(jsonPath("$.data[0].lat").value(35.23272))
 			.andExpect(jsonPath("$.data[0].lng").value(129.08246))
-			.andExpect(jsonPath("$.data[0].gridId").value("39147_112245"));
+			.andExpect(jsonPath("$.data[0].gridId").value("39147_112245"))
+			.andExpect(jsonPath("$.data[0].zoneName").value("부산대"))
+			.andExpect(jsonPath("$.data[0].zoneCell").value("B-3"));
 	}
 
 	@Test

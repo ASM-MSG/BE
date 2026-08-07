@@ -19,9 +19,12 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
+import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.hotzone.config.HotZoneProperties;
 import com.msg.fillmap.hotzone.exception.HotZoneErrorCode;
+import com.msg.fillmap.zone.entity.Zone;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * 실제 Redis(localhost:6379)를 사용하는 조회 계층 테스트 — HotScoreCommandServiceImplTest 방식.
@@ -42,6 +45,9 @@ class HotZoneServiceImplTest {
 	private static final String IN_GRID_B = GridEncoder.encode(37.52, 127.02);
 	private static final String OUT_GRID = GridEncoder.encode(38.00, 128.00);
 
+	/** 표시명 계산용 합성 구역 (MSG-341) — IN_GRID_A 만 덮는 1×1 사각형이라 A 는 이름이 있고 B 는 없다. */
+	private static final String ZONE_NAME = "m341핫구역";
+
 	private static LettuceConnectionFactory connectionFactory;
 	private static StringRedisTemplate redisTemplate;
 	private static HotZoneServiceImpl service;
@@ -52,7 +58,18 @@ class HotZoneServiceImplTest {
 		connectionFactory.afterPropertiesSet();
 		redisTemplate = new StringRedisTemplate(connectionFactory);
 		redisTemplate.afterPropertiesSet();
-		service = new HotZoneServiceImpl(redisTemplate, new HotZoneProperties(50, 3),
+		// zones 는 DB 대신 고정 스냅샷을 주입한다 — 이름 산술은 순수 함수라 Redis 조회 경로와 독립이다
+		GridIndex inA = GridEncoder.decode(IN_GRID_A);
+		ZoneNameResolver resolver = new ZoneNameResolver(List.of(Zone.builder()
+			.zoneKey("m341-hotzone")
+			.name(ZONE_NAME)
+			.minGridY((int) inA.gridY())
+			.maxGridY((int) inA.gridY())
+			.minGridX((int) inA.gridX())
+			.maxGridX((int) inA.gridX())
+			.priority(0)
+			.build()));
+		service = new HotZoneServiceImpl(redisTemplate, new HotZoneProperties(50, 3), () -> resolver,
 			Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
 	}
 
@@ -87,6 +104,18 @@ class HotZoneServiceImplTest {
 
 		assertThat(hotZones).extracting(HotZoneView::gridId).containsExactly(IN_GRID_B, IN_GRID_A);
 		assertThat(hotZones).extracting(HotZoneView::score).containsExactly(5L, 3L);
+	}
+
+	@Test
+	void 핫구역_항목에_구역_이름이_붙는다() {
+		record(CURRENT_BUCKET, IN_GRID_A, 5);
+		record(CURRENT_BUCKET, IN_GRID_B, 4);
+
+		List<HotZoneView> hotZones = service.getHotZones(BOUNDS);
+
+		// 합성 구역이 덮는 칸은 IN_GRID_A 하나뿐이라 A 는 이름 쌍이 붙고 구역 밖인 B 는 두 필드가 null 이다
+		assertThat(hotZones).extracting(HotZoneView::zoneName).containsExactly(ZONE_NAME, null);
+		assertThat(hotZones).extracting(HotZoneView::zoneCell).containsExactly("A-1", null);
 	}
 
 	@Test

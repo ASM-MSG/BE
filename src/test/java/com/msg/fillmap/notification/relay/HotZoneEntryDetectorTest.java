@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 
 import jakarta.persistence.EntityManager;
 
@@ -26,6 +27,7 @@ import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * 핫구역 진입 검출 스케줄러 검증 (실 Redis + 실 PostGIS, MSG-181 D3~D7). 게이트(enabled) 컨텍스트
@@ -79,7 +81,9 @@ class HotZoneEntryDetectorTest {
 	void setUp() {
 		Clock fixedClock = Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC);
 		detector = new HotZoneEntryDetector(
-			new HotZoneServiceImpl(redisTemplate, new HotZoneProperties(50, 3), fixedClock),
+			// 진입 검출은 격자 ID 만 보므로 표시명 리졸버는 빈 스냅샷이면 충분하다 (MSG-341)
+			new HotZoneServiceImpl(redisTemplate, new HotZoneProperties(50, 3),
+				() -> new ZoneNameResolver(List.of()), fixedClock),
 			userGridQueryService, notificationCommandService, redisTemplate, fixedClock);
 		tx = new TransactionTemplate(txManager);
 		cleanRedis();
