@@ -26,9 +26,9 @@ import ch.qos.logback.classic.Logger;
  * {@code HotScoreCommandServiceImpl.defaultExecutor()} 는 단일 스레드 + 큐 10,000 이고
  * "밀리면 스레드 수 증설"이라는 판단만 주석으로 남아 있다. 그 "밀리는" 지점을 잰다.
  *
- * <p>포화 실험은 로그를 끈 것과 켠 것을 나눠 잰다. 운영 코드는 폐기 건마다 예외 스택을 포함한
- * WARN 을 호출 스레드에서 남기므로, 로그를 끈 수치는 워커 자체의 상한일 뿐 운영에서 실제로
- * 겪는 값이 아니다. 두 값의 차이가 곧 그 로깅이 포화 상황에 얹는 비용이다.
+ * <p>포화 실험은 로그를 끈 것과 켠 것을 나눠 잰다. 두 값의 차이가 곧 폐기 로깅이 포화 상황에
+ * 얹는 비용이다. MSG-330 이전에는 폐기 건마다 예외 스택을 호출 스레드에서 남겨 이 차이가 28배였고
+ * (352,122 → 12,596 건/초), 지금은 건수만 모아 주기 요약하므로 두 값이 붙어야 한다.
  *
  * <p>실행: {@code HOTZONE_BENCH=true ./gradlew test --tests '*HotScoreThroughputBenchmark'}
  * (실제 Redis 필요 — 로컬 fillmap-local-redis. 버킷 키는 과거 시각으로 격리한다.)
@@ -112,7 +112,7 @@ class HotScoreThroughputBenchmark {
 
 		System.out.printf("%n=== 큐 포화 · 로그 OFF (워커 자체 상한) ===%n");
 		printSaturation(result, 60_000);
-		System.out.printf("  ※ 운영은 폐기마다 WARN 을 남기므로 이 값이 그대로 나오지 않는다%n");
+		System.out.printf("  ※ 아래 운영 조건과 같은 버스트다 — 두 유입률의 차이가 폐기 로깅 비용이다%n");
 
 		assertThat(result.lost).isGreaterThan(0);        // 실제로 포화됐는지
 		assertThat(result.stored).isGreaterThan(0);      // Redis 기록이 실제로 일어났는지
@@ -121,16 +121,14 @@ class HotScoreThroughputBenchmark {
 	@Test
 	@DisplayName("큐 포화 — 폐기 로그까지 포함한 운영 조건")
 	void 큐_포화점을_측정한다_운영_로그_포함() throws Exception {
-		// 운영 기본값은 WARN 이다. 폐기 건마다 예외 스택이 호출 스레드에서 기록된다.
+		// 운영 기본값은 WARN 이다. MSG-330 이후 폐기는 건수만 모여 주기 요약 1줄로 나간다.
 		serviceLogger.setLevel(Level.WARN);
-		// 로그가 실제로 쏟아지는 조건이라 60,000건이면 측정보다 로그 처리가 오래 걸린다.
-		// 20,000건이면 큐(10,000)를 확실히 넘기면서도 실행 시간이 감당된다.
-		Saturation result = runBurst(20_000);
+		Saturation result = runBurst(60_000);   // 로그 OFF 와 같은 버스트 — 유입률을 직접 비교한다
 		serviceLogger.setLevel(Level.OFF);
 
 		System.out.printf("%n=== 큐 포화 · 로그 ON (운영 조건) ===%n");
-		printSaturation(result, 20_000);
-		System.out.printf("  ※ 폐기 %,d건이 각각 스택트레이스를 남긴다%n", result.lost);
+		printSaturation(result, 60_000);
+		System.out.printf("  ※ 폐기 %,d건이 요약 1줄로 눌린다 — 나머지는 다음 주기에 합산된다 (MSG-330)%n", result.lost);
 
 		assertThat(result.lost).isGreaterThan(0);
 	}
