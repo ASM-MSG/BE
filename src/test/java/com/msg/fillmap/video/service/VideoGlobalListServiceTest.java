@@ -39,6 +39,7 @@ import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.video.support.VideoCursor;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * 전역 목록 조회 + 커서/클램프/presign (MSG-237). 필터·정렬은 repository 계약이라 VideoGlobalListQueryTest 가
@@ -69,7 +70,7 @@ class VideoGlobalListServiceTest {
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
-			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class));
+			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
 	}
 
 	/** 목록 후보 조건(PUBLIC 는 repository 필터 소관)·READY·썸네일 key 를 갖춘 픽스처 — 정상 경로 기준. */

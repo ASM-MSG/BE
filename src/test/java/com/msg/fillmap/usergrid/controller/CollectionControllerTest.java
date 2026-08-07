@@ -90,7 +90,8 @@ class CollectionControllerTest {
 		CollectionGridView view = new CollectionGridView(
 			"41642_110458", 41642, 110458,
 			LocalDateTime.of(2026, 7, 20, 18, 3, 11), LocalDateTime.of(2026, 7, 21, 9, 12, 0),
-			3, 1042L, "https://s3.example/thumb.jpg?X-Amz-Signature=abc", "서울특별시 강남구 역삼1동");
+			3, 1042L, "https://s3.example/thumb.jpg?X-Amz-Signature=abc", "서울특별시 강남구 역삼1동",
+			"서면", "I-9");
 		given(userGridQueryService.getCollectionGrids(anyLong())).willReturn(List.of(view));
 
 		mockMvc.perform(get("/api/collections/grids")
@@ -105,7 +106,9 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.data[0].coverVideoId").value(1042))
 			.andExpect(jsonPath("$.data[0].coverThumbnailUrl")
 				.value("https://s3.example/thumb.jpg?X-Amz-Signature=abc"))
-			.andExpect(jsonPath("$.data[0].regionName").value("서울특별시 강남구 역삼1동"));
+			.andExpect(jsonPath("$.data[0].regionName").value("서울특별시 강남구 역삼1동"))
+			.andExpect(jsonPath("$.data[0].zoneName").value("서면"))
+			.andExpect(jsonPath("$.data[0].zoneCell").value("I-9"));
 	}
 
 	@Test
@@ -133,7 +136,7 @@ class CollectionControllerTest {
 	void 동_단위_영상_조회는_200과_gridId_포함_영상_리스트를_반환한다() throws Exception {
 		RegionVideoView view = new RegionVideoView(
 			1042L, "41642_110458", "https://s3.example/thumb.jpg?X-Amz-Signature=abc",
-			"READY", 12, LocalDateTime.of(2026, 7, 20, 18, 3, 11));
+			"READY", 12, LocalDateTime.of(2026, 7, 20, 18, 3, 11), "서면", "I-9");
 		given(userGridQueryService.getRegionVideos(anyLong(), anyString())).willReturn(List.of(view));
 
 		mockMvc.perform(get("/api/collections/videos")
@@ -147,7 +150,9 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.data[0].thumbnailUrl")
 				.value("https://s3.example/thumb.jpg?X-Amz-Signature=abc"))
 			.andExpect(jsonPath("$.data[0].processingStatus").value("READY"))
-			.andExpect(jsonPath("$.data[0].durationSec").value(12));
+			.andExpect(jsonPath("$.data[0].durationSec").value(12))
+			.andExpect(jsonPath("$.data[0].zoneName").value("서면"))
+			.andExpect(jsonPath("$.data[0].zoneCell").value("I-9"));
 	}
 
 	@Test

@@ -18,6 +18,9 @@ import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.hotzone.config.HotZoneProperties;
 import com.msg.fillmap.hotzone.exception.HotZoneErrorCode;
+import com.msg.fillmap.zone.service.ZoneCellName;
+import com.msg.fillmap.zone.service.ZoneNameQueryService;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * 핫구역 조회 구현 (MSG-184). 최근 8버킷(현재 포함) ZUNIONSTORE 균등 합산을 {@code hotzone:top}
@@ -46,17 +49,21 @@ public class HotZoneServiceImpl implements HotZoneService {
 
 	private final StringRedisTemplate redisTemplate;
 	private final HotZoneProperties properties;
+	private final ZoneNameQueryService zoneNameQueryService;
 	private final Clock clock;
 
 	@Autowired
-	public HotZoneServiceImpl(StringRedisTemplate redisTemplate, HotZoneProperties properties) {
-		this(redisTemplate, properties, Clock.systemUTC());
+	public HotZoneServiceImpl(StringRedisTemplate redisTemplate, HotZoneProperties properties,
+		ZoneNameQueryService zoneNameQueryService) {
+		this(redisTemplate, properties, zoneNameQueryService, Clock.systemUTC());
 	}
 
 	/** 버킷 경계(6h) 결정적 테스트용 — 고정 Clock 주입 (HotScoreCommandServiceImpl 선례). */
-	public HotZoneServiceImpl(StringRedisTemplate redisTemplate, HotZoneProperties properties, Clock clock) {
+	public HotZoneServiceImpl(StringRedisTemplate redisTemplate, HotZoneProperties properties,
+		ZoneNameQueryService zoneNameQueryService, Clock clock) {
 		this.redisTemplate = redisTemplate;
 		this.properties = properties;
+		this.zoneNameQueryService = zoneNameQueryService;
 		this.clock = clock;
 	}
 
@@ -72,6 +79,8 @@ public class HotZoneServiceImpl implements HotZoneService {
 		// bbox 코너를 GridEncoder(단일 진실 원천)로 정수 인덱스로 환산해 범위 비교한다 — 위경도 재계산 없음.
 		GridIndex sw = GridEncoder.decode(GridEncoder.encode(bounds.swLat(), bounds.swLng()));
 		GridIndex ne = GridEncoder.decode(GridEncoder.encode(bounds.neLat(), bounds.neLng()));
+		// 리졸버는 루프 진입 전 1회 — 항목마다 zones 를 다시 읽지 않는다 (MSG-341 FR-8)
+		ZoneNameResolver resolver = zoneNameQueryService.resolver();
 		List<HotZoneView> hotZones = new ArrayList<>();
 		for (TypedTuple<String> tuple : top) {
 			long score = Math.round(tuple.getScore());
@@ -83,7 +92,9 @@ public class HotZoneServiceImpl implements HotZoneService {
 				|| index.gridX() < sw.gridX() || index.gridX() > ne.gridX()) {
 				continue;
 			}
-			hotZones.add(new HotZoneView(tuple.getValue(), (int) index.gridY(), (int) index.gridX(), score));
+			ZoneCellName name = resolver.name(index.gridY(), index.gridX());
+			hotZones.add(new HotZoneView(tuple.getValue(), (int) index.gridY(), (int) index.gridX(), score,
+				name.zoneName(), name.zoneCell()));
 		}
 		return hotZones;
 	}

@@ -157,6 +157,21 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	);
 
 	/**
+	 * 격자 저장 라벨(grids.region_code)의 행정동 이름 (MSG-341 D-6). 업로드 확정·재생 응답의 regionName —
+	 * 구역(zone) 밖 격자에서 FE 가 쓰는 폴백 라벨 재료다. upsertGrid 는 region_code 판정·저장까지만 하고
+	 * 이름을 돌려주지 않으므로 확정 직후 이 변환 조회 1회가 따로 필요하다(신규 격자도 같은 트랜잭션에서
+	 * 방금 INSERT 한 라벨을 읽는다). 좌표 재판정(resolveByPoint)이 아니라 저장 라벨을 읽는 이유는 도감
+	 * 목록·카드 리스트의 regionName 과 같은 축이어야 경계 격자에서 화면 간 이름이 어긋나지 않아서다.
+	 * grids row 없음(이론상 도달 불가) 또는 region_code NULL(무귀속·해상)이면 empty → 응답은 null.
+	 */
+	@Query(value = """
+		SELECT r.region_name FROM grids g
+		JOIN regions r ON r.region_code = g.region_code
+		WHERE g.grid_id = :gridId
+		""", nativeQuery = true)
+	Optional<String> findRegionNameByGridId(@Param("gridId") String gridId);
+
+	/**
 	 * 점령 여부 판정 (upsert 전 호출). false 면 이번 업로드가 첫 점령.
 	 */
 	@Query(value = "SELECT EXISTS(SELECT 1 FROM user_grids WHERE user_id = :userId AND grid_id = :gridId)",

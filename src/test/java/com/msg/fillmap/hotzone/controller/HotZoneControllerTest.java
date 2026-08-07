@@ -1,5 +1,6 @@
 package com.msg.fillmap.hotzone.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -59,7 +60,7 @@ class HotZoneControllerTest {
 	@DisplayName("응답에 user_id 가 포함되지 않는다")
 	void 응답에_user_id가_포함되지_않는다() throws Exception {
 		given(hotZoneService.getHotZones(any(ViewportBounds.class)))
-			.willReturn(List.of(new HotZoneView("41642_110458", 41642, 110458, 5L)));
+			.willReturn(List.of(new HotZoneView("41642_110458", 41642, 110458, 5L, "서면", "I-6")));
 
 		mockMvc.perform(hotZoneRequest())
 			.andExpect(status().isOk())
@@ -73,8 +74,8 @@ class HotZoneControllerTest {
 	void 핫구역_목록이_핫스코어_내림차순_JSON으로_직렬화된다() throws Exception {
 		given(hotZoneService.getHotZones(any(ViewportBounds.class)))
 			.willReturn(List.of(
-				new HotZoneView("41677_110443", 41677, 110443, 7L),
-				new HotZoneView("41642_110458", 41642, 110458, 5L)));
+				new HotZoneView("41677_110443", 41677, 110443, 7L, "서면", "I-6"),
+				new HotZoneView("41642_110458", 41642, 110458, 5L, null, null)));
 
 		mockMvc.perform(hotZoneRequest())
 			.andExpect(status().isOk())
@@ -83,8 +84,12 @@ class HotZoneControllerTest {
 			.andExpect(jsonPath("$.data.hotZones[0].gridY").value(41677))
 			.andExpect(jsonPath("$.data.hotZones[0].gridX").value(110443))
 			.andExpect(jsonPath("$.data.hotZones[0].score").value(7))
+			.andExpect(jsonPath("$.data.hotZones[0].zoneName").value("서면"))
+			.andExpect(jsonPath("$.data.hotZones[0].zoneCell").value("I-6"))
 			.andExpect(jsonPath("$.data.hotZones[1].gridId").value("41642_110458"))
-			.andExpect(jsonPath("$.data.hotZones[1].score").value(5));
+			.andExpect(jsonPath("$.data.hotZones[1].score").value(5))
+			.andExpect(jsonPath("$.data.hotZones[1].zoneName").value(nullValue()))
+			.andExpect(jsonPath("$.data.hotZones[1].zoneCell").value(nullValue()));
 	}
 
 	private MockHttpServletRequestBuilder hotZoneRequest() {

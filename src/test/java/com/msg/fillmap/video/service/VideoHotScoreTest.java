@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,7 @@ import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * 업로드 훅의 핫스코어 배선 (MSG-183). 트랜잭션 없이 돌리므로 afterCommit 폴백이 즉시 실행돼
@@ -73,7 +75,7 @@ class VideoHotScoreTest {
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, hotScoreCommandService,
-			mock(FriendshipQueryService.class));
+			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
 	}
 
 	private void givenSavedVideo() {

@@ -8,18 +8,22 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.GridEncoder;
+import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.search.dto.PlaceSearchResponseDto;
 import com.msg.fillmap.search.exception.SearchErrorCode;
 import com.msg.fillmap.search.service.KakaoLocalClient.KakaoPlace;
 import com.msg.fillmap.search.service.impl.PlaceSearchServiceImpl;
+import com.msg.fillmap.zone.entity.Zone;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * 장소 검색 서비스 단위 테스트 (MSG-251) — 클라이언트는 mock, DB 무접점. trim 가드(§D3)·gridId 즉석 합성·
@@ -33,14 +37,34 @@ class PlaceSearchServiceTest {
 
 	private static final long USER_ID = 42L;
 
+	/** 표시명 계산용 합성 구역 (MSG-341) — 서면역 격자(39064_112225) 한 칸만 덮는다. */
+	private static final String ZONE_NAME = "m341서면";
+	private static final String 서면역_GRID_ID = "39064_112225";
+
 	@Mock
 	private KakaoLocalClient kakaoLocalClient;
 
 	@Mock
 	private SearchKeywordCommandService searchKeywordCommandService;
 
-	@InjectMocks
 	private PlaceSearchServiceImpl placeSearchService;
+
+	@BeforeEach
+	void setUp() {
+		// zones 는 DB 대신 고정 스냅샷을 주입한다 — 이름 산술은 순수 함수라 카카오 프록시 경로와 독립이다
+		GridIndex 서면역 = GridEncoder.decode(서면역_GRID_ID);
+		ZoneNameResolver resolver = new ZoneNameResolver(List.of(Zone.builder()
+			.zoneKey("m341-search")
+			.name(ZONE_NAME)
+			.minGridY((int) 서면역.gridY())
+			.maxGridY((int) 서면역.gridY())
+			.minGridX((int) 서면역.gridX())
+			.maxGridX((int) 서면역.gridX())
+			.priority(0)
+			.build()));
+		placeSearchService = new PlaceSearchServiceImpl(kakaoLocalClient, searchKeywordCommandService,
+			() -> resolver);
+	}
 
 	private KakaoPlace place(String name, double lat, double lng) {
 		return new KakaoPlace(name, name + " 지번", name + " 도로명", lat, lng);
@@ -104,6 +128,19 @@ class PlaceSearchServiceTest {
 
 		assertThat(results).extracting(PlaceSearchResponseDto::gridId)
 			.containsExactly("39147_112245", "39064_112225", "41729_110368", "39059_112277");
+	}
+
+	@Test
+	void 장소_검색_결과에_구역_이름이_붙는다() {
+		given(kakaoLocalClient.search("서면")).willReturn(List.of(
+			place("서면역", 35.15790, 129.05930),
+			place("부산대학교", 35.23272, 129.08246)));
+
+		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(USER_ID, "서면");
+
+		// 합성 구역이 덮는 칸은 서면역 하나뿐 — 구역 밖인 부산대는 두 필드가 null 이고 표시 라벨은 address 가 맡는다
+		assertThat(results).extracting(PlaceSearchResponseDto::zoneName).containsExactly(ZONE_NAME, null);
+		assertThat(results).extracting(PlaceSearchResponseDto::zoneCell).containsExactly("A-1", null);
 	}
 
 	@Test

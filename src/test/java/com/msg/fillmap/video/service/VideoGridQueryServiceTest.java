@@ -31,6 +31,7 @@ import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * 조회 + 썸네일 presign. presign 은 네트워크 없는 로컬 서명이라 더미 자격증명으로 실제 S3Presigner 를
@@ -62,7 +63,7 @@ class VideoGridQueryServiceTest {
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
-			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class));
+			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
 	}
 
 	private void givenVideos(Video... videos) {

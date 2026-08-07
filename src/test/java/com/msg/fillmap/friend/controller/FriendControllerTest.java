@@ -172,7 +172,7 @@ class FriendControllerTest {
 			new CollectionSummaryResponseDto(15, 42L, 6),
 			List.of(new FriendCollectionGridResponseDto("41642_110458", 41642, 110458,
 				LocalDateTime.of(2026, 7, 20, 18, 3, 11), LocalDateTime.of(2026, 7, 21, 9, 12, 0),
-				3, "https://signed/thumb.jpg", "서울특별시 강남구 역삼1동"))));
+				3, "https://signed/thumb.jpg", "서울특별시 강남구 역삼1동", "서면", "I-9"))));
 
 		mockMvc.perform(get("/api/friends/7/profile").header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
@@ -192,6 +192,8 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data.recentGrids[0].videoCount").value(3))
 			.andExpect(jsonPath("$.data.recentGrids[0].thumbnailUrl").value("https://signed/thumb.jpg"))
 			.andExpect(jsonPath("$.data.recentGrids[0].regionName").value("서울특별시 강남구 역삼1동"))
+			.andExpect(jsonPath("$.data.recentGrids[0].zoneName").value("서면"))
+			.andExpect(jsonPath("$.data.recentGrids[0].zoneCell").value("I-9"))
 			// 영상 ID 미노출 — 비공개 영상의 존재가 id 로 새지 않아야 한다 (§D6 의도적 델타).
 			.andExpect(jsonPath("$.data.recentGrids[0].coverVideoId").doesNotExist());
 	}
@@ -202,7 +204,8 @@ class FriendControllerTest {
 		// 형상 보장은 타입 공유(OccupiedGridPageResponseDto — GridController 와 동일 DTO)가 하고,
 		// 이 테스트는 직렬화 결과에 색상 같은 여분 필드가 붙지 않는지만 고정한다.
 		given(friendService.getFriendGrids(USER_ID, 7L, new ViewportBounds(37.50, 127.00, 37.55, 127.05), null, 1000))
-			.willReturn(new OccupiedGridPage(List.of(new OccupiedGridView("41642_110458", 41642, 110458)),
+			.willReturn(new OccupiedGridPage(
+				List.of(new OccupiedGridView("41642_110458", 41642, 110458, "서면", "I-9")),
 				"NDE2NDNfMTEwNDYw"));
 
 		mockMvc.perform(get("/api/friends/7/grids")
@@ -217,7 +220,10 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data.grids[0].gridId").value("41642_110458"))
 			.andExpect(jsonPath("$.data.grids[0].gridY").value(41642))
 			.andExpect(jsonPath("$.data.grids[0].gridX").value(110458))
-			.andExpect(jsonPath("$.data.grids[0].*", Matchers.hasSize(3)))
+			// 이름 2필드는 내 뷰포트 조회와 공용 DTO 라 같이 실린다 (MSG-341) — 색상 같은 여분 필드는 여전히 없다.
+			.andExpect(jsonPath("$.data.grids[0].zoneName").value("서면"))
+			.andExpect(jsonPath("$.data.grids[0].zoneCell").value("I-9"))
+			.andExpect(jsonPath("$.data.grids[0].*", Matchers.hasSize(5)))
 			.andExpect(jsonPath("$.data.nextCursor").value("NDE2NDNfMTEwNDYw"));
 	}
 

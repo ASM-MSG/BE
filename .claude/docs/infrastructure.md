@@ -91,6 +91,8 @@ com.msg.fillmap
 **계약 인터페이스 (변경 시 상대 팀원 확인 필수)**:
 - `GridQueryService` — Owner A 제공
 - `HotZoneService` — Owner A 제공
+- `ZoneNameQueryService` — Owner A 제공 (`zone.service`, MSG-341) — 격자 표시명의 구역 부분(`zoneName`·`zoneCell`) 계산.
+  단건 메서드 대신 요청당 1회 받는 스냅샷 `ZoneNameResolver` 를 반환해 항목별 zones 재조회(N+1)를 계약으로 막는다
 - `UserGridQueryService` — Owner B 제공
 - `UserOidcCommandService` — Owner B 제공
 

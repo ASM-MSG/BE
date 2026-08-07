@@ -1,5 +1,6 @@
 {
-  "_readme": "격자 표시명 명명 계약 픽스처 (언어 중립 — FE/모바일이 이 파일을 파싱해 자기 구현을 검증한다, 정본은 이 파일이고 위키 'zone 표시명 FE 계약' 노트는 미러). 규칙: 행 = maxGridY − gridY 를 A(0)…Z(25), 열 = gridX − minGridX + 1, 표시명 = '{name} {행}-{열}'. 두 zone 에 겹치면 priority 높은 쪽(동률은 zoneKey 사전순), 매칭 없으면 regionName 폴백(번호 없이 이름만), 그것도 없으면 null. 값은 ZoneNamingContractTest 기존 7건 시나리오의 상수를 그대로 이식한 것(m234 접두). 근거 결정: docs/MSG-259.md D-4.",
+  "_readme": "격자 표시명 명명 계약 픽스처 (언어 중립). 명명 규칙의 정본은 이 파일 하나이고, 위키 'zone 표시명 FE 계약' 노트는 미러다. MSG-341부터 계산 구현은 서버 한 곳이라(응답 필드 zoneName·zoneCell) 이 파일을 검증에 쓰는 것은 서버 계약 테스트(ZoneNamingContractTest)뿐이다 — 클라이언트는 명명 구현이 없고 응답 조립과 행정동 폴백 표시만 한다. 규칙: 행 = maxGridY − gridY 를 A(0)…Z(25), 열 = gridX − minGridX + 1, 표시명 = '{name} {행}-{열}'. 두 zone 에 겹치면 priority 높은 쪽(동률은 zoneKey 사전순), 매칭 없으면 regionName 폴백(번호 없이 이름만), 그것도 없으면 null. 값은 ZoneNamingContractTest 기존 7건 시나리오의 상수를 그대로 이식한 것(m234 접두). 근거 결정: docs/MSG-259.md D-4, docs/MSG-341.md D-3.",
+  "_readme_expected_fields": "expectedZoneName/expectedZoneCell 이 서버 응답 두 필드(zoneName, zoneCell)의 기대값이고 서버 테스트의 판정 기준이다. 구역 매칭이 없으면 둘 다 null 이다. expected 는 그 둘을 조립한 통짜 표시명(구역 밖이면 regionName 폴백)으로, 기존 소비자를 위해 하위 호환으로 유지된다. 조립 규칙은 한 줄: expectedZoneName 이 있으면 expectedZoneName + ' ' + expectedZoneCell, 없으면 regionName. 근거 결정: docs/MSG-341.md D-4.",
   "zones": {
     "seomyeon": {
       "zoneKey": "m234-seomyeon",
@@ -55,7 +56,9 @@
         "seomyeon"
       ],
       "regionName": null,
-      "expected": "m234서면 A-1"
+      "expected": "m234서면 A-1",
+      "expectedZoneName": "m234서면",
+      "expectedZoneCell": "A-1"
     },
     {
       "name": "북단에서_14번째_열은_A_14다",
@@ -64,7 +67,9 @@
         "seomyeon"
       ],
       "regionName": null,
-      "expected": "m234서면 A-14"
+      "expected": "m234서면 A-14",
+      "expectedZoneName": "m234서면",
+      "expectedZoneCell": "A-14"
     },
     {
       "name": "한_행_남쪽은_B로_내려간다",
@@ -73,7 +78,9 @@
         "seomyeon"
       ],
       "regionName": null,
-      "expected": "m234서면 B-1"
+      "expected": "m234서면 B-1",
+      "expectedZoneName": "m234서면",
+      "expectedZoneCell": "B-1"
     },
     {
       "name": "남단_행은_사각형_높이에_따라_알파벳이_증가한다_25행이_Z_경계다",
@@ -82,7 +89,9 @@
         "tall"
       ],
       "regionName": null,
-      "expected": "m234높은구역 Z-1"
+      "expected": "m234높은구역 Z-1",
+      "expectedZoneName": "m234높은구역",
+      "expectedZoneCell": "Z-1"
     },
     {
       "name": "사각형_북쪽_밖_격자는_매칭이_없어_표시명이_없다",
@@ -91,7 +100,9 @@
         "seomyeon"
       ],
       "regionName": null,
-      "expected": null
+      "expected": null,
+      "expectedZoneName": null,
+      "expectedZoneCell": null
     },
     {
       "name": "사각형_동쪽_밖_격자는_매칭이_없어_표시명이_없다",
@@ -100,7 +111,9 @@
         "seomyeon"
       ],
       "regionName": null,
-      "expected": null
+      "expected": null,
+      "expectedZoneName": null,
+      "expectedZoneCell": null
     },
     {
       "name": "사각형_안_격자는_zone_매칭으로_명명된다",
@@ -109,7 +122,9 @@
         "seomyeon"
       ],
       "regionName": null,
-      "expected": "m234서면 F-11"
+      "expected": "m234서면 F-11",
+      "expectedZoneName": "m234서면",
+      "expectedZoneCell": "F-11"
     },
     {
       "name": "두_zone에_겹치는_격자는_priority가_높은_zone을_고른다",
@@ -119,7 +134,9 @@
         "hot"
       ],
       "regionName": null,
-      "expected": "m234핫스팟 B-3"
+      "expected": "m234핫스팟 B-3",
+      "expectedZoneName": "m234핫스팟",
+      "expectedZoneCell": "B-3"
     },
     {
       "name": "매칭_zone이_없으면_행정동_이름으로_폴백한다",
@@ -128,7 +145,9 @@
         "seomyeon"
       ],
       "regionName": "부산광역시 부산진구 부전동",
-      "expected": "부산광역시 부산진구 부전동"
+      "expected": "부산광역시 부산진구 부전동",
+      "expectedZoneName": null,
+      "expectedZoneCell": null
     },
     {
       "name": "zone_안이면_좌표_명명이_폴백보다_우선한다",
@@ -137,7 +156,9 @@
         "seomyeon"
       ],
       "regionName": "부산광역시 부산진구 부전동",
-      "expected": "m234서면 A-1"
+      "expected": "m234서면 A-1",
+      "expectedZoneName": "m234서면",
+      "expectedZoneCell": "A-1"
     },
     {
       "name": "priority가_동률이면_zoneKey_사전순으로_앞선_zone을_고른다",
@@ -147,7 +168,9 @@
         "spot"
       ],
       "regionName": null,
-      "expected": "m234큰구역 F-11"
+      "expected": "m234큰구역 F-11",
+      "expectedZoneName": "m234큰구역",
+      "expectedZoneCell": "F-11"
     }
   ]
 }

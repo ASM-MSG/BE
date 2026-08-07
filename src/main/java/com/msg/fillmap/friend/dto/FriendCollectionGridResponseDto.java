@@ -14,7 +14,7 @@ import com.msg.fillmap.usergrid.service.FriendCollectionGridView;
  */
 @Schema(description = "친구가 수집한 격자 하나 — 썸네일은 재생 허용 영상이 있을 때만 붙는다.",
 	requiredProperties = {"gridId", "gridY", "gridX", "firstCollectedAt", "lastUploadedAt", "videoCount",
-		"thumbnailUrl", "regionName"})
+		"thumbnailUrl", "regionName", "zoneName", "zoneCell"})
 public record FriendCollectionGridResponseDto(
 	@Schema(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "41642_110458")
 	String gridId,
@@ -39,7 +39,15 @@ public record FriendCollectionGridResponseDto(
 
 	@Schema(description = "격자 중심점 행정동 이름(무귀속/미판정이면 null)",
 		example = "서울특별시 강남구 역삼1동", nullable = true)
-	String regionName
+	String regionName,
+
+	@Schema(description = "격자가 속한 구역 이름 (예 \"서면\"). 구역 밖 격자면 null — 이때 라벨은 regionName 이다",
+		example = "서면", nullable = true)
+	String zoneName,
+
+	@Schema(description = "구역 내 위치 코드 \"{행}-{열}\" (행 A 는 구역 북단, 열 1 은 서단). zoneName 과 항상 "
+		+ "쌍이라 구역 밖이면 함께 null", example = "I-6", nullable = true)
+	String zoneCell
 ) {
 
 	public static FriendCollectionGridResponseDto from(FriendCollectionGridView view) {
@@ -51,7 +59,9 @@ public record FriendCollectionGridResponseDto(
 			view.lastUploadedAt(),
 			view.videoCount(),
 			view.thumbnailUrl(),
-			view.regionName()
+			view.regionName(),
+			view.zoneName(),
+			view.zoneCell()
 		);
 	}
 }

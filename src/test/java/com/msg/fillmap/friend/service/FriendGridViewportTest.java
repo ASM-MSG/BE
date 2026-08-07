@@ -30,6 +30,7 @@ import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.grid.service.OccupiedGridView;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.zone.entity.Zone;
 
 /**
  * 친구 격자 뷰포트 조회 (MSG-187 D2·D3, 실 DB). @Transactional 롤백 격리로 공유 로컬 DB 에 시드를 남기지
@@ -91,6 +92,36 @@ class FriendGridViewportTest {
 		assertThat(page.items().get(0).gridY()).isEqualTo((int) baseY);
 		assertThat(page.items().get(0).gridX()).isEqualTo((int) baseX);
 		assertThat(page.nextCursor()).isNull();
+	}
+
+	@Test
+	@DisplayName("친구 격자 뷰포트 항목에도 같은 이름이 실린다")
+	void 친구_격자_뷰포트_항목에도_같은_이름이_실린다() {
+		// MSG-341: 친구 뷰포트는 내 뷰포트와 같은 GridQueryService·같은 OccupiedGridView 를 통과시킬 뿐이라
+		// friend 쪽에 이름 코드가 0줄이다. 그 통과가 실제로 이름을 실어 오는지를 실 DB 로 고정한다.
+		// 구역은 이 트랜잭션 안에서만 살고 롤백되므로 공유 로컬 DB 에 남지 않는다.
+		seedZone(baseY, baseY + 5, baseX, baseX + 5);
+		occupy(friend, 0, 0);
+		occupy(friend, 1, 0);
+
+		OccupiedGridPage page = friendGrids(bounds(0, 0, 3, 3), null, DEFAULT_SIZE);
+
+		// 행 = 'A' + (maxGridY − gridY): baseY 는 'F'(5칸 남쪽), baseY+1 은 'E'. 열 = gridX − minGridX + 1 = 1.
+		assertThat(page.items()).extracting(OccupiedGridView::zoneName).containsOnly("서면");
+		assertThat(page.items()).extracting(OccupiedGridView::zoneCell).containsExactly("F-1", "E-1");
+	}
+
+	@Test
+	@DisplayName("구역 밖 친구 격자는 두 필드가 모두 null 이다")
+	void 구역_밖_친구_격자는_두_필드가_모두_null이다() {
+		// 구역을 아예 안 심으면(서해 공해상은 시드 구역과 무관) NONE 이 그대로 내려온다 — 오버레이는
+		// 라벨을 그리지 않으므로 여기에 행정동 폴백 재료를 싣지 않는 게 계약이다.
+		occupy(friend, 0, 0);
+
+		OccupiedGridPage page = friendGrids(bounds(0, 0, 3, 3), null, DEFAULT_SIZE);
+
+		assertThat(page.items().get(0).zoneName()).isNull();
+		assertThat(page.items().get(0).zoneCell()).isNull();
 	}
 
 	@Test
@@ -240,6 +271,21 @@ class FriendGridViewportTest {
 	private void becomeFriends(User requester, User addressee) {
 		friendService.request(requester.getId(), addressee.getFriendCode());
 		friendService.accept(addressee.getId(), requester.getId());
+	}
+
+	/**
+	 * 격자 인덱스 사각형으로 구역 하나를 심는다 (MSG-341). flush 로 같은 트랜잭션의 zones 조회에 보이게 하고,
+	 * 테스트 롤백이 지우므로 공유 로컬 DB 에 남지 않는다.
+	 */
+	private void seedZone(long minGridY, long maxGridY, long minGridX, long maxGridX) {
+		em.persist(Zone.builder()
+			.zoneKey("m341-" + UUID.randomUUID().toString().substring(0, 8))
+			.name("서면")
+			.minGridY((int) minGridY).maxGridY((int) maxGridY)
+			.minGridX((int) minGridX).maxGridX((int) maxGridX)
+			.priority(0)
+			.build());
+		em.flush();
 	}
 
 	/** (baseY + dy, baseX + dx) 셀을 grids 에 만들고 그 사용자의 점령 row 를 넣는다. */

@@ -14,7 +14,7 @@ import com.msg.fillmap.usergrid.service.CollectionGridView;
  */
 @Schema(description = "갤러리 격자 항목 — 내가 수집한 격자 하나와 cover 썸네일.",
 	requiredProperties = {"gridId", "gridY", "gridX", "firstCollectedAt", "lastUploadedAt", "videoCount",
-		"coverVideoId", "coverThumbnailUrl", "regionName"})
+		"coverVideoId", "coverThumbnailUrl", "regionName", "zoneName", "zoneCell"})
 public record CollectionGridResponseDto(
 	@Schema(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "41642_110458")
 	String gridId,
@@ -42,7 +42,15 @@ public record CollectionGridResponseDto(
 
 	@Schema(description = "격자 중심점 행정동 이름(무귀속/미판정이면 null)",
 		example = "서울특별시 강남구 역삼1동", nullable = true)
-	String regionName
+	String regionName,
+
+	@Schema(description = "격자가 속한 구역 이름 (예 \"서면\"). 구역 밖 격자면 null — 이때 라벨은 regionName 이다",
+		example = "서면", nullable = true)
+	String zoneName,
+
+	@Schema(description = "구역 내 위치 코드 \"{행}-{열}\" (행 A 는 구역 북단, 열 1 은 서단). zoneName 과 항상 "
+		+ "쌍이라 구역 밖이면 함께 null", example = "I-6", nullable = true)
+	String zoneCell
 ) {
 
 	public static CollectionGridResponseDto from(CollectionGridView view) {
@@ -55,7 +63,9 @@ public record CollectionGridResponseDto(
 			view.videoCount(),
 			view.coverVideoId(),
 			view.coverThumbnailUrl(),
-			view.regionName()
+			view.regionName(),
+			view.zoneName(),
+			view.zoneCell()
 		);
 	}
 }

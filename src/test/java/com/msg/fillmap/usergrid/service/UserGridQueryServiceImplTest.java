@@ -2,10 +2,13 @@ package com.msg.fillmap.usergrid.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.times;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -18,14 +21,25 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
+import com.msg.fillmap.usergrid.repository.FriendCollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.RegionVideoProjection;
 import com.msg.fillmap.usergrid.repository.UserGridRepository;
 import com.msg.fillmap.usergrid.service.impl.UserGridQueryServiceImpl;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.zone.entity.Zone;
+import com.msg.fillmap.zone.service.ZoneNameQueryService;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("UserGridQueryServiceImpl")
 class UserGridQueryServiceImplTest {
+
+	/** 테스트 격자(41642_110458)를 덮는 구역 — 행 = 'A' + (41650 − 41642) = 'I', 열 = 110458 − 110450 + 1 = 9. */
+	private static final Zone SEOMYEON = Zone.builder()
+		.zoneKey("seomyeon").name("서면")
+		.minGridY(41640).maxGridY(41650).minGridX(110450).maxGridX(110460)
+		.priority(0)
+		.build();
 
 	@Mock
 	private UserGridRepository userGridRepository;
@@ -33,8 +47,19 @@ class UserGridQueryServiceImplTest {
 	@Mock
 	private ThumbnailUrlPresigner thumbnailUrlPresigner;
 
+	@Mock
+	private ZoneNameQueryService zoneNameQueryService;
+
 	@InjectMocks
 	private UserGridQueryServiceImpl userGridQueryService;
+
+	/**
+	 * 구역 이름 배선을 검증하는 목록 조회에서 호출한다 — 리졸버는 목이 아니라 실물이라 배선이 어긋나면
+	 * 값이 그대로 틀린다. getCollectionSummary 는 격자 목록이 아니라 이 배선을 타지 않는다.
+	 */
+	private void givenSeomyeonZone() {
+		given(zoneNameQueryService.resolver()).willReturn(new ZoneNameResolver(List.of(SEOMYEON)));
+	}
 
 	@Nested
 	@DisplayName("getCollectionSummary")
@@ -68,6 +93,11 @@ class UserGridQueryServiceImplTest {
 	@Nested
 	@DisplayName("getCollectionGrids")
 	class GetCollectionGrids {
+
+		@BeforeEach
+		void givenZone() {
+			givenSeomyeonZone();
+		}
 
 		@Test
 		@DisplayName("gridY gridX는 gridId를 디코드한 값이다")
@@ -116,6 +146,11 @@ class UserGridQueryServiceImplTest {
 	@DisplayName("getRegionVideos")
 	class GetRegionVideos {
 
+		@BeforeEach
+		void givenZone() {
+			givenSeomyeonZone();
+		}
+
 		@Test
 		@DisplayName("thumbnailKey가 있으면 presigned GET URL로 바꾸고 gridId를 그대로 통과시킨다")
 		void thumbnailKey가_있으면_presigned_GET_URL로_바꾸고_gridId를_그대로_통과시킨다() {
@@ -144,6 +179,99 @@ class UserGridQueryServiceImplTest {
 			assertThat(view.processingStatus()).isEqualTo("ENCODING");
 			assertThat(view.thumbnailUrl()).isNull();
 		}
+	}
+
+	@Nested
+	@DisplayName("구역 이름 통과 (MSG-341)")
+	class ZoneName {
+
+		@Test
+		@DisplayName("도감 목록과 지역별 갤러리와 친구 최근 수집 격자에 구역 이름이 붙는다")
+		void 도감_목록과_지역별_갤러리와_친구_최근_수집_격자에_구역_이름이_붙는다() {
+			// 뷰 3종이 같은 산식으로 이름을 받는지 한 자리에서 고정한다. 지역별 갤러리는 뷰에 gridY/gridX 가
+			// 없어 이 매핑에서 gridId 를 새로 decode 하는 유일한 경로다 (D-5).
+			givenSeomyeonZone();
+			given(userGridRepository.getCollectionGrids(1L))
+				.willReturn(List.of(gridProjection("41642_110458", null, null)));
+			given(userGridRepository.getRegionVideos(1L, "1168051500"))
+				.willReturn(List.of(regionVideoProjection(1042L, "41642_110458", null, "ENCODING")));
+			given(userGridRepository.getCollectionGridsForFriend(7L))
+				.willReturn(List.of(friendGridProjection("41642_110458")));
+
+			CollectionGridView collection = userGridQueryService.getCollectionGrids(1L).get(0);
+			RegionVideoView regionVideo = userGridQueryService.getRegionVideos(1L, "1168051500").get(0);
+			FriendCollectionGridView friendGrid = userGridQueryService.getCollectionGridsForFriend(7L).get(0);
+
+			assertThat(collection.zoneName()).isEqualTo("서면");
+			assertThat(collection.zoneCell()).isEqualTo("I-9");
+			assertThat(regionVideo.zoneName()).isEqualTo("서면");
+			assertThat(regionVideo.zoneCell()).isEqualTo("I-9");
+			assertThat(friendGrid.zoneName()).isEqualTo("서면");
+			assertThat(friendGrid.zoneCell()).isEqualTo("I-9");
+		}
+
+		@Test
+		@DisplayName("구역 밖 격자는 두 필드가 모두 null이다")
+		void 구역_밖_격자는_두_필드가_모두_null이다() {
+			givenSeomyeonZone();
+			given(userGridRepository.getCollectionGrids(1L))
+				.willReturn(List.of(gridProjection("38879_112390", null, null)));
+
+			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
+
+			assertThat(view.zoneName()).isNull();
+			assertThat(view.zoneCell()).isNull();
+			assertThat(view.regionName()).isEqualTo("역삼1동");   // 폴백 재료는 그대로 남는다
+		}
+
+		@Test
+		@DisplayName("항목이 여러 건이어도 zones 조회는 1회다")
+		void 항목이_여러_건이어도_zones_조회는_1회다() {
+			// FR-8: 항목마다 리졸버를 받으면 격자 수만큼 zones 를 다시 읽는 N+1 이 된다.
+			givenSeomyeonZone();
+			given(userGridRepository.getCollectionGrids(1L)).willReturn(List.of(
+				gridProjection("41642_110458", null, null),
+				gridProjection("41643_110459", null, null),
+				gridProjection("41644_110460", null, null)));
+
+			assertThat(userGridQueryService.getCollectionGrids(1L)).hasSize(3);
+
+			then(zoneNameQueryService).should(times(1)).resolver();
+		}
+	}
+
+	private FriendCollectionGridProjection friendGridProjection(String gridId) {
+		return new FriendCollectionGridProjection() {
+			@Override
+			public String getGridId() {
+				return gridId;
+			}
+
+			@Override
+			public LocalDateTime getFirstCollectedAt() {
+				return LocalDateTime.of(2026, 7, 20, 18, 3, 11);
+			}
+
+			@Override
+			public LocalDateTime getLastUploadedAt() {
+				return LocalDateTime.of(2026, 7, 21, 9, 12, 0);
+			}
+
+			@Override
+			public Integer getVideoCount() {
+				return 3;
+			}
+
+			@Override
+			public String getThumbnailKey() {
+				return null;
+			}
+
+			@Override
+			public String getRegionName() {
+				return "역삼1동";
+			}
+		};
 	}
 
 	private RegionVideoProjection regionVideoProjection(

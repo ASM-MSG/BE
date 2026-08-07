@@ -57,7 +57,7 @@ class GridControllerTest {
 	@DisplayName("단일 격자 조회 API 는 200 과 점령여부와 videoCount 를 반환한다")
 	void 단일_격자_조회_API는_200과_점령여부와_videoCount를_반환한다() throws Exception {
 		given(gridQueryService.getCell(anyLong(), eq(GRID_ID)))
-			.willReturn(new GridCellView(GRID_ID, true, 3));
+			.willReturn(new GridCellView(GRID_ID, true, 3, "서면", "I-6"));
 
 		mockMvc.perform(get("/api/grids/{gridId}", GRID_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -65,7 +65,9 @@ class GridControllerTest {
 			.andExpect(jsonPath("$.developCode").value(200))
 			.andExpect(jsonPath("$.data.gridId").value(GRID_ID))
 			.andExpect(jsonPath("$.data.occupied").value(true))
-			.andExpect(jsonPath("$.data.videoCount").value(3));
+			.andExpect(jsonPath("$.data.videoCount").value(3))
+			.andExpect(jsonPath("$.data.zoneName").value("서면"))
+			.andExpect(jsonPath("$.data.zoneCell").value("I-6"));
 	}
 
 	@Test
@@ -84,7 +86,7 @@ class GridControllerTest {
 	void 뷰포트_페이지_조회는_200과_grids배열과_nextCursor를_반환한다() throws Exception {
 		given(gridQueryService.getOccupiedInViewport(anyLong(), any(ViewportBounds.class), any(), anyInt()))
 			.willReturn(new OccupiedGridPage(
-				List.of(new OccupiedGridView(GRID_ID, 41642, 110458)), "NDE2NDNfMTEwNDYw"));
+				List.of(new OccupiedGridView(GRID_ID, 41642, 110458, "서면", "I-6")), "NDE2NDNfMTEwNDYw"));
 
 		mockMvc.perform(viewportRequest())
 			.andExpect(status().isOk())
@@ -92,6 +94,8 @@ class GridControllerTest {
 			.andExpect(jsonPath("$.data.grids[0].gridId").value(GRID_ID))
 			.andExpect(jsonPath("$.data.grids[0].gridY").value(41642))
 			.andExpect(jsonPath("$.data.grids[0].gridX").value(110458))
+			.andExpect(jsonPath("$.data.grids[0].zoneName").value("서면"))
+			.andExpect(jsonPath("$.data.grids[0].zoneCell").value("I-6"))
 			.andExpect(jsonPath("$.data.nextCursor").value("NDE2NDNfMTEwNDYw"));
 	}
 
@@ -99,7 +103,8 @@ class GridControllerTest {
 	@DisplayName("마지막 페이지 응답의 nextCursor 는 null 이다")
 	void 마지막페이지_응답의_nextCursor는_null이다() throws Exception {
 		given(gridQueryService.getOccupiedInViewport(anyLong(), any(ViewportBounds.class), any(), anyInt()))
-			.willReturn(new OccupiedGridPage(List.of(new OccupiedGridView(GRID_ID, 41642, 110458)), null));
+			.willReturn(new OccupiedGridPage(
+				List.of(new OccupiedGridView(GRID_ID, 41642, 110458, null, null)), null));
 
 		mockMvc.perform(viewportRequest())
 			.andExpect(status().isOk())
