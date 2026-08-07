@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,15 +18,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 /**
  * 실제 Redis(localhost:6379)를 사용하는 스토어 계층 테스트 — 로컬은 fillmap-local-redis,
@@ -47,6 +55,9 @@ class HotScoreCommandServiceImplTest {
 	private static StringRedisTemplate redisTemplate;
 	private static HotScoreCommandServiceImpl service;
 
+	/** 폐기 로그의 줄 수·스택 추적 유무를 단언하려고 테스트마다 붙였다 뗀다 (MSG-330). */
+	private ListAppender<ILoggingEvent> logAppender;
+
 	@BeforeAll
 	static void beforeAll() {
 		connectionFactory = new LettuceConnectionFactory("localhost", 6379);
@@ -57,8 +68,16 @@ class HotScoreCommandServiceImplTest {
 			Runnable::run);
 	}
 
+	@BeforeEach
+	void attachLogAppender() {
+		logAppender = new ListAppender<>();
+		logAppender.start();
+		serviceLogger().addAppender(logAppender);
+	}
+
 	@AfterEach
 	void tearDown() {
+		serviceLogger().detachAppender(logAppender);
 		redisTemplate.delete(List.of(BUCKET_KEY, NEXT_BUCKET_KEY));
 	}
 
@@ -109,7 +128,122 @@ class HotScoreCommandServiceImplTest {
 	@Test
 	void 워커_실행이_버킷_경계를_넘겨_지연돼도_호출_시각_버킷에_기록된다() {
 		AtomicReference<Instant> now = new AtomicReference<>(FIXED_INSTANT);
-		Clock mutableClock = new Clock() {
+		List<Runnable> deferred = new ArrayList<>();
+		HotScoreCommandServiceImpl delayedService =
+			new HotScoreCommandServiceImpl(redisTemplate, movableClock(now), deferred::add);
+
+		delayedService.recordUpload(GRID_ID);
+		now.set(FIXED_INSTANT.plusSeconds(BUCKET_SECONDS));   // 워커 실행 전에 6h 경계를 넘긴다
+		deferred.forEach(Runnable::run);
+
+		assertThat(redisTemplate.opsForZSet().score(BUCKET_KEY, GRID_ID)).isEqualTo(1.0);
+		assertThat(redisTemplate.opsForZSet().score(NEXT_BUCKET_KEY, GRID_ID)).isNull();
+	}
+
+	@Test
+	void 큐가_포화되면_예외_없이_신호를_버린다() {
+		HotScoreCommandServiceImpl saturatedService = serviceWithFailingExecutor(
+			new RejectedExecutionException("큐 포화"));
+
+		assertThatCode(() -> saturatedService.recordUpload(GRID_ID)).doesNotThrowAnyException();
+
+		assertThat(redisTemplate.opsForZSet().score(BUCKET_KEY, GRID_ID)).isNull();
+	}
+
+	@Test
+	void 큐_포화_폐기는_스택_추적_없이_주기당_한_줄만_남긴다() {
+		HotScoreCommandServiceImpl saturatedService = serviceWithFailingExecutor(
+			new RejectedExecutionException("큐 포화"));
+
+		saturatedService.recordUpload(GRID_ID);
+		saturatedService.recordUpload(GRID_ID);
+		saturatedService.recordUpload(GRID_ID);
+
+		// 고정 Clock 이라 세 건이 같은 요약 주기에 들어간다 — 건별로 찍히면 3줄이 된다 (MSG-330)
+		assertThat(logAppender.list).hasSize(1);
+		assertThat(logAppender.list.get(0).getThrowableProxy()).isNull();
+		assertThat(logAppender.list.get(0).getFormattedMessage()).contains("대기열 포화");
+	}
+
+	@Test
+	void 포화가_끝난_뒤에도_밀린_폐기_건수가_다음_요약에_보고된다() {
+		AtomicReference<Instant> now = new AtomicReference<>(FIXED_INSTANT);
+		AtomicBoolean saturated = new AtomicBoolean(true);
+		HotScoreCommandServiceImpl flakyService = new HotScoreCommandServiceImpl(
+			redisTemplate, movableClock(now),
+			task -> {
+				if (saturated.get()) {
+					throw new RejectedExecutionException("큐 포화");
+				}
+				task.run();
+			});
+
+		flakyService.recordUpload(GRID_ID);   // 첫 폐기 — 즉시 요약 1줄로 포화를 알린다
+		flakyService.recordUpload(GRID_ID);   // 같은 주기라 로그 없이 쌓이기만 한다
+		flakyService.recordUpload(GRID_ID);
+		saturated.set(false);
+		flakyService.recordUpload(GRID_ID);   // 포화는 풀렸지만 아직 주기 안이라 조용하다
+
+		assertThat(logAppender.list).hasSize(1);
+
+		now.set(FIXED_INSTANT.plusSeconds(61));
+		flakyService.recordUpload(GRID_ID);   // 주기가 지난 첫 정상 적재가 밀린 2건을 내보낸다
+
+		assertThat(logAppender.list).hasSize(2);
+		assertThat(logAppender.list.get(1).getFormattedMessage()).contains("2건");
+	}
+
+	@Test
+	void 종료할_때_주기를_못_채운_잔여_폐기를_마저_남긴다() {
+		HotScoreCommandServiceImpl saturatedService = serviceWithFailingExecutor(
+			new RejectedExecutionException("큐 포화"));
+		saturatedService.recordUpload(GRID_ID);   // 첫 폐기 — 즉시 1줄
+		saturatedService.recordUpload(GRID_ID);   // 주기 안이라 쌓이기만 한다
+
+		saturatedService.shutdown();
+
+		assertThat(logAppender.list).hasSize(2);
+		assertThat(logAppender.list.get(1).getFormattedMessage()).contains("종료 시점 잔여분").contains("1건");
+	}
+
+	@Test
+	void 드레인_도중_거부된_신호도_종료_로그에_잡힌다() throws InterruptedException {
+		ExecutorService drainingExecutor = mock(ExecutorService.class);
+		HotScoreCommandServiceImpl drainingService = new HotScoreCommandServiceImpl(
+			redisTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC), drainingExecutor);
+		doThrow(new RejectedExecutionException("종료 중")).when(drainingExecutor).execute(any());
+		// executor 를 닫은 뒤 아직 처리 중이던 요청이 신호를 밀어넣는 상황 — 전부 거부된다
+		when(drainingExecutor.awaitTermination(anyLong(), any())).thenAnswer(invocation -> {
+			drainingService.recordUpload(GRID_ID);   // 첫 폐기 — 즉시 요약 1줄
+			drainingService.recordUpload(GRID_ID);   // 주기 안이라 쌓이기만 한다
+			return true;
+		});
+
+		drainingService.shutdown();
+
+		// flush 가 드레인보다 앞서면 이 1건이 통째로 빠진다 (PR #129 리뷰)
+		assertThat(logAppender.list).hasSize(2);
+		assertThat(logAppender.list.get(1).getFormattedMessage()).contains("종료 시점 잔여분").contains("1건");
+	}
+
+	@Test
+	void 포화가_아닌_적재_실패는_스택_추적을_남긴다() {
+		HotScoreCommandServiceImpl brokenService = serviceWithFailingExecutor(
+			new IllegalStateException("실행기 고장"));
+
+		assertThatCode(() -> brokenService.recordUpload(GRID_ID)).doesNotThrowAnyException();
+
+		assertThat(logAppender.list).hasSize(1);
+		assertThat(logAppender.list.get(0).getThrowableProxy()).isNotNull();
+	}
+
+	private static Logger serviceLogger() {
+		return (Logger) LoggerFactory.getLogger(HotScoreCommandServiceImpl.class);
+	}
+
+	/** 테스트가 시각을 임의로 미는 Clock — 버킷 경계·요약 주기 경과를 결정적으로 재현한다. */
+	private static Clock movableClock(AtomicReference<Instant> now) {
+		return new Clock() {
 			@Override
 			public ZoneId getZone() {
 				return ZoneOffset.UTC;
@@ -125,29 +259,13 @@ class HotScoreCommandServiceImplTest {
 				return now.get();
 			}
 		};
-		List<Runnable> deferred = new ArrayList<>();
-		HotScoreCommandServiceImpl delayedService =
-			new HotScoreCommandServiceImpl(redisTemplate, mutableClock, deferred::add);
-
-		delayedService.recordUpload(GRID_ID);
-		now.set(FIXED_INSTANT.plusSeconds(BUCKET_SECONDS));   // 워커 실행 전에 6h 경계를 넘긴다
-		deferred.forEach(Runnable::run);
-
-		assertThat(redisTemplate.opsForZSet().score(BUCKET_KEY, GRID_ID)).isEqualTo(1.0);
-		assertThat(redisTemplate.opsForZSet().score(NEXT_BUCKET_KEY, GRID_ID)).isNull();
 	}
 
-	@Test
-	void 큐가_포화되면_예외_없이_신호를_버린다() {
-		HotScoreCommandServiceImpl saturatedService = new HotScoreCommandServiceImpl(
-			redisTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC),
+	private HotScoreCommandServiceImpl serviceWithFailingExecutor(RuntimeException failure) {
+		return new HotScoreCommandServiceImpl(redisTemplate, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC),
 			task -> {
-				throw new RejectedExecutionException("큐 포화");
+				throw failure;
 			});
-
-		assertThatCode(() -> saturatedService.recordUpload(GRID_ID)).doesNotThrowAnyException();
-
-		assertThat(redisTemplate.opsForZSet().score(BUCKET_KEY, GRID_ID)).isNull();
 	}
 
 	@Test

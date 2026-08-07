@@ -52,6 +52,20 @@ SPRING_PROFILES_ACTIVE=prod java -jar build/libs/msgbe-0.0.1-SNAPSHOT.jar
 - `jpa.show-sql=false`, 로깅 `root=INFO`, `hibernate.SQL=WARN`.
 - HikariCP 풀: max 20 / idle 5.
 
+## 관리자 계정 승격 (MSG-195)
+
+관리자 계정을 만드는 코드·시드는 없다 (2026-08-06 확정). 관리자 API(`/api/admin/**`, ADMIN role
+필수)를 쓸 계정은 기존 사용자를 DB에서 직접 승격한다:
+
+```sql
+UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
+```
+
+- **승격 후 재로그인(토큰 재발급)해야 반영된다** — role은 로그인 시 액세스 토큰 클레임에 실리므로,
+  승격 전에 발급받은 토큰으로는 여전히 403이다.
+- **강등은 역방향으로 지연된다**: `role = 'USER'`로 되돌려도 이미 발급된 액세스 토큰은 만료까지
+  ADMIN으로 동작한다. 즉시 차단이 필요하면 토큰 만료를 기다리거나 리프레시 토큰을 무효화한다.
+
 ## S3 presign — AWS 측 전제 (콘솔 설정, 저장소 밖)
 
 앱 설정(`AwsProperties`·`S3Config`)은 자격증명·버킷명만 안다. 아래는 **AWS 콘솔에만 존재하는 전제**라 여기 기록한다.

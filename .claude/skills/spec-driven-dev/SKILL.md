@@ -18,9 +18,12 @@ convention-reviewer 팀을 조율해 실제 코드와 테스트를 완성하는 
 | 팀원 이름 | 에이전트 타입 | 역할 | 산출물 |
 |-----------|--------------|------|--------|
 | `spec-writer` | `spec-writer` | 스펙 문서 없을 때만 선행 호출 | `docs/MSG-{번호}.md` |
-| `grid-dev` | `grid-developer` | Owner A: grid/region 구현 | `src/main/java/com/msg/fillmap/{grid,region}/**`, 테스트 |
-| `auth-dev` | `auth-developer` | Owner B: user/video/auth/usergrid 구현 | `src/main/java/com/msg/fillmap/{user,video,auth,usergrid}/**`, 테스트 |
+| `grid-dev` | `grid-developer` | Owner A 구현 (지도 인프라) | Owner A 패키지 하위 `src/main/java/**`, 테스트 |
+| `auth-dev` | `auth-developer` | Owner B 구현 (콘텐츠/인증) | Owner B 패키지 하위 `src/main/java/**`, 테스트 |
 | `reviewer` | `convention-reviewer` | 컨벤션·계약·빌드 검증 | 리뷰 결과(위반 목록 또는 통과) |
+
+**Owner별 패키지 목록의 정본은 CLAUDE.md "협업 원칙"이다.** 여기에 사본을 두지 않는다 —
+새 패키지가 배정되면 그쪽만 갱신되므로 사본은 반드시 낡는다 (MSG-337).
 
 `prd-writer`는 이 표에 없다 — 서브에이전트가 아니라 **인라인 스킬**이다(PRD의 입력이 대화에 흐르는
 맥락이라 격리하면 품질이 떨어진다). Phase 0 게이트에서 `Skill` 도구로 직접 실행한다.

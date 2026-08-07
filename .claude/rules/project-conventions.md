@@ -79,6 +79,14 @@ MSG-179 fix: 컨슈머 poll 튜닝·말폼드 비재시도 분류               
 MSG-179 fix: 소비 지연 시 그룹 이탈 방지, 깨진 메시지는 즉시 폐기  (O) 읽히는 문장
 ```
 
+### 본문은 기본적으로 쓰지 않는다 (2026-08-06 신설)
+
+**제목 한 줄이 기본이다.** 본문은 제목으로 설명되지 않는 근거가 있을 때만 2~3문장 붙인다
+(실측 수치, 기각한 대안처럼 나중에 복기할 값). 제목이 다 말하는데 본문을 덧붙이면 군더더기다.
+
+본문을 길게 쓰고 싶어지면 먼저 **커밋에 관심사가 여럿 섞였는지 의심하고 쪼갠다.** 소제목·표·
+여러 문단이 필요하다면 그건 커밋이 아니라 PR 본문이나 스펙 작업 로그에 갈 내용이다.
+
 ## 브랜치 명명
 
 git flow 브랜치 타입만 쓴다. **커밋 메시지 타입(`feat`·`fix`·`chore`·`docs`…)을
@@ -120,6 +128,36 @@ Controller → Service → Repository → DB
 - Controller는 얇게. Request 파싱 + Service 호출 + Response 변환만.
 - Service에 비즈니스 로직 집중.
 - Repository는 JpaRepository 상속 + native UPSERT는 `@Modifying @Query nativeQuery = true`.
+
+## 영속 계층 — JPA 사용 방식 (MSG-334 명문화)
+
+**엔티티 간 연관관계 매핑(`@ManyToOne`·`@OneToMany`)을 만들지 않는다.** 참조는
+`reporterId`·`videoId`처럼 **id 컬럼 보관**(Long/String)으로 통일한다 — 전 도메인 선례
+(Video·UserGrid·Friendship·Report).
+
+이유 4가지:
+
+1. **Owner A/B 도메인 경계**: 연관관계는 엔티티 클래스 수준의 타 도메인 import를 만든다 —
+   "접점은 인터페이스로만" 원칙이 엔티티에서 무너진다. id 보관이면 참조가 값 수준.
+2. **부분 매핑 전략과 정합**: 엔티티는 사용 컬럼만 매핑한다(`Grid.geom` 미매핑,
+   `Report.reviewed_by` 후속 티켓 매핑 등). 연관관계는 상대 엔티티의 온전한 매핑을 전제한다.
+3. **N+1 · LAZY 프록시 함정 원천 차단**: 조회는 프로젝션·native로 명시적으로 짠다.
+4. **무결성은 DB 소유**: FK 제약·ON DELETE는 Flyway DDL이 보장한다 (JPA는 `validate`만).
+
+**예외 (애그리거트 내부)**: 동일 패키지·동일 Owner에서 생명주기를 공유하는 부모-자식
+(예: Mission↔MissionGrid 류)은 근거를 주석과 PR에 남기고 연관관계를 쓸 수 있다.
+도메인·Owner 경계를 넘는 참조는 예외 없이 id 보관.
+
+조인이 필요하면 **세타 조인 + 생성자 프로젝션**으로 쓴다
+(`FROM Report r, User ru WHERE ru.id = r.reporterId` — Friendship·Report 리포지토리 선례).
+
+연관관계 없이도 JPA를 유지하는 이유: 상태 전이 더티 체킹(`Video.markBlinded()` 류 도메인
+메서드가 UPDATE문 없이 성립), `@Lock` 파생 쿼리·페이징 인프라, enum·시각 타입 자동 매핑,
+영속성 컨텍스트의 트랜잭션 정합성(1차 캐시 — 같은 트랜잭션의 같은 행 = 같은 객체).
+PostgreSQL 전용 기능(ON CONFLICT upsert·PostGIS·advisory lock)은 native로 내린다.
+MyBatis 전면 전환 반려 판정·번복 트리거·대안(QueryDSL 포크·JdbcClient·jOOQ)은 ADR 정본 참조:
+[영속 계층 JPA 유지 — MyBatis 전환 반려 (2026-08-03, cf-29917209)](https://soma17-msg.atlassian.net/wiki/spaces/M/pages/29917209)
+— LLM-WIKI `04-decisions/ADR 영속 계층 JPA 유지 MyBatis 반려.md`
 
 ## Lombok 사용 원칙
 

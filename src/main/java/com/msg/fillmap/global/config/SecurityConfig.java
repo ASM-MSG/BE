@@ -20,6 +20,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import tools.jackson.databind.ObjectMapper;
 
+import com.msg.fillmap.auth.jwt.CustomAccessDeniedHandler;
 import com.msg.fillmap.auth.jwt.CustomAuthenticationEntryPoint;
 import com.msg.fillmap.auth.jwt.JwtAuthenticationFilter;
 import com.msg.fillmap.auth.jwt.TokenProvider;
@@ -47,10 +48,16 @@ public class SecurityConfig {
 	}
 
 	@Bean
+	public CustomAccessDeniedHandler customAccessDeniedHandler(ObjectMapper objectMapper) {
+		return new CustomAccessDeniedHandler(objectMapper);
+	}
+
+	@Bean
 	public SecurityFilterChain filterChain(
 		HttpSecurity http,
 		JwtAuthenticationFilter jwtAuthenticationFilter,
 		CustomAuthenticationEntryPoint authenticationEntryPoint,
+		CustomAccessDeniedHandler accessDeniedHandler,
 		CorsConfigurationSource corsConfigurationSource
 	) throws Exception {
 		return http
@@ -69,9 +76,15 @@ public class SecurityConfig {
 				.requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
 				// API 문서(MSG-131) — Swagger UI · OpenAPI 스펙. prod 노출 정책은 별도 검토.
 				.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
+				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
+				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.
+				.requestMatchers("/api/admin/**").hasRole("ADMIN")
 				.anyRequest().authenticated()
 			)
-			.exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint))
+			.exceptionHandling(ex -> ex
+				.authenticationEntryPoint(authenticationEntryPoint)
+				.accessDeniedHandler(accessDeniedHandler))
 			.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 			.build();
 	}
