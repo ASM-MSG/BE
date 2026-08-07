@@ -88,9 +88,14 @@ MSG-179 fix: 소비 지연 시 그룹 이탈 방지, 깨진 메시지는 즉시 
 
 두 도메인의 접점은 인터페이스로만 잇는다(`GridQueryService`, `UserGridQueryService` 등).
 
-- **Owner A** — 지도 인프라: `grid`, `region`, `search`, `hotzone`
+- **Owner A** — 지도 인프라: `grid`, `region`, `search`, `hotzone`, `zone`
 - **Owner B** — 콘텐츠/인증: `user`, `video`, `auth`, `usergrid`, `badge`, `streak`, `mission`,
   `notification`, `friend`, `moderation`
+
+**Owner는 도메인 분담 라벨이지 "누가 짰나"의 기록이 아니다.** 계약 인터페이스 경계를 따질 때와
+작업을 배정할 때 쓰는 값은 이 라벨이 맞다. 실제 사람 구현자는 별개이고 git 이력과 지라 담당자가
+정본이며, 패키지별 주 구현자는 `.claude/docs/status.md` 헤더에 병기돼 있다. 둘이 어긋나는 건
+오류가 아니다.
 
 ## 팀 위키
 
