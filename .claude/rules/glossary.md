@@ -150,7 +150,8 @@ FillMap 프로젝트에서 사용하는 도메인 용어의 공식 정의. 코�
   결정 변경 — 기존 FE-local 산술(MSG-234 §D3)을 대체). FE는 조립(`zoneName + " " + zoneCell`)과 행정동
   폴백 표시만 하고, zones 캐시는 검색바 구역 이동(MSG-234 §D6)용으로만 남는다
 - 명명 규칙의 실행형 정본: `src/test/resources/fixtures/zone-naming.json` (언어 중립 픽스처, MSG-259 D-4) —
-  FE·Android·iOS가 같은 파일로 자기 구현을 검증한다
+  MSG-341부터 계산 구현은 서버 한 곳이라 서버 테스트가 분리 기대값(expectedZoneName·expectedZoneCell)으로
+  검증한다. 클라이언트는 명명 구현이 없어 검증 대상이 아니다
 ### 핫구역 (Hot Zone)
 
 **정의**: 최근 48시간 업로드 신호(핫스코어)가 **상위 K(50) 안이면서 최소 임계(3) 이상**인 격자.
