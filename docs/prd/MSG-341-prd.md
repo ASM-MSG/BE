@@ -1,7 +1,7 @@
 # PRD: 격자 표시명 서버 응답 포함 (zoneName + zoneCell)
 
 > 티켓: MSG-341 · 작성일: 2026-08-07 · 작성: prd-writer
-> 상태: 검토됨 (2026-08-07 정민 승인 — 범위 전체 응답 확장, FE 폴백 미유지 확정 반영)
+> 상태: 검토됨 (2026-08-07 정민 승인. 범위 전체 응답 확장, FE 폴백 미유지 확정 반영)
 
 ## 1. 문제 상황
 
@@ -26,11 +26,12 @@
 | ID | 요구사항 | 우선순위 |
 |----|----------|----------|
 | FR-1 | 격자를 담는 조회 응답 전부에 구역 이름(`zoneName`)과 구역 내 위치 코드(`zoneCell`, 예 "A-14")가 포함된다. 대상: 행정동 격자 카드 리스트, 단일 격자 조회, 뷰포트 격자 조회(내 격자와 친구 격자 공용 DTO), 도감 목록, 지역별 갤러리, 친구 프로필 최근 수집 격자, 핫구역, 장소 검색 결과, 영상 업로드 확정과 재생 응답 | Must |
-| FR-2 | 구역 안 격자의 두 필드 값은 `zone-naming.json` 픽스처의 기대값과 정확히 일치한다 (행 A는 사각형 북단, 열 1은 서단) | Must |
-| FR-3 | 구역 밖 격자는 두 필드가 모두 null이다. 클라이언트는 기존 `regionName`으로 폴백하며, 폴백에 번호를 붙이지 않는 기존 규칙은 그대로다 | Must |
+| FR-2 | 구역 안 격자의 두 필드 값은 `zone-naming.json` 픽스처의 기대값과 정확히 일치한다 (행 A는 사각형 북단, 열 1은 서단). 픽스처에는 분리 기대값(`expectedZoneName`, `expectedZoneCell`)을 가산 추가한다. 기존 `expected` 통짜 문자열은 유지되어 기존 소비자(FE, 모바일)는 영향받지 않는다 | Must |
+| FR-3 | 구역 밖 격자는 두 필드가 모두 null이다. 폴백 이름(행정동)은 응답마다 가용 재료가 달라 5절의 폴백 표를 따른다. 폴백에 번호를 붙이지 않는 규칙은 그대로다 | Must |
 | FR-4 | 미점령 격자를 단일 격자 조회(`GET /api/grids/{gridId}`)로 보면(occupied=false) 두 필드가 동일하게 계산된다. 격자의 DB 행 존재 여부와 무관하게 이름이 나온다 | Must |
 | FR-5 | 한 격자가 두 구역에 겹치면 priority 내림차순, 같으면 zoneKey 사전순으로 하나만 선택된다 (기존 타이브레이크[^3]와 동일) | Must |
-| FR-6 | zones 데이터가 재시딩으로 바뀌면 서버 재배포나 별도 배치 없이 다음 응답부터 새 이름이 반영된다 | Must |
+| FR-6 | 이름은 요청 시점의 zones 데이터를 반영한다. 재시딩(기동 시)과 zone 수동 삭제(MSG-259 D-8의 공식 제거 절차, 재기동 없음) 어느 경로로 바뀌어도 별도 이름 갱신 배치 없이 이후 응답에 반영된다 | Must |
+| FR-8 | 항목 수와 무관하게 요청당 zones 로드는 상수 회다. 응답 항목마다 zones를 DB에서 다시 조회하는 구조(N+1)는 금지된다 | Must |
 | FR-7 | OpenAPI 명세에 두 필드의 의미와 null 조건(구역 밖)이 기술되어, 생성된 클라이언트 타입만 보고도 폴백 분기를 알 수 있다 | Should |
 
 ## 4. 비기능 요구사항
@@ -76,8 +77,18 @@
 구역 밖 격자는 두 필드가 null이고, 클라이언트 조립 규칙은 한 줄이다:
 
 ```js
-const label = zoneName ? `${zoneName} ${zoneCell}` : regionName;  // regionName은 기존 필드
+const label = zoneName ? `${zoneName} ${zoneCell}` : regionName;  // regionName 출처는 아래 표
 ```
+
+폴백 재료(`regionName`)는 응답마다 가용성이 다르다. 대상 응답 전수 확인 결과다:
+
+| 응답 | 구역 밖 폴백 이름 |
+|------|------------------|
+| 카드 리스트, 도감 목록, 지역별 갤러리, 친구 최근 수집 격자 | 응답에 이미 있는 `regionName` 사용 (필드 추가 없음) |
+| 단일 격자 조회 | 필드 추가 없음. 격자 클릭 화면이 탐험률 표시용으로 병행 호출하는 by-grid 응답의 `regionName`이 폴백 재료다 |
+| 영상 업로드 확정, 재생 | `regionName`(nullable)을 함께 추가한다. 업로드 경로는 행정동 판정을 이미 수행하므로 추가 비용이 없다 |
+| 뷰포트(내 격자, 친구 격자), 핫구역 | 폴백 이름 미제공. 지도 위 셀과 마커는 라벨 없이 그려지고, 구역 안 격자만 `zoneCell` 배지를 쓸 수 있다 |
+| 장소 검색 | `zoneName`, `zoneCell`만 추가. 표시 라벨은 `address`가 담당한다는 기존 결정(MSG-251 §D2, regionName 기각)을 유지한다 |
 
 ## 6. 시퀀스 다이어그램
 
@@ -96,6 +107,8 @@ sequenceDiagram
     Z-->>S: (zoneName, zoneCell) 또는 null
     S-->>FE: 카드 + zoneName + zoneCell
 ```
+
+ZoneNameQueryService는 요청당 zones를 상수 회(1회 수준)만 로드해 항목 계산에 재사용한다(FR-8). 프로세스 캐시를 도입하는 경우, 재기동 없이 일어나는 zones 변경(수동 DELETE)의 반영 전략을 스펙 D-결정으로 확정해야 한다(FR-6).
 
 ## 7. 클래스 다이어그램
 
@@ -129,6 +142,7 @@ classDiagram
 | `zone/service/ZoneNameQueryService.java` | 신규 (인터페이스) | A |
 | `zone/service/impl/ZoneNameQueryServiceImpl.java` | 신규 (사각형 매칭 + 행렬 산술) | A |
 | `src/test/java/.../zone/service/ZoneNameQueryServiceImplTest.java` | 신규 (`zone-naming.json` 픽스처 소비) | A |
+| `src/test/resources/fixtures/zone-naming.json` | 수정 (분리 기대값 `expectedZoneName`, `expectedZoneCell` 가산 추가, 기존 `expected` 유지) | A |
 | `grid/dto/GridCellResponseDto.java` · `grid/dto/OccupiedGridResponseDto.java` | 수정 (필드 2개 + Schema 설명) | A |
 | `grid/service/impl/GridQueryServiceImpl.java` | 수정 (단일 격자, 뷰포트 조회에 이름 계산) | A |
 | `hotzone/dto/HotZoneResponseDto.java` | 수정 (필드 2개) | A |
@@ -137,7 +151,7 @@ classDiagram
 | `search/service/impl/PlaceSearchServiceImpl.java` | 수정 (검색 결과 매핑) | A |
 | `video/dto/ExploreGridResponseDto.java` | 수정 (필드 2개 + Schema 설명) | B |
 | `video/service/RegionExploreServiceImpl.java` | 수정 (ZoneNameQueryService 주입, 카드 매핑) | B |
-| `video/dto/VideoUploadResponseDto.java` · `video/dto/VideoPlaybackResponseDto.java` | 수정 (필드 2개) | B |
+| `video/dto/VideoUploadResponseDto.java` · `video/dto/VideoPlaybackResponseDto.java` | 수정 (필드 2개 + regionName 추가, 5절 폴백 표) | B |
 | `video/service/VideoServiceImpl.java` | 수정 (업로드 확정, 재생 응답 매핑) | B |
 | `usergrid/dto/CollectionGridResponseDto.java` · `usergrid/dto/RegionVideoResponseDto.java` | 수정 (필드 2개) | B |
 | `usergrid/service/impl/UserGridQueryServiceImpl.java` | 수정 (도감 목록, 지역별 갤러리 매핑) | B |
