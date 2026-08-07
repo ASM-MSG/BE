@@ -56,7 +56,7 @@ sequenceDiagram
     participant X as 코드 교환 컴포넌트(신규)
     participant O as OidcLoginService(기존)
 
-    W->>K: 인가 요청 (scope=openid)
+    W->>K: 인가 요청 (scope=openid, nonce 포함)
     K-->>W: 콜백 리다이렉트 (인가 코드)
     W->>API: POST /api/auth/oauth/kakao/code {code, redirectUri, nonce}
     API->>X: 코드 교환 요청
@@ -92,7 +92,7 @@ classDiagram
 | 파일 | 변경 | Owner |
 |------|------|-------|
 | `auth/controller/AuthController.java` | 수정: 코드 교환 로그인 엔드포인트 추가 | B |
-| `auth/dto/` 신규 요청 DTO | 신규: code, redirectUri | B |
+| `auth/dto/` 신규 요청 DTO | 신규: code, redirectUri, nonce | B |
 | `auth/oidc/KakaoOidcProperties.java` | 수정: 토큰 엔드포인트 URI 추가 | B |
 | `auth/` 코드 교환 컴포넌트 | 신규: 카카오 토큰 엔드포인트 호출(RestClient), 타임아웃 | B |
 | `auth/exception/AuthErrorCode.java` | 수정: 교환 실패, 제공자 오류 상수 추가(2xxx 대역 내) | B |
