@@ -19,6 +19,9 @@ import com.msg.fillmap.grid.service.GridCellView;
 import com.msg.fillmap.grid.service.GridQueryService;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.grid.service.OccupiedGridView;
+import com.msg.fillmap.zone.service.ZoneCellName;
+import com.msg.fillmap.zone.service.ZoneNameQueryService;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 @Service
 @RequiredArgsConstructor
@@ -33,15 +36,18 @@ public class GridQueryServiceImpl implements GridQueryService {
 	private static final int MAX_PAGE_SIZE = 5000;
 
 	private final GridRepository gridRepository;
+	private final ZoneNameQueryService zoneNameQueryService;
 
 	@Override
 	public GridCellView getCell(long userId, String gridId) {
-		validateGridId(gridId);
+		GridIndex index = validateGridId(gridId);
+		// 격자는 논리 개념이라 grids row·점령 여부와 무관하게 이름이 계산된다 (MSG-341 FR-4)
+		ZoneCellName name = zoneNameQueryService.resolver().name(index.gridY(), index.gridX());
 		Integer videoCount = gridRepository.findVideoCount(userId, gridId).orElse(null);
 		if (videoCount == null) {
-			return new GridCellView(gridId, false, 0);
+			return new GridCellView(gridId, false, 0, name.zoneName(), name.zoneCell());
 		}
-		return new GridCellView(gridId, true, videoCount);
+		return new GridCellView(gridId, true, videoCount, name.zoneName(), name.zoneCell());
 	}
 
 	@Override
@@ -95,14 +101,20 @@ public class GridQueryServiceImpl implements GridQueryService {
 	}
 
 	private List<OccupiedGridView> toViews(List<OccupiedGridProjection> rows) {
+		// 리졸버는 항목 수와 무관하게 매핑 진입 전 1회만 받는다 — 항목당 zones 조회(N+1) 봉쇄 (MSG-341 FR-8)
+		ZoneNameResolver resolver = zoneNameQueryService.resolver();
 		return rows.stream()
-			.map(p -> new OccupiedGridView(p.getGridId(), p.getGridY(), p.getGridX()))
+			.map(p -> {
+				ZoneCellName name = resolver.name(p.getGridY(), p.getGridX());
+				return new OccupiedGridView(p.getGridId(), p.getGridY(), p.getGridX(),
+					name.zoneName(), name.zoneCell());
+			})
 			.toList();
 	}
 
-	private void validateGridId(String gridId) {
+	private GridIndex validateGridId(String gridId) {
 		try {
-			GridEncoder.decode(gridId);
+			return GridEncoder.decode(gridId);
 		} catch (RuntimeException e) {
 			throw new ApiException(GridErrorCode.INVALID_GRID_ID, e);
 		}

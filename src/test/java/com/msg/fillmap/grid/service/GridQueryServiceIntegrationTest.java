@@ -4,6 +4,8 @@ import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
 import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.global.exception.ApiException;
@@ -27,6 +30,9 @@ import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.zone.entity.Zone;
+import com.msg.fillmap.zone.repository.ZoneRepository;
+import com.msg.fillmap.zone.service.ZoneNameQueryService;
 
 @SpringBootTest
 @Transactional
@@ -36,11 +42,23 @@ class GridQueryServiceIntegrationTest {
 	private static final double 성수_LAT = 37.5445;
 	private static final double 성수_LON = 127.0560;
 
+	/**
+	 * 표시명 검증용 합성 구역 (MSG-341). 테스트 블록을 덮는 3행×3열 사각형이고 priority 100 이라
+	 * 같은 좌표를 덮는 실 시드 구역(priority 0)을 타이브레이크로 이긴다 — 시딩 상태와 무관하게 기대값이 고정된다.
+	 */
+	private static final String ZONE_NAME = "m341성수합성";
+
 	@Autowired
 	private GridQueryService gridQueryService;
 
 	@Autowired
 	private UserRepository userRepository;
+
+	@Autowired
+	private ZoneRepository zoneRepository;
+
+	@MockitoSpyBean
+	private ZoneNameQueryService zoneNameQueryService;
 
 	@Autowired
 	private EntityManager em;
@@ -63,6 +81,16 @@ class GridQueryServiceIntegrationTest {
 		unoccupiedGridId = GridFixtures.seedGrid(em, baseY + 1, baseX + 1);
 		GridFixtures.seedUserGrid(em, me, occupiedGridId, 3);
 		em.flush();
+
+		zoneRepository.saveAndFlush(Zone.builder()
+			.zoneKey("m341-grid-svc")
+			.name(ZONE_NAME)
+			.minGridY((int) baseY)
+			.maxGridY((int) baseY + 2)
+			.minGridX((int) baseX)
+			.maxGridX((int) baseX + 2)
+			.priority(100)
+			.build());
 	}
 
 	private ViewportBounds blockBounds() {
@@ -117,6 +145,50 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.gridId()).isEqualTo(occupiedGridId);
 		assertThat(view.gridY()).isEqualTo((int) baseY);
 		assertThat(view.gridX()).isEqualTo((int) baseX);
+	}
+
+	@Test
+	@DisplayName("구역 안 단일 격자 조회는 구역 이름과 위치 코드를 함께 담는다 (MSG-341 FR-1)")
+	void 단일_격자_조회는_구역_안이면_zoneName과_zoneCell을_담는다() {
+		GridCellView view = gridQueryService.getCell(me, occupiedGridId);
+
+		// 사각형 북단이 A 라 baseY 는 3행 중 남단 C, 서단이 1 열이라 baseX 는 1
+		assertThat(view.zoneName()).isEqualTo(ZONE_NAME);
+		assertThat(view.zoneCell()).isEqualTo("C-1");
+	}
+
+	@Test
+	@DisplayName("미점령 격자도 구역 안이면 이름이 계산된다 (격자는 논리 개념 — grids row·점령 무관, FR-4)")
+	void 미점령_격자도_구역_안이면_이름이_계산된다() {
+		GridCellView view = gridQueryService.getCell(me, unoccupiedGridId);
+
+		assertThat(view.occupied()).isFalse();
+		assertThat(view.zoneName()).isEqualTo(ZONE_NAME);
+		assertThat(view.zoneCell()).isEqualTo("B-2");
+	}
+
+	@Test
+	@DisplayName("구역 밖 격자는 zoneName·zoneCell 이 모두 null 이다 (폴백 조립은 클라이언트 몫, FR-3)")
+	void 구역_밖_격자는_두_필드가_모두_null이다() {
+		// 시드 구역 전체가 위도 37180~42305 대역이라 9999 행은 어느 사각형에도 들지 않는다
+		GridCellView view = gridQueryService.getCell(me, "9999_9999");
+
+		assertThat(view.zoneName()).isNull();
+		assertThat(view.zoneCell()).isNull();
+	}
+
+	@Test
+	@DisplayName("뷰포트 페이지 항목마다 구역 이름이 붙고 zones 로드는 요청당 1회다 (N+1 금지, FR-8)")
+	void 뷰포트_페이지_항목마다_구역_이름이_붙고_zones_조회는_1회다() {
+		String b = seedOccupied(0, 1);
+
+		OccupiedGridPage page = gridQueryService.getOccupiedInViewport(me, blockBounds(), null, 2);
+
+		assertThat(gridIds(page)).containsExactly(occupiedGridId, b);
+		assertThat(page.items()).extracting(OccupiedGridView::zoneName).containsOnly(ZONE_NAME);
+		assertThat(page.items()).extracting(OccupiedGridView::zoneCell).containsExactly("C-1", "C-2");
+		// 항목 수와 무관하게 리졸버(=zones 로드)는 매핑 진입 전 1회뿐이다
+		verify(zoneNameQueryService, times(1)).resolver();
 	}
 
 	@Test
