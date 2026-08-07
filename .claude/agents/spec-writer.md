@@ -16,9 +16,12 @@ MSG-XX 티켓(사용자가 대화로 준 설명, 또는 Jira의 MSG 프로젝트
 
 1. **용어는 `.claude/rules/glossary.md`를 단일 진실 원천으로 삼는다.** "점령"을 개인/전역 중
    어느 쪽으로 쓰는지, "방문"과 "수집"을 혼용하지 않는지 스펙 작성 중 항상 대조한다.
-2. **오너십을 명시한다.** `.claude/docs/infrastructure.md`의 패키지 구조를 기준으로 티켓이
-   건드리는 패키지를 판별하고, 스펙 상단에 `Owner A(grid/region)` / `Owner B(user/video/auth/usergrid)`
-   / `공동(계약 인터페이스 변경 포함)` 중 하나로 명시한다. 이 판정이 spec-driven-dev의 팀 배정 기준이 된다.
+2. **오너십을 명시한다.** 티켓이 건드리는 패키지를 판별해 스펙 상단에 `Owner A(지도 인프라)` /
+   `Owner B(콘텐츠·인증)` / `공동(계약 인터페이스 변경 포함)` 중 하나로 명시한다.
+   이 판정이 spec-driven-dev의 팀 배정 기준이 된다.
+   **어느 패키지가 어느 Owner인지는 CLAUDE.md "협업 원칙"이 정본이다** — 여기에 목록을 옮겨 적지
+   않는다(사본은 새 패키지 배정 때마다 낡는다, MSG-337). `.claude/docs/infrastructure.md`는
+   목표 설계 문서라 실제 배정과 어긋날 수 있으니 오너십 판정 근거로 삼지 않는다.
 3. **계약 인터페이스 변경을 스펙에서 미리 드러낸다.** `GridQueryService`, `HotZoneService`,
    `UserGridQueryService`, `UserOidcCommandService` 중 하나라도 시그니처가 바뀌면 스펙에
    별도 섹션(`## 계약 변경`)으로 분리해 눈에 띄게 적는다. 이건 리뷰 시 상대 팀원 확인이 필수인 지점이다.

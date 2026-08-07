@@ -11,36 +11,54 @@
 패키지별 섹션 + **티켓당 한 줄 불릿**. 새 티켓은 해당 패키지 끝에 자기 줄 하나만 append한다
 (한 줄에 여러 티켓 조각을 잇지 말 것 — 병렬 PR의 같은 줄 충돌 방지, MSG-169).
 
-### `response` — ✅ 완성
+### 헤더의 두 표기는 서로 다른 축이다 (MSG-337)
+
+- **Owner A/B** = **도메인 분담 라벨**. 두 곳에서 쓰인다. ① 계약 인터페이스 경계 판정 —
+  본문의 "read 계약 A→B", "B-내부 read", "크로스오너" 서술이 전부 이 축이고 CLAUDE.md
+  "두 도메인의 접점은 인터페이스로만" 원칙의 근거다. ② spec-driven-dev의 개발 에이전트 배정
+  (A→`grid-dev`, B→`auth-dev`, 공동→둘 다). **이 두 용도에는 이 라벨이 맞는 값이다.**
+- **구현 XXX** = 그 패키지를 실제로 짠 **주 구현자**(git 커밋·라인 기여 기준, 한쪽이 뚜렷하지
+  않으면 "공동"). 사람 이력이라 사실 기록일 뿐이고, 위 두 판정에는 쓰지 않는다.
+
+`zone`의 Owner A 배정 근거는 `docs/MSG-234.md`(§Owner 판정 — 산출물이 전부 지도 인프라 안)이고
+`docs/MSG-259.md`가 확정했다. CLAUDE.md 협업 원칙의 패키지 목록에 이 패키지가 빠져 있었는데,
+미배정이 아니라 목록 누락이라 2026-08-07에 채웠다.
+
+**둘은 자주 어긋난다.** 실제로 Owner B 도메인(friend·moderation·badge·streak·usergrid) 대부분을
+강정민이, Owner A 도메인인 hotzone을 성민이 구현했다. 어긋남은 오류가 아니라 분담과 실제 작업
+배분이 다르게 흘렀다는 사실이다. 구현자의 정본은 git 이력과 지라 담당자이고 (2026-08-07 전수
+대조에서 둘은 100% 일치했다), 이 헤더는 그 요약이다.
+
+### `response` (구현 강정민) — ✅ 완성
 - `ApiResponseDto`, `SuccessResponse`, `ErrorCode`, `ErrorCodeIfs`
 - MSG-311: 공통 응답 실데이터 키 `body` → `data` rename (필드명 자체 변경 — @JsonProperty 미사용, 테스트 17파일 190곳 치환. **breaking — FE 동시 배포 전제**)
 
-### `global` — ✅ 완성
+### `global` (구현 공동) — ✅ 완성
 - `ApiException`, `GlobalExceptionHandler`, `config/SecurityConfig`, `config/S3Config`(S3Presigner 빈)·`config/AwsProperties` (MSG-64)
 - MSG-167: `GlobalExceptionHandler`에 `MissingServletRequestParameterException → 400 BAD_REQUEST` 전역 매핑 (필수 파라미터 누락이 catch-all에 삼켜져 500이던 결함 정정)
 - MSG-244: `config/ProdRedisPasswordValidator`(prod 프로파일 전용 기동 검증 — 바인더가 미해석 `${REDIS_PASSWORD}`를 리터럴로 통과시키는 결함 보완, 공백/미해석 리터럴 완전 일치 시 기동 실패) + prod Redis 포트 6380·헬스체크 호스트 보간 정합(application-prod.yml·docker-compose.server.yml)
 - MSG-260: `config/ProdRequiredEnvValidator`(prod 필수 env 8종 일괄 기동 검증 — 공백/미해석 리터럴 완전 일치 시 누락 변수명 전부 나열하며 기동 실패, `ProdRedisPasswordValidator`는 흡수·삭제)
 
-### `auth` (Owner B) — ✅ 완성
+### `auth` (Owner B · 구현 공동) — ✅ 완성
 - 기본 골격: `controller`(+`/reissue`), `service`(AuthService·OidcLoginService·RefreshTokenService), `dto`(+Reissue*), `jwt`(TokenProvider·필터·JwtProperties·RefreshTokenProvider/Store·RedisInvalidatedTokenStore), `oidc`(Kakao OIDC), `support/RefreshTokenCookies`, `exception/AuthErrorCode`
 - MSG-135: 리프레시 토큰(디바이스별 Redis `refresh:{userId}:{deviceId}`, 2주 슬라이딩, 로테이션+재사용감지)·블랙리스트 Redis 이관·하이브리드 전송(웹 쿠키/앱 body)
 - MSG-178: logout에 `LogoutRequestDto`(fcmToken 선택, `@RequestBody(required = false)` — body 없는 기존 호출 하위 호환) — 세션 삭제와 같은 처리에서 `PushTokenService.unregister(userId, fcmToken)` 호출(auth → notification 단방향 주입, 공유 기기 알림 잔존 P1 차단)
 - MSG-195: `jwt/CustomAccessDeniedHandler` 신설(403 공통 응답 형식 — EntryPoint 미러) + SecurityConfig `/api/admin/**` `hasRole("ADMIN")` matcher — **코드베이스 최초 role 인가 지점**(배관은 V1부터 완비돼 있었고 검사 지점만 신설)
 
-### `user` (Owner B) — 🟡 부분
+### `user` (Owner B · 구현 강정민) — 🟡 부분
 - `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode`
 - MSG-205: 계정 삭제(`DELETE /api/users/me` — `controller/UserController`·`service/UserService`(+Impl) 첫 신설, V15 reports FK ON DELETE(CASCADE/SET NULL), 삭제 트랜잭션 = S3 키 수집(`findAllS3KeysByUserId`)→`deleteUser` 0행 1404, afterCommit = S3 1000키 청크 best-effort·refresh `deleteAll`·액세스 토큰 블랙리스트 각각 독립 try. CASCADE 보정 로직 없음, D5 경합 수용 — 스펙 §D1~D5)
 - MSG-203: 프로필 조회/닉네임 수정 — `GET /api/users/me`·`PUT /api/users/me/nickname`, `dto/{UserProfileResponseDto,NicknameUpdateRequestDto}` (email 은 카카오 유저 null — MSG-310, 색상 수정은 기획 제외)
 - MSG-185: `User.friendCode`(V18 — 생성자 자동 부여, 혼동 문자 제외 32종 8자)·`UserRepository.findByFriendCode` — friend 도메인이 소비
 
-### `grid` (Owner A) — 🟡 부분
+### `grid` (Owner A · 구현 강정민) — 🟡 부분
 - MSG-73: `GridEncoder`·`GridConstants`(순수 유틸), `entity/{UserGrid,UserGridId,Grid}`, `repository/GridRepository`, `service/GridQueryService`(+impl, read 계약 A→B), `controller/GridController`, `dto/*`, `exception/GridErrorCode`(4xxx)
 - MSG-90: viewport cursor 페이지네이션(`GridCursor` Base64URL 커서, `OccupiedGridPage`, `OccupiedGridPageResponseDto`, keyset 행값비교+lookahead, `?strategy` 파라미터·`ViewportStrategy` 제거 — A 고정, repo B 쿼리는 보존)
 - MSG-167: 격자 중심점 행정동 라벨 저장 — V5 `grids.region_code`(nullable FK→regions, 쓰기 시 1회 판정·조회는 equi) + 멱등 백필(`region_code IS NULL`만, regions 미시딩 no-op). 판정 규칙 = 93/155 중심점 축(`ST_Covers … ORDER BY region_code LIMIT 1`). 인덱스 미추가·Grid 엔티티 미매핑(native)
 - MSG-238: V7 `idx_grids_region_code`(단순 btree — 167 §D5 예약 발동, region_code 주도 조회 최초 등장의 물리 기반. partial 기각)
 - **없는 것**: `GridOccupationService`(write는 MSG-66이 흡수), `HotZoneService`(MSG-233 §D5로 `hotzone` 독립 패키지 배치 확정 — grid 아님)
 
-### `usergrid` (Owner B) — 🟡 부분
+### `usergrid` (Owner B · 구현 강정민) — 🟡 부분
 - MSG-152: `repository/{UserGridRepository,CollectionSummaryProjection}`(user_grids·videos 네이티브 집계), `service/UserGridQueryService`(+impl, read 계약 B→A)·`CollectionSummaryView`, `controller/CollectionController`(`GET /api/collections/summary`), `dto/CollectionSummaryResponseDto`
 - MSG-246: 도감 요약 `visitedRegionCount` 정정(`getCollectionSummary` 서브쿼리 — dead `videos.region_code` 대신 `JOIN grids` 후 `COUNT(DISTINCT g.region_code)`, MSG-167 by-grid 귀속 정합. 테스트 시딩도 프로덕션 형상(videos.region_code NULL)으로 재작성)
 - MSG-153: 갤러리 격자 목록(`GET /api/collections/grids` — `first_collected_at DESC` 30 고정·무커서, `GridEncoder.decode`로 grids 미조인, `ThumbnailUrlPresigner` 소비, `CollectionGridProjection`/`CollectionGridView`/`CollectionGridResponseDto`·`getCollectionGrids` B-내부 read)
@@ -50,7 +68,7 @@
 - MSG-181: 격자 점령 사용자 역조회 `getGridOccupants(gridId)` — `UserGridQueryService`에 메서드 1개 비파괴 추가(MSG-186 선례 동형, notification만 소비하는 B-내부 read), `GridOccupantProjection`/`GridOccupantView`(userId, regionName — LEFT JOIN grids→regions 1왕복), V24 `idx_user_grids_grid`(최초의 grid 축 접근 경로)
 - **없는 것**: — (155/156 소비용 프리미티브 구상은 불필요해져 폐기 — 155 자기완결·156 별도 서비스로 종결)
 
-### `mission` (Owner B) — 🟡 부분
+### `mission` (Owner B · 구현 성민) — 🟡 부분
 - MSG-166: V6 스키마 검증 테스트(`MissionSchemaMigrationTest` — 엔티티 없던 시점)
 - MSG-222: 활성 미션 조회(`GET /api/missions/active` — `entity/{Mission,MissionType,MissionGrid,MissionGridId}`(조회 전용), `MissionRepository.findActive`(기간 경계 독립 판정)·`MissionGridRepository`, `MissionQueryService`(+impl — 유형→shape 단일 분기: COURSE→PATH(path 원문+spots)/EVENT→BOX(bbox 합성)/THEME·CONTINUOUS→CELLS/AREA→REGION(코드만), 1h 전역 캐시 단일 volatile CacheEntry+더블체크 락, 단일 인스턴스 전제), `dto/MissionResponseDto`+`sealed MissionShape` 4종. 기본 클럭 `Clock.systemUTC()` — KST JVM 9h 스큐 정정, MSG-223 리뷰 파생)
 - MSG-223: 미션 완료 판정·스탬프(`entity/{UserMission,UserMissionId}`(UserBadge 미러·비회수)·`UserMissionRepository`(`insertIgnoreConflict` ON CONFLICT·`countMyStamps`), `MissionRepository.findAwardCandidateIds/findCompleted`(native, `recorded_at` 판정·무기간 IS NULL 생략·`AT TIME ZONE 'UTC'` 정규화), `MissionAwardService`(+impl — 신규 INSERT 성공분만 응답·MISSION_COUNT 뱃지 배선), 업로드 확정 훅(streak 다음·점령 분기 바깥, `VideoUploadResponseDto.completedMissions`), V12 뱃지 시딩 1·5·10)
@@ -59,7 +77,7 @@
 - MSG-235: 팝업 미션 적재(`seed/{PopupRecord,PopupJsonlReader,PopupMissionSeeder}` — 플래그 게이트 `fillmap.mission.popup.seed.enabled` 기본 off·`@Order(50)`, 주 1회 수동 갱신 단일 러너·**정리→적재 순**(id 단독 키라 연장 팝업 공백을 같은 실행에서 흡수 — 축제와 반대), 멱등=**V14 `missions.source_key`**(팝가 id, `(source,source_key)` 부분 유니크 백스톱)·INSERT-only, 9×9·target_count=1·**type=POPUP 신설**(V14 CHECK 확장, 조회 `case EVENT, POPUP → BOX`, 판정 무수정). reader는 코스 전량 거부 계약 승계(id 정수·중복, 좌표 33~39/124~132, 날짜 순서 — periodType 미사용·날짜 직접 판정). 정리 쿼리 `deleteEndedBySourceWithoutStamps(:source)` 파라미터화(축제 메서드 흡수). 산출은 레포 밖 `~/fillmap-data/popups/crawl_popga.py`)
 - **없는 것**: — (미션 3종 시더 완결). 축제·코스·팝업 실적재는 운영 절차(각 스펙 §D6/§D9/§D8 — 산출물 복사 + 플래그 on 1회 기동, 코스는 TourAPI 전량 수집 완료 후)
 
-### `region` (Owner A) — 🟡 부분
+### `region` (Owner A · 구현 강정민) — 🟡 부분
 - MSG-154: `entity/Region`(boundary_geom 미매핑), `repository/RegionRepository`(native UPSERT + ST_Area 기반 total_grid_count), `seed/{RegionGeoJsonReader,RegionFeature,RegionSeeder}`(플래그 게이트 `fillmap.region.seed.enabled` 기본 off, 전국 3,558 행정동)
 - MSG-93: 역지오코딩(`GET /api/regions/reverse-geocode`, ST_Covers/GIST, `service/RegionQueryService`(+impl)·`controller/RegionController`·`dto/RegionResponseDto`·`exception/RegionErrorCode`(6400))
 - MSG-155: region_stats 동기 recompute(`repository/RegionRepository.refreshRegionStats` — 계산-시 격자 중심점 ST_Covers 판정·0-UPSERT 유지, `service/RegionStatsCommandService`(+impl) 명령 계약 A→B)
@@ -68,12 +86,12 @@
 - MSG-167: 시딩 직후 `grids.region_code` 멱등 보정 백필(`RegionRepository.backfillGridRegionCodes`, `RegionSeeder.run`에서 호출 — regions 후착 환경의 영구 NULL 라벨 방지, `EXISTS` 가드로 무귀속 격자 NULL→NULL 재기록 차단, Codex 리뷰 P1·2차)
 - **없는 것**: 시/도 상위 레벨 집계 (MVP 이후 별도 티켓)
 
-### `zone` (Owner A) — 🟡 부분
+### `zone` (Owner A · 구현 강정민) — 🟡 부분
 - MSG-234: 격자 표시명 구역 — `entity/Zone`(V8 `zones` 전 컬럼 매핑)·`repository/ZoneRepository`, `GET /api/zones` 전체 목록(`service/ZoneQueryService`(+impl)·`controller/ZoneController`·`dto/ZoneResponseDto`), `seed/{ZoneSeed,ZoneSeeder}`(플래그 게이트 `fillmap.zone.seed.enabled` 기본 off, `resources/seed/zones.json` `zone_key` UPSERT 멱등). 표시명("서면 A-14") 계산은 FE-local(§D3) — 서버는 데이터만. 장소 검색은 카카오 프록시 MSG-251 이관(2단 폴백 구현분 제거, §D6)
 - MSG-259: zones 실데이터 48건 주입(`seed/zones.json` — 공공 상권 17 + 수동 작도 31, 전국·검증기 PASS)·prod/dev 시더 상시 on·명명 계약 언어 중립 픽스처(`src/test/resources/fixtures/zone-naming.json`, `ZoneNamingContractTest` 픽스처 로드 리팩터)·glossary 구역/표시명 등재
 - **없는 것**: 장소 검색(MSG-251 카카오 프록시 — 구현 완료로 이관)
 
-### `video` (Owner B) — 🟡 부분
+### `video` (Owner B · 구현 공동) — 🟡 부분
 - MSG-66: `entity`(Video·ProcessingStatus·Visibility·VideoStatus + 상태전이 도메인 메서드), `repository/VideoRepository`(grids·user_grids native UPSERT/롤백), 메타저장 `service`·`controller`(`POST /api/videos`)·`dto`, `support/GeoSupport`, `exception/VideoErrorCode`(3xxx)
 - MSG-64: presigned URL 발급(`POST /api/videos/presigned-url`)
 - MSG-65: 인코딩 워커(`VideoEncodingService`+`VideoStatusWriter`+`support/FfmpegRunner`+`config/AsyncConfig`, 커밋 후 `@Async` 트리거)
@@ -109,12 +127,12 @@
 - MSG-193: 블라인드 전환·해제 — `service/VideoModerationService`(+Impl, blind/unblind — **HTTP 미노출**, 호출 주체는 MSG-195 관리자 API), `findWithLockById` 행 잠금(실측 SQL은 **FOR NO KEY UPDATE** — 삭제(MSG-243)·신고(MSG-192)와 동일 메서드라 전이 직렬화, FK KEY SHARE와 비충돌), 가드 first-match(미존재·DELETED 3404 재사용, 이미 목표 상태 `ALREADY_IN_TARGET_STATUS` **3409** 신규), `Video.markBlinded()/markActive()` 도메인 메서드(검증은 서비스, 대입은 엔티티), markBlinded가 `reselectCover` native보다 먼저(자동 flush로 재선정 서브쿼리가 최신 status를 봄 — 삭제 경로와 동일 원리), 해제는 대표 원복 없음(D6). 점령·video_count·수집률·핫스코어·스트릭·뱃지 전부 불변, 조회 쿼리 수정 0줄(노출 차단은 기존 ACTIVE 필터가 즉시 수행 — 통합 테스트 16건이 재생 404·전역 대표·전역 목록·내 리스트 4경로 회귀 검증)
 - **없는 것**: —
 
-### `search` (Owner A) — ✅ 완성 (MVP 범위)
+### `search` (Owner A · 구현 강정민) — ✅ 완성 (MVP 범위)
 - MSG-251: 장소 검색 카카오 프록시(`GET /api/search/places?q=` — keyword.json 실시간 패스스루(약관: 캐시·저장 금지), `PlaceSearchController`/`Service`(+impl)/`KakaoLocalClient`/`SearchConfig`(완성 RestClient 빈, connect 1s/read 3s)/`KakaoLocalProperties`, gridId=`GridEncoder.encode` 즉석 합성, `SearchErrorCode` 5xxx 신설 `SEARCH_UPSTREAM_ERROR(5502)` 단일 수렴, 키=`${oauth.kakao.client-id:}` 재사용)
 - MSG-258: 인기 검색어 순위 — V23 `search_keyword_daily_counts`(PK+`uq_search_keyword_daily UNIQUE(keyword_date, keyword)` — 사용자 식별자·카카오 응답 필드 없음, 약관 경계), `entity/SearchKeywordDailyCount`, `repository/SearchKeywordDailyCountRepository`(`upsertIncrement` native ON CONFLICT +1 · `findTopKeywords` 오늘+어제 SUM DESC·keyword ASC LIMIT 10), `service/SearchKeywordCommandService`(+impl — 정규화 trim·공백압축·소문자·255자 초과 스킵, KST 날짜 요청 스레드 확정, Redis dedupe `searchdedupe:{yyyyMMdd}` SET member `{userId}:{keyword}` Lua SADD+EXPIRE 26h, hotzone 미러 단일 데몬 워커(유계 큐 10,000)·전 예외 warn 삼킴 — 검색 응답 독립, Redis 실패 시 UPSERT 미진행), `TrendingKeywordQueryService`(+impl)·`TrendingKeywordController`(`GET /api/search/trending` — rank 자바 부여)·`dto/TrendingKeywordResponseDto`(rank·keyword만 — count 미노출), 훅=`PlaceSearchServiceImpl.searchPlaces(long userId, String q)` trim 가드 직후·카카오 호출 전(실패 검색도 집계 — 확정 결정 7), 신규 에러코드 0
 - **없는 것**: 배치 확장(주간/월간 집계 — 일별 이력만 축적, MSG-258 비목표)
 
-### `badge` (Owner B) — 🟡 부분
+### `badge` (Owner B · 구현 강정민) — 🟡 부분
 - MSG-239: 뱃지 시스템 MVP — V9(`chk_badges_condition`에 MISSION_COUNT 확장·`user_badges.notified_at/featured_rank`+partial UNIQUE·활성 3축 11종 시딩·set-based 소급), `entity/{Badge(conditionValue 미매핑),BadgeConditionType,UserBadge,UserBadgeId}`, `repository/{BadgeRepository.findEligible,UserBadgeRepository(지급 ON CONFLICT·metric 3종·featured lock/clear/set)}`, `service/BadgeAwardService`(+impl, 후보 SELECT+INSERT 2단 — B 내부)·`BadgeFeaturedService`(+impl), `PUT /api/badges/featured`(`BadgeController`·집합 교체 멱등), `dto/{EarnedBadge,FeaturedBadgeRequest,FeaturedBadgeResponse}ResponseDto`, `exception/BadgeErrorCode`(7xxx — 7400·7403)
 - MSG-200: V10 꾸준함 뱃지 시딩(STREAK_3/7/30 — DDL 0·소급 블록 없음, §D6 예외 주석. 판정 훅은 streak 도메인이 `award(STREAK_DAYS)` 호출)
 - MSG-201: 내 뱃지 조회 — `GET /api/badges`(획득+미획득 전체, badges.id ASC·featuredRank 동봉), `repository/{BadgeRepository.findAllWithMyStatus,MyBadgeProjection,UserBadgeRepository.markMyBadgesNotified}`, `service/BadgeQueryService`(+impl — 조회 시 노출된 미확인분만 IN 리스트 자동 스탬프·isNew 는 SELECT 시점 값), `dto/MyBadgeResponseDto`(마이그레이션·신규 에러 코드 0)
@@ -122,11 +140,11 @@
 - MSG-314: 뱃지 임박 알림 — `award()` 꼬리 `recordNearMiss`(조기 return 제거·공통 꼬리 합류). 4축 allowlist(EnumSet — REGION_PERCENT는 소수 rate, SPECIAL은 비개수 축이라 제외), `BadgeRepository.findNearMiss`(`= :metric + 1` native, 후보 최대 1건, `EligibleBadgeProjection` 재사용), 생애 1회 = `BADGE_NEAR:{badgeId}` dedupe, 하루 1건(KST) = `tryAcquireBadgeNearLock`(**pg_try_advisory_xact_lock 비대기** — 블로킹이면 streaks 행 잠금과 교차 데드락, Codex 정정) + `countRecordedSince` select-then-act. 카테고리 BADGE 재사용이라 마이그레이션·enum·컨슈머·설정 API 무변경, Clock 이중 생성자
 - **없는 것**: MISSION_COUNT 훅·시딩(미션 엔진 티켓), SPECIAL 시딩(오픈 준비 티켓)
 
-### `streak` (Owner B) — ✅ 완성 (MVP 범위)
+### `streak` (Owner B · 구현 공동) — ✅ 완성 (MVP 범위)
 - MSG-200: 스트릭 집계 — `entity/Streak`(전 컬럼 매핑·Setter 없음, 쓰기는 native 전용), `repository/StreakRepository`(`upsertOnUpload` — 3분기 CASE 한 문장 UPSERT·KST 자정 경계·ON CONFLICT 행 잠금 직렬화 + `findCurrentCount`), `service/StreakCommandService`(+impl — 갱신 직후 `BadgeAwardService.award(STREAK_DAYS)` 배선·획득분 반환, B 내부). 조회 API 없음(currentStreak·maxStreak 노출은 도감 summary 티켓 소관 §D8), freeze 미도입·소급 차감 없음 확정
 - MSG-181: 스트릭 리마인드 배치 — `service/StreakRemindScheduler`(cron 20~23시 매시 KST, `fillmap.notification.enabled` 게이트 안. **시간별 재발화 = 당일 재시도** — `REMIND:{KST일자}` dedupe가 기기록을 0행 흡수, per-recipient 예외 격리로 한 명 실패가 나머지를 안 막음, Codex 1R P2 반영), `StreakRepository.findRemindTargets`(`last_recorded_date = KST 어제` 한 조건 — 오늘=기업로드·그전=이미 끊김, 어제 날짜는 앱 Clock KST 계산 바인딩)
 
-### `friend` (Owner B) — ✅ 완성 (MVP 범위)
+### `friend` (Owner B · 구현 강정민) — ✅ 완성 (MVP 범위)
 - MSG-185: 친구 코드·관계 수명주기 — V18(users.friend_code 추가·기존 행 백필·UNIQUE)·V19(대칭 쌍 유니크 — findPair Optional 계약 보호), `entity/{Friendship,FriendshipId,FriendshipStatus}`(복합 PK @EmbeddedId — UserGrid 미러. status 는 PENDING·ACCEPTED 만 영속 — 거절·삭제는 행 DELETE, §D3 "행 존재 = 활성 관계"), `repository/FriendshipRepository`(`findPair` 양방향·`findReceivedRequests` 생성자 프로젝션 — User FK 매핑 없이 Long 조인), `service/FriendService`(+Impl — 요청 시 역방향 PENDING 자동 수락 = 기존 행 ACCEPTED 승격), `controller/FriendController` 7종(`/api/friends` — code·preview·requests·requests/received·accept·reject·`DELETE /{userId}`), `exception/FriendErrorCode`(9xxx — 9400·9404·9409·9410·9414·9424)
 - MSG-186: 친구 목록·친구 프로필 조회 — `FriendshipRepository` 3종 추가(`findFriendsOrderByAcceptedAt`·`findFriendsOrderByNickname` — 양방향 OR 2분기 세타 조인 생성자 프로젝션 1방, SQL UNION 아님. 정렬만 다른 정적 2본(`responded_at DESC NULLS LAST, u.id` / `u.nickname, u.id` — 닉네임 중복 허용 타이브레이크). `existsAcceptedPair` 무잠금 존재 확인 — `findPair`는 PESSIMISTIC_WRITE라 readOnly 트랜잭션에서 PG가 거부해 조회 전용 분리. MSG-285(FRIENDS 공개범위)도 같은 메서드를 소비 — 선언은 이 한 곳(병렬 합의분 중복은 285 리베이스에서 제거·javadoc 병합, 2026-08-04)), `FriendService.getFriends(userId, sort)`(sort null·recent=수락 시각↓ 기본·nickname, 그 외 9420)·`getFriendProfile(userId, targetUserId)`(`existsAcceptedPair` → 프로필 → `UserGridQueryService` 요약·격자, friend→usergrid 단방향 B-내부 read), `FriendController` +2(`GET /api/friends?sort=`·`GET /{userId}/profile` — 기존 7종과 경로 무충돌), `dto/{FriendListItemResponseDto,FriendProfileResponseDto,FriendCollectionGridResponseDto}`(프로필은 단일 응답 — 프로필+요약+최근 격자 30, `summary`는 `CollectionSummaryResponseDto` 중첩 재사용으로 본인·친구 수치 동일 보장. 격자 항목은 본인 갤러리에서 영상 ID 2필드를 뺀 형상 — 비공개 영상 존재 누설 차단), `FriendErrorCode` +1(9420 INVALID_FRIEND_SORT). 프로필 실패는 **전건 기존 9424 단일 응답**(비친구·본인 ID·PENDING 상대·미존재 userId — 관계·계정 존재 은닉), 판정은 요청 시점 실시간(캐시 없음). 마이그레이션 0(조회 전용)
 - MSG-285: 친구 여부 read 판정 추가 — `@Transactional(readOnly = true)` 판정(요청 시점 실시간이라 친구 삭제가 다음 요청부터 즉시 반영, 캐시·비정규화 없음). 내부는 MSG-186과 공유하는 무잠금 `existsAcceptedPair` 소비(`findPair`는 `PESSIMISTIC_WRITE` 쓰기용이라 재생 판정마다 행 `FOR UPDATE` 가 걸려 재사용 금지). video 도메인이 FRIENDS 재생 판정에서 소비(B-내부, 계약 인터페이스 아님). **선언 위치는 MSG-312에서 이동** — 당시엔 `FriendService.isFriend` 였고 지금은 `FriendshipQueryService.isFriend` 다
@@ -134,11 +152,11 @@
 - MSG-312: video↔friend 상호 의존 해소 — `service/FriendshipQueryService`(+Impl) 신설. 친구 판정만 하고 `FriendshipRepository` 하나만 의존하는 leaf 라 어떤 서비스 순환에도 끼지 않는다. `FriendService.isFriend` 는 **제거**(계약에서 삭제 — 소비자였던 `VideoServiceImpl` 이 leaf 로 이동, friend 내부 `requireFriend` 도 leaf 경유해 판정 코드가 한 곳). `FriendServiceImpl` 의 `ObjectProvider<VideoService>` → `VideoService` 생성자 직접 주입 복원. 의존 방향은 `FriendServiceImpl → VideoServiceImpl → FriendshipQueryServiceImpl → FriendshipRepository` 단방향 — 지연 조회 없이 컨텍스트가 뜨는 것이 순환 해소의 증거다(이전 배선은 `BeanCurrentlyInCreationException`). 트랜잭션 경계: leaf 의 `@Transactional(readOnly = true)` 는 전파 REQUIRED 기본이라 호출자(재생 판정·`requireFriend`)가 이미 트랜잭션 안이면 새로 열지 않고 참여한다 — 실행 SQL 은 이전과 같은 `existsAcceptedPair` 단건이고 횟수도 그대로다. 쿼리·응답·에러코드·마이그레이션 전부 0 (동작 무변경 리팩터링)
 - **없는 것**: 도감 공개 범위 설정(Phase 2+)·차단(후속)·코드 재발급(Phase 2+ — MSG-188 종결로 유예 확정)·친구 목록 페이지네이션(수십 명 규모 전제)
 
-### `hotzone` (Owner A) — ✅ 완성 (MVP 범위)
+### `hotzone` (Owner A · 구현 성민) — ✅ 완성 (MVP 범위)
 - MSG-183: 핫스코어 집계 — `service/HotScoreCommandService`(+impl, 평면 service 패키지). 업로드 신호 +1을 UTC 6h 버킷(`hotzone:{bucketId}` Sorted Set, `bucketId=epochSeconds/21600`)에 Lua 원자 스크립트(ZINCRBY+EXPIRE 54h)로 증분. 버킷 키는 호출(커밋) 스레드에서 확정, 실행은 자체 데몬 1스레드 executor(큐 10k, 종료 시 5s 드레인) — 요청 스레드 무블록. 전 실패 삼킴+warn(FR-6, 에러코드 불요). DDL·yml 없음, Redis 전용(D4)
 - MSG-184: 핫구역 조회(`GET /api/hotzones` 뷰포트 4파라미터 필수 — `service/HotZoneService`(+impl)·`HotZoneView`, `hotzone:top` 캐시(최근 8버킷 ZUNIONSTORE 균등 합산, TTL 30s, 캐시 보장 Lua 원자 — EXISTS→ZUNIONSTORE→EXPIRE), 상위 K(50)·임계(3)·뷰포트 필터(encode→decode 정수 인덱스, queryByRange 동형), `config/HotZoneProperties`(record, `fillmap.hotzone.top-k/min-score` — topK 양수 기동 검증), `controller/HotZoneController`·DTO 2종, `exception/HotZoneErrorCode`(8400 INVALID_VIEWPORT — 비유한 좌표 NaN 우회 차단 포함), 파라미터 누락은 전역 400(MSG-167 매핑, GridController 구 관행 미답습). 48h 판정은 룩백 몫·TTL은 청소 전용(D4 역할 분리))
 
-### `notification` (Owner B) — 🟡 부분
+### `notification` (Owner B · 구현 성민) — 🟡 부분
 - MSG-178: FCM 푸시 토큰 등록/해제 — `entity/PushToken`(String 자연키 PK, 조회 매핑 앵커)·`PushPlatform`(IOS/ANDROID/WEB), `repository/PushTokenRepository`(native UPSERT `ON CONFLICT (fcm_token) DO UPDATE` user_id 포함 — 계정 전환 이관 시맨틱 · 해제는 `WHERE fcm_token AND user_id` 소유 검증+멱등), `service/PushTokenService`(+Impl — platform `toUpperCase(Locale.ROOT)` 파싱 → 10400), `controller/PushTokenController`(`/api/notifications/tokens` POST·DELETE), `exception/NotificationErrorCode`(**10xxx 대역** — 9xxx 선확정했으나 MSG-185 병렬 경합(9400 충돌)으로 이동, 대역 정본 = response-pattern.md 표). 마이그레이션 없음(V1 push_tokens 그대로), FCM 호출 없음(발송은 MSG-179)
 - MSG-179: FCM 발송 파이프라인 — outbox `notifications`(V21 — V20은 MSG-285 선점으로 리네임, 발송 기록 겸용) → `relay/NotificationRelay`(@Scheduled 5s 폴링, send().get() 동기 확인 후 PUBLISHED — 발행 실패 시 배치 중단, stale PUBLISHED(published_at 30분 초과) 자동 PENDING 복구) → Kafka(단일 브로커 KRaft·토픽 prefix dev./prod.·힙 256M/리밋 512M·thin payload=outbox id) → `consumer/NotificationConsumer`(@KafkaListener earliest·max.poll 600s/10건 — 멱등 2차(종결 상태 검사)→retry_count→설정 필터→전송률 제한(KST 자정 앱 UTC 변환)→토큰 조회→발송, TransactionTemplate 개별 트랜잭션) → `sender/FcmNotificationSender`(sendEachForMulticast 500 청크·UNREGISTERED/INVALID_ARGUMENT 자동 삭제·connect 10s/read 30s). 재시도 = DefaultErrorHandler 백오프(1s×2^n, 8회, 합 255s) → DEAD(DB DLQ — DLT 토픽 없음), 말폼드 비재시도. `relay/StaleTokenCleaner`(일 04시 KST, last_used_at 60일 무갱신 삭제). 접점 2종: `NotificationCommandService.record`(181 소비 — 호출자 트랜잭션 참여 규약)·`NotificationPreferenceService`(MSG-180이 실구현으로 교체 완료). 전부 `fillmap.notification.enabled` 게이트(기본 off — 로컬·CI는 Kafka 없이 green, @EmbeddedKafka 테스트). Codex 5라운드 7건 반영
 - MSG-180: 알림 설정 API — `notification_opt_outs`(V22, 복합 PK(user_id, category)·CHECK·FK CASCADE) **행 존재 = off, 행 부재 = on**(기본 전부 on이 스키마 내장 — 시딩·백필 없음). `NotificationPreferenceService`에 `getPreferences`·`update` 추가(isEnabled 시그니처·`NotificationConsumer` 호출부 무변경 — 179 D7 규약 이행), Impl 스텁 → 실구현(`existsById` 부정 1문장 · off 행 조회 후 3종 합성 · 멱등 토글 = off INSERT ON CONFLICT DO NOTHING / on DELETE, 캐시 없음 — 발송량이 전송률 상한으로 눌려 PK 단건 조회로 충분), `controller/NotificationPreferenceController`(GET `/api/notifications/preferences` · PATCH `/{category}` — visibility PATCH 동형 멱등 토글), `INVALID_CATEGORY(10420)`. SecurityConfig·yml·compose 무변경
@@ -148,7 +166,7 @@
 - MSG-315: 주간 활동 요약 — `NotificationCategory.WEEKLY` 신설(V26이 V21·V22 양쪽 CHECK를 VIDEO 포함 5종으로 재정의), 배치는 `usergrid/service/WeeklySummaryScheduler`(usergrid 섹션), `rateLimited` switch에 `case WEEKLY -> null`(주 1회라 상한 불요). 설정 API는 enum 순회 합성이라 코드 무변경으로 5종 확장. 알림 확장 3종(313·314·315) 완결
 - **없는 것**: 알림 이력/읽음 API(후속 티켓 — PRD 비목표), 딥링크 데이터 페이로드(FCM 전송은 title·body 뿐), 주간 조회수 증분(view_count가 누적값 — 스냅숏 테이블 신설 전엔 산출 불가, MSG-315 FR-8 비목표)
 
-### `moderation` (Owner B) — 🟡 부분
+### `moderation` (Owner B · 구현 강정민) — 🟡 부분
 - MSG-192: 영상 신고 접수 — `POST /api/videos/{videoId}/reports`(`ReportController`, AuthPrincipal 패턴·SecurityConfig 무변경), `entity/Report`(사용 컬럼만 매핑 — reviewed_by/reviewed_at은 MSG-195 몫 D6)·`ReportReason` 5종·`ReportStatus` 4종(V1 CHECK 문자열 일치), `ReportServiceImpl` **검증 순서가 계약**: reason 파싱 11400 → OTHER 상세 11401 → 영상 `findWithLockById` 행 잠금 후 없음·DELETED·BLINDED 3404 은닉(검증과 저장 사이 삭제·블라인드 커밋 창 차단 — Codex 교차 리뷰 수용, D8) → 자기 영상 11402 → 중복 exists 11409 → `saveAndFlush`+`DataIntegrityViolationException` catch 11409(동시 신고 레이스 수렴). **V27**(detail VARCHAR(500) + `uq_reports_reporter_video` — status 무관 전체 유니크 D3, 처리 후 재신고도 불가), `ReportErrorCode` **11xxx 대역**(대역표 행 추가 커밋 선행)
 - MSG-195: 관리자 신고 처리 — `controller/AdminReportController`(`/api/admin` 5종: 신고 목록 GET(상태 필터 기본 PENDING·**오프셋 페이징 PageRequest 첫 도입** — 관리자 전용 소량 데이터 예외, 사용자향 커서 관례 불변·닉네임 2종 세타 조인)·승인/기각 POST(reports 행 잠금 → PENDING 확인 11410 → videos 행 잠금 → ACTIVE만 blind 위임 — 잠금 순서 reports→videos 고정 D3, 이미 BLINDED/DELETED는 신고만 종결 FR-5)·해제 POST(unblind 위임, principal 미수취 §D4)·단건 영상 확인 GET(상태·공개범위 무관 재생 URL — 블러본 우선, 조회수·은닉 없음)), `service/AdminReportService`(+Impl), `Report` reviewed_by/reviewed_at 매핑 완성+`resolve`/`reject`(MSG-192 §D6 예약 이행), `ReportErrorCode` +4(11404·11410·11420·11421), DTO 4종(MSG-319 계약), 극단 page 오버플로 11421 가드(Codex 1R). 마이그레이션 0(컬럼 V1 기존재·목록은 `idx_reports_pending` 커버). 관리자 계정 생성 코드 없음 — DB 수동 승격 절차 deploy.md(§D8)
 - **없는 것**: 신고 rate limit(같은 사용자의 다수 영상 연속 신고 — 요구 생기면 PRD부터), 사용자 신고(대상은 영상만 2026-08-06 확정 — 사용자 차단 MSG-194는 제품 범위 제외로 종결 2026-08-06), 신고자 처리 결과 알림(후속 논의)
