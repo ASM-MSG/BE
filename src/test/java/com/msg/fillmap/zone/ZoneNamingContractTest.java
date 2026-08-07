@@ -1,6 +1,7 @@
 package com.msg.fillmap.zone;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -127,6 +128,13 @@ class ZoneNamingContractTest {
 		assertThat(name).isEqualTo(ZoneCellName.NONE);
 		assertThat(name.zoneName()).isNull();
 		assertThat(name.zoneCell()).isNull();
+	}
+
+	@Test
+	@DisplayName("한쪽만 null 인 ZoneCellName 은 생성이 거부된다 (\"항상 쌍\" 불변식을 타입이 강제)")
+	void 하나만_null인_ZoneCellName은_생성이_거부된다() {
+		assertThatThrownBy(() -> new ZoneCellName(null, "A-1")).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> new ZoneCellName("m234서면", null)).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test

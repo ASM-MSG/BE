@@ -10,4 +10,12 @@ public record ZoneCellName(String zoneName, String zoneCell) {
 
 	/** 어느 구역 사각형에도 안 드는 격자의 결과 (두 필드 null). */
 	public static final ZoneCellName NONE = new ZoneCellName(null, null);
+
+	public ZoneCellName {
+		// "항상 쌍" 을 문서가 아니라 타입이 강제한다 — 한쪽만 null 이면 소비처 9곳의 무분기 매핑이 깨진다
+		if ((zoneName == null) != (zoneCell == null)) {
+			throw new IllegalArgumentException(
+				"zoneName 과 zoneCell 은 항상 쌍이어야 한다: zoneName=" + zoneName + ", zoneCell=" + zoneCell);
+		}
+	}
 }
