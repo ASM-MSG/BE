@@ -117,7 +117,8 @@ public class FriendController {
 		summary = "친구 격자 뷰포트 조회",
 		description = "지도 화면 bbox(남서~북동 좌표) 안에서 그 친구가 점령한 격자를 (grid_y, grid_x) 오름차순으로 "
 			+ "반환한다. 응답 형상·검증 규칙·에러는 내 격자 조회(GET /api/grids)와 같다 — 응답의 nextCursor 를 "
-			+ "다음 요청 cursor 에 넣어 이어 조회하고, bbox 한 변의 span 은 최대 0.5도다. 격자 색상은 내려주지 "
+			+ "다음 요청 cursor 에 넣어 이어 조회하고, bbox span 상한 0.5도는 위도·경도 각 변에 따로 적용되며 "
+			+ "초과 시 400 + 4402(VIEWPORT_TOO_LARGE)로 거절된다. 격자 색상은 내려주지 "
 			+ "않는다(FE 단일색 렌더). 친구가 아닌 사용자·본인·존재하지 않는 사용자 조회는 모두 같은 404 다."
 	)
 	@GetMapping("/{userId}/grids")

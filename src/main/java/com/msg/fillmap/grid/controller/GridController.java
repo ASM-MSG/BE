@@ -54,7 +54,9 @@ public class GridController {
 	@Operation(
 		summary = "뷰포트 내 색칠 격자 조회 (커서 페이지네이션)",
 		description = "지도 화면 bbox(남서~북동 좌표) 안에서 내가 점령한 격자를 (grid_y, grid_x) 오름차순으로 반환한다. "
-			+ "응답의 nextCursor를 다음 요청 cursor에 넣어 이어서 조회한다. bbox 한 변의 span은 최대 0.5도."
+			+ "응답의 nextCursor를 다음 요청 cursor에 넣어 이어서 조회한다. bbox span 상한은 0.5도로 위도·경도 "
+			+ "각 변에 따로 적용된다(정확히 0.5도는 허용). 초과 시 잘라서 응답하지 않고 400 + developCode "
+			+ "4402(VIEWPORT_TOO_LARGE)로 거절한다."
 	)
 	@GetMapping
 	public SuccessResponse<OccupiedGridPageResponseDto> getOccupiedInViewport(
