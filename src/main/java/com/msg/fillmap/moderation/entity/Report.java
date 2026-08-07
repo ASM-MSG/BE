@@ -22,8 +22,8 @@ import lombok.NoArgsConstructor;
  * 어떤 자동 전환도 일으키지 않는다 — 블라인드는 관리자 수동 판단만이다.
  * 같은 사용자의 같은 영상 재신고는 V27 유니크 제약(uq_reports_reporter_video)이 상태와 무관하게 막는다.
  *
- * <p>reviewed_by·reviewed_at 컬럼은 이번 범위에서 쓰는 코드가 없어 매핑하지 않는다 (§D6) —
- * 검토 흐름을 만드는 MSG-195 가 자기 요구에 맞게 추가한다.
+ * <p>관리자 처리(MSG-195)는 PENDING 을 RESOLVED(승인) 또는 REJECTED(기각) 로 한 번만 옮기고,
+ * 누가 언제 처리했는지를 reviewed_by·reviewed_at 에 남긴다 (MSG-192 §D6 이 이 티켓 몫으로 예약한 매핑).
  */
 @Entity
 @Table(name = "reports")
@@ -53,6 +53,14 @@ public class Report {
 	@Column(length = 500)
 	private String detail;
 
+	/** 처리한 관리자의 사용자 id. 미처리면 null (MSG-195 FR-4). */
+	@Column(name = "reviewed_by")
+	private Long reviewedBy;
+
+	/** 처리 시각. 미처리면 null (MSG-195 FR-4). */
+	@Column(name = "reviewed_at")
+	private LocalDateTime reviewedAt;
+
 	@CreationTimestamp
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
@@ -68,5 +76,24 @@ public class Report {
 	/** 신고 접수 — 항상 PENDING 으로 시작한다 (FR-1). */
 	public static Report create(Long reporterId, Long videoId, ReportReason reason, String detail) {
 		return new Report(reporterId, videoId, reason, detail);
+	}
+
+	/**
+	 * 승인 종결 (MSG-195 FR-4). "이미 처리된 신고인가" 가드는 여기에 두지 않는다 — 재처리 판정은 신고 행
+	 * 잠금을 쥔 상태에서만 경합에 안전하고, 그 잠금은 서비스가 갖는다 (Video.markBlinded 선례).
+	 */
+	public void resolve(Long adminId) {
+		markReviewed(ReportStatus.RESOLVED, adminId);
+	}
+
+	/** 기각 종결 (MSG-195 FR-6). 영상에는 아무 영향이 없다. 가드 위치는 resolve 주석 참조. */
+	public void reject(Long adminId) {
+		markReviewed(ReportStatus.REJECTED, adminId);
+	}
+
+	private void markReviewed(ReportStatus status, Long adminId) {
+		this.status = status;
+		this.reviewedBy = adminId;
+		this.reviewedAt = LocalDateTime.now();
 	}
 }
