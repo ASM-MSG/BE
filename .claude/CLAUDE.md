@@ -103,7 +103,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 
 ## 협업 원칙 (요약)
 
-- **Owner A**: 지도 인프라 도메인 (`com.msg.fillmap.grid.*`, `com.msg.fillmap.region.*`, `com.msg.fillmap.search.*` — MSG-251 §D1, `com.msg.fillmap.hotzone.*` — MSG-233)
+- **Owner A**: 지도 인프라 도메인 (`com.msg.fillmap.grid.*`, `com.msg.fillmap.region.*`, `com.msg.fillmap.search.*` — MSG-251 §D1, `com.msg.fillmap.hotzone.*` — MSG-233, `com.msg.fillmap.zone.*` — MSG-234)
 - **Owner B**: 콘텐츠/인증 도메인 (`com.msg.fillmap.user.*`, `com.msg.fillmap.video.*`, `com.msg.fillmap.auth.*`, `com.msg.fillmap.usergrid.*`, `com.msg.fillmap.badge.*` — MSG-239, `com.msg.fillmap.streak.*` — MSG-200, `com.msg.fillmap.mission.*` — MSG-222, `com.msg.fillmap.notification.*` — MSG-178, `com.msg.fillmap.friend.*` — MSG-185, `com.msg.fillmap.moderation.*` — MSG-192)
-- 두 도메인의 접점은 인터페이스로만 (`GridQueryService`, `UserGridQueryService` 등)
+- 두 도메인의 접점은 인터페이스로만 (`GridQueryService`, `UserGridQueryService`, `ZoneNameQueryService`(격자 표시명 계산, MSG-341) 등)
 - 상세: `@.claude/docs/infrastructure.md`
