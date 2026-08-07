@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,11 +28,16 @@ import com.msg.fillmap.video.repository.RegionExploreSummaryProjection;
 import com.msg.fillmap.video.repository.RegionGridCountProjection;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.zone.entity.Zone;
+import com.msg.fillmap.zone.service.ZoneNameQueryService;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * 전역 탐색 서비스 (MSG-238 §도메인 4). 게이트·정렬·카운트 정의는 repository 계약이라 RegionExploreQueryTest 가
  * 실 DB 로 검증하고, 여기서는 sort 분기·limit 보정(§D2)·커버 presign(null→null 통과)·미존재 regionCode 합성
  * (regionName null·0·빈 배열 — 예외 아님, §D2)·DTO 매핑만 본다. HTTP 200/400/401 은 컨트롤러 테스트 담당.
+ * 구역 이름(MSG-341)은 리졸버를 목이 아니라 실물로 준다 — 명명 산술 자체의 정본은 픽스처 계약 테스트이고
+ * 여기서 볼 것은 "요청당 1회 받아 카드마다 꽂는다"는 배선이라, 실물이 배선 오류를 그대로 드러낸다.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("RegionExploreServiceImpl")
@@ -45,8 +51,18 @@ class RegionExploreServiceTest {
 	@Mock
 	private ThumbnailUrlPresigner thumbnailUrlPresigner;
 
+	@Mock
+	private ZoneNameQueryService zoneNameQueryService;
+
 	@InjectMocks
 	private RegionExploreServiceImpl regionExploreService;
+
+	/** 카드 좌표(38879_112390)를 덮는 구역 하나 — 행 A 는 maxGridY, 열 1 은 minGridX 다. */
+	private static final Zone SEOMYEON = Zone.builder()
+		.zoneKey("seomyeon").name("서면")
+		.minGridY(38870).maxGridY(38884).minGridX(112385).maxGridX(112400)
+		.priority(0)
+		.build();
 
 	private ExploreGridProjection cardProjection(String gridId, long gridY, long gridX, int videoCount,
 		String coverThumbnailKey) {
@@ -129,6 +145,11 @@ class RegionExploreServiceTest {
 	@Nested
 	@DisplayName("getRegionGrids — 행정동 격자 카드 + 헤더 카운트")
 	class GetRegionGrids {
+
+		@BeforeEach
+		void givenSeomyeonZone() {
+			given(zoneNameQueryService.resolver()).willReturn(new ZoneNameResolver(List.of(SEOMYEON)));
+		}
 
 		@Test
 		@DisplayName("sort가 POPULAR면 인기순 메서드를 선택한다")
@@ -226,6 +247,27 @@ class RegionExploreServiceTest {
 			assertThat(result.grids().get(0).gridX()).isEqualTo(112390L);
 			assertThat(result.grids().get(0).videoCount()).isEqualTo(138);
 			assertThat(result.grids().get(0).coverDurationSec()).isEqualTo((short) 12);
+		}
+
+		@Test
+		@DisplayName("카드 리스트 항목에 구역 이름이 붙는다")
+		void 카드_리스트_항목에_구역_이름이_붙는다() {
+			// MSG-341 FR-1·FR-8: 구역 안 카드는 zoneName+zoneCell 을 얻고, 구역 밖 카드는 둘 다 null 이다.
+			// 카드가 2장이어도 resolver() 는 1회 — 항목마다 zones 를 다시 읽는 N+1 이 아님을 고정한다.
+			given(videoRepository.findExploreGridsPopular(REGION_CODE, null)).willReturn(List.of(
+				cardProjection("38879_112390", 38879L, 112390L, 138, null),
+				cardProjection("41642_110458", 41642L, 110458L, 12, null)));
+			givenSummary("부전2동", 2, 150L);
+
+			RegionExploreResponseDto result =
+				regionExploreService.getRegionGrids(REGION_CODE, ExploreSort.POPULAR, null);
+
+			// maxGridY(38884) − 38879 = 5 → 'F', 112390 − minGridX(112385) + 1 = 6
+			assertThat(result.grids().get(0).zoneName()).isEqualTo("서면");
+			assertThat(result.grids().get(0).zoneCell()).isEqualTo("F-6");
+			assertThat(result.grids().get(1).zoneName()).isNull();
+			assertThat(result.grids().get(1).zoneCell()).isNull();
+			then(zoneNameQueryService).should(times(1)).resolver();
 		}
 
 		@Test

@@ -15,6 +15,9 @@ import com.msg.fillmap.video.dto.RegionGridCountResponseDto;
 import com.msg.fillmap.video.repository.ExploreGridProjection;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.zone.service.ZoneCellName;
+import com.msg.fillmap.zone.service.ZoneNameQueryService;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +26,7 @@ public class RegionExploreServiceImpl implements RegionExploreService {
 
 	private final VideoRepository videoRepository;
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
+	private final ZoneNameQueryService zoneNameQueryService;
 
 	/**
 	 * limit 보정(§D2: null=전부, 1 미만=1) → sort 분기(native ORDER BY 분기 불가라 메서드 2개 — 90 선례) →
@@ -32,6 +36,8 @@ public class RegionExploreServiceImpl implements RegionExploreService {
 	 * REPEATABLE_READ: 카드·summary가 별도 스테이트먼트라 READ COMMITTED에선 스냅샷이 갈려
 	 * §D1의 "카운트 = 카드 집합" 일치가 동시 업로드/삭제/전환 중 깨질 수 있다 — PG는 이 레벨에서
 	 * 트랜잭션 단일 스냅샷을 보장(읽기 전용이라 직렬화 실패 없음).
+	 * 카드 이름(MSG-341): 매핑 진입 전 리졸버를 1회 받고 카드마다 순수 산술만 돌린다 — 카드 수와 무관하게
+	 * zones 로드가 1회다(FR-8). 리졸버 생성이 이 트랜잭션 안이라 zones 도 카드·summary 와 같은 스냅샷이다.
 	 */
 	@Override
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -40,9 +46,14 @@ public class RegionExploreServiceImpl implements RegionExploreService {
 		List<ExploreGridProjection> projections = sort == ExploreSort.LATEST
 			? videoRepository.findExploreGridsLatest(regionCode, effectiveLimit)
 			: videoRepository.findExploreGridsPopular(regionCode, effectiveLimit);
+		ZoneNameResolver zoneNameResolver = zoneNameQueryService.resolver();
 		List<ExploreGridResponseDto> grids = projections.stream()
-			.map(projection -> ExploreGridResponseDto.of(
-				projection, thumbnailUrlPresigner.presign(projection.getCoverThumbnailKey())))
+			.map(projection -> {
+				ZoneCellName name = zoneNameResolver.name(projection.getGridY(), projection.getGridX());
+				return ExploreGridResponseDto.of(
+					projection, thumbnailUrlPresigner.presign(projection.getCoverThumbnailKey()),
+					name.zoneName(), name.zoneCell());
+			})
 			.toList();
 		return videoRepository.getRegionExploreSummary(regionCode)
 			.map(summary -> new RegionExploreResponseDto(
