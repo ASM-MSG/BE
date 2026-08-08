@@ -251,25 +251,19 @@ class GridEpsg5179MigrationTest {
 	/**
 	 * V28 본문을 지금 트랜잭션에서 실행한다. 파일을 그대로 읽어 구문 단위로 쪼개므로 마이그레이션이 바뀌면
 	 * 이 테스트도 자동으로 바뀐 내용을 검증한다.
+	 *
+	 * <p>배포와 다른 점 하나: Flyway 는 V28 을 한 번만 돌리지만 여기서는 이미 적용된 DB 에서 본문을 다시
+	 * 돌린다. 그래서 grids 행이 없는 mission_grids(미방문 포토스팟 — 설계상 정상)는 이미 새 ID 인 값을
+	 * 2단계가 구 규칙으로 다시 파싱해 엉뚱한 셀로 옮긴다. 아래 단언들은 videos·user_grids·grids·
+	 * region_stats 만 보고 미션은 new_grids 스냅숏에도 안 들어가므로 판정에 영향이 없고, 재파싱된 값은
+	 * 트랜잭션과 함께 롤백된다. 미션 이행 자체를 검증하려면 clean 후 1회 실행이 필요하다.
 	 */
 	private void runMigration() {
 		em.flush();
-		assertThat(missionGridsWithoutGrid())
-			.as("grids 행이 없는 mission_grids 가 있으면 이 재실행이 그 행의 새 ID 를 구 규칙으로 다시 파싱해 "
-				+ "엉뚱한 값을 만든다(예 17413_7646 → 위도 15.7·경도 8.8, 유효 범위라 V28 가드에도 안 걸린다). "
-				+ "배포 때 V28 은 Flyway 로 한 번만 돌아 무관하지만, 여기서는 이행 결과를 신뢰할 수 없다")
-			.isZero();
 		for (String statement : statements(readMigration())) {
 			em.createNativeQuery(statement).executeUpdate();
 		}
 		em.clear();
-	}
-
-	private long missionGridsWithoutGrid() {
-		return scalar("""
-			SELECT COUNT(*) FROM mission_grids mg
-			WHERE NOT EXISTS (SELECT 1 FROM grids g WHERE g.grid_id = mg.grid_id)
-			""");
 	}
 
 	private static String readMigration() {
