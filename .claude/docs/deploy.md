@@ -43,8 +43,9 @@ docker compose up -d          # PostGIS 컨테이너(fillmap DB) 기동
 | `S3_BUCKET_VIDEO` | prod 영상 S3 버킷 — 기본값 없음, 미설정 시 `AwsProperties @Pattern` 이 기동 실패시킴 |
 | `SERVER_PORT` | 서버 포트 (기본 `8080`) |
 
-- 카카오 토큰 엔드포인트(`oauth.kakao.token-uri`, 웹 인가 코드 교환 — MSG-345)는 issuer·jwk-set-uri 와 같은
-  공개 고정값이라 공통 `application.yml`에 있다. 프로파일별 값도 환경변수도 없다.
+- 카카오 엔드포인트 두 개(`oauth.kakao.token-uri` 인가 코드 교환, `oauth.kakao.authorize-uri` 로그인 진입점의
+  302 목적지 — MSG-345)는 issuer·jwk-set-uri 와 같은 공개 고정값이라 공통 `application.yml`에 있다.
+  프로파일별 값도 환경변수도 없다.
 - `oauth.kakao.nonce-cookie-secure`(같은 티켓)는 공통 `true` — nonce 쿠키를 `Secure; SameSite=None`으로 심는다.
   로컬만 `false`(`SameSite=Lax`, Secure 없음)로 덮는다. http://localhost 는 Secure 쿠키를 저장하지 않아
   켜두면 로컬 웹 로그인이 전부 401(2423)로 죽는다. 환경변수는 없다.
