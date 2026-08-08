@@ -1,5 +1,8 @@
 package com.msg.fillmap.region;
 
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
+import com.msg.fillmap.grid.GridFixtures;
+
 /**
  * region 테스트 공용 fixture. 공유 로컬 DB 오염 방지를 위해 실존하지 않는 sido 코드 999 대역의
  * 합성 region_code 만 쓴다(실데이터 3,558건과 절대 충돌하지 않음). 실제 정리는 @Transactional 롤백.
@@ -28,6 +31,21 @@ public final class RegionTestFixtures {
 		return ("{\"type\":\"Polygon\",\"coordinates\":[["
 			+ "[%1$s,%2$s],[%3$s,%2$s],[%3$s,%4$s],[%1$s,%4$s],[%1$s,%2$s]"
 			+ "]]}").formatted(minLon, minLat, maxLon, maxLat);
+	}
+
+	/**
+	 * 격자 인덱스 경계 [minGy,maxGy)×[minGx,maxGx) 를 덮는 위경도 직사각형 Polygon GeoJSON.
+	 * 격자 축이 위경도 축과 평행하지 않아(자오선 수렴) 블록 꼭짓점 4점의 min/max 로 감싼다 —
+	 * 블록보다 조금 넓지만 안쪽 셀 중심이 반드시 폴리곤 안에 든다 (MSG-347).
+	 */
+	public static String cellBlockPolygonJson(long minGy, long maxGy, long minGx, long maxGx) {
+		GridPoint southWest = GridFixtures.pointAt(minGy, minGx);
+		GridPoint southEast = GridFixtures.pointAt(minGy, maxGx);
+		GridPoint northEast = GridFixtures.pointAt(maxGy, maxGx);
+		GridPoint northWest = GridFixtures.pointAt(maxGy, minGx);
+		return rectanglePolygonJson(
+			Math.min(southWest.lon(), northWest.lon()), Math.min(southWest.lat(), southEast.lat()),
+			Math.max(southEast.lon(), northEast.lon()), Math.max(northWest.lat(), northEast.lat()));
 	}
 
 	/**

@@ -1,7 +1,5 @@
 package com.msg.fillmap.grid.service;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.times;
@@ -25,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
@@ -94,9 +93,9 @@ class GridQueryServiceIntegrationTest {
 	}
 
 	private ViewportBounds blockBounds() {
-		return new ViewportBounds(
-			(baseY + 0.5) * GRID_LAT_STEP, (baseX + 0.5) * GRID_LNG_STEP,
-			(baseY + 2.5) * GRID_LAT_STEP, (baseX + 2.5) * GRID_LNG_STEP);
+		GridPoint southWest = GridFixtures.pointAt(baseY + 0.5, baseX + 0.5);
+		GridPoint northEast = GridFixtures.pointAt(baseY + 2.5, baseX + 2.5);
+		return new ViewportBounds(southWest.lat(), southWest.lon(), northEast.lat(), northEast.lon());
 	}
 
 	/**

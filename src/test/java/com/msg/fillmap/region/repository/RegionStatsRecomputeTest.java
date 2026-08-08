@@ -1,8 +1,7 @@
 package com.msg.fillmap.region.repository;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
+import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
 import static com.msg.fillmap.region.RegionTestFixtures.syntheticCode;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,8 +34,8 @@ import com.msg.fillmap.user.repository.UserRepository;
 class RegionStatsRecomputeTest {
 
 	// 서해 공해상(lat ≈36.0, lon ≈125.0) 기준 격자 인덱스 — 육상 실데이터 행정동과 겹치지 않는 좌표 대역.
-	private static final long GY0 = 40000L;
-	private static final long GX0 = 108695L;
+	private static final long GY0 = 17810L;
+	private static final long GX0 = 7746L;
 
 	@Autowired
 	private RegionRepository regionRepository;
@@ -58,9 +57,7 @@ class RegionStatsRecomputeTest {
 
 	/** 격자 인덱스 경계 [minGy,maxGy)×[minGx,maxGx) 를 통째로 덮는 합성 행정동을 upsert 한다. */
 	private void seedRegion(String code, long minGy, long maxGy, long minGx, long maxGx) {
-		String polygon = rectanglePolygonJson(
-			minGx * GRID_LNG_STEP, minGy * GRID_LAT_STEP,
-			maxGx * GRID_LNG_STEP, maxGy * GRID_LAT_STEP);
+		String polygon = cellBlockPolygonJson(minGy, maxGy, minGx, maxGx);
 		regionRepository.upsert(code, "합성동", code.substring(0, 5), polygon, CELL_AREA_M2);
 	}
 
@@ -121,15 +118,17 @@ class RegionStatsRecomputeTest {
 	@DisplayName("경계 격자에 양쪽 행정동 좌표 영상이 2개여도 중심점 기준 한 행정동에만 1 카운트된다")
 	void 경계_격자에_양쪽_행정동_좌표_영상이_2개여도_중심점_기준_한_행정동에만_1_카운트된다() {
 		// 격자 (GY0,GX0) 의 동서를 가르는 경계선을 셀 내부(중심점 동편, 0.7 지점)에 둔다 — 격자가 A|B 를 물리적으로 걸친다.
-		double borderLon = (GX0 + 0.7) * GRID_LNG_STEP;
-		double minLat = (GY0 - 1) * GRID_LAT_STEP;
-		double maxLat = (GY0 + 2) * GRID_LAT_STEP;
+		double borderLon = GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.7).lon();
+		double minLat = GridFixtures.pointAt(GY0 - 1, GX0 + 0.5).lat();
+		double maxLat = GridFixtures.pointAt(GY0 + 2, GX0 + 0.5).lat();
 		String a = syntheticCode("1");
 		String b = syntheticCode("2");
 		regionRepository.upsert(a, "합성동", a.substring(0, 5),
-			rectanglePolygonJson((GX0 - 2) * GRID_LNG_STEP, minLat, borderLon, maxLat), CELL_AREA_M2);
+			rectanglePolygonJson(GridFixtures.pointAt(GY0 + 0.5, GX0 - 2).lon(), minLat, borderLon, maxLat),
+			CELL_AREA_M2);
 		regionRepository.upsert(b, "합성동", b.substring(0, 5),
-			rectanglePolygonJson(borderLon, minLat, (GX0 + 3) * GRID_LNG_STEP, maxLat), CELL_AREA_M2);
+			rectanglePolygonJson(borderLon, minLat, GridFixtures.pointAt(GY0 + 0.5, GX0 + 3).lon(), maxLat),
+			CELL_AREA_M2);
 
 		String grid = occupy(user1, GY0, GX0);
 

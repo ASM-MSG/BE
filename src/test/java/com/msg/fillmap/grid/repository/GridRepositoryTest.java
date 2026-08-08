@@ -1,7 +1,5 @@
 package com.msg.fillmap.grid.repository;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
@@ -18,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -85,10 +84,12 @@ class GridRepositoryTest {
 		GridFixtures.seedUserGrid(em, me, gOut, 4);
 
 		// 뷰포트 코너를 셀 경계가 아닌 셀 중심에 두어 A/B 경계 판정이 부동소수 오차 없이 일치하게 한다.
-		swLat = (baseY + 0.5) * GRID_LAT_STEP;
-		swLng = (baseX + 0.5) * GRID_LNG_STEP;
-		neLat = (baseY + 2.5) * GRID_LAT_STEP;
-		neLng = (baseX + 2.5) * GRID_LNG_STEP;
+		GridPoint southWest = GridFixtures.pointAt(baseY + 0.5, baseX + 0.5);
+		GridPoint northEast = GridFixtures.pointAt(baseY + 2.5, baseX + 2.5);
+		swLat = southWest.lat();
+		swLng = southWest.lon();
+		neLat = northEast.lat();
+		neLng = northEast.lon();
 
 		em.flush();
 	}

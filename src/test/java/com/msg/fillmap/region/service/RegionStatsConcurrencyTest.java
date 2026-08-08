@@ -1,9 +1,7 @@
 package com.msg.fillmap.region.service;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
-import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
+import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
@@ -59,8 +57,8 @@ import com.msg.fillmap.user.repository.UserRepository;
 class RegionStatsConcurrencyTest {
 
 	// 서해 공해상(lat ≈36.0, lon ≈124.96) 기준 격자 인덱스 — 육상 실데이터 행정동과 겹치지 않는 좌표 대역.
-	private static final long GY0 = 40000L;
-	private static final long GX0 = 108665L;
+	private static final long GY0 = 17811L;
+	private static final long GX0 = 7715L;
 
 	// 실존하지 않는 99920 대역 합성 코드(153 트랙의 9993x·9994x 와도 분리). parent_code = 앞 5자리 "99920".
 	private static final String REGION_CODE = "9992000165";
@@ -98,9 +96,7 @@ class RegionStatsConcurrencyTest {
 		// region·user·grids 는 먼저 커밋해 둔다 — 두 워커 트랜잭션은 자기 user_grids 점령 row 만 삽입한다.
 		tx.executeWithoutResult(status -> {
 			userId = userRepository.save(User.createLocalUser("m165-concurrency@example.com", "hash", "m165동시")).getId();
-			String polygon = rectanglePolygonJson(
-				GX0 * GRID_LNG_STEP, GY0 * GRID_LAT_STEP,
-				(GX0 + 3) * GRID_LNG_STEP, (GY0 + 3) * GRID_LAT_STEP);
+			String polygon = cellBlockPolygonJson(GY0, GY0 + 3, GX0, GX0 + 3);
 			regionRepository.upsert(REGION_CODE, "m165합성동", REGION_CODE.substring(0, 5), polygon, CELL_AREA_M2);
 			// 같은 행정동 안의 서로 다른 두 격자 — region 을 먼저 upsert 했으므로 seedLabeledGrid 가 둘 다 REGION_CODE 로 라벨한다
 			// (equi refreshRegionStats 가 이 저장 라벨을 읽는다).

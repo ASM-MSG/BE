@@ -1,8 +1,7 @@
 package com.msg.fillmap.grid;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
+import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -16,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.region.service.RegionView;
@@ -38,8 +38,8 @@ import com.msg.fillmap.region.service.RegionView;
 class GridRegionCodeBackfillTest {
 
 	// 서해 공해상(lat ≈35.55, lon ≈124.78) 격자 인덱스 — 어떤 실존 행정동에도 안 드는 좌표 대역.
-	private static final long GY0 = 39500L;
-	private static final long GX0 = 108500L;
+	private static final long GY0 = 17316L;
+	private static final long GX0 = 7530L;
 
 	// 실존하지 않는 99950 대역 합성 코드(오름차순: A < B — 타이브레이크는 낮은 A 를 고른다).
 	private static final String REGION_A = "9995000001";
@@ -56,9 +56,7 @@ class GridRegionCodeBackfillTest {
 
 	/** 격자 인덱스 경계 [minGy,maxGy)×[minGx,maxGx) 를 통째로 덮는 합성 행정동을 upsert 한다. */
 	private void seedRegion(String code, long minGy, long maxGy, long minGx, long maxGx) {
-		String polygon = rectanglePolygonJson(
-			minGx * GRID_LNG_STEP, minGy * GRID_LAT_STEP,
-			maxGx * GRID_LNG_STEP, maxGy * GRID_LAT_STEP);
+		String polygon = cellBlockPolygonJson(minGy, maxGy, minGx, maxGx);
 		regionRepository.upsert(code, "m167합성동", code.substring(0, 5), polygon, CELL_AREA_M2);
 	}
 
@@ -89,7 +87,8 @@ class GridRegionCodeBackfillTest {
 
 	/** 격자 (gy,gx) 중심점의 by-grid 귀속(resolveByPoint) region_code — 무귀속이면 null. */
 	private String byGridLabel(long gy, long gx) {
-		return regionQueryService.resolveByPoint((gy + 0.5) * GRID_LAT_STEP, (gx + 0.5) * GRID_LNG_STEP)
+		GridPoint center = GridFixtures.pointAt(gy + 0.5, gx + 0.5);
+		return regionQueryService.resolveByPoint(center.lat(), center.lon())
 			.map(RegionView::regionCode).orElse(null);
 	}
 
@@ -108,13 +107,15 @@ class GridRegionCodeBackfillTest {
 	@DisplayName("경계에 인접한 두 행정동에서도 중심점 기준 한 행정동으로 라벨되고 by-grid 와 일치한다")
 	void 경계에_인접한_두_행정동에서도_중심점_기준_한_행정동으로_라벨되고_by_grid와_일치한다() {
 		// 격자 (GY0,GX0) 의 동서를 가르는 경계선을 셀 내부(중심점 동편, 0.7 지점)에 둔다 — 격자가 A|B 를 물리적으로 걸친다.
-		double borderLon = (GX0 + 0.7) * GRID_LNG_STEP;
-		double minLat = (GY0 - 1) * GRID_LAT_STEP;
-		double maxLat = (GY0 + 2) * GRID_LAT_STEP;
+		double borderLon = GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.7).lon();
+		double minLat = GridFixtures.pointAt(GY0 - 1, GX0 + 0.5).lat();
+		double maxLat = GridFixtures.pointAt(GY0 + 2, GX0 + 0.5).lat();
 		regionRepository.upsert(REGION_A, "m167합성동", REGION_A.substring(0, 5),
-			rectanglePolygonJson((GX0 - 2) * GRID_LNG_STEP, minLat, borderLon, maxLat), CELL_AREA_M2);
+			rectanglePolygonJson(GridFixtures.pointAt(GY0 + 0.5, GX0 - 2).lon(), minLat, borderLon, maxLat),
+			CELL_AREA_M2);
 		regionRepository.upsert(REGION_B, "m167합성동", REGION_B.substring(0, 5),
-			rectanglePolygonJson(borderLon, minLat, (GX0 + 3) * GRID_LNG_STEP, maxLat), CELL_AREA_M2);
+			rectanglePolygonJson(borderLon, minLat, GridFixtures.pointAt(GY0 + 0.5, GX0 + 3).lon(), maxLat),
+			CELL_AREA_M2);
 		String grid = GridFixtures.seedGrid(em, GY0, GX0);
 
 		backfill(GY0, GY0 + 1);
