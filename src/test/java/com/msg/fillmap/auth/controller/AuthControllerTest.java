@@ -1,5 +1,6 @@
 package com.msg.fillmap.auth.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -7,7 +8,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -30,9 +33,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import tools.jackson.databind.ObjectMapper;
 
+import com.msg.fillmap.auth.dto.KakaoCodeLoginRequestDto;
 import com.msg.fillmap.auth.dto.LoginRequestDto;
 import com.msg.fillmap.auth.dto.LoginResponseDto;
 import com.msg.fillmap.auth.dto.OidcLoginRequestDto;
@@ -41,10 +46,13 @@ import com.msg.fillmap.auth.dto.SignupRequestDto;
 import com.msg.fillmap.auth.dto.SignupResponseDto;
 import com.msg.fillmap.auth.exception.AuthErrorCode;
 import com.msg.fillmap.auth.jwt.JwtProperties;
+import com.msg.fillmap.auth.oidc.KakaoAuthCodeExchanger;
+import com.msg.fillmap.auth.oidc.KakaoOidcProperties;
 import com.msg.fillmap.auth.service.AuthService;
 import com.msg.fillmap.auth.service.OidcLoginService;
 import com.msg.fillmap.auth.service.RefreshTokenService;
 import com.msg.fillmap.auth.service.ReissueResult;
+import com.msg.fillmap.auth.support.NonceCookies;
 import com.msg.fillmap.auth.support.RefreshTokenCookies;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.entity.AuthProvider;
@@ -52,25 +60,36 @@ import com.msg.fillmap.user.exception.UserErrorCode;
 
 @WebMvcTest(AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import(AuthControllerTest.JwtPropertiesTestConfig.class)
+@Import(AuthControllerTest.PropertiesTestConfig.class)
 @DisplayName("AuthController")
 class AuthControllerTest {
 
 	private static final String SIGNUP_URL = "/api/auth/signup";
 	private static final String LOGIN_URL = "/api/auth/login";
 	private static final String OAUTH_URL = "/api/auth/oauth/kakao";
+	private static final String OAUTH_CODE_URL = "/api/auth/oauth/kakao/code";
+	private static final String OAUTH_AUTHORIZE_URL = "/api/auth/oauth/kakao/authorize";
 	private static final String REISSUE_URL = "/api/auth/reissue";
 	private static final String LOGOUT_URL = "/api/auth/logout";
 	private static final String CLIENT_TYPE_HEADER = "X-Client-Type";
 	private static final String DEVICE_ID_HEADER = "X-Device-Id";
 
+	/** @WebMvcTest 는 @ConfigurationProperties 를 바인딩하지 않으므로 컨트롤러가 쓰는 설정을 직접 넣는다. */
 	@TestConfiguration
-	static class JwtPropertiesTestConfig {
+	static class PropertiesTestConfig {
 
 		@Bean
 		JwtProperties jwtProperties() {
 			return new JwtProperties(
 				"test-access-secret", Duration.ofHours(1), "test-refresh-secret", Duration.ofDays(14));
+		}
+
+		@Bean
+		KakaoOidcProperties kakaoOidcProperties() {
+			// nonceCookieSecure=true — 공통(dev·prod) 기본값. false 분기는 NonceCookies 직접 단언으로 덮는다
+			return new KakaoOidcProperties("https://kauth.kakao.com",
+				"https://kauth.kakao.com/.well-known/jwks.json", "test-client-id",
+				"https://kauth.kakao.com/oauth/token", "https://kauth.kakao.com/oauth/authorize", true);
 		}
 	}
 
@@ -88,6 +107,9 @@ class AuthControllerTest {
 
 	@MockitoBean
 	private RefreshTokenService refreshTokenService;
+
+	@MockitoBean
+	private KakaoAuthCodeExchanger kakaoAuthCodeExchanger;
 
 	@Nested
 	@DisplayName("POST /auth/signup")
@@ -321,6 +343,222 @@ class AuthControllerTest {
 			mockMvc.perform(post(OAUTH_URL)
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2421));
+		}
+	}
+
+	@Nested
+	@DisplayName("/auth/oauth/kakao/* — 웹 인가 진입점과 코드 교환 로그인 (MSG-345)")
+	class OauthCodeLogin {
+
+		private static final String CODE = "kakao-auth-code";
+		private static final String REDIRECT_URI = "http://localhost:5173/oauth/kakao/callback";
+		private static final String NONCE = "f47ac10b58cc4372a5670e02b2c3d479";
+
+		private KakaoCodeLoginRequestDto request() {
+			return new KakaoCodeLoginRequestDto(CODE, REDIRECT_URI);
+		}
+
+		/** 발급 API 가 심어 브라우저가 자동 동반하는 쿠키. 기대 nonce 는 요청 body 가 아니라 여기서 온다. */
+		private Cookie nonceCookie() {
+			return new Cookie(NonceCookies.COOKIE_NAME, NONCE);
+		}
+
+		@Test
+		@DisplayName("인가 진입점: 카카오 인가 URL 로 302 하면서 같은 응답에 nonce 쿠키를 심는다")
+		void 인가_진입점은_카카오_인가_URL로_302하며_nonce_쿠키를_심는다() throws Exception {
+			MvcResult result = mockMvc.perform(get(OAUTH_AUTHORIZE_URL).param("redirectUri", REDIRECT_URI))
+				.andExpect(status().isFound())
+				.andExpect(cookie().httpOnly(NonceCookies.COOKIE_NAME, true))
+				.andExpect(cookie().maxAge(NonceCookies.COOKIE_NAME, 600))
+				// 설정값(nonce-cookie-secure, 여기선 공통 기본 true)이 그대로 쿠키 속성에 실린다
+				.andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Secure")))
+				.andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("SameSite=None")))
+				.andReturn();
+
+			String location = result.getResponse().getHeader(HttpHeaders.LOCATION);
+			// 쿠키에 심은 값과 인가 URL 의 nonce 가 같아야 대조가 성립한다 — 이 한 쌍이 결속의 전부다
+			String cookieNonce = result.getResponse().getCookie(NonceCookies.COOKIE_NAME).getValue();
+			assertThat(location)
+				.startsWith("https://kauth.kakao.com/oauth/authorize?")
+				.contains("client_id=test-client-id")
+				.contains("redirect_uri=" + REDIRECT_URI)
+				.contains("response_type=code")
+				.contains("scope=openid")
+				.contains("nonce=" + cookieNonce)
+				.doesNotContain("state=");
+		}
+
+		@Test
+		@DisplayName("인가 진입점: state 는 손대지 않고 인가 URL 에 그대로 전달한다")
+		void 인가_진입점은_state를_그대로_인가_URL에_전달한다() throws Exception {
+			mockMvc.perform(get(OAUTH_AUTHORIZE_URL)
+					.param("redirectUri", REDIRECT_URI)
+					.param("state", "fe-state-123"))
+				.andExpect(status().isFound())
+				.andExpect(header().string(HttpHeaders.LOCATION, containsString("state=fe-state-123")));
+		}
+
+		@Test
+		@DisplayName("실패: 인가 진입점에 redirectUri 가 없으면 400 이다")
+		void 인가_진입점에_redirectUri가_없으면_400이다() throws Exception {
+			// 명세엔 필수로 노출하되(@Parameter required = true) 누락 응답은 우리가 정한 메시지로 낸다 (MSG-332 선례)
+			mockMvc.perform(get(OAUTH_AUTHORIZE_URL))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.developCode").value(400))
+				.andExpect(jsonPath("$.message").value("redirectUri는 필수 항목입니다"));
+		}
+
+		@Test
+		@DisplayName("nonce 쿠키 속성: 설정이 꺼진 로컬은 Secure 없이 SameSite=Lax 로 내려간다")
+		void 논스_쿠키_속성은_secure_설정에_따라_갈린다() {
+			// http://localhost 는 Secure 쿠키를 저장하지 않는다 — 배포 속성을 그대로 쓰면 로컬 웹 로그인이 전부 2423
+			assertThat(NonceCookies.issue("test-nonce", false)).contains("SameSite=Lax").doesNotContain("Secure");
+			assertThat(NonceCookies.issue("test-nonce", true)).contains("SameSite=None", "Secure");
+		}
+
+		@Test
+		@DisplayName("성공(웹): 교환한 ID Token 으로 로그인해 액세스 토큰과 리프레시 쿠키를 내린다")
+		void 유효한_인가_코드로_로그인하면_웹은_액세스_토큰과_리프레시_쿠키가_발급된다() throws Exception {
+			given(kakaoAuthCodeExchanger.exchange(CODE, REDIRECT_URI, NONCE)).willReturn("kakao-id-token");
+			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString()))
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+
+			mockMvc.perform(post(OAUTH_CODE_URL)
+					.cookie(nonceCookie())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.developCode").value(200))
+				.andExpect(jsonPath("$.data.accessToken").value("access-jwt"))
+				.andExpect(jsonPath("$.data.refreshToken").isEmpty())
+				.andExpect(cookie().exists(RefreshTokenCookies.COOKIE_NAME))
+				.andExpect(header().exists(DEVICE_ID_HEADER));
+		}
+
+		@Test
+		@DisplayName("성공(앱): 리프레시를 body 로 내리고 리프레시 쿠키는 없다 — 기존 소셜 로그인과 같은 전송 규칙")
+		void 앱_클라이언트는_리프레시_토큰이_body로_내려간다() throws Exception {
+			given(kakaoAuthCodeExchanger.exchange(CODE, REDIRECT_URI, NONCE)).willReturn("kakao-id-token");
+			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString()))
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+
+			mockMvc.perform(post(OAUTH_CODE_URL)
+					.cookie(nonceCookie())
+					.header(CLIENT_TYPE_HEADER, "app")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request())))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.accessToken").value("access-jwt"))
+				.andExpect(jsonPath("$.data.refreshToken").value("refresh-jwt"))
+				.andExpect(cookie().doesNotExist(RefreshTokenCookies.COOKIE_NAME));
+		}
+
+		@Test
+		@DisplayName("X-Device-Id 가 없으면 서버가 생성해 서비스로 넘기고 응답 헤더로 반환한다")
+		void 디바이스_ID_헤더가_없으면_서버가_생성해_응답_헤더로_반환한다() throws Exception {
+			given(kakaoAuthCodeExchanger.exchange(CODE, REDIRECT_URI, NONCE)).willReturn("kakao-id-token");
+			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString()))
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+
+			mockMvc.perform(post(OAUTH_CODE_URL)
+					.cookie(nonceCookie())
+					.header(CLIENT_TYPE_HEADER, "app")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request())))
+				.andExpect(status().isOk())
+				.andExpect(header().exists(DEVICE_ID_HEADER));
+
+			verify(oidcLoginService).login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString());
+		}
+
+		@Test
+		@DisplayName("로그인에 성공하면 쓴 nonce 쿠키를 즉시 만료시킨다 — 재사용 창을 1회로 좁힌다")
+		void 로그인_성공_시_논스_쿠키가_만료된다() throws Exception {
+			given(kakaoAuthCodeExchanger.exchange(CODE, REDIRECT_URI, NONCE)).willReturn("kakao-id-token");
+			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString()))
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+
+			mockMvc.perform(post(OAUTH_CODE_URL)
+					.cookie(nonceCookie())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request())))
+				.andExpect(status().isOk())
+				.andExpect(cookie().maxAge(NonceCookies.COOKIE_NAME, 0))
+				.andExpect(cookie().value(NonceCookies.COOKIE_NAME, ""));
+		}
+
+		@Test
+		@DisplayName("실패: nonce 쿠키가 없으면 401(2423) — 카카오 왕복도 하지 않는다")
+		void 논스_쿠키가_없으면_카카오_왕복_없이_2423으로_거절한다() throws Exception {
+			mockMvc.perform(post(OAUTH_CODE_URL)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request())))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2423))
+				.andExpect(jsonPath("$.message").value("유효하지 않은 인가 코드입니다"));
+
+			verify(kakaoAuthCodeExchanger, never()).exchange(any(), any(), any());
+			verify(oidcLoginService, never()).login(any(), any(), any());
+		}
+
+		@Test
+		@DisplayName("실패: code 가 비어있으면 400 을 반환하고 교환은 시도하지 않는다")
+		void code가_없으면_400_검증_에러가_난다() throws Exception {
+			mockMvc.perform(post(OAUTH_CODE_URL)
+					.cookie(nonceCookie())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(new KakaoCodeLoginRequestDto("", REDIRECT_URI))))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.developCode").value(400));
+
+			verify(kakaoAuthCodeExchanger, never()).exchange(any(), any(), any());
+			verify(oidcLoginService, never()).login(any(), any(), any());
+		}
+
+		@Test
+		@DisplayName("실패: redirectUri 가 비어있으면 400 을 반환하고 교환은 시도하지 않는다")
+		void redirectUri가_없으면_400_검증_에러가_난다() throws Exception {
+			mockMvc.perform(post(OAUTH_CODE_URL)
+					.cookie(nonceCookie())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(new KakaoCodeLoginRequestDto(CODE, ""))))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.developCode").value(400));
+
+			verify(kakaoAuthCodeExchanger, never()).exchange(any(), any(), any());
+			verify(oidcLoginService, never()).login(any(), any(), any());
+		}
+
+		@Test
+		@DisplayName("실패: 교환이 거부되면 401 INVALID_AUTHORIZATION_CODE(2423) 로 응답하고 로그인은 하지 않는다")
+		void 교환_실패_예외는_2423_응답으로_변환된다() throws Exception {
+			given(kakaoAuthCodeExchanger.exchange(CODE, REDIRECT_URI, NONCE))
+				.willThrow(new ApiException(AuthErrorCode.INVALID_AUTHORIZATION_CODE));
+
+			mockMvc.perform(post(OAUTH_CODE_URL)
+					.cookie(nonceCookie())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request())))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2423))
+				.andExpect(jsonPath("$.message").value("유효하지 않은 인가 코드입니다"));
+
+			verify(oidcLoginService, never()).login(any(), any(), any());
+		}
+
+		@Test
+		@DisplayName("실패: 교환한 ID Token 이 검증에 실패하면 기존 401 INVALID_ID_TOKEN(2421) 로 응답한다")
+		void 교환으로_받은_ID_토큰이_검증에_실패하면_기존_2421로_응답한다() throws Exception {
+			given(kakaoAuthCodeExchanger.exchange(CODE, REDIRECT_URI, NONCE)).willReturn("bad-id-token");
+			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("bad-id-token"), anyString()))
+				.willThrow(new ApiException(AuthErrorCode.INVALID_ID_TOKEN));
+
+			mockMvc.perform(post(OAUTH_CODE_URL)
+					.cookie(nonceCookie())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request())))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.developCode").value(2421));
 		}

@@ -44,6 +44,7 @@
 - MSG-135: 리프레시 토큰(디바이스별 Redis `refresh:{userId}:{deviceId}`, 2주 슬라이딩, 로테이션+재사용감지)·블랙리스트 Redis 이관·하이브리드 전송(웹 쿠키/앱 body)
 - MSG-178: logout에 `LogoutRequestDto`(fcmToken 선택, `@RequestBody(required = false)` — body 없는 기존 호출 하위 호환) — 세션 삭제와 같은 처리에서 `PushTokenService.unregister(userId, fcmToken)` 호출(auth → notification 단방향 주입, 공유 기기 알림 잔존 P1 차단)
 - MSG-195: `jwt/CustomAccessDeniedHandler` 신설(403 공통 응답 형식 — EntryPoint 미러) + SecurityConfig `/api/admin/**` `hasRole("ADMIN")` matcher — **코드베이스 최초 role 인가 지점**(배관은 V1부터 완비돼 있었고 검사 지점만 신설)
+- MSG-345: 웹 카카오 인가 코드 교환 — `GET /api/auth/oauth/kakao/authorize`(로그인 진입점: redirectUri 필수·state 패스스루, 인가 URL을 서버가 조립(client_id·scope=openid·nonce)해 302 + `OAUTH_NONCE` HttpOnly 쿠키 600s. `support/NonceCookies`가 `oauth.kakao.nonce-cookie-secure`로 분기: true=`Secure;SameSite=None`·false=`SameSite=Lax`, local은 example부터 false. `SuccessResponse` 규칙의 유일한 302 예외) + `POST /api/auth/oauth/kakao/code`(`KakaoCodeLoginRequestDto{code,redirectUri}`, 쿠키 nonce ↔ id_token 클레임 대조 후 기존 `OidcLoginService.login` 무수정 재사용). `oidc/KakaoAuthCodeExchanger`(완성 RestClient 빈 2호 `kakaoTokenRestClient` — **by-name 주입 필수**, connect 1s/read 3s, `error=invalid_grant`만 2423·그 외 4xx와 5xx/IO는 2502, KOE는 로그 전용)·`KakaoOidcProperties`(+tokenUri·authorizeUri·nonceCookieSecure)·`AuthErrorCode`(+2423·2502). 교환 왕복은 트랜잭션 경계 밖
 
 ### `user` (Owner B · 구현 강정민) — 🟡 부분
 - `entity`(User·AuthProvider·UserRole), `repository/UserRepository`, `exception/UserErrorCode`
