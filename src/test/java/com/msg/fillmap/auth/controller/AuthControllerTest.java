@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -67,7 +68,7 @@ class AuthControllerTest {
 	private static final String LOGIN_URL = "/api/auth/login";
 	private static final String OAUTH_URL = "/api/auth/oauth/kakao";
 	private static final String OAUTH_CODE_URL = "/api/auth/oauth/kakao/code";
-	private static final String OAUTH_NONCE_URL = "/api/auth/oauth/kakao/nonce";
+	private static final String OAUTH_AUTHORIZE_URL = "/api/auth/oauth/kakao/authorize";
 	private static final String REISSUE_URL = "/api/auth/reissue";
 	private static final String LOGOUT_URL = "/api/auth/logout";
 	private static final String CLIENT_TYPE_HEADER = "X-Client-Type";
@@ -88,7 +89,7 @@ class AuthControllerTest {
 			// nonceCookieSecure=true — 공통(dev·prod) 기본값. false 분기는 NonceCookies 직접 단언으로 덮는다
 			return new KakaoOidcProperties("https://kauth.kakao.com",
 				"https://kauth.kakao.com/.well-known/jwks.json", "test-client-id",
-				"https://kauth.kakao.com/oauth/token", true);
+				"https://kauth.kakao.com/oauth/token", "https://kauth.kakao.com/oauth/authorize", true);
 		}
 	}
 
@@ -348,7 +349,7 @@ class AuthControllerTest {
 	}
 
 	@Nested
-	@DisplayName("POST /auth/oauth/kakao/code — 웹 인가 코드 교환 로그인 (MSG-345)")
+	@DisplayName("/auth/oauth/kakao/* — 웹 인가 진입점과 코드 교환 로그인 (MSG-345)")
 	class OauthCodeLogin {
 
 		private static final String CODE = "kakao-auth-code";
@@ -365,12 +366,10 @@ class AuthControllerTest {
 		}
 
 		@Test
-		@DisplayName("nonce 발급: body 의 값과 OAUTH_NONCE 쿠키 값이 같고 쿠키는 HttpOnly·10분이다")
-		void 논스_발급은_같은_값을_body와_쿠키로_함께_내려준다() throws Exception {
-			MvcResult result = mockMvc.perform(post(OAUTH_NONCE_URL))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.developCode").value(200))
-				.andExpect(jsonPath("$.data.nonce").isNotEmpty())
+		@DisplayName("인가 진입점: 카카오 인가 URL 로 302 하면서 같은 응답에 nonce 쿠키를 심는다")
+		void 인가_진입점은_카카오_인가_URL로_302하며_nonce_쿠키를_심는다() throws Exception {
+			MvcResult result = mockMvc.perform(get(OAUTH_AUTHORIZE_URL).param("redirectUri", REDIRECT_URI))
+				.andExpect(status().isFound())
 				.andExpect(cookie().httpOnly(NonceCookies.COOKIE_NAME, true))
 				.andExpect(cookie().maxAge(NonceCookies.COOKIE_NAME, 600))
 				// 설정값(nonce-cookie-secure, 여기선 공통 기본 true)이 그대로 쿠키 속성에 실린다
@@ -378,9 +377,37 @@ class AuthControllerTest {
 				.andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("SameSite=None")))
 				.andReturn();
 
-			String bodyNonce = objectMapper.readTree(result.getResponse().getContentAsString())
-				.path("data").path("nonce").asString("");
-			assertThat(result.getResponse().getCookie(NonceCookies.COOKIE_NAME).getValue()).isEqualTo(bodyNonce);
+			String location = result.getResponse().getHeader(HttpHeaders.LOCATION);
+			// 쿠키에 심은 값과 인가 URL 의 nonce 가 같아야 대조가 성립한다 — 이 한 쌍이 결속의 전부다
+			String cookieNonce = result.getResponse().getCookie(NonceCookies.COOKIE_NAME).getValue();
+			assertThat(location)
+				.startsWith("https://kauth.kakao.com/oauth/authorize?")
+				.contains("client_id=test-client-id")
+				.contains("redirect_uri=" + REDIRECT_URI)
+				.contains("response_type=code")
+				.contains("scope=openid")
+				.contains("nonce=" + cookieNonce)
+				.doesNotContain("state=");
+		}
+
+		@Test
+		@DisplayName("인가 진입점: state 는 손대지 않고 인가 URL 에 그대로 전달한다")
+		void 인가_진입점은_state를_그대로_인가_URL에_전달한다() throws Exception {
+			mockMvc.perform(get(OAUTH_AUTHORIZE_URL)
+					.param("redirectUri", REDIRECT_URI)
+					.param("state", "fe-state-123"))
+				.andExpect(status().isFound())
+				.andExpect(header().string(HttpHeaders.LOCATION, containsString("state=fe-state-123")));
+		}
+
+		@Test
+		@DisplayName("실패: 인가 진입점에 redirectUri 가 없으면 400 이다")
+		void 인가_진입점에_redirectUri가_없으면_400이다() throws Exception {
+			// 명세엔 필수로 노출하되(@Parameter required = true) 누락 응답은 우리가 정한 메시지로 낸다 (MSG-332 선례)
+			mockMvc.perform(get(OAUTH_AUTHORIZE_URL))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.developCode").value(400))
+				.andExpect(jsonPath("$.message").value("redirectUri는 필수 항목입니다"));
 		}
 
 		@Test
