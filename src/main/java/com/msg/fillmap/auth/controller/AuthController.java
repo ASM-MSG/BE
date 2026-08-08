@@ -97,7 +97,9 @@ public class AuthController {
 
 	@Operation(
 		summary = "소셜 로그인 (OIDC)",
-		description = "소셜 제공자의 ID Token으로 로그인/가입하고 JWT 액세스 토큰과 리프레시 토큰을 발급받는다."
+		description = "소셜 제공자의 ID Token으로 로그인/가입하고 JWT 액세스 토큰과 리프레시 토큰을 발급받는다. "
+			+ "웹(X-Client-Type: web, 기본)은 리프레시가 HttpOnly 쿠키(Set-Cookie)로 내려가 body 의 "
+			+ "refreshToken 이 null 이고, 앱(app)은 body 로 내려간다."
 	)
 	@PostMapping("/oauth/{provider}")
 	public SuccessResponse<LoginResponseDto> oauthLogin(
@@ -150,9 +152,10 @@ public class AuthController {
 		summary = "소셜 로그인 (카카오 인가 코드)",
 		description = "웹에서 카카오 콜백으로 받은 인가 코드로 로그인/가입한다. 서버가 REST API 키로 카카오 토큰 "
 			+ "엔드포인트를 호출해 ID Token 을 받은 뒤, 소셜 로그인(OIDC)과 완전히 같은 검증·발급 경로를 태운다. "
-			+ "인가 진입점이 심은 OAUTH_NONCE 쿠키가 함께 와야 한다(없으면 401). 응답 형태와 토큰 전송 "
-			+ "규칙(웹=쿠키, 앱=body)은 기존 소셜 로그인과 동일하다. 네이티브 SDK 가 교환까지 해주는 앱은 "
-			+ "이 API 가 아니라 POST /api/auth/oauth/{provider} 를 쓴다."
+			+ "인가 진입점이 심은 OAUTH_NONCE 쿠키가 함께 와야 한다(없으면 401). 응답 형태는 기존 소셜 "
+			+ "로그인과 동일하다 — 웹(X-Client-Type: web, 기본)은 리프레시가 HttpOnly 쿠키(Set-Cookie)로 "
+			+ "내려가 body 의 refreshToken 이 null 이고, 앱(app)은 body 로 내려간다. 네이티브 SDK 가 "
+			+ "교환까지 해주는 앱은 이 API 가 아니라 POST /api/auth/oauth/{provider} 를 쓴다."
 	)
 	@PostMapping("/oauth/kakao/code")
 	public SuccessResponse<LoginResponseDto> oauthCodeLogin(
