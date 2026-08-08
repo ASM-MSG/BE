@@ -54,15 +54,15 @@ class VideoPlaybackServiceTest {
 	private static final Long OWNER_ID = 42L;
 	private static final Long OTHER_ID = 99L;
 	private static final Long VIDEO_ID = 1042L;
-	private static final String GRID_ID = "41642_110458";
+	private static final String GRID_ID = "19422_9582";
 	private static final String ENCODED_KEY = "videos/encoded/1042.mp4";
 	private static final String BLURRED_KEY = "videos/blurred/1042.mp4";
 	private static final String THUMB_KEY = "videos/thumb/1042.jpg";
 	private static final LocalDateTime RECORDED_AT = LocalDateTime.of(2026, 7, 20, 18, 3, 11);
-	/** GRID_ID(41642_110458)를 덮는 구역 — 행 = 'A' + (41650 − 41642) = 'I', 열 = 110458 − 110450 + 1 = 9. */
+	/** GRID_ID(19422_9582)를 덮는 구역 — 행 = 'A' + (19430 − 19422) = 'I', 열 = 9582 − 9574 + 1 = 9. */
 	private static final Zone SEOMYEON = Zone.builder()
 		.zoneKey("seomyeon").name("서면")
-		.minGridY(41640).maxGridY(41650).minGridX(110450).maxGridX(110460)
+		.minGridY(19420).maxGridY(19430).minGridX(9574).maxGridX(9584)
 		.priority(0)
 		.build();
 

@@ -63,7 +63,7 @@ class VideoEncodingServiceTest {
 		encodingService = new VideoEncodingServiceImpl(
 			videoRepository, statusWriter, ffmpegRunner, s3Client, properties);
 
-		video = Video.create(1L, "41716_110483", ORIGINAL_KEY,
+		video = Video.create(1L, "19495_9607", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 		given(videoRepository.findById(VIDEO_ID)).willReturn(Optional.of(video));
 		given(statusWriter.markEncoding(VIDEO_ID, ORIGINAL_KEY)).willReturn(true);

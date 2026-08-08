@@ -53,7 +53,9 @@ class CourseSeedContractTest {
 
 	private static final String PATH_JSON = """
 		{"type": "LineString", "coordinates": [[129.03597, 35.09656], [129.03642, 35.09721]]}""";
-	// 남반구 합성 격자 블록 — 타 테스트·실데이터와 못 겹친다 (모듈 3과도 다른 대역).
+	// 음수 y 합성 격자 블록 — 타 테스트·실데이터와 못 겹친다 (모듈 3과도 다른 대역). EPSG:5179 전환 후에도
+	// 값 그대로 둔다: mission_grids 는 grids FK 가 없어 gridId 를 불투명 문자열로만 다루고, 이 대역은
+	// 새 체계 한국 범위(y 15000~23000)와도 안 겹쳐 격리 근거가 유지된다 (MSG-347).
 	private static final long BASE_Y = -39200L;
 	private static final long BASE_X = 112198L;
 

@@ -26,6 +26,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.global.geo.KoreaCoordinates;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -131,6 +132,24 @@ class VideoServiceIntegrationTest {
 		assertThatThrownBy(() -> videoService.saveVideo(userId, request(0.0, 0.0)))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_COORDINATE);
+	}
+
+	@Test
+	@DisplayName("서비스 범위 경계값 좌표는 허용된다 — 닫힌 구간이라 위도 33.0·경도 124.0 이 통과한다")
+	void 경계값_좌표는_허용된다() {
+		// EPSG:5179 는 한국 한정 투영이라 원거리 좌표를 막지만(MSG-347 FR-13), 경계선 위 좌표는 서비스 안이다.
+		// 네 경계값을 모두 실제 업로드로 통과시켜 부등호 방향이 뒤집히지 않았음을 본다.
+		double[][] corners = {
+			{KoreaCoordinates.MIN_LAT, KoreaCoordinates.MIN_LON},
+			{KoreaCoordinates.MIN_LAT, KoreaCoordinates.MAX_LON},
+			{KoreaCoordinates.MAX_LAT, KoreaCoordinates.MIN_LON},
+			{KoreaCoordinates.MAX_LAT, KoreaCoordinates.MAX_LON}};
+
+		for (double[] corner : corners) {
+			VideoUploadResponseDto response = videoService.saveVideo(userId, request(corner[0], corner[1]));
+
+			assertThat(response.gridId()).isEqualTo(GridEncoder.encode(corner[0], corner[1]));
+		}
 	}
 
 	// 업로드 시 공개범위 지정 (MSG-204). 미지정은 PUBLIC, 지정값 저장, 오류값은 S3 부수효과 없이 3420.

@@ -54,7 +54,7 @@ class VideoPlaybackControllerTest {
 	void 단건_조회는_200과_재생메타를_반환한다() throws Exception {
 		given(videoService.getVideoPlayback(anyLong(), anyLong())).willReturn(new VideoPlaybackResponseDto(
 			VIDEO_ID, "https://bucket.s3/play.mp4?X-Amz-Signature=abc",
-			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "41642_110458", (short) 12,
+			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
 			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
 			"서면", "I-9", "서울특별시 강남구 역삼1동"));
 

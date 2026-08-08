@@ -1,7 +1,5 @@
 package com.msg.fillmap.friend.service;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -23,6 +21,7 @@ import com.msg.fillmap.friend.exception.FriendErrorCode;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
@@ -297,16 +296,8 @@ class FriendGridViewportTest {
 
 	/** 셀 중심 좌표로 bbox 를 만든다 — 서비스가 GridEncoder 로 되돌려 인덱스 범위 [from, to] 를 얻는다. */
 	private ViewportBounds bounds(long dyFrom, long dxFrom, long dyTo, long dxTo) {
-		return new ViewportBounds(
-			centerLat(baseY + dyFrom), centerLng(baseX + dxFrom),
-			centerLat(baseY + dyTo), centerLng(baseX + dxTo));
-	}
-
-	private static double centerLat(long gridY) {
-		return (gridY + 0.5) * GRID_LAT_STEP;
-	}
-
-	private static double centerLng(long gridX) {
-		return (gridX + 0.5) * GRID_LNG_STEP;
+		GridPoint from = GridFixtures.pointAt(baseY + dyFrom + 0.5, baseX + dxFrom + 0.5);
+		GridPoint to = GridFixtures.pointAt(baseY + dyTo + 0.5, baseX + dxTo + 0.5);
+		return new ViewportBounds(from.lat(), from.lon(), to.lat(), to.lon());
 	}
 }

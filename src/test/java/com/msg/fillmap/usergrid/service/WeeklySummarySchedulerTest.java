@@ -51,10 +51,10 @@ class WeeklySummarySchedulerTest {
 
 	private static final String EVENT_KEY = "WEEKLY:2002-W02";
 
-	// 공해상(서해) 격자 — 어느 테스트도 안 쓰는 39900 행. grid_y 범위를 스캔하는 백필 테스트
+	// 공해상(서해) 격자 — 어느 테스트도 안 쓰는 17705 행. grid_y 범위를 스캔하는 백필 테스트
 	// (GridRegionCodeBackfillTest 39500~39503)와 겹치면 그쪽 갱신 행 수 단언이 깨지므로 대역을 분리한다.
-	private static final long GY0 = 39900L;
-	private static final long GX0 = 108900L;
+	private static final long GY0 = 17705L;
+	private static final long GX0 = 7956L;
 
 	@Autowired
 	private UserGridRepository userGridRepository;

@@ -17,7 +17,7 @@ import com.msg.fillmap.video.support.GeoSupport;
 class VideoBlurTransitionTest {
 
 	private Video newVideo() {
-		return Video.create(1L, "41716_110483", "videos/original/1/x.mp4",
+		return Video.create(1L, "19495_9607", "videos/original/1/x.mp4",
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 	}
 

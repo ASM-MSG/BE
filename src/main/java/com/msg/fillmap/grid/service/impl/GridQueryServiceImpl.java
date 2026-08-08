@@ -11,6 +11,7 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridCursor;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.grid.GridEncoder.GridRange;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
 import com.msg.fillmap.grid.repository.GridRepository;
@@ -75,14 +76,15 @@ public class GridQueryServiceImpl implements GridQueryService {
 	}
 
 	private List<OccupiedGridProjection> queryPage(long userId, ViewportBounds bounds, String cursor, int limit) {
-		GridIndex sw = GridEncoder.decode(GridEncoder.encode(bounds.swLat(), bounds.swLng()));
-		GridIndex ne = GridEncoder.decode(GridEncoder.encode(bounds.neLat(), bounds.neLng()));
+		GridRange range = GridEncoder.viewportRange(bounds);
 		if (cursor == null) {
-			return gridRepository.findOccupiedPage(userId, sw.gridY(), ne.gridY(), sw.gridX(), ne.gridX(), limit);
+			return gridRepository.findOccupiedPage(
+				userId, range.minGridY(), range.maxGridY(), range.minGridX(), range.maxGridX(), limit);
 		}
 		GridCursor decoded = decodeCursor(cursor);
 		return gridRepository.findOccupiedPageAfter(
-			userId, sw.gridY(), ne.gridY(), sw.gridX(), ne.gridX(), decoded.gridY(), decoded.gridX(), limit);
+			userId, range.minGridY(), range.maxGridY(), range.minGridX(), range.maxGridX(),
+			decoded.gridY(), decoded.gridX(), limit);
 	}
 
 	private GridCursor decodeCursor(String cursor) {
@@ -94,10 +96,10 @@ public class GridQueryServiceImpl implements GridQueryService {
 	}
 
 	private List<OccupiedGridProjection> queryByRange(long userId, ViewportBounds bounds) {
-		// bbox 남서/북동 코너를 GridEncoder(단일 진실 원천)로 grid_y/grid_x 정수 인덱스로 환산한다.
-		GridIndex sw = GridEncoder.decode(GridEncoder.encode(bounds.swLat(), bounds.swLng()));
-		GridIndex ne = GridEncoder.decode(GridEncoder.encode(bounds.neLat(), bounds.neLng()));
-		return gridRepository.findOccupiedInRange(userId, sw.gridY(), ne.gridY(), sw.gridX(), ne.gridX());
+		// bbox 꼭짓점 4점을 GridEncoder(단일 진실 원천)로 grid_y/grid_x 정수 인덱스 범위로 환산한다.
+		GridRange range = GridEncoder.viewportRange(bounds);
+		return gridRepository.findOccupiedInRange(
+			userId, range.minGridY(), range.maxGridY(), range.minGridX(), range.maxGridX());
 	}
 
 	private List<OccupiedGridView> toViews(List<OccupiedGridProjection> rows) {

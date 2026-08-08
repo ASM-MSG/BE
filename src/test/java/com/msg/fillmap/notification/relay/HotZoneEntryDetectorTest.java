@@ -99,8 +99,9 @@ class HotZoneEntryDetectorTest {
 	@AfterEach
 	void tearDown() {
 		cleanRedis();
-		// 합성 유저 삭제 — user_grids·notifications 는 ON DELETE CASCADE. 합성 region 은 라벨 해제 후 삭제
-		// (grids row 는 lazy insert 의미상 잔존 무해라 남긴다 — 공유 좌표 grids 삭제는 타 데이터 FK 리스크).
+		// 합성 유저 삭제 — user_grids·notifications 는 ON DELETE CASCADE. 합성 region 은 라벨 해제 후 삭제.
+		// 시드한 grids 는 아무도 참조하지 않을 때만 지운다 — 예전엔 "잔존 무해"로 남겼으나 실제로 공유 로컬 DB 에
+		// 무참조 행이 쌓였다(2026-08-06 유출 3행 실측). 참조가 있으면 남의 데이터이므로 건드리지 않는다.
 		tx.executeWithoutResult(status -> {
 			em.createNativeQuery("DELETE FROM users WHERE id IN (:user1, :user2)")
 				.setParameter("user1", user1)
@@ -111,6 +112,15 @@ class HotZoneEntryDetectorTest {
 				.executeUpdate();
 			em.createNativeQuery("DELETE FROM regions WHERE region_code = :code")
 				.setParameter("code", regionCode)
+				.executeUpdate();
+			em.createNativeQuery("""
+				DELETE FROM grids g
+				WHERE g.grid_id IN (:gridIds)
+					AND NOT EXISTS (SELECT 1 FROM videos v WHERE v.grid_id = g.grid_id)
+					AND NOT EXISTS (SELECT 1 FROM user_grids ug WHERE ug.grid_id = g.grid_id)
+					AND NOT EXISTS (SELECT 1 FROM sponsor_ads sa WHERE sa.grid_id = g.grid_id)
+				""")
+				.setParameter("gridIds", List.of(GRID_A, GRID_B, GRID_C))
 				.executeUpdate();
 		});
 	}

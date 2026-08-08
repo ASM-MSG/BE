@@ -55,7 +55,7 @@ class MissionControllerTest {
 	void active_조회는_200과_미션_리스트를_반환한다() throws Exception {
 		MissionResponseDto dto = new MissionResponseDto(
 			31L, "THEME", "성수 카페 투어", 5, null, null,
-			new CellsShape(List.of(new Cell("41642_110458", 37.478, 127.027))));
+			new CellsShape(List.of(new Cell("19422_9582", 37.478, 127.027))));
 		given(missionQueryService.getActiveMissions()).willReturn(List.of(dto));
 
 		mockMvc.perform(get("/api/missions/active")
@@ -68,7 +68,7 @@ class MissionControllerTest {
 			.andExpect(jsonPath("$.data[0].title").value("성수 카페 투어"))
 			.andExpect(jsonPath("$.data[0].targetCount").value(5))
 			.andExpect(jsonPath("$.data[0].shape.cells.length()").value(1))
-			.andExpect(jsonPath("$.data[0].shape.cells[0].gridId").value("41642_110458"));
+			.andExpect(jsonPath("$.data[0].shape.cells[0].gridId").value("19422_9582"));
 	}
 
 	@Test
@@ -77,7 +77,7 @@ class MissionControllerTest {
 		String line = "{\"type\":\"LineString\",\"coordinates\":[[129.04,35.10],[129.05,35.11]]}";
 		MissionResponseDto dto = new MissionResponseDto(
 			12L, "COURSE", "남파랑길 3코스", 3, null, null,
-			new PathShape(line, List.of(new Spot("39001_143377", 35.1005, 129.0415, 1))));
+			new PathShape(line, List.of(new Spot("16794_11404", 35.1005, 129.0415, 1))));
 		given(missionQueryService.getActiveMissions()).willReturn(List.of(dto));
 
 		mockMvc.perform(get("/api/missions/active")
@@ -86,7 +86,7 @@ class MissionControllerTest {
 			// @JsonRawValue — line 이 문자열이 아니라 JSON 객체라 하위 필드로 접근된다(escape 없음).
 			.andExpect(jsonPath("$.data[0].shape.line.type").value("LineString"))
 			.andExpect(jsonPath("$.data[0].shape.line.coordinates.length()").value(2))
-			.andExpect(jsonPath("$.data[0].shape.spots[0].gridId").value("39001_143377"))
+			.andExpect(jsonPath("$.data[0].shape.spots[0].gridId").value("16794_11404"))
 			.andExpect(jsonPath("$.data[0].shape.spots[0].seq").value(1));
 	}
 

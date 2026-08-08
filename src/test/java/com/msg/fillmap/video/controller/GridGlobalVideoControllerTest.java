@@ -36,7 +36,7 @@ import com.msg.fillmap.video.service.VideoService;
 class GridGlobalVideoControllerTest {
 
 	private static final long USER_ID = 42L;
-	private static final String GRID_ID = "41642_110458";
+	private static final String GRID_ID = "19422_9582";
 	private static final String URL = "/api/grids/{gridId}/videos";
 
 	@Autowired

@@ -42,7 +42,7 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 class VideoGridQueryServiceTest {
 
 	private static final long USER_ID = 42L;
-	private static final String GRID_ID = "41642_110458";
+	private static final String GRID_ID = "19422_9582";
 	private static final String THUMB_KEY = "videos/thumb/1042.jpg";
 
 	private VideoRepository videoRepository;

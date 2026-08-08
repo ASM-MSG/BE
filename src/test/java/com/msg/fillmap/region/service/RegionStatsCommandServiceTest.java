@@ -1,9 +1,7 @@
 package com.msg.fillmap.region.service;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
-import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
+import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static com.msg.fillmap.region.RegionTestFixtures.syntheticCode;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,8 +28,8 @@ import com.msg.fillmap.user.repository.UserRepository;
 @DisplayName("RegionStatsCommandService.refresh (합성 폴리곤·롤백 격리)")
 class RegionStatsCommandServiceTest {
 
-	private static final long GY0 = 40000L;
-	private static final long GX0 = 108695L;
+	private static final long GY0 = 17810L;
+	private static final long GX0 = 7746L;
 
 	@Autowired
 	private RegionStatsCommandService regionStatsCommandService;
@@ -53,9 +51,7 @@ class RegionStatsCommandServiceTest {
 	}
 
 	private void seedRegion(String code) {
-		String polygon = rectanglePolygonJson(
-			GX0 * GRID_LNG_STEP, GY0 * GRID_LAT_STEP,
-			(GX0 + 3) * GRID_LNG_STEP, (GY0 + 3) * GRID_LAT_STEP);
+		String polygon = cellBlockPolygonJson(GY0, GY0 + 3, GX0, GX0 + 3);
 		regionRepository.upsert(code, "합성동", code.substring(0, 5), polygon, CELL_AREA_M2);
 	}
 

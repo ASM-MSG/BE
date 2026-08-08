@@ -1,9 +1,7 @@
 package com.msg.fillmap.usergrid.repository;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
-import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
+import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import jakarta.persistence.EntityManager;
@@ -31,9 +29,9 @@ import com.msg.fillmap.user.repository.UserRepository;
 class UserGridRepositoryTest {
 
 	// 공해상(서해) 기준점 — ST_Covers 라벨링에 실데이터 행정동(11… 대역, 999 보다 앞 정렬)이 끼어들 수 없는
-	// 좌표 대역. CollectionGridsRegionNameTest(GY 39700/GX 108500)와 다른 블록으로 격리.
-	private static final long GY0 = 39600L;
-	private static final long GX0 = 108600L;
+	// 좌표 대역. CollectionGridsRegionNameTest(GY 17516/GX 7535)와 다른 블록으로 격리.
+	private static final long GY0 = 17413L;
+	private static final long GX0 = 7637L;
 
 	// 합성 행정동(999 대역) — 동A 는 dx [0,2) 격자 2개, 동B 는 dx [2,3) 격자 1개를 덮는다.
 	private static final String 동A = "9992460001";
@@ -226,9 +224,7 @@ class UserGridRepositoryTest {
 
 	/** GY0 행의 격자 dx 구간 [dxFrom, dxTo) 중심점을 덮는 합성 행정동(999 대역)을 시드한다. */
 	private void seedRegion(String code, long dxFrom, long dxTo) {
-		String polygon = rectanglePolygonJson(
-			(GX0 + dxFrom) * GRID_LNG_STEP, GY0 * GRID_LAT_STEP,
-			(GX0 + dxTo) * GRID_LNG_STEP, (GY0 + 1) * GRID_LAT_STEP);
+		String polygon = cellBlockPolygonJson(GY0, GY0 + 1, GX0 + dxFrom, GX0 + dxTo);
 		regionRepository.upsert(code, code, code.substring(0, 5), polygon, CELL_AREA_M2);
 	}
 

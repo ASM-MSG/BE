@@ -1,7 +1,5 @@
 package com.msg.fillmap.moderation.service;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
@@ -26,6 +24,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.moderation.entity.Report;
 import com.msg.fillmap.moderation.entity.ReportReason;
@@ -57,9 +56,9 @@ import com.msg.fillmap.video.support.GeoSupport;
 @DisplayName("신고 동시 승인 — 행 잠금이 처리를 직렬화한다 (실 PostGIS)")
 class AdminReportApproveConcurrencyTest {
 
-	// 서해 공해상 합성 격자 인덱스 — 실데이터·다른 동시성 트랙(m243: 40243 대역)과 겹치지 않는 대역.
-	private static final long GY = 40195L;
-	private static final long GX = 108665L;
+	// 서해 공해상 합성 격자 인덱스 — 실데이터·다른 동시성 트랙(m243: 18054 대역)과 겹치지 않는 대역.
+	private static final long GY = 18006L;
+	private static final long GX = 7720L;
 
 	private static final long POLL_INTERVAL_MS = 20L;
 	private static final long PROTOCOL_TIMEOUT_SEC = 15L;
@@ -105,11 +104,11 @@ class AdminReportApproveConcurrencyTest {
 			winnerAdminId = seedUser("winner", "m195c승자관리자");
 			loserAdminId = seedUser("loser", "m195c패자관리자");
 			gridId = GridFixtures.seedGrid(em, GY, GX);
-			double lat = (GY + 0.5) * GRID_LAT_STEP;
-			double lon = (GX + 0.5) * GRID_LNG_STEP;
+			GridPoint center = GridFixtures.pointAt(GY + 0.5, GX + 0.5);
 			videoId = videoRepository.save(Video.create(
 				ownerId, gridId, "videos/original/%d/m195c.mp4".formatted(ownerId),
-				GeoSupport.toPoint(lat, lon), (short) 10, LocalDateTime.now(), Visibility.PUBLIC)).getId();
+				GeoSupport.toPoint(center.lat(), center.lon()), (short) 10, LocalDateTime.now(),
+				Visibility.PUBLIC)).getId();
 			reportId = reportRepository.save(
 				Report.create(reporterId, videoId, ReportReason.INAPPROPRIATE, null)).getId();
 		});

@@ -1,9 +1,7 @@
 package com.msg.fillmap.region.service;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
-import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
+import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -42,8 +40,8 @@ class RegionStatsPointGridQueryServiceTest {
 	private static final String REGION_A = "9993000001";
 
 	// 서해 공해상(lat ≈36.09, lon ≈125.12) 격자 인덱스 — 육상 실데이터·타 트랙과 겹치지 않는 좌표 대역.
-	private static final long GY = 40100L;
-	private static final long GX = 108800L;
+	private static final long GY = 17907L;
+	private static final long GX = 7857L;
 
 	@Autowired
 	private RegionStatsQueryService regionStatsQueryService;
@@ -66,9 +64,7 @@ class RegionStatsPointGridQueryServiceTest {
 
 	/** 격자 인덱스 경계 [minGy,maxGy)×[minGx,maxGx) 를 덮는 합성 행정동을 upsert 한다(parent = code 앞 5자리). */
 	private void seedRegion(String code, long minGy, long maxGy, long minGx, long maxGx) {
-		String polygon = rectanglePolygonJson(
-			minGx * GRID_LNG_STEP, minGy * GRID_LAT_STEP,
-			maxGx * GRID_LNG_STEP, maxGy * GRID_LAT_STEP);
+		String polygon = cellBlockPolygonJson(minGy, maxGy, minGx, maxGx);
 		regionRepository.upsert(code, "합성동", code.substring(0, 5), polygon, CELL_AREA_M2);
 	}
 
@@ -93,11 +89,11 @@ class RegionStatsPointGridQueryServiceTest {
 	}
 
 	private double centerLat() {
-		return (GY + 0.5) * GRID_LAT_STEP;
+		return GridFixtures.pointAt(GY + 0.5, GX + 0.5).lat();
 	}
 
 	private double centerLon() {
-		return (GX + 0.5) * GRID_LNG_STEP;
+		return GridFixtures.pointAt(GY + 0.5, GX + 0.5).lon();
 	}
 
 	@Test

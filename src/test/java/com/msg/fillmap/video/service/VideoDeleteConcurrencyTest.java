@@ -1,7 +1,5 @@
 package com.msg.fillmap.video.service;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -32,6 +30,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
 
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -61,8 +60,8 @@ import com.msg.fillmap.video.support.GeoSupport;
 class VideoDeleteConcurrencyTest {
 
 	// 서해 공해상 합성 격자 인덱스 — 실데이터·다른 동시성 트랙(m165: 40000 대역)과 겹치지 않는 대역.
-	private static final long GY = 40243L;
-	private static final long GX = 108665L;
+	private static final long GY = 18054L;
+	private static final long GX = 7721L;
 
 	private static final long POLL_INTERVAL_MS = 20L;
 	private static final long PROTOCOL_TIMEOUT_SEC = 15L;
@@ -171,8 +170,9 @@ class VideoDeleteConcurrencyTest {
 	}
 
 	private long saveActiveVideo(String suffix) {
-		double lat = (GY + 0.5) * GRID_LAT_STEP;
-		double lon = (GX + 0.5) * GRID_LNG_STEP;
+		GridPoint center = GridFixtures.pointAt(GY + 0.5, GX + 0.5);
+		double lat = center.lat();
+		double lon = center.lon();
 		return videoRepository.save(Video.create(
 			userId, gridId, "videos/original/%d/m243-%s.mp4".formatted(userId, suffix),
 			GeoSupport.toPoint(lat, lon), (short) 10, LocalDateTime.now(), Visibility.PRIVATE)).getId();

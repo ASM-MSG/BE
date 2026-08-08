@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.grid.GridEncoder.GridRange;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.hotzone.config.HotZoneProperties;
 import com.msg.fillmap.hotzone.exception.HotZoneErrorCode;
@@ -76,9 +77,8 @@ public class HotZoneServiceImpl implements HotZoneService {
 		if (top == null || top.isEmpty()) {
 			return List.of();
 		}
-		// bbox 코너를 GridEncoder(단일 진실 원천)로 정수 인덱스로 환산해 범위 비교한다 — 위경도 재계산 없음.
-		GridIndex sw = GridEncoder.decode(GridEncoder.encode(bounds.swLat(), bounds.swLng()));
-		GridIndex ne = GridEncoder.decode(GridEncoder.encode(bounds.neLat(), bounds.neLng()));
+		// bbox 꼭짓점 4점을 GridEncoder(단일 진실 원천)로 정수 인덱스 범위로 환산해 비교한다 — 위경도 재계산 없음.
+		GridRange range = GridEncoder.viewportRange(bounds);
 		// 리졸버는 루프 진입 전 1회 — 항목마다 zones 를 다시 읽지 않는다 (MSG-341 FR-8)
 		ZoneNameResolver resolver = zoneNameQueryService.resolver();
 		List<HotZoneView> hotZones = new ArrayList<>();
@@ -88,8 +88,8 @@ public class HotZoneServiceImpl implements HotZoneService {
 				continue;
 			}
 			GridIndex index = GridEncoder.decode(tuple.getValue());
-			if (index.gridY() < sw.gridY() || index.gridY() > ne.gridY()
-				|| index.gridX() < sw.gridX() || index.gridX() > ne.gridX()) {
+			if (index.gridY() < range.minGridY() || index.gridY() > range.maxGridY()
+				|| index.gridX() < range.minGridX() || index.gridX() > range.maxGridX()) {
 				continue;
 			}
 			ZoneCellName name = resolver.name(index.gridY(), index.gridX());

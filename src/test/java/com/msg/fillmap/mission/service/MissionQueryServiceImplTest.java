@@ -3,9 +3,11 @@ package com.msg.fillmap.mission.service;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
 import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.data.Offset.offset;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 import jakarta.persistence.EntityManager;
@@ -16,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.grid.GridConstants;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
@@ -44,8 +47,11 @@ import com.msg.fillmap.region.repository.RegionRepository;
 @DisplayName("MissionQueryServiceImpl 유형별 shape 합성 (실 PostGIS)")
 class MissionQueryServiceImplTest {
 
-	private static final long GY0 = 39810L;
-	private static final long GX0 = 108810L;
+	private static final long GY0 = 17618L;
+	private static final long GX0 = 7861L;
+
+	/** PROJ(PostGIS)와 Proj4J 의 수치 오차 허용치 — 1e-9 도는 위도 약 0.1mm 로 셀(100m) 판정에 무해하다. */
+	private static final double TOLERANCE_DEG = 1e-9;
 
 	@Autowired
 	private MissionRepository missionRepository;
@@ -63,6 +69,58 @@ class MissionQueryServiceImplTest {
 	private MissionQueryService newService() {
 		return new MissionQueryServiceImpl(
 			missionRepository, missionGridRepository, Clock.systemDefaultZone(), Duration.ofHours(1).toMillis());
+	}
+
+	/**
+	 * BOX 폴리곤을 PostGIS 오라클과 대조한다. 기대값을 자바로 다시 계산하면 프로덕션과 같은 산술을 두 번 쓰는
+	 * 동어반복이 되므로, 셀 경계 생성부터 감싸기까지 전부 DB 에 맡긴다 — PROJ(ST_Transform)로 5179 셀
+	 * 사각형을 4326 으로 되돌리고 ST_Collect·ST_Envelope 로 축정렬 최소 사각형을 얻는다. 좌표계 정의는 앱과
+	 * 같은 계약 문자열이라 남는 차이는 PROJ 와 Proj4J 의 수치 오차뿐이다(서브밀리미터 = 1e-9 도 미만).
+	 * 링 순서(남서→남동→북동→북서→남서)는 스펙이 정한 계약이라 여기서 직접 못 박는다 (MSG-222 §도메인 3).
+	 */
+	private void assertBoxEnvelope(BoxShape shape, String... gridIds) {
+		Object[] bounds = (Object[]) em.createNativeQuery("""
+			SELECT ST_XMin(envelope), ST_YMin(envelope), ST_XMax(envelope), ST_YMax(envelope)
+			FROM (
+				SELECT ST_Envelope(ST_Collect(ST_Transform(
+					ST_MakeEnvelope(cell.gx * 100, cell.gy * 100, (cell.gx + 1) * 100, (cell.gy + 1) * 100),
+					:def5179, :defWgs84))) AS envelope
+				FROM unnest(string_to_array(:gridIds, ',')) AS t(grid_id),
+					LATERAL (SELECT split_part(t.grid_id, '_', 1)::bigint AS gy,
+						split_part(t.grid_id, '_', 2)::bigint AS gx) cell
+			) e
+			""")
+			.setParameter("def5179", GridConstants.CRS_DEF_EPSG5179)
+			.setParameter("defWgs84", "+proj=longlat +datum=WGS84 +no_defs")
+			.setParameter("gridIds", String.join(",", gridIds))
+			.getSingleResult();
+		double minLon = ((Number) bounds[0]).doubleValue();
+		double minLat = ((Number) bounds[1]).doubleValue();
+		double maxLon = ((Number) bounds[2]).doubleValue();
+		double maxLat = ((Number) bounds[3]).doubleValue();
+		List<LatLng> expected = List.of(
+			new LatLng(minLat, minLon),
+			new LatLng(minLat, maxLon),
+			new LatLng(maxLat, maxLon),
+			new LatLng(maxLat, minLon),
+			new LatLng(minLat, minLon));
+
+		assertThat(shape.polygon()).hasSize(5);
+		for (int i = 0; i < expected.size(); i++) {
+			assertThat(shape.polygon().get(i).lat()).isCloseTo(expected.get(i).lat(), offset(TOLERANCE_DEG));
+			assertThat(shape.polygon().get(i).lng()).isCloseTo(expected.get(i).lng(), offset(TOLERANCE_DEG));
+		}
+	}
+
+	/** 중심 ±radius 격자 전부 (시더 산출물 형태 — POPUP 은 81셀). */
+	private static List<String> allCells(long radius) {
+		List<String> cells = new ArrayList<>();
+		for (long dy = -radius; dy <= radius; dy++) {
+			for (long dx = -radius; dx <= radius; dx++) {
+				cells.add(gid(GY0 + dy, GX0 + dx));
+			}
+		}
+		return cells;
 	}
 
 	private static String gid(long gridY, long gridX) {
@@ -150,16 +208,7 @@ class MissionQueryServiceImplTest {
 		BoxShape shape = (BoxShape) findMission(mission).shape();
 
 		// 남서→남동→북동→북서→남서 닫힌 링. 경계는 두 셀 bbox 의 전역 min/max.
-		double south = GridEncoder.bbox(gid(GY0, GX0)).get(0).lat();
-		double west = GridEncoder.bbox(gid(GY0, GX0)).get(0).lon();
-		double north = GridEncoder.bbox(gid(GY0 + 1, GX0 + 1)).get(2).lat();
-		double east = GridEncoder.bbox(gid(GY0 + 1, GX0 + 1)).get(2).lon();
-		assertThat(shape.polygon()).containsExactly(
-			new LatLng(south, west),
-			new LatLng(south, east),
-			new LatLng(north, east),
-			new LatLng(north, west),
-			new LatLng(south, west));
+		assertBoxEnvelope(shape, gid(GY0, GX0), gid(GY0 + 1, GX0 + 1));
 	}
 
 	@Test
@@ -171,13 +220,9 @@ class MissionQueryServiceImplTest {
 
 		BoxShape shape = (BoxShape) findMission(mission).shape();
 
-		// 한 격자면 경계 사각형 = 그 셀의 bbox(≈마커).
-		List<GridPoint> cellBbox = GridEncoder.bbox(grid);
-		assertThat(shape.polygon()).hasSize(5);
-		for (int i = 0; i < 5; i++) {
-			assertThat(shape.polygon().get(i).lat()).isEqualTo(cellBbox.get(i).lat());
-			assertThat(shape.polygon().get(i).lng()).isEqualTo(cellBbox.get(i).lon());
-		}
+		// 한 격자면 경계 사각형 = 그 셀 하나를 감싸는 축정렬 사각형(≈마커). 5179 셀은 기울어져 있어
+		// 셀 bbox 링 자체와는 다르다 — 네 꼭짓점을 감싸는 최소 사각형이다 (MSG-347).
+		assertBoxEnvelope(shape, grid);
 	}
 
 	@Test
@@ -194,16 +239,8 @@ class MissionQueryServiceImplTest {
 		BoxShape shape = (BoxShape) findMission(mission).shape();
 
 		assertThat(findMission(mission).type()).isEqualTo("POPUP");
-		double south = GridEncoder.bbox(gid(GY0 - 4, GX0 - 4)).get(0).lat();
-		double west = GridEncoder.bbox(gid(GY0 - 4, GX0 - 4)).get(0).lon();
-		double north = GridEncoder.bbox(gid(GY0 + 4, GX0 + 4)).get(2).lat();
-		double east = GridEncoder.bbox(gid(GY0 + 4, GX0 + 4)).get(2).lon();
-		assertThat(shape.polygon()).containsExactly(
-			new LatLng(south, west),
-			new LatLng(south, east),
-			new LatLng(north, east),
-			new LatLng(north, west),
-			new LatLng(south, west));
+		// 오라클이 DB 쪽이라 81셀 전량을 그대로 넘긴다 — 모서리 셀만 추리는 지름길이 필요 없다.
+		assertBoxEnvelope(shape, allCells(4).toArray(String[]::new));
 	}
 
 	@Test

@@ -37,9 +37,9 @@ class PlaceSearchServiceTest {
 
 	private static final long USER_ID = 42L;
 
-	/** 표시명 계산용 합성 구역 (MSG-341) — 서면역 격자(39064_112225) 한 칸만 덮는다. */
+	/** 표시명 계산용 합성 구역 (MSG-341) — 서면역 격자(16858_11420) 한 칸만 덮는다. */
 	private static final String ZONE_NAME = "m341서면";
-	private static final String 서면역_GRID_ID = "39064_112225";
+	private static final String 서면역_GRID_ID = "16858_11420";
 
 	@Mock
 	private KakaoLocalClient kakaoLocalClient;
@@ -107,9 +107,9 @@ class PlaceSearchServiceTest {
 
 		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(USER_ID, "  강남역  ");
 
-		// GridEncoder.encode(37.4979, 127.0276) = floor(37.4979/0.0009)_floor(127.0276/0.00115)
+		// GridEncoder.encode(37.4979, 127.0276) = 5179 변환 후 floor(y/100)_floor(x/100)
 		assertThat(results).hasSize(1);
-		assertThat(results.getFirst().gridId()).isEqualTo("41664_110458");
+		assertThat(results.getFirst().gridId()).isEqualTo("19443_9582");
 		assertThat(results.getFirst().name()).isEqualTo("강남역");
 		assertThat(results.getFirst().lat()).isEqualTo(37.4979);
 		assertThat(results.getFirst().lng()).isEqualTo(127.0276);
@@ -127,7 +127,7 @@ class PlaceSearchServiceTest {
 		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(USER_ID, "스모크");
 
 		assertThat(results).extracting(PlaceSearchResponseDto::gridId)
-			.containsExactly("39147_112245", "39064_112225", "41729_110368", "39059_112277");
+			.containsExactly("16941_11439", "16858_11420", "19509_9491", "16854_11474");
 	}
 
 	@Test

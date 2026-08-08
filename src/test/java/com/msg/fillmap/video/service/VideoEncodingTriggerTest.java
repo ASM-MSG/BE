@@ -48,7 +48,7 @@ class VideoEncodingTriggerTest {
 		VideoEncodingService encodingService = mock(VideoEncodingService.class);
 		VideoStatusWriter statusWriter = mock(VideoStatusWriter.class);
 
-		Video saved = Video.create(USER_ID, "41716_110483", "videos/original/1/x.mp4", null, (short) 10,
+		Video saved = Video.create(USER_ID, "19495_9607", "videos/original/1/x.mp4", null, (short) 10,
 			LocalDateTime.now(ZoneOffset.UTC), Visibility.PRIVATE);
 		org.springframework.test.util.ReflectionTestUtils.setField(saved, "id", 7L);
 		// 확정은 클레임 선행 직렬화로 saveAndFlush 를 쓴다 (MSG-247 P1) — 스텁도 따라간다.

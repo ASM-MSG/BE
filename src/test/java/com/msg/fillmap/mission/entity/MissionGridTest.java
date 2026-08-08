@@ -14,10 +14,10 @@ class MissionGridTest {
 
 	@Test
 	void seq_생성자가_스팟_순번을_기록한다() {
-		MissionGrid spot = new MissionGrid(7L, "39001_112198", 3);
+		MissionGrid spot = new MissionGrid(7L, "16795_11392", 3);
 
 		assertThat(spot.getMissionId()).isEqualTo(7L);
-		assertThat(spot.getGridId()).isEqualTo("39001_112198");
+		assertThat(spot.getGridId()).isEqualTo("16795_11392");
 		assertThat(spot.getSeq()).isEqualTo(3);
 	}
 }

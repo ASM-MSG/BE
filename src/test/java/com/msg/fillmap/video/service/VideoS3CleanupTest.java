@@ -63,7 +63,7 @@ class VideoS3CleanupTest {
 
 	private static final long USER_ID = 1L;
 	private static final long VIDEO_ID = 7L;
-	private static final String GRID_ID = "41716_110483";
+	private static final String GRID_ID = "19495_9607";
 	private static final String PENDING = "videos/pending/1/new.mp4";
 	// original 키는 확정 시도마다 새 UUID 라(MSG-247 2R) 정확값 대신 파생 prefix 로 단언한다.
 	private static final String ORIGINAL_CLAIM_PREFIX = "videos/original/1/new-";

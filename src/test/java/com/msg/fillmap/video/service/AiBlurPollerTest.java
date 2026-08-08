@@ -99,7 +99,7 @@ class AiBlurPollerTest {
 	 * 맞춘다 — 타임아웃 기준이 blurringStartedAt 이라 둘을 정렬해야 "n분 전 시작" 시나리오가 그대로 성립한다.
 	 */
 	private Video blurring(long id, String jobId, LocalDateTime startedAt) {
-		Video video = Video.create(1L, "41716_110483", "videos/original/1/x.mp4",
+		Video video = Video.create(1L, "19495_9607", "videos/original/1/x.mp4",
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 		video.markEncoding();
 		video.markEncoded("videos/encoded/1/" + id + ".mp4");

@@ -90,7 +90,7 @@ class VideoRecordedAtValidationTest {
 
 	@Test
 	void 교체_요청의_미래_recordedAt도_동일하게_거부된다() {
-		Video owned = Video.create(USER_ID, "41716_110483", "videos/original/1/old.mp4", null, (short) 10,
+		Video owned = Video.create(USER_ID, "19495_9607", "videos/original/1/old.mp4", null, (short) 10,
 			UTC_NOW.minusDays(1), Visibility.PRIVATE);
 		given(repository.findById(7L)).willReturn(Optional.of(owned));
 
@@ -143,7 +143,7 @@ class VideoRecordedAtValidationTest {
 
 	/** 통과 케이스만 저장 이후 흐름을 지난다 — saveAndFlush 스텁이 필요한 쪽에서만 부른다. */
 	private void givenSavedVideo() {
-		Video saved = Video.create(USER_ID, "41716_110483", "videos/original/1/x.mp4", null, (short) 10,
+		Video saved = Video.create(USER_ID, "19495_9607", "videos/original/1/x.mp4", null, (short) 10,
 			UTC_NOW.minusDays(1), Visibility.PRIVATE);
 		ReflectionTestUtils.setField(saved, "id", 7L);
 		given(repository.saveAndFlush(any(Video.class))).willReturn(saved);

@@ -92,12 +92,12 @@ class BadgeAwardServiceTest {
 		given(badgeRepository.findEligible(BadgeConditionType.TOTAL_GRIDS.name(), BigDecimal.ONE, USER_ID))
 			.willReturn(List.of(candidate(1L, "EXPLORER_1")));
 		BigDecimal rate = new BigDecimal("10.00");
-		given(userBadgeRepository.findMyRegionProgress(USER_ID, "41642_110458")).willReturn(Optional.of(rate));
+		given(userBadgeRepository.findMyRegionProgress(USER_ID, "19422_9582")).willReturn(Optional.of(rate));
 		given(badgeRepository.findEligible(BadgeConditionType.REGION_PERCENT.name(), rate, USER_ID))
 			.willReturn(List.of(candidate(9L, "REGION_MASTER_10")));
 		given(userBadgeRepository.insertIgnoreConflict(anyLong(), anyLong())).willReturn(1);
 
-		List<EarnedBadgeResponseDto> earned = badgeAwardService.awardCollectionBadges(USER_ID, "41642_110458");
+		List<EarnedBadgeResponseDto> earned = badgeAwardService.awardCollectionBadges(USER_ID, "19422_9582");
 
 		assertThat(earned).extracting(EarnedBadgeResponseDto::code)
 			.containsExactly("EXPLORER_1", "REGION_MASTER_10");

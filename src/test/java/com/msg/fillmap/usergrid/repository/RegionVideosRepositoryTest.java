@@ -1,9 +1,7 @@
 package com.msg.fillmap.usergrid.repository;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
-import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
+import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Method;
@@ -19,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.user.entity.User;
@@ -38,8 +37,8 @@ import com.msg.fillmap.user.repository.UserRepository;
 @DisplayName("UserGridRepository 동 단위 내 영상 (getRegionVideos, 실 PostGIS)")
 class RegionVideosRepositoryTest {
 
-	private static final long GY0 = 39700L;
-	private static final long GX0 = 108700L;
+	private static final long GY0 = 17511L;
+	private static final long GX0 = 7743L;
 	private static final String REGION_A = "9995300001";
 	private static final String REGION_B = "9995300002";
 	private static final LocalDateTime BASE = LocalDateTime.of(2026, 7, 20, 12, 0, 0);
@@ -58,17 +57,13 @@ class RegionVideosRepositoryTest {
 
 	/** 격자 (GY0,GX0) 중심점을 덮는 합성 행정동 A(3×3 격자 블록)를 시드한다. */
 	private void seedRegionA() {
-		String polygon = rectanglePolygonJson(
-			GX0 * GRID_LNG_STEP, GY0 * GRID_LAT_STEP,
-			(GX0 + 3) * GRID_LNG_STEP, (GY0 + 3) * GRID_LAT_STEP);
+		String polygon = cellBlockPolygonJson(GY0, GY0 + 3, GX0, GX0 + 3);
 		regionRepository.upsert(REGION_A, "m167v합성동A", REGION_A.substring(0, 5), polygon, CELL_AREA_M2);
 	}
 
 	/** A 에서 북쪽으로 떨어진 합성 행정동 B(3×3 블록) — "옆 동" 영상 좌표가 여기 든다. */
 	private void seedRegionB() {
-		String polygon = rectanglePolygonJson(
-			GX0 * GRID_LNG_STEP, (GY0 + 10) * GRID_LAT_STEP,
-			(GX0 + 3) * GRID_LNG_STEP, (GY0 + 13) * GRID_LAT_STEP);
+		String polygon = cellBlockPolygonJson(GY0 + 10, GY0 + 13, GX0, GX0 + 3);
 		regionRepository.upsert(REGION_B, "m167v합성동B", REGION_B.substring(0, 5), polygon, CELL_AREA_M2);
 	}
 
@@ -101,7 +96,7 @@ class RegionVideosRepositoryTest {
 	 * 격자 귀속은 grid_id 로만 정해진다(geom 은 격자 축 조회에 무관 — DoD 검증용으로 옆 동 좌표를 넣을 수 있다).
 	 */
 	private long seedVideo(long userId, String gridId, String thumbnailKey, String processingStatus,
-		String visibility, String status, double lon, double lat, LocalDateTime createdAt) {
+		String visibility, String status, GridPoint point, LocalDateTime createdAt) {
 		String originalKey = "videos/original/m167v-" + System.nanoTime() + ".mp4";
 		em.createNativeQuery("""
 			INSERT INTO videos (
@@ -118,8 +113,8 @@ class RegionVideosRepositoryTest {
 			.setParameter("gridId", gridId)
 			.setParameter("originalKey", originalKey)
 			.setParameter("thumbKey", thumbnailKey)
-			.setParameter("lon", lon)
-			.setParameter("lat", lat)
+			.setParameter("lon", point.lon())
+			.setParameter("lat", point.lat())
 			.setParameter("createdAt", createdAt)
 			.setParameter("processingStatus", processingStatus)
 			.setParameter("visibility", visibility)
@@ -133,7 +128,7 @@ class RegionVideosRepositoryTest {
 	/** READY·PUBLIC·ACTIVE 영상을 격자 중심점 좌표로 삽입한다 (기본 케이스). */
 	private long seedReadyVideo(long userId, String gridId, String thumbnailKey, LocalDateTime createdAt) {
 		return seedVideo(userId, gridId, thumbnailKey, "READY", "PUBLIC", "ACTIVE",
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, createdAt);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), createdAt);
 	}
 
 	@Test
@@ -181,7 +176,7 @@ class RegionVideosRepositoryTest {
 		String grid = seedGridA();
 		// 영상 좌표는 옆 동(B) 안이지만 grid_id 는 A 로 라벨된 격자다 — 격자 축이라 A 로 잡혀야 한다(DoD 핵심).
 		long video = seedVideo(me, grid, "thumbs/nextdoor.jpg", "READY", "PUBLIC", "ACTIVE",
-			(GX0 + 1.5) * GRID_LNG_STEP, (GY0 + 11.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 11.5, GX0 + 1.5), BASE);
 
 		assertThat(userGridRepository.getRegionVideos(me, REGION_A))
 			.extracting(RegionVideoProjection::getVideoId).containsExactly(video);
@@ -212,7 +207,7 @@ class RegionVideosRepositoryTest {
 		String grid = seedGridA();
 		long active = seedReadyVideo(me, grid, "thumbs/active.jpg", BASE);
 		seedVideo(me, grid, "thumbs/deleted.jpg", "READY", "PUBLIC", "DELETED",
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		List<RegionVideoProjection> result = userGridRepository.getRegionVideos(me, REGION_A);
 
@@ -226,7 +221,7 @@ class RegionVideosRepositoryTest {
 		seedRegionA();
 		String grid = seedGridA();
 		long privateVideo = seedVideo(me, grid, "thumbs/private.jpg", "READY", "PRIVATE", "ACTIVE",
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		List<RegionVideoProjection> result = userGridRepository.getRegionVideos(me, REGION_A);
 
@@ -241,7 +236,7 @@ class RegionVideosRepositoryTest {
 		String grid = seedGridA();
 		// 인코딩 중이면 썸네일 key 가 없다 — 무필터라 포함되고 thumbnailKey null → 서비스 presign 이 thumbnailUrl null 로 흡수.
 		long encoding = seedVideo(me, grid, null, "ENCODING", "PRIVATE", "ACTIVE",
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		RegionVideoProjection row = userGridRepository.getRegionVideos(me, REGION_A).get(0);
 

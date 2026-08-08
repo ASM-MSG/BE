@@ -61,6 +61,12 @@ dependencies {
 	runtimeOnly  'org.postgresql:postgresql'
 	implementation 'org.hibernate.orm:hibernate-spatial'   // Spring Boot 3.x가 버전 관리
 
+	// --- 좌표 변환 (WGS84 → EPSG:5179 미터 평면, MSG-347) ---
+	implementation 'org.locationtech.proj4j:proj4j:1.4.3'
+	// EPSG 코드 내장 정의 — 계약 문자열(GridConstants.CRS_DEF_EPSG5179)이 표준 EPSG:5179 와
+	// 같은 좌표를 내는지 대조하는 테스트 전용이라 test 스코프다. 운영 경로의 CRS 는 계약 문자열로만 만든다.
+	testImplementation 'org.locationtech.proj4j:proj4j-epsg:1.4.3'
+
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
