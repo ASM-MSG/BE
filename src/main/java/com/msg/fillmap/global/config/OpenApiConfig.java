@@ -96,16 +96,15 @@ public class OpenApiConfig {
 		if (data == null || data.getAnyOf() != null) {
 			return; // 같은 래퍼를 공유하는 형제 경로(by-point·by-grid)가 먼저 처리했으면 멱등
 		}
+		if (data.get$ref() == null) {
+			return; // 현재 대상 전수가 $ref DTO 다. 원시 data 경로가 생기면 가드 테스트가 깨져 이 분기를 넓히게 된다
+		}
 		Schema nullType = new Schema<>();
 		nullType.addType("null");
-		if (data.get$ref() != null) {
-			Schema wrapped = new Schema<>();
-			wrapped.addAnyOfItem(new Schema<>().$ref(data.get$ref()));
-			wrapped.addAnyOfItem(nullType);
-			wrapped.setDescription(data.getDescription());
-			properties.put("data", wrapped);
-			return;
-		}
-		data.addType("null");
+		Schema wrapped = new Schema<>();
+		wrapped.addAnyOfItem(new Schema<>().$ref(data.get$ref()));
+		wrapped.addAnyOfItem(nullType);
+		wrapped.setDescription(data.getDescription());
+		properties.put("data", wrapped);
 	}
 }
