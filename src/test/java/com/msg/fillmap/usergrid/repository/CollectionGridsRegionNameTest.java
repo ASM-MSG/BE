@@ -1,9 +1,7 @@
 package com.msg.fillmap.usergrid.repository;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
-import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
+import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
@@ -16,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.region.service.RegionQueryService;
@@ -29,15 +28,15 @@ import com.msg.fillmap.user.repository.UserRepository;
  * 무귀속(라벨 NULL)이면 null 인지, 그 이름이 by-grid 귀속(resolveByPoint)과 같은 행정동인지 검증한다.
  * 153 계약(나머지 필드·정렬·30 상한·geospatial 0)의 회귀는 기존 CollectionGridsRepositoryTest 가 담당한다.
  *
- * 격리(공유 로컬 DB): 99952 대역 합성 region_code + 서해 공해상 grid(GY 39700) + @Transactional 롤백.
+ * 격리(공유 로컬 DB): 99952 대역 합성 region_code + 서해 공해상 grid(GY 17516) + @Transactional 롤백.
  */
 @SpringBootTest
 @Transactional
 @DisplayName("갤러리 목록 regionName (grids·regions equi-join, 실 PostGIS)")
 class CollectionGridsRegionNameTest {
 
-	private static final long GY0 = 39700L;
-	private static final long GX0 = 108500L;
+	private static final long GY0 = 17516L;
+	private static final long GX0 = 7535L;
 	private static final String REGION = "9995200001";
 	private static final LocalDateTime BASE = LocalDateTime.of(2026, 7, 20, 12, 0, 0);
 
@@ -58,9 +57,7 @@ class CollectionGridsRegionNameTest {
 
 	/** 격자 (GY0,GX0) 중심점을 덮는 합성 행정동(3×3 격자 블록)을 시드한다. */
 	private void seedRegion() {
-		String polygon = rectanglePolygonJson(
-			GX0 * GRID_LNG_STEP, GY0 * GRID_LAT_STEP,
-			(GX0 + 3) * GRID_LNG_STEP, (GY0 + 3) * GRID_LAT_STEP);
+		String polygon = cellBlockPolygonJson(GY0, GY0 + 3, GX0, GX0 + 3);
 		regionRepository.upsert(REGION, "m167b합성동", REGION.substring(0, 5), polygon, CELL_AREA_M2);
 	}
 
@@ -93,7 +90,8 @@ class CollectionGridsRegionNameTest {
 	}
 
 	private String byGridName(long gy, long gx) {
-		return regionQueryService.resolveByPoint((gy + 0.5) * GRID_LAT_STEP, (gx + 0.5) * GRID_LNG_STEP)
+		GridPoint center = GridFixtures.pointAt(gy + 0.5, gx + 0.5);
+		return regionQueryService.resolveByPoint(center.lat(), center.lon())
 			.map(RegionView::regionName).orElse(null);
 	}
 

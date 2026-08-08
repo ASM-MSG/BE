@@ -34,10 +34,10 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 @DisplayName("UserGridQueryServiceImpl")
 class UserGridQueryServiceImplTest {
 
-	/** 테스트 격자(41642_110458)를 덮는 구역 — 행 = 'A' + (41650 − 41642) = 'I', 열 = 110458 − 110450 + 1 = 9. */
+	/** 테스트 격자(19422_9582)를 덮는 구역 — 행 = 'A' + (19430 − 19422) = 'I', 열 = 9582 − 9574 + 1 = 9. */
 	private static final Zone SEOMYEON = Zone.builder()
 		.zoneKey("seomyeon").name("서면")
-		.minGridY(41640).maxGridY(41650).minGridX(110450).maxGridX(110460)
+		.minGridY(19420).maxGridY(19430).minGridX(9574).maxGridX(9584)
 		.priority(0)
 		.build();
 
@@ -102,7 +102,7 @@ class UserGridQueryServiceImplTest {
 		@Test
 		@DisplayName("gridY gridX는 gridId를 디코드한 값이다")
 		void gridY_gridX는_gridId를_디코드한_값이다() {
-			String gridId = "41642_110458";
+			String gridId = "19422_9582";
 			given(userGridRepository.getCollectionGrids(1L))
 				.willReturn(List.of(gridProjection(gridId, null, null)));
 
@@ -120,7 +120,7 @@ class UserGridQueryServiceImplTest {
 			String thumbKey = "videos/thumb/1042.jpg";
 			String signed = "https://s3.example/thumb.jpg?X-Amz-Signature=abc";
 			given(userGridRepository.getCollectionGrids(1L))
-				.willReturn(List.of(gridProjection("41642_110458", 1042L, thumbKey)));
+				.willReturn(List.of(gridProjection("19422_9582", 1042L, thumbKey)));
 			given(thumbnailUrlPresigner.presign(thumbKey)).willReturn(signed);
 
 			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
@@ -133,7 +133,7 @@ class UserGridQueryServiceImplTest {
 		@DisplayName("coverThumbnailUrl은 cover가 null이면 null이다")
 		void coverThumbnailUrl은_cover가_null이면_null이다() {
 			given(userGridRepository.getCollectionGrids(1L))
-				.willReturn(List.of(gridProjection("41642_110458", null, null)));
+				.willReturn(List.of(gridProjection("19422_9582", null, null)));
 
 			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
 
@@ -157,13 +157,13 @@ class UserGridQueryServiceImplTest {
 			String thumbKey = "videos/thumb/1042.jpg";
 			String signed = "https://s3.example/thumb.jpg?X-Amz-Signature=abc";
 			given(userGridRepository.getRegionVideos(1L, "1168051500"))
-				.willReturn(List.of(regionVideoProjection(1042L, "41642_110458", thumbKey, "READY")));
+				.willReturn(List.of(regionVideoProjection(1042L, "19422_9582", thumbKey, "READY")));
 			given(thumbnailUrlPresigner.presign(thumbKey)).willReturn(signed);
 
 			RegionVideoView view = userGridQueryService.getRegionVideos(1L, "1168051500").get(0);
 
 			assertThat(view.videoId()).isEqualTo(1042L);
-			assertThat(view.gridId()).isEqualTo("41642_110458");
+			assertThat(view.gridId()).isEqualTo("19422_9582");
 			assertThat(view.thumbnailUrl()).isEqualTo(signed);
 			assertThat(view.durationSec()).isEqualTo(12);
 		}
@@ -172,7 +172,7 @@ class UserGridQueryServiceImplTest {
 		@DisplayName("thumbnailKey가 null이면 thumbnailUrl이 null이다")
 		void thumbnailKey가_null이면_thumbnailUrl이_null이다() {
 			given(userGridRepository.getRegionVideos(1L, "1168051500"))
-				.willReturn(List.of(regionVideoProjection(1041L, "41642_110458", null, "ENCODING")));
+				.willReturn(List.of(regionVideoProjection(1041L, "19422_9582", null, "ENCODING")));
 
 			RegionVideoView view = userGridQueryService.getRegionVideos(1L, "1168051500").get(0);
 
@@ -192,11 +192,11 @@ class UserGridQueryServiceImplTest {
 			// 없어 이 매핑에서 gridId 를 새로 decode 하는 유일한 경로다 (D-5).
 			givenSeomyeonZone();
 			given(userGridRepository.getCollectionGrids(1L))
-				.willReturn(List.of(gridProjection("41642_110458", null, null)));
+				.willReturn(List.of(gridProjection("19422_9582", null, null)));
 			given(userGridRepository.getRegionVideos(1L, "1168051500"))
-				.willReturn(List.of(regionVideoProjection(1042L, "41642_110458", null, "ENCODING")));
+				.willReturn(List.of(regionVideoProjection(1042L, "19422_9582", null, "ENCODING")));
 			given(userGridRepository.getCollectionGridsForFriend(7L))
-				.willReturn(List.of(friendGridProjection("41642_110458")));
+				.willReturn(List.of(friendGridProjection("19422_9582")));
 
 			CollectionGridView collection = userGridQueryService.getCollectionGrids(1L).get(0);
 			RegionVideoView regionVideo = userGridQueryService.getRegionVideos(1L, "1168051500").get(0);
@@ -215,7 +215,7 @@ class UserGridQueryServiceImplTest {
 		void 구역_밖_격자는_두_필드가_모두_null이다() {
 			givenSeomyeonZone();
 			given(userGridRepository.getCollectionGrids(1L))
-				.willReturn(List.of(gridProjection("38879_112390", null, null)));
+				.willReturn(List.of(gridProjection("16676_11596", null, null)));
 
 			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
 
@@ -230,9 +230,9 @@ class UserGridQueryServiceImplTest {
 			// FR-8: 항목마다 리졸버를 받으면 격자 수만큼 zones 를 다시 읽는 N+1 이 된다.
 			givenSeomyeonZone();
 			given(userGridRepository.getCollectionGrids(1L)).willReturn(List.of(
-				gridProjection("41642_110458", null, null),
-				gridProjection("41643_110459", null, null),
-				gridProjection("41644_110460", null, null)));
+				gridProjection("19422_9582", null, null),
+				gridProjection("19423_9583", null, null),
+				gridProjection("19424_9584", null, null)));
 
 			assertThat(userGridQueryService.getCollectionGrids(1L)).hasSize(3);
 

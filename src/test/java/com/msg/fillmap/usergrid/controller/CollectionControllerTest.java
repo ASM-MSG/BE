@@ -88,7 +88,7 @@ class CollectionControllerTest {
 	@DisplayName("인증된 요청은 200 과 갤러리 격자 리스트를 반환한다")
 	void 인증된_요청은_200과_갤러리_격자_리스트를_반환한다() throws Exception {
 		CollectionGridView view = new CollectionGridView(
-			"41642_110458", 41642, 110458,
+			"19422_9582", 19422, 9582,
 			LocalDateTime.of(2026, 7, 20, 18, 3, 11), LocalDateTime.of(2026, 7, 21, 9, 12, 0),
 			3, 1042L, "https://s3.example/thumb.jpg?X-Amz-Signature=abc", "서울특별시 강남구 역삼1동",
 			"서면", "I-9");
@@ -99,9 +99,9 @@ class CollectionControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
 			.andExpect(jsonPath("$.data.length()").value(1))
-			.andExpect(jsonPath("$.data[0].gridId").value("41642_110458"))
-			.andExpect(jsonPath("$.data[0].gridY").value(41642))
-			.andExpect(jsonPath("$.data[0].gridX").value(110458))
+			.andExpect(jsonPath("$.data[0].gridId").value("19422_9582"))
+			.andExpect(jsonPath("$.data[0].gridY").value(19422))
+			.andExpect(jsonPath("$.data[0].gridX").value(9582))
 			.andExpect(jsonPath("$.data[0].videoCount").value(3))
 			.andExpect(jsonPath("$.data[0].coverVideoId").value(1042))
 			.andExpect(jsonPath("$.data[0].coverThumbnailUrl")
@@ -135,7 +135,7 @@ class CollectionControllerTest {
 	@DisplayName("동 단위 영상 조회는 200 과 gridId 포함 영상 리스트를 반환한다")
 	void 동_단위_영상_조회는_200과_gridId_포함_영상_리스트를_반환한다() throws Exception {
 		RegionVideoView view = new RegionVideoView(
-			1042L, "41642_110458", "https://s3.example/thumb.jpg?X-Amz-Signature=abc",
+			1042L, "19422_9582", "https://s3.example/thumb.jpg?X-Amz-Signature=abc",
 			"READY", 12, LocalDateTime.of(2026, 7, 20, 18, 3, 11), "서면", "I-9");
 		given(userGridQueryService.getRegionVideos(anyLong(), anyString())).willReturn(List.of(view));
 
@@ -146,7 +146,7 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(200))
 			.andExpect(jsonPath("$.data.length()").value(1))
 			.andExpect(jsonPath("$.data[0].videoId").value(1042))
-			.andExpect(jsonPath("$.data[0].gridId").value("41642_110458"))
+			.andExpect(jsonPath("$.data[0].gridId").value("19422_9582"))
 			.andExpect(jsonPath("$.data[0].thumbnailUrl")
 				.value("https://s3.example/thumb.jpg?X-Amz-Signature=abc"))
 			.andExpect(jsonPath("$.data[0].processingStatus").value("READY"))
