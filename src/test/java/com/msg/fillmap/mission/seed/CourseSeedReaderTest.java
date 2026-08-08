@@ -32,8 +32,8 @@ class CourseSeedReaderTest {
 	private static String spots(int count) {
 		return IntStream.rangeClosed(1, count)
 			.mapToObj(seq -> """
-				{"seq": %d, "gridId": "%d_112198", "name": "스팟%d", "method": "tourapi"}"""
-				.formatted(seq, 39000 + seq, seq))
+				{"seq": %d, "gridId": "%d_11392", "name": "스팟%d", "method": "tourapi"}"""
+				.formatted(seq, 16794 + seq, seq))
 			.reduce((a, b) -> a + "," + b)
 			.orElseThrow();
 	}
@@ -63,7 +63,7 @@ class CourseSeedReaderTest {
 		assertThat(record.spots()).hasSize(6)
 			.extracting(CourseRecord.Spot::seq)
 			.containsExactly(1, 2, 3, 4, 5, 6);
-		assertThat(record.spots().get(0).gridId()).isEqualTo("39001_112198");
+		assertThat(record.spots().get(0).gridId()).isEqualTo("16795_11392");
 	}
 
 	@Test
@@ -126,7 +126,7 @@ class CourseSeedReaderTest {
 
 	@Test
 	void gridId_포맷_위반이면_예외다() {
-		String malformed = spots(5).replace("39001_112198", "39001-112198");
+		String malformed = spots(5).replace("16795_11392", "16795-11392");
 
 		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, malformed) + "]"))
 			.isInstanceOf(IllegalStateException.class)
@@ -136,7 +136,7 @@ class CourseSeedReaderTest {
 	@Test
 	void gridId가_정규형이_아니면_예외다() {
 		// 선행 0 — 정규식(숫자 나열)은 통과하지만 GridEncoder.encode 정규형과 문자열 불일치 = 죽은 스팟.
-		String nonCanonical = spots(5).replace("39001_112198", "039001_112198");
+		String nonCanonical = spots(5).replace("16795_11392", "016795_11392");
 
 		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, nonCanonical) + "]"))
 			.isInstanceOf(IllegalStateException.class)
@@ -157,7 +157,7 @@ class CourseSeedReaderTest {
 	@Test
 	void 코스_안에서_gridId가_중복이면_예외다() {
 		// 스팟 2의 격자를 스팟 1과 같게 — PK 흡수로 실격자 수 < N 이 되는 산출물은 전량 거부한다 (D7).
-		String duplicated = spots(5).replace("39002_112198", "39001_112198");
+		String duplicated = spots(5).replace("16796_11392", "16795_11392");
 
 		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, duplicated) + "]"))
 			.isInstanceOf(IllegalStateException.class)
