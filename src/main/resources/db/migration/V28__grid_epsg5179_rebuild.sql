@@ -179,6 +179,26 @@ WHERE v.status <> 'DELETED'
 GROUP BY v.user_id, v.grid_id;
 
 -- ============================================================================
+-- 5b단계: region_stats 전량 재계산
+-- 탐험률 통계는 user_grids(5단계 재구성)와 grids.region_code(3단계 재판정)에서 파생되는 캐시라,
+-- 그대로 두면 각 지역에 다음 업로드가 올 때까지 이전 체계 값이 사용자에게 보이고 뱃지 판정도 그 값을 쓴다.
+-- 집계 규칙은 RegionRepository.refreshRegionStats(MSG-155)를 그대로 옮긴 것이다 — 분자는 videos 가 아니라
+-- user_grids(격자 1행)라 경계 격자 이중 카운트가 없고, total_count 는 regions.total_grid_count 사본,
+-- progress_rate 는 ROUND(collected*100/total, 2)에 0 분모 가드(NULLIF·COALESCE)를 건 물질화다.
+-- regions 와의 JOIN 이 무라벨 격자(region_code IS NULL — 해안·무귀속)를 자연히 제외한다.
+-- 전량 DELETE 후 재INSERT 라 대응 (사용자, 지역) 쌍이 사라진 행은 이 과정에서 함께 없어진다.
+-- ============================================================================
+DELETE FROM region_stats;
+
+INSERT INTO region_stats (user_id, region_code, collected_count, total_count, progress_rate, updated_at)
+SELECT ug.user_id, tr.region_code, COUNT(*), tr.total_grid_count,
+	COALESCE(ROUND(COUNT(*) * 100.0 / NULLIF(tr.total_grid_count, 0), 2), 0.00), now()
+FROM user_grids ug
+JOIN grids g ON g.grid_id = ug.grid_id
+JOIN regions tr ON tr.region_code = g.region_code
+GROUP BY ug.user_id, tr.region_code, tr.total_grid_count;
+
+-- ============================================================================
 -- 6단계: sponsor_ads · mission_grids 격자 참조 교체
 -- ============================================================================
 UPDATE sponsor_ads sa SET grid_id = m.new_grid_id
