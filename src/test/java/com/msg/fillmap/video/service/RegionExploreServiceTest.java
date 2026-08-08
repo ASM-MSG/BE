@@ -57,10 +57,10 @@ class RegionExploreServiceTest {
 	@InjectMocks
 	private RegionExploreServiceImpl regionExploreService;
 
-	/** 카드 좌표(38879_112390)를 덮는 구역 하나 — 행 A 는 maxGridY, 열 1 은 minGridX 다. */
+	/** 카드 좌표(16676_11596)를 덮는 구역 하나 — 행 A 는 maxGridY, 열 1 은 minGridX 다. */
 	private static final Zone SEOMYEON = Zone.builder()
 		.zoneKey("seomyeon").name("서면")
-		.minGridY(38870).maxGridY(38884).minGridX(112385).maxGridX(112400)
+		.minGridY(16667).maxGridY(16681).minGridX(11591).maxGridX(11606)
 		.priority(0)
 		.build();
 
@@ -215,8 +215,8 @@ class RegionExploreServiceTest {
 			String thumbKey = "videos/thumb/1042.jpg";
 			String signed = "https://s3.example/thumb.jpg?X-Amz-Signature=abc";
 			given(videoRepository.findExploreGridsPopular(REGION_CODE, null)).willReturn(List.of(
-				cardProjection("38879_112390", 38879L, 112390L, 138, thumbKey),
-				cardProjection("38880_112391", 38880L, 112391L, 97, null)));
+				cardProjection("16676_11596", 16676L, 11596L, 138, thumbKey),
+				cardProjection("16677_11597", 16677L, 11597L, 97, null)));
 			given(thumbnailUrlPresigner.presign(thumbKey)).willReturn(signed);
 			givenSummary("부전2동", 2, 235L);
 
@@ -232,7 +232,7 @@ class RegionExploreServiceTest {
 		@DisplayName("헤더는 summary 값을 담고 regionCode를 에코하며 카드 필드를 그대로 매핑한다")
 		void 헤더는_summary_값을_담고_regionCode를_에코하며_카드_필드를_그대로_매핑한다() {
 			given(videoRepository.findExploreGridsPopular(REGION_CODE, null)).willReturn(List.of(
-				cardProjection("38879_112390", 38879L, 112390L, 138, null)));
+				cardProjection("16676_11596", 16676L, 11596L, 138, null)));
 			givenSummary("부산광역시 부산진구 부전2동", 5, 355L);
 
 			RegionExploreResponseDto result =
@@ -242,9 +242,9 @@ class RegionExploreServiceTest {
 			assertThat(result.regionName()).isEqualTo("부산광역시 부산진구 부전2동");
 			assertThat(result.gridCount()).isEqualTo(5);
 			assertThat(result.videoCount()).isEqualTo(355L);
-			assertThat(result.grids().get(0).gridId()).isEqualTo("38879_112390");
-			assertThat(result.grids().get(0).gridY()).isEqualTo(38879L);
-			assertThat(result.grids().get(0).gridX()).isEqualTo(112390L);
+			assertThat(result.grids().get(0).gridId()).isEqualTo("16676_11596");
+			assertThat(result.grids().get(0).gridY()).isEqualTo(16676L);
+			assertThat(result.grids().get(0).gridX()).isEqualTo(11596L);
 			assertThat(result.grids().get(0).videoCount()).isEqualTo(138);
 			assertThat(result.grids().get(0).coverDurationSec()).isEqualTo((short) 12);
 		}
@@ -255,14 +255,14 @@ class RegionExploreServiceTest {
 			// MSG-341 FR-1·FR-8: 구역 안 카드는 zoneName+zoneCell 을 얻고, 구역 밖 카드는 둘 다 null 이다.
 			// 카드가 2장이어도 resolver() 는 1회 — 항목마다 zones 를 다시 읽는 N+1 이 아님을 고정한다.
 			given(videoRepository.findExploreGridsPopular(REGION_CODE, null)).willReturn(List.of(
-				cardProjection("38879_112390", 38879L, 112390L, 138, null),
-				cardProjection("41642_110458", 41642L, 110458L, 12, null)));
+				cardProjection("16676_11596", 16676L, 11596L, 138, null),
+				cardProjection("19422_9582", 19422L, 9582L, 12, null)));
 			givenSummary("부전2동", 2, 150L);
 
 			RegionExploreResponseDto result =
 				regionExploreService.getRegionGrids(REGION_CODE, ExploreSort.POPULAR, null);
 
-			// maxGridY(38884) − 38879 = 5 → 'F', 112390 − minGridX(112385) + 1 = 6
+			// maxGridY(16681) − 16676 = 5 → 'F', 11596 − minGridX(11591) + 1 = 6
 			assertThat(result.grids().get(0).zoneName()).isEqualTo("서면");
 			assertThat(result.grids().get(0).zoneCell()).isEqualTo("F-6");
 			assertThat(result.grids().get(1).zoneName()).isNull();

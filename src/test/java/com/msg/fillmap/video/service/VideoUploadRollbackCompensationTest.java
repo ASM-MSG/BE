@@ -1,7 +1,5 @@
 package com.msg.fillmap.video.service;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,6 +42,8 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 
 import com.msg.fillmap.grid.GridEncoder;
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
+import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -68,10 +68,11 @@ class VideoUploadRollbackCompensationTest {
 
 	// 다른 테스트(VideoRegionStatsAtomicityTest 40000/108700 등)와 안 겹치는 서해 공해상 격자.
 	// 무라벨(region 없음)이라 region_stats 가 안 생겨 수집률 경로와도 독립이다.
-	private static final long GY = 39500L;
-	private static final long GX = 108600L;
-	private static final double LAT = (GY + 0.5) * GRID_LAT_STEP;
-	private static final double LON = (GX + 0.5) * GRID_LNG_STEP;
+	private static final long GY = 17314L;
+	private static final long GX = 7634L;
+	private static final GridPoint CENTER = GridFixtures.pointAt(GY + 0.5, GX + 0.5);
+	private static final double LAT = CENTER.lat();
+	private static final double LON = CENTER.lon();
 
 	@Autowired
 	private VideoService videoService;

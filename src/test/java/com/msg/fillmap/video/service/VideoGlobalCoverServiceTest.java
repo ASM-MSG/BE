@@ -43,7 +43,7 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 @DisplayName("VideoService 격자 전역 대표 조회")
 class VideoGlobalCoverServiceTest {
 
-	private static final String GRID_ID = "41642_110458";
+	private static final String GRID_ID = "19422_9582";
 	private static final String THUMB_KEY = "videos/thumb/1042.jpg";
 
 	private VideoRepository videoRepository;

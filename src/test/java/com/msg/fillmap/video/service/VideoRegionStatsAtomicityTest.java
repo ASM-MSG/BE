@@ -1,9 +1,7 @@
 package com.msg.fillmap.video.service;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
-import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
+import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static com.msg.fillmap.region.RegionTestFixtures.syntheticCode;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -31,6 +29,8 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import com.msg.fillmap.grid.GridEncoder;
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
+import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -50,10 +50,11 @@ import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 class VideoRegionStatsAtomicityTest {
 
 	// VideoRegionStatsIntegrationTest 와 안 겹치는 별도 서해 공해상 격자(중심 ≈ 위도 36.0·경도 125.0).
-	private static final long GY = 40000L;
-	private static final long GX = 108700L;
-	private static final double LAT = (GY + 0.5) * GRID_LAT_STEP;
-	private static final double LON = (GX + 0.5) * GRID_LNG_STEP;
+	private static final long GY = 17810L;
+	private static final long GX = 7751L;
+	private static final GridPoint CENTER = GridFixtures.pointAt(GY + 0.5, GX + 0.5);
+	private static final double LAT = CENTER.lat();
+	private static final double LON = CENTER.lon();
 
 	@Autowired
 	private VideoService videoService;
@@ -87,9 +88,7 @@ class VideoRegionStatsAtomicityTest {
 		// region·user 를 먼저 커밋해 둔다 — saveVideo 롤백을 별도 트랜잭션에서 관찰하기 위해서다.
 		tx.executeWithoutResult(status -> {
 			userId = userRepository.save(User.createLocalUser("stats-atomic@example.com", "hash", "원자")).getId();
-			String polygon = rectanglePolygonJson(
-				GX * GRID_LNG_STEP, GY * GRID_LAT_STEP,
-				(GX + 3) * GRID_LNG_STEP, (GY + 3) * GRID_LAT_STEP);
+			String polygon = cellBlockPolygonJson(GY, GY + 3, GX, GX + 3);
 			regionRepository.upsert(regionCode, "합성동", regionCode.substring(0, 5), polygon, CELL_AREA_M2);
 		});
 	}

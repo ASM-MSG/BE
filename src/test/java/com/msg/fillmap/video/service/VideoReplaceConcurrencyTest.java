@@ -40,7 +40,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 
 import com.msg.fillmap.global.exception.ApiException;
-import com.msg.fillmap.grid.GridConstants;
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -73,8 +73,8 @@ import com.msg.fillmap.video.support.GeoSupport;
 class VideoReplaceConcurrencyTest {
 
 	// 서해 공해상 합성 격자 인덱스 — 실데이터·다른 동시성 트랙(m243: 40243 대역)과 겹치지 않는 대역.
-	private static final long GY = 40247L;
-	private static final long GX = 108670L;
+	private static final long GY = 18058L;
+	private static final long GX = 7726L;
 
 	private static final long POLL_INTERVAL_MS = 20L;
 	private static final long PROTOCOL_TIMEOUT_SEC = 15L;
@@ -200,8 +200,9 @@ class VideoReplaceConcurrencyTest {
 	}
 
 	private long saveActiveVideo(String suffix) {
-		double lat = (GY + 0.5) * GridConstants.GRID_LAT_STEP;
-		double lon = (GX + 0.5) * GridConstants.GRID_LNG_STEP;
+		GridPoint center = GridFixtures.pointAt(GY + 0.5, GX + 0.5);
+		double lat = center.lat();
+		double lon = center.lon();
 		return videoRepository.save(Video.create(
 			userId, gridId, "videos/original/%d/m247-%s.mp4".formatted(userId, suffix),
 			GeoSupport.toPoint(lat, lon), (short) 10, LocalDateTime.now(ZoneOffset.UTC), Visibility.PRIVATE)).getId();

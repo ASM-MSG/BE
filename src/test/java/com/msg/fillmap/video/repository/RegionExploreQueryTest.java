@@ -1,9 +1,7 @@
 package com.msg.fillmap.video.repository;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
-import static com.msg.fillmap.region.RegionTestFixtures.rectanglePolygonJson;
+import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.lang.reflect.Method;
@@ -20,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.user.entity.User;
@@ -41,8 +40,8 @@ import com.msg.fillmap.video.entity.Video;
 @DisplayName("VideoRepository 전역 탐색 조회 (격자 카드·헤더 카운트·전체 지역, 실 PostGIS)")
 class RegionExploreQueryTest {
 
-	private static final long GY0 = 39800L;
-	private static final long GX0 = 108800L;
+	private static final long GY0 = 17608L;
+	private static final long GX0 = 7850L;
 	private static final String REGION_A = "9995400001";
 	private static final String REGION_B = "9995400002";
 	private static final String REGION_C = "9995400003";
@@ -62,9 +61,7 @@ class RegionExploreQueryTest {
 
 	/** 격자 (GY0+gyOffset, GX0) 대역을 덮는 합성 행정동(3×3 블록)을 upsert 한다. */
 	private void seedRegion(String code, String name, long gyOffset) {
-		String polygon = rectanglePolygonJson(
-			GX0 * GRID_LNG_STEP, (GY0 + gyOffset) * GRID_LAT_STEP,
-			(GX0 + 3) * GRID_LNG_STEP, (GY0 + gyOffset + 3) * GRID_LAT_STEP);
+		String polygon = cellBlockPolygonJson(GY0 + gyOffset, GY0 + gyOffset + 3, GX0, GX0 + 3);
 		regionRepository.upsert(code, name, code.substring(0, 5), polygon, CELL_AREA_M2);
 	}
 
@@ -103,7 +100,7 @@ class RegionExploreQueryTest {
 	 * 격자 귀속은 grid_id 로만 정해진다(geom 은 탐색 쿼리에 무관 — 격자 축 귀속 검증용으로 옆 동 좌표를 넣을 수 있다).
 	 */
 	private long seedVideo(long userId, String gridId, String thumbnailKey, String processingStatus,
-		String visibility, String status, long viewCount, double lon, double lat, LocalDateTime createdAt) {
+		String visibility, String status, long viewCount, GridPoint point, LocalDateTime createdAt) {
 		String originalKey = "videos/original/m238-" + UUID.randomUUID() + ".mp4";
 		em.createNativeQuery("""
 			INSERT INTO videos (
@@ -120,8 +117,8 @@ class RegionExploreQueryTest {
 			.setParameter("gridId", gridId)
 			.setParameter("originalKey", originalKey)
 			.setParameter("thumbKey", thumbnailKey)
-			.setParameter("lon", lon)
-			.setParameter("lat", lat)
+			.setParameter("lon", point.lon())
+			.setParameter("lat", point.lat())
 			.setParameter("createdAt", createdAt)
 			.setParameter("processingStatus", processingStatus)
 			.setParameter("visibility", visibility)
@@ -136,7 +133,7 @@ class RegionExploreQueryTest {
 	/** 전역 노출 게이트(READY·PUBLIC·ACTIVE)를 통과하는 영상 — 좌표는 region A 격자 중심점. */
 	private long gated(long userId, String gridId, String thumbnailKey, long viewCount, LocalDateTime createdAt) {
 		return seedVideo(userId, gridId, thumbnailKey, "READY", "PUBLIC", "ACTIVE", viewCount,
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, createdAt);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), createdAt);
 	}
 
 	private static LocalDateTime at(int hour) {
@@ -174,7 +171,7 @@ class RegionExploreQueryTest {
 		String grid = seedLabeledGrid(GY0, GX0, REGION_A);
 		// 내 것이어도 전역 게이트 — PRIVATE 는 전역 탐색에 안 잡힌다(87/237 전역 축 동일).
 		seedVideo(me, grid, "thumbs/m238-private.jpg", "READY", "PRIVATE", "ACTIVE", 99L,
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		assertThat(videoRepository.findExploreGridsPopular(REGION_A, null)).isEmpty();
 	}
@@ -187,7 +184,7 @@ class RegionExploreQueryTest {
 		String grid = seedLabeledGrid(GY0, GX0, REGION_A);
 		// READY MUST — 162 §도메인3. 인코딩 중(PUBLIC 이어도)은 노출 불가.
 		seedVideo(me, grid, null, "ENCODING", "PUBLIC", "ACTIVE", 99L,
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		assertThat(videoRepository.findExploreGridsPopular(REGION_A, null)).isEmpty();
 	}
@@ -200,7 +197,7 @@ class RegionExploreQueryTest {
 		String grid = seedLabeledGrid(GY0, GX0, REGION_A);
 		gated(me, grid, "thumbs/m238-alive.jpg", 5L, BASE);
 		seedVideo(me, grid, "thumbs/m238-deleted.jpg", "READY", "PUBLIC", "DELETED", 99L,
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		List<ExploreGridProjection> cards = videoRepository.findExploreGridsPopular(REGION_A, null);
 
@@ -261,7 +258,7 @@ class RegionExploreQueryTest {
 		gated(me, stale, "thumbs/m238-l3.jpg", 99L, at(11));   // stale 의 최신 공개 = 11시 (조회수 무관)
 		// 게이트 밖(PRIVATE) 최신 영상은 MAX 에 안 잡힌다 — stale 이 앞서지 않는다.
 		seedVideo(me, stale, "thumbs/m238-l4.jpg", "READY", "PRIVATE", "ACTIVE", 0L,
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, at(13));
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), at(13));
 
 		List<ExploreGridProjection> cards = videoRepository.findExploreGridsLatest(REGION_A, null);
 
@@ -277,7 +274,7 @@ class RegionExploreQueryTest {
 		String grid = seedLabeledGrid(GY0, GX0, REGION_A);
 		// 영상 좌표는 옆 동(B) 안이지만 격자 라벨은 A — 격자 축이라 A 탐색에 잡혀야 한다(167 DoD 계승).
 		seedVideo(me, grid, "thumbs/m238-nextdoor.jpg", "READY", "PUBLIC", "ACTIVE", 5L,
-			(GX0 + 1.5) * GRID_LNG_STEP, (GY0 + 11.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 11.5, GX0 + 1.5), BASE);
 
 		assertThat(videoRepository.findExploreGridsPopular(REGION_A, null))
 			.extracting(ExploreGridProjection::getGridId).containsExactly(grid);
@@ -342,9 +339,9 @@ class RegionExploreQueryTest {
 		gated(me, grid1, "thumbs/m238-c2.jpg", 3L, BASE);
 		gated(me, grid2, "thumbs/m238-c3.jpg", 1L, BASE);
 		seedVideo(me, grid1, "thumbs/m238-c4.jpg", "READY", "PRIVATE", "ACTIVE", 9L,
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 		seedVideo(me, gatedOut, null, "ENCODING", "PUBLIC", "ACTIVE", 0L,
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		RegionExploreSummaryProjection summary = videoRepository.getRegionExploreSummary(REGION_A).orElseThrow();
 		List<ExploreGridProjection> cards = videoRepository.findExploreGridsPopular(REGION_A, null);
@@ -382,7 +379,7 @@ class RegionExploreQueryTest {
 		seedRegionA();
 		String grid = seedLabeledGrid(GY0, GX0, REGION_A);
 		seedVideo(me, grid, "thumbs/m238-e1.jpg", "READY", "PRIVATE", "ACTIVE", 5L,
-			(GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		RegionExploreSummaryProjection summary = videoRepository.getRegionExploreSummary(REGION_A).orElseThrow();
 
@@ -413,7 +410,7 @@ class RegionExploreQueryTest {
 		gated(me, seedLabeledGrid(GY0, GX0 + 1, REGION_A), "thumbs/m238-x2.jpg", 3L, BASE);
 		gated(me, seedLabeledGrid(GY0 + 10, GX0, REGION_B), "thumbs/m238-x3.jpg", 1L, BASE);
 		seedVideo(me, seedLabeledGrid(GY0 + 20, GX0, REGION_C), "thumbs/m238-x4.jpg", "READY", "PRIVATE",
-			"ACTIVE", 9L, (GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			"ACTIVE", 9L, GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		List<RegionGridCountProjection> rows = syntheticRows();
 
@@ -433,7 +430,7 @@ class RegionExploreQueryTest {
 		gated(me, seedLabeledGrid(GY0, GX0, REGION_A), "thumbs/m238-y1.jpg", 5L, BASE);
 		gated(me, seedLabeledGrid(GY0, GX0 + 1, REGION_A), "thumbs/m238-y2.jpg", 3L, BASE);
 		seedVideo(me, seedLabeledGrid(GY0, GX0 + 2, REGION_A), "thumbs/m238-y3.jpg", "READY", "PRIVATE",
-			"ACTIVE", 9L, (GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			"ACTIVE", 9L, GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		RegionGridCountProjection row = syntheticRows().get(0);
 
@@ -448,7 +445,7 @@ class RegionExploreQueryTest {
 		long me = newUser();
 		seedRegionC();
 		seedVideo(me, seedLabeledGrid(GY0 + 20, GX0, REGION_C), "thumbs/m238-z1.jpg", "READY", "PRIVATE",
-			"ACTIVE", 9L, (GX0 + 0.5) * GRID_LNG_STEP, (GY0 + 0.5) * GRID_LAT_STEP, BASE);
+			"ACTIVE", 9L, GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
 		assertThat(syntheticRows()).isEmpty();
 	}

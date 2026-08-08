@@ -35,8 +35,8 @@ import com.msg.fillmap.video.support.GeoSupport;
 @DisplayName("VideoStatusWriter → VIDEO 알림 배선 (실 PostGIS)")
 class VideoNotificationIntegrationTest {
 
-	private static final long GRID_Y = 40313L;
-	private static final long GRID_X = 108670L;
+	private static final long GRID_Y = 18123L;
+	private static final long GRID_X = 7728L;
 	private static final String ENCODED_KEY = "videos/encoded/1/n.mp4";
 	private static final String THUMBNAIL_KEY = "videos/thumb/1/n.jpg";
 

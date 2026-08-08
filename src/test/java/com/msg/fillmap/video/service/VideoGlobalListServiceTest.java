@@ -50,7 +50,7 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 @DisplayName("VideoService 격자 전역 영상 목록 조회")
 class VideoGlobalListServiceTest {
 
-	private static final String GRID_ID = "41642_110458";
+	private static final String GRID_ID = "19422_9582";
 
 	private VideoRepository videoRepository;
 	private VideoService videoService;
@@ -205,7 +205,7 @@ class VideoGlobalListServiceTest {
 	void 다른_격자에서_발급된_커서는_400_INVALID_CURSOR다() {
 		// 격자 A 의 커서를 격자 B 요청에 재사용하면 경계값이 B 의 keyset 으로 오적용돼 결과가 조용히
 		// 잘린다 — 커서의 gridId 성분을 요청 격자와 대조해 거부한다 (2026-07-28 Codex 교차 리뷰 P2).
-		String foreignCursor = VideoCursor.encode("41000_110000", 20L, at(9), 2L);
+		String foreignCursor = VideoCursor.encode("18784_9109", 20L, at(9), 2L);
 
 		assertThatThrownBy(() -> videoService.getGridGlobalVideos(GRID_ID, foreignCursor, 20))
 			.isInstanceOf(ApiException.class)

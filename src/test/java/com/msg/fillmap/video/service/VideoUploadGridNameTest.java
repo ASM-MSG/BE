@@ -50,17 +50,17 @@ class VideoUploadGridNameTest {
 	private static final long USER_ID = 1L;
 	private static final long VIDEO_ID = 7L;
 	// 37.5445, 127.0560 의 격자 — VideoHotScoreTest 와 동일 좌표.
-	private static final String GRID_ID = "41716_110483";
-	/** GRID_ID 를 덮는 구역 — 행 = 'A' + (41720 − 41716) = 'E', 열 = 110483 − 110480 + 1 = 4. */
+	private static final String GRID_ID = "19495_9607";
+	/** GRID_ID 를 덮는 구역 — 행 = 'A' + (19499 − 19495) = 'E', 열 = 9607 − 9604 + 1 = 4. */
 	private static final Zone SEOMYEON = Zone.builder()
 		.zoneKey("seomyeon").name("서면")
-		.minGridY(41710).maxGridY(41720).minGridX(110480).maxGridX(110490)
+		.minGridY(19489).maxGridY(19499).minGridX(9604).maxGridX(9614)
 		.priority(0)
 		.build();
 	/** GRID_ID 를 벗어난 구역 — 어느 사각형에도 안 들면 두 필드가 null 이어야 한다. */
 	private static final Zone ELSEWHERE = Zone.builder()
 		.zoneKey("elsewhere").name("딴구역")
-		.minGridY(38870).maxGridY(38884).minGridX(112385).maxGridX(112400)
+		.minGridY(16667).maxGridY(16681).minGridX(11591).maxGridX(11606)
 		.priority(0)
 		.build();
 

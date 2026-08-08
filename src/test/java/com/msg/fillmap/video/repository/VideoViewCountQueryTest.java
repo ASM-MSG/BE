@@ -1,7 +1,5 @@
 package com.msg.fillmap.video.repository;
 
-import static com.msg.fillmap.grid.GridConstants.GRID_LAT_STEP;
-import static com.msg.fillmap.grid.GridConstants.GRID_LNG_STEP;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
@@ -27,6 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -43,9 +42,9 @@ import com.msg.fillmap.video.support.GeoSupport;
 @DisplayName("VideoRepository 재생 조회수 증가 (실 PostGIS)")
 class VideoViewCountQueryTest {
 
-	// VideoRegionStatsAtomicityTest(40000_108700) 와 겹치지 않는 별도 서해 공해상 격자.
-	private static final long GY = 40000L;
-	private static final long GX = 108720L;
+	// VideoRegionStatsAtomicityTest(17810_7751) 와 겹치지 않는 별도 서해 공해상 격자.
+	private static final long GY = 17810L;
+	private static final long GX = 7772L;
 
 	@Autowired
 	private VideoRepository videoRepository;
@@ -85,9 +84,8 @@ class VideoViewCountQueryTest {
 
 	/** view_count 기본 0(Video 생성자)으로 저장한 영상 하나. */
 	private long insertVideo() {
-		double lat = (GY + 0.5) * GRID_LAT_STEP;
-		double lon = (GX + 0.5) * GRID_LNG_STEP;
-		Point geom = GeoSupport.toPoint(lat, lon);
+		GridPoint center = GridFixtures.pointAt(GY + 0.5, GX + 0.5);
+		Point geom = GeoSupport.toPoint(center.lat(), center.lon());
 		String key = "videos/original/" + UUID.randomUUID() + ".mp4";   // uq_videos_original_s3_key
 		return videoRepository.save(
 			Video.create(userId, gridId, key, geom, (short) 10, LocalDateTime.now(), Visibility.PRIVATE)).getId();

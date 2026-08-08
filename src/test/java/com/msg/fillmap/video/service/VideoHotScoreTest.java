@@ -50,7 +50,7 @@ class VideoHotScoreTest {
 	private static final long USER_ID = 1L;
 	private static final long VIDEO_ID = 7L;
 	// 37.5445, 127.0560 의 격자 — VideoEncodingTriggerTest 와 동일 좌표.
-	private static final String GRID_ID = "41716_110483";
+	private static final String GRID_ID = "19495_9607";
 
 	private VideoRepository repository;
 	private HotScoreCommandService hotScoreCommandService;

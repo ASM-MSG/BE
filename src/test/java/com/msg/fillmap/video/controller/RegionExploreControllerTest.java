@@ -61,7 +61,7 @@ class RegionExploreControllerTest {
 
 	private RegionExploreResponseDto responseWithCard(String coverThumbnailUrl) {
 		return new RegionExploreResponseDto(REGION_CODE, "부산광역시 부산진구 부전2동", 5, 355L,
-			List.of(new ExploreGridResponseDto("38879_112390", 38879L, 112390L, 138,
+			List.of(new ExploreGridResponseDto("16676_11596", 16676L, 11596L, 138,
 				coverThumbnailUrl, (short) 12, "서면", "F-6")));
 	}
 
@@ -81,9 +81,9 @@ class RegionExploreControllerTest {
 			.andExpect(jsonPath("$.data.regionName").value("부산광역시 부산진구 부전2동"))
 			.andExpect(jsonPath("$.data.gridCount").value(5))
 			.andExpect(jsonPath("$.data.videoCount").value(355))
-			.andExpect(jsonPath("$.data.grids[0].gridId").value("38879_112390"))
-			.andExpect(jsonPath("$.data.grids[0].gridY").value(38879))
-			.andExpect(jsonPath("$.data.grids[0].gridX").value(112390))
+			.andExpect(jsonPath("$.data.grids[0].gridId").value("16676_11596"))
+			.andExpect(jsonPath("$.data.grids[0].gridY").value(16676))
+			.andExpect(jsonPath("$.data.grids[0].gridX").value(11596))
 			.andExpect(jsonPath("$.data.grids[0].videoCount").value(138))
 			.andExpect(jsonPath("$.data.grids[0].coverDurationSec").value(12))
 			.andExpect(jsonPath("$.data.grids[0].coverThumbnailUrl", containsString("X-Amz-Algorithm")))
