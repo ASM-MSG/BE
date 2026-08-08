@@ -254,10 +254,22 @@ class GridEpsg5179MigrationTest {
 	 */
 	private void runMigration() {
 		em.flush();
+		assertThat(missionGridsWithoutGrid())
+			.as("grids 행이 없는 mission_grids 가 있으면 이 재실행이 그 행의 새 ID 를 구 규칙으로 다시 파싱해 "
+				+ "엉뚱한 값을 만든다(예 17413_7646 → 위도 15.7·경도 8.8, 유효 범위라 V28 가드에도 안 걸린다). "
+				+ "배포 때 V28 은 Flyway 로 한 번만 돌아 무관하지만, 여기서는 이행 결과를 신뢰할 수 없다")
+			.isZero();
 		for (String statement : statements(readMigration())) {
 			em.createNativeQuery(statement).executeUpdate();
 		}
 		em.clear();
+	}
+
+	private long missionGridsWithoutGrid() {
+		return scalar("""
+			SELECT COUNT(*) FROM mission_grids mg
+			WHERE NOT EXISTS (SELECT 1 FROM grids g WHERE g.grid_id = mg.grid_id)
+			""");
 	}
 
 	private static String readMigration() {
