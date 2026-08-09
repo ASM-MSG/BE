@@ -28,8 +28,10 @@ FillMap의 핵심 공간 모델. 용어 정의는 `.claude/rules/glossary.md`가
 
 정확한 변환 상수(좌표계 정의 문자열·셀 크기)는 `GridEncoder`/`GridConstants`에 정의한다.
 이 문서에서 수식을 중복 기재하지 않는다 — 드리프트를 막기 위해 코드를 참조할 것.
-서버(Proj4J)·프론트(proj4js)·이행 SQL(ST_Transform)은 `GridConstants.CRS_DEF_EPSG5179` 문자열
-하나를 글자 단위로 공유한다. 정합성 검증 자료는 `src/test/resources/fixtures/grid-epsg5179-samples.json`
+서버(Proj4J)·프론트(proj4js)는 `GridConstants.CRS_DEF_EPSG5179` 문자열 하나를 글자 단위로 공유한다.
+이행 SQL은 `ST_Transform`에 SRID 5179를 넘기고(문자열 전달은 호출당 106배 느려 dev 배포가 멈췄다 —
+MSG-347 2026-08-09), 대신 이행 전에 DB의 `spatial_ref_sys` 정의가 그 문자열과 같은지 검사한다.
+정합성 검증 자료는 `src/test/resources/fixtures/grid-epsg5179-samples.json`
 (전국 200건). 2026-08-08 MSG-347에서 위경도 등간격 근사(0.0009°/0.00115°)를 대체했다.
 
 ## 저장 구조
