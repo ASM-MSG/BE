@@ -2,9 +2,12 @@
 -- MSG-347: 격자 계산 규칙을 위경도 등간격 근사(0.0009°/0.00115°)에서 EPSG:5179 미터 평면으로 전환하고
 -- 저장된 격자 참조를 전량 이행한다. 스키마(컬럼·타입·제약) 변경은 없고 데이터만 바뀐다.
 --
--- 좌표 변환은 spatial_ref_sys 의 내장 EPSG:5179 정의가 아니라 계약 문자열(아래 pg_temp.crs_5179)을
--- ST_Transform 인자로 직접 넘긴다. 앱(GridConstants.CRS_DEF_EPSG5179 · Proj4J)·FE(proj4js)와 글자 단위로
--- 같은 정의를 써야 셀 경계 근처가 어긋나지 않기 때문이다.
+-- 좌표 변환은 SRID 5179 로 넘긴다. 계약 문자열(아래 pg_temp.crs_5179)을 ST_Transform 인자로 직접 주면
+-- PostGIS 가 행마다 PROJ 파이프라인을 새로 만들어 호출당 0.846ms 가 든다(SRID 경로는 좌표계 캐시를 타서
+-- 0.008ms, 로컬 PostGIS 16-3.4 동일 식 실측 106배). 이행이 수 분간 멈춰 dev 배포 헬스체크가 터진 원인이었다.
+-- 값은 같다 — 이 DB 의 spatial_ref_sys 5179 proj4text 는 계약 문자열과 바이트 단위로 동일하고,
+-- 전국 5,000점 대조에서 두 경로의 grid_id 불일치가 0건이었다. pg_temp.crs_5179 는 그 동일성을 남기는
+-- 기록으로만 남긴다(아래 사전 검사에서 실제로 대조한다).
 --
 -- 모든 재계산이 보존된 원본(videos.geom · grids.center_geom)에서 출발하므로 flyway clean 후 재실행해도
 -- 같은 값으로 수렴한다(멱등). 전 구문이 트랜잭션 안전하다 — CONCURRENTLY 같은 비트랜잭션 구문 없음.
@@ -18,29 +21,41 @@ CREATE FUNCTION pg_temp.crs_5179() RETURNS text LANGUAGE sql IMMUTABLE AS $$
 		|| '+towgs84=0,0,0,0,0,0,0 +units=m +no_defs'
 $$;
 
-CREATE FUNCTION pg_temp.crs_wgs84() RETURNS text LANGUAGE sql IMMUTABLE AS $$
-	SELECT '+proj=longlat +datum=WGS84 +no_defs'
-$$;
+-- SRID 경로를 쓰는 전제 검사: 이 DB 의 5179 정의가 앱·FE 계약 문자열과 다르면 격자가 미묘하게 어긋난
+-- 채로 전량 이행된다. 사후 발견이 불가능한 종류의 오차라 이행 전에 막는다.
+DO $$
+DECLARE
+	registered text;
+BEGIN
+	SELECT proj4text INTO registered FROM spatial_ref_sys WHERE srid = 5179;
+
+	IF registered IS NULL THEN
+		RAISE EXCEPTION 'spatial_ref_sys 에 SRID 5179 가 없어 이행할 수 없다';
+	END IF;
+
+	IF btrim(registered) <> btrim(pg_temp.crs_5179()) THEN
+		RAISE EXCEPTION 'SRID 5179 정의가 계약 문자열과 다르다. 등록값=[%], 계약=[%]',
+			registered, pg_temp.crs_5179();
+	END IF;
+END $$;
 
 -- 위경도 점 → 새 격자 ID. floor 반열림 구간 [n*100m, (n+1)*100m) 로 GridEncoder.encode 와 같은 규칙이다.
 CREATE FUNCTION pg_temp.grid_id_5179(point geometry) RETURNS varchar LANGUAGE sql IMMUTABLE AS $$
 	SELECT (floor(ST_Y(m) / 100)::bigint || '_' || floor(ST_X(m) / 100)::bigint)::varchar
-	FROM (SELECT ST_Transform(point, pg_temp.crs_wgs84(), pg_temp.crs_5179()) AS m) t
+	FROM (SELECT ST_Transform(ST_SetSRID(point, 4326), 5179) AS m) t
 $$;
 
 -- 격자 인덱스 → 셀 중심 위경도. 5179 평면에서 중심을 잡고 4326 으로 되돌린다.
 CREATE FUNCTION pg_temp.cell_center(grid_y bigint, grid_x bigint) RETURNS geometry LANGUAGE sql IMMUTABLE AS $$
-	SELECT ST_SetSRID(ST_Transform(
-		ST_MakePoint((grid_x + 0.5) * 100, (grid_y + 0.5) * 100),
-		pg_temp.crs_5179(), pg_temp.crs_wgs84()), 4326)
+	SELECT ST_Transform(
+		ST_SetSRID(ST_MakePoint((grid_x + 0.5) * 100, (grid_y + 0.5) * 100), 5179), 4326)
 $$;
 
 -- 격자 인덱스 → 셀 경계 폴리곤. 5179 사각형의 꼭짓점 4점을 각각 되돌리므로 위경도 평면에서는
 -- 자오선 수렴만큼 기울어진 사각형이 된다(FR-4 — 남서/북동 2점으로 복원 불가).
 CREATE FUNCTION pg_temp.cell_bbox(grid_y bigint, grid_x bigint) RETURNS geometry LANGUAGE sql IMMUTABLE AS $$
-	SELECT ST_SetSRID(ST_Transform(
-		ST_MakeEnvelope(grid_x * 100, grid_y * 100, (grid_x + 1) * 100, (grid_y + 1) * 100),
-		pg_temp.crs_5179(), pg_temp.crs_wgs84()), 4326)
+	SELECT ST_Transform(
+		ST_MakeEnvelope(grid_x * 100, grid_y * 100, (grid_x + 1) * 100, (grid_y + 1) * 100, 5179), 4326)
 $$;
 
 -- ============================================================================
