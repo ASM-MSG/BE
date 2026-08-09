@@ -108,7 +108,7 @@ public class RegionController {
 	@GetMapping("/stats/by-grid")
 	public SuccessResponse<RegionStatResponseDto> getStatByGrid(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
-		@Parameter(description = "격자 ID \"{grid_y}_{grid_x}\"", required = true, example = "41642_110458")
+		@Parameter(description = "격자 ID \"{grid_y}_{grid_x}\"", required = true, example = "19422_9582")
 		@RequestParam(required = false) String gridId
 	) {
 		RegionStatResponseDto body = regionStatsQueryService.findStatByGrid(principal.userId(), gridId)

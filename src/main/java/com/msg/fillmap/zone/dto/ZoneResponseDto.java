@@ -21,16 +21,16 @@ public record ZoneResponseDto(
 		nullable = true)
 	String regionCode,
 
-	@Schema(description = "사각형 남단 행 (zones.min_grid_y)", example = "39710")
+	@Schema(description = "사각형 남단 행 (zones.min_grid_y)", example = "16850")
 	Integer minGridY,
 
-	@Schema(description = "사각형 북단 행 = A행 (zones.max_grid_y)", example = "39725")
+	@Schema(description = "사각형 북단 행 = A행 (zones.max_grid_y)", example = "16866")
 	Integer maxGridY,
 
-	@Schema(description = "사각형 서단 열 = 1열 (zones.min_grid_x)", example = "109830")
+	@Schema(description = "사각형 서단 열 = 1열 (zones.min_grid_x)", example = "11414")
 	Integer minGridX,
 
-	@Schema(description = "사각형 동단 열 (zones.max_grid_x)", example = "109850")
+	@Schema(description = "사각형 동단 열 (zones.max_grid_x)", example = "11424")
 	Integer maxGridX,
 
 	@Schema(description = "겹침 결정성 우선순위 (zones.priority)", example = "0")

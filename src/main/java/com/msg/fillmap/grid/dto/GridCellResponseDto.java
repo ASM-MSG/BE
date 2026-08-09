@@ -11,7 +11,7 @@ import com.msg.fillmap.grid.service.GridCellView;
 @Schema(description = "단일 격자의 내 색칠(점령) 상태. 미점령이어도 404가 아니라 occupied=false로 응답한다.",
 	requiredProperties = {"gridId", "occupied", "videoCount", "zoneName", "zoneCell"})
 public record GridCellResponseDto(
-	@Schema(description = "격자 ID (\"{grid_y}_{grid_x}\" 포맷)", example = "41642_110458")
+	@Schema(description = "격자 ID (\"{grid_y}_{grid_x}\" 포맷)", example = "19422_9582")
 	String gridId,
 
 	@Schema(description = "내가 이 격자를 점령(색칠)했는지 여부", example = "true")

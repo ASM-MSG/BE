@@ -22,7 +22,7 @@ public record VideoUploadResponseDto(
 	@Schema(description = "생성된 영상 ID", example = "1001")
 	Long videoId,
 
-	@Schema(description = "매핑된 격자 ID", example = "41642_110458")
+	@Schema(description = "매핑된 격자 ID", example = "19422_9582")
 	String gridId,
 
 	@Schema(description = "영상 처리 상태 (UPLOADED/ENCODING/BLURRING/READY/FAILED)", example = "UPLOADED")

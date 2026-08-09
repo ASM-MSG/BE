@@ -16,13 +16,13 @@ import com.msg.fillmap.usergrid.service.FriendCollectionGridView;
 	requiredProperties = {"gridId", "gridY", "gridX", "firstCollectedAt", "lastUploadedAt", "videoCount",
 		"thumbnailUrl", "regionName", "zoneName", "zoneCell"})
 public record FriendCollectionGridResponseDto(
-	@Schema(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "41642_110458")
+	@Schema(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "19422_9582")
 	String gridId,
 
-	@Schema(description = "격자 Y 인덱스(지도 이동용, gridId 디코드값)", example = "41642")
+	@Schema(description = "격자 Y 인덱스(지도 이동용, gridId 디코드값)", example = "19422")
 	Integer gridY,
 
-	@Schema(description = "격자 X 인덱스(지도 이동용, gridId 디코드값)", example = "110458")
+	@Schema(description = "격자 X 인덱스(지도 이동용, gridId 디코드값)", example = "9582")
 	Integer gridX,
 
 	@Schema(description = "친구가 이 격자를 처음 수집한 시각 — 정렬 키", example = "2026-07-20T18:03:11")

@@ -42,7 +42,7 @@ public class GridVideoController {
 	@GetMapping("/api/grids/{gridId}/my-videos")
 	public SuccessResponse<List<GridVideoResponseDto>> getGridVideos(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
-		@Parameter(description = "격자 ID", example = "41642_110458") @PathVariable String gridId
+		@Parameter(description = "격자 ID", example = "19422_9582") @PathVariable String gridId
 	) {
 		return SuccessResponse.of(videoService.getGridVideos(principal.userId(), gridId));
 	}
@@ -55,7 +55,7 @@ public class GridVideoController {
 	)
 	@GetMapping("/api/grids/{gridId}/cover")
 	public SuccessResponse<GridCoverVideoResponseDto> getGridCover(
-		@Parameter(description = "격자 ID", example = "41642_110458") @PathVariable String gridId
+		@Parameter(description = "격자 ID", example = "19422_9582") @PathVariable String gridId
 	) {
 		return SuccessResponse.of(videoService.getGridCover(gridId));
 	}
@@ -70,7 +70,7 @@ public class GridVideoController {
 	)
 	@GetMapping("/api/grids/{gridId}/videos")
 	public SuccessResponse<GridVideoPageResponseDto> getGridGlobalVideos(
-		@Parameter(description = "격자 ID", example = "41642_110458") @PathVariable String gridId,
+		@Parameter(description = "격자 ID", example = "19422_9582") @PathVariable String gridId,
 		@Parameter(description = "직전 응답의 nextCursor (opaque). 생략하면 첫 페이지")
 		@RequestParam(required = false) String cursor,
 		@Parameter(description = "페이지 크기 (1~50, 기본 20)") @RequestParam(defaultValue = "20") int size

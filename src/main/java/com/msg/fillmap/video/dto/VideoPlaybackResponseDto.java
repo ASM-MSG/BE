@@ -26,7 +26,7 @@ public record VideoPlaybackResponseDto(
 	@Schema(description = "썸네일 presigned GET URL. 썸네일 key 없음(READY 이전)이면 null", nullable = true)
 	String thumbnailUrl,
 
-	@Schema(description = "이 영상이 속한 격자 ID", example = "41642_110458")
+	@Schema(description = "이 영상이 속한 격자 ID", example = "19422_9582")
 	String gridId,
 
 	@Schema(description = "영상 길이(초, 최대 30)", example = "12")
