@@ -11,7 +11,7 @@ import com.msg.fillmap.grid.service.OccupiedGridView;
 @Schema(description = "뷰포트 색칠 격자 한 칸 — 지도 렌더링용 위치 정보",
 	requiredProperties = {"gridId", "gridY", "gridX", "zoneName", "zoneCell"})
 public record OccupiedGridResponseDto(
-	@Schema(description = "격자 ID (\"{grid_y}_{grid_x}\" 포맷)", example = "41642_110458")
+	@Schema(description = "격자 ID (\"{grid_y}_{grid_x}\" 포맷)", example = "19422_9582")
 	String gridId,
 
 	@Schema(description = "격자 세로 인덱스 (위도 기반 정수)", example = "41642")

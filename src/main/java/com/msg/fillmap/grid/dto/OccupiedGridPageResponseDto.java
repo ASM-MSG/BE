@@ -16,7 +16,7 @@ public record OccupiedGridPageResponseDto(
 	List<OccupiedGridResponseDto> grids,
 
 	@Schema(description = "다음 페이지 조회용 커서. 다음 요청 cursor 파라미터에 넣는다. 마지막 페이지면 null.",
-		example = "NDE2NDNfMTEwNDYw", nullable = true)
+		example = "MTk0MjJfOTU4Mg==", nullable = true)
 	String nextCursor
 ) {
 

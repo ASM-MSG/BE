@@ -133,7 +133,7 @@ public class FriendController {
 		@RequestParam(required = false) Double neLat,
 		@Parameter(description = "북동 모서리 경도", required = true, example = "127.05")
 		@RequestParam(required = false) Double neLng,
-		@Parameter(description = "다음 페이지 커서 (직전 응답의 nextCursor). 첫 페이지는 생략", example = "NDE2NDNfMTEwNDYw")
+		@Parameter(description = "다음 페이지 커서 (직전 응답의 nextCursor). 첫 페이지는 생략", example = "MTk0MjJfOTU4Mg==")
 		@RequestParam(required = false) String cursor,
 		@Parameter(description = "페이지 크기 (기본 1000, 최대 5000)", example = "1000")
 		@RequestParam(required = false, defaultValue = "1000") int size
@@ -154,7 +154,7 @@ public class FriendController {
 	public SuccessResponse<List<FriendGridVideoResponseDto>> getFriendGridVideos(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@PathVariable Long userId,
-		@Parameter(description = "격자 ID", example = "41642_110458") @PathVariable String gridId
+		@Parameter(description = "격자 ID", example = "19422_9582") @PathVariable String gridId
 	) {
 		return SuccessResponse.of(friendService.getFriendGridVideos(principal.userId(), userId, gridId));
 	}

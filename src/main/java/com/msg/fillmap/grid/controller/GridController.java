@@ -44,7 +44,7 @@ public class GridController {
 	@GetMapping("/{gridId}")
 	public SuccessResponse<GridCellResponseDto> getCell(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
-		@Parameter(description = "격자 ID (\"{grid_y}_{grid_x}\" 포맷)", example = "41642_110458")
+		@Parameter(description = "격자 ID (\"{grid_y}_{grid_x}\" 포맷)", example = "19422_9582")
 		@PathVariable String gridId
 	) {
 		GridCellView view = gridQueryService.getCell(principal.userId(), gridId);
@@ -69,7 +69,7 @@ public class GridController {
 		@RequestParam(required = false) Double neLat,
 		@Parameter(description = "북동 모서리 경도", required = true, example = "127.05")
 		@RequestParam(required = false) Double neLng,
-		@Parameter(description = "다음 페이지 커서 (직전 응답의 nextCursor). 첫 페이지는 생략", example = "NDE2NDNfMTEwNDYw")
+		@Parameter(description = "다음 페이지 커서 (직전 응답의 nextCursor). 첫 페이지는 생략", example = "MTk0MjJfOTU4Mg==")
 		@RequestParam(required = false) String cursor,
 		@Parameter(description = "페이지 크기 (기본 1000, 최대 5000)", example = "1000")
 		@RequestParam(required = false, defaultValue = "1000") int size

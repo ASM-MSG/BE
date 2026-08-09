@@ -22,7 +22,7 @@ public record PlaceSearchResponseDto(
 	@Schema(description = "경도 (WGS84, 카카오 x)", example = "129.08246")
 	double lng,
 
-	@Schema(description = "그 좌표의 격자 ID — FE 격자 하이라이트 키 (즉석 계산, 저장 아님)", example = "39147_112245")
+	@Schema(description = "그 좌표의 격자 ID — FE 격자 하이라이트 키 (즉석 계산, 저장 아님)", example = "16941_11439")
 	String gridId,
 
 	@Schema(description = "격자가 속한 구역 이름. 구역 밖이면 null — 표시 라벨은 address 가 맡으므로 "

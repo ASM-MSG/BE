@@ -19,7 +19,7 @@ public record GridVideoPageResponseDto(
 	boolean hasNext,
 
 	@Schema(description = "다음 페이지 조회용 opaque 커서. 다음 요청 cursor 파라미터에 넣는다. 마지막 페이지면 null.",
-		example = "NDE2NDJfMTEwNDU4OjU6MTc4NDQ1NTgwMDAwMDAwMDoxMDM5", nullable = true)
+		example = "MTk0MjJfOTU4Mjo1OjE3ODQ0NTU4MDAwMDAwMDA6MTAzOQ==", nullable = true)
 	String nextCursor
 ) {
 }

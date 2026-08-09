@@ -16,7 +16,7 @@ import com.msg.fillmap.video.repository.ExploreGridProjection;
 	requiredProperties = {"gridId", "gridY", "gridX", "videoCount", "coverDurationSec", "coverThumbnailUrl",
 		"zoneName", "zoneCell"})
 public record ExploreGridResponseDto(
-	@Schema(description = "격자 ID — 카드 탭 시 격자 전역 영상 목록(MSG-237) 진입 키", example = "38879_112390")
+	@Schema(description = "격자 ID — 카드 탭 시 격자 전역 영상 목록(MSG-237) 진입 키", example = "16676_11596")
 	String gridId,
 
 	@Schema(description = "격자 위도 인덱스 (FE 지도 이동·라벨 조합)", example = "38879")

@@ -10,7 +10,7 @@ import com.msg.fillmap.hotzone.service.HotZoneView;
 @Schema(description = "핫구역 한 칸 — 최근 48시간 방문(업로드) 신호가 상위인 격자",
 	requiredProperties = {"gridId", "gridY", "gridX", "score", "zoneName", "zoneCell"})
 public record HotZoneResponseDto(
-	@Schema(description = "격자 ID (\"{grid_y}_{grid_x}\" 포맷)", example = "41642_110458")
+	@Schema(description = "격자 ID (\"{grid_y}_{grid_x}\" 포맷)", example = "19422_9582")
 	String gridId,
 
 	@Schema(description = "격자 세로 인덱스 (위도 기반 정수)", example = "41642")

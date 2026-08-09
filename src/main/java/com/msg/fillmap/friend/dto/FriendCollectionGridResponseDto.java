@@ -16,7 +16,7 @@ import com.msg.fillmap.usergrid.service.FriendCollectionGridView;
 	requiredProperties = {"gridId", "gridY", "gridX", "firstCollectedAt", "lastUploadedAt", "videoCount",
 		"thumbnailUrl", "regionName", "zoneName", "zoneCell"})
 public record FriendCollectionGridResponseDto(
-	@Schema(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "41642_110458")
+	@Schema(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "19422_9582")
 	String gridId,
 
 	@Schema(description = "격자 Y 인덱스(지도 이동용, gridId 디코드값)", example = "41642")

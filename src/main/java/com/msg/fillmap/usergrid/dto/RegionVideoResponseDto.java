@@ -20,7 +20,7 @@ public record RegionVideoResponseDto(
 	Long videoId,
 
 	@Schema(description = "영상이 속한 격자 ID \"{grid_y}_{grid_x}\" — 항목별 격자 라벨·지도 이동용",
-		example = "41642_110458")
+		example = "19422_9582")
 	String gridId,
 
 	@Schema(description = "썸네일 presigned GET URL. READY 아니면(썸네일 key 없음) null", nullable = true)
