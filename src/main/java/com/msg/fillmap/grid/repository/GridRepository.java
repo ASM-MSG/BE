@@ -1,5 +1,6 @@
 package com.msg.fillmap.grid.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,11 +31,15 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 	/**
 	 * 접근 A — 정수 범위 스캔. bbox 를 grid_y/grid_x 정수 범위로 환산해 BETWEEN 으로 필터한다.
 	 * uq_grids_yx(btree) 활용, PostGIS 연산 없음.
+	 * regions 는 LEFT JOIN 이다 (MSG-349) — 무귀속 격자(region_code NULL)를 INNER JOIN 으로 떨구면
+	 * 색칠된 칸이 지도에서 사라진다. 이름만 비고 칸은 남는 게 계약이다.
 	 */
 	@Query(value = """
-		SELECT g.grid_id AS "gridId", g.grid_y AS "gridY", g.grid_x AS "gridX"
+		SELECT g.grid_id AS "gridId", g.grid_y AS "gridY", g.grid_x AS "gridX",
+			r.region_name AS "regionName"
 		FROM user_grids ug
 		JOIN grids g ON g.grid_id = ug.grid_id
+		LEFT JOIN regions r ON r.region_code = g.region_code
 		WHERE ug.user_id = :userId
 			AND g.grid_y BETWEEN :minY AND :maxY
 			AND g.grid_x BETWEEN :minX AND :maxX
@@ -50,11 +55,14 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 	/**
 	 * 접근 A 페이지 — 첫 페이지 (MSG-90 keyset). ORDER BY (grid_y, grid_x) 가 uq_grids_yx(btree)
 	 * 정렬과 일치해 추가 정렬 비용이 없다. OFFSET 미사용, LIMIT 은 서비스의 lookahead(size + 1)다.
+	 * regions LEFT JOIN(MSG-349)은 정렬 키와 무관해 keyset 순서·lookahead 판정을 바꾸지 않는다.
 	 */
 	@Query(value = """
-		SELECT g.grid_id AS "gridId", g.grid_y AS "gridY", g.grid_x AS "gridX"
+		SELECT g.grid_id AS "gridId", g.grid_y AS "gridY", g.grid_x AS "gridX",
+			r.region_name AS "regionName"
 		FROM user_grids ug
 		JOIN grids g ON g.grid_id = ug.grid_id
+		LEFT JOIN regions r ON r.region_code = g.region_code
 		WHERE ug.user_id = :userId
 			AND g.grid_y BETWEEN :minY AND :maxY
 			AND g.grid_x BETWEEN :minX AND :maxX
@@ -73,11 +81,14 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 	/**
 	 * 접근 A 페이지 — 커서 이후 (MSG-90 keyset). PostgreSQL 행 값 비교(row-value comparison)로
 	 * (cursorY, cursorX) 보다 큰 격자만 grid_y, grid_x 순으로 이어서 반환한다.
+	 * regions LEFT JOIN(MSG-349)은 정렬 키와 무관해 keyset 순서·lookahead 판정을 바꾸지 않는다.
 	 */
 	@Query(value = """
-		SELECT g.grid_id AS "gridId", g.grid_y AS "gridY", g.grid_x AS "gridX"
+		SELECT g.grid_id AS "gridId", g.grid_y AS "gridY", g.grid_x AS "gridX",
+			r.region_name AS "regionName"
 		FROM user_grids ug
 		JOIN grids g ON g.grid_id = ug.grid_id
+		LEFT JOIN regions r ON r.region_code = g.region_code
 		WHERE ug.user_id = :userId
 			AND g.grid_y BETWEEN :minY AND :maxY
 			AND g.grid_x BETWEEN :minX AND :maxX
@@ -95,6 +106,20 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 		@Param("cursorX") long cursorX,
 		@Param("limit") int limit
 	);
+
+	/**
+	 * 격자 여러 개의 행정동 이름을 한 번에 읽는다 (MSG-349, 핫구역 상위 K ≤ 50건). 결과가 응답 항목이 아니라
+	 * "gridId → 이름" 사전이라 여기는 INNER JOIN 이다 — 무귀속 격자는 결과에 안 나타나고 맵 miss 로 null 이
+	 * 된다. Collectors.toMap 은 null 값에서 NPE 를 던지므로 null 행을 아예 안 받는 쪽이 조립을 단순하게 한다.
+	 * 빈 목록으로 부르면 IN () 이 SQL 문법 오류라 호출부가 0건일 때 호출을 생략한다.
+	 */
+	@Query(value = """
+		SELECT g.grid_id AS "gridId", r.region_name AS "regionName"
+		FROM grids g
+		JOIN regions r ON r.region_code = g.region_code
+		WHERE g.grid_id IN (:gridIds)
+		""", nativeQuery = true)
+	List<GridRegionNameProjection> findRegionNames(@Param("gridIds") Collection<String> gridIds);
 
 	/**
 	 * 접근 B — GIST 공간 쿼리. ST_MakeEnvelope 인자는 (경도, 위도) 순서다(PostGIS 축 순서).

@@ -18,6 +18,8 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
+import com.msg.fillmap.region.RegionTestFixtures;
+import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 
@@ -30,8 +32,16 @@ class GridRepositoryTest {
 	private static final double 성수_LAT = 37.5445;
 	private static final double 성수_LON = 127.0560;
 
+	// 실존하지 않는 sido 999 대역 합성 행정동 (MSG-349) — 라벨 조인 검증용. 경계 도형은 서해 공해상이라
+	// 실데이터·타 트랙의 ST_Covers 판정에 끼어들지 않는다. 이 테스트는 저장 라벨(region_code)만 equi 로 읽는다.
+	private static final String REGION_CODE = "9996000001";
+	private static final String REGION_NAME = "합성시 합성구 합성349동";
+
 	@Autowired
 	private GridRepository gridRepository;
+
+	@Autowired
+	private RegionRepository regionRepository;
 
 	@Autowired
 	private UserRepository userRepository;
@@ -121,6 +131,61 @@ class GridRepositoryTest {
 
 	private List<String> gridIds(List<OccupiedGridProjection> rows) {
 		return rows.stream().map(OccupiedGridProjection::getGridId).toList();
+	}
+
+	/** 합성 행정동 1건을 넣고 지정 격자에 저장 라벨(region_code)을 건다 — 프로덕션 upsertGrid 라벨 상태 재현. */
+	private void label(String gridId) {
+		regionRepository.upsert(REGION_CODE, REGION_NAME, REGION_CODE.substring(0, 5),
+			RegionTestFixtures.rectanglePolygonJson(124.10, 36.10, 124.12, 36.12),
+			RegionTestFixtures.CELL_AREA_M2);
+		em.createNativeQuery("UPDATE grids SET region_code = :code WHERE grid_id = :gridId")
+			.setParameter("code", REGION_CODE)
+			.setParameter("gridId", gridId)
+			.executeUpdate();
+	}
+
+	private String regionNameOf(List<OccupiedGridProjection> rows, String gridId) {
+		return rows.stream()
+			.filter(row -> row.getGridId().equals(gridId))
+			.findFirst()
+			.orElseThrow()
+			.getRegionName();
+	}
+
+	@Test
+	@DisplayName("격자에 걸린 행정동 라벨을 같은 쿼리에서 함께 읽는다 (MSG-349)")
+	void 격자에_걸린_행정동_라벨을_같은_쿼리에서_함께_읽는다() {
+		label(g00);
+
+		assertThat(regionNameOf(gridRepository.findOccupiedInRange(
+			me, baseY, baseY + 2, baseX, baseX + 2), g00)).isEqualTo(REGION_NAME);
+		assertThat(regionNameOf(pageA(10), g00)).isEqualTo(REGION_NAME);
+	}
+
+	@Test
+	@DisplayName("여러 격자의 행정동 이름을 한 번에 읽는다 — 라벨 없는 격자는 결과에서 빠진다 (MSG-349 핫구역용)")
+	void 여러_격자의_행정동_이름을_한_번에_읽는다() {
+		label(g00);
+
+		List<GridRegionNameProjection> rows = gridRepository.findRegionNames(List.of(g00, g11, g22));
+
+		// 이름 사전이라 INNER JOIN 이다 — 라벨 없는 격자는 행이 없고 호출부에서 맵 miss(null)로 처리된다.
+		assertThat(rows).hasSize(1);
+		assertThat(rows.get(0).getGridId()).isEqualTo(g00);
+		assertThat(rows.get(0).getRegionName()).isEqualTo(REGION_NAME);
+	}
+
+	@Test
+	@DisplayName("무귀속 격자는 regionName 이 null 이어도 항목에서 빠지지 않는다 (LEFT JOIN)")
+	void 무귀속_격자는_regionName이_null이어도_항목에서_빠지지_않는다() {
+		// g00 만 라벨하고 g11·g22 는 region_code NULL 로 둔다 — INNER JOIN 이면 색칠된 두 칸이 통째로 사라진다.
+		label(g00);
+
+		List<OccupiedGridProjection> rows = pageA(10);
+
+		assertThat(gridIds(rows)).containsExactly(g00, g11, g22);
+		assertThat(regionNameOf(rows, g11)).isNull();
+		assertThat(regionNameOf(rows, g22)).isNull();
 	}
 
 	@Test
