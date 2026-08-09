@@ -19,10 +19,10 @@ public record ExploreGridResponseDto(
 	@Schema(description = "격자 ID — 카드 탭 시 격자 전역 영상 목록(MSG-237) 진입 키", example = "16676_11596")
 	String gridId,
 
-	@Schema(description = "격자 위도 인덱스 (FE 지도 이동·라벨 조합)", example = "38879")
+	@Schema(description = "격자 세로 인덱스 (EPSG:5179 평면 y / 100 — 위도가 아니다). FE 지도 이동·라벨 조합", example = "16676")
 	Long gridY,
 
-	@Schema(description = "격자 경도 인덱스", example = "112390")
+	@Schema(description = "격자 가로 인덱스 (EPSG:5179 평면 x / 100 — 경도가 아니다)", example = "11596")
 	Long gridX,
 
 	@Schema(description = "그 격자의 게이트 통과 영상 수 — \"N개 영상\"", example = "138")

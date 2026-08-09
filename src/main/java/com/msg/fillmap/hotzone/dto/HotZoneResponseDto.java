@@ -13,10 +13,10 @@ public record HotZoneResponseDto(
 	@Schema(description = "격자 ID (\"{grid_y}_{grid_x}\" 포맷)", example = "19422_9582")
 	String gridId,
 
-	@Schema(description = "격자 세로 인덱스 (위도 기반 정수)", example = "41642")
+	@Schema(description = "격자 세로 인덱스 (EPSG:5179 평면 y / 100 — 위도가 아니다)", example = "19422")
 	int gridY,
 
-	@Schema(description = "격자 가로 인덱스 (경도 기반 정수)", example = "110458")
+	@Schema(description = "격자 가로 인덱스 (EPSG:5179 평면 x / 100 — 경도가 아니다)", example = "9582")
 	int gridX,
 
 	@Schema(description = "핫스코어 — 최근 48시간(8버킷) 방문 신호 합산", example = "12")
