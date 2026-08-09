@@ -2,8 +2,12 @@ package com.msg.fillmap.grid.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -27,6 +31,10 @@ import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
+import com.msg.fillmap.grid.repository.GridRepository;
+import com.msg.fillmap.region.RegionTestFixtures;
+import com.msg.fillmap.region.repository.RegionRepository;
+import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.zone.entity.Zone;
@@ -38,14 +46,25 @@ import com.msg.fillmap.zone.service.ZoneNameQueryService;
 @DisplayName("GridQueryService 통합 (실 PostGIS)")
 class GridQueryServiceIntegrationTest {
 
-	private static final double 성수_LAT = 37.5445;
-	private static final double 성수_LON = 127.0560;
+	/**
+	 * 서해 공해상 기준점 — 실 행정동이 덮지 않는 좌표라 이 테스트가 심는 합성 행정동만 판정에 잡힌다.
+	 * regions 시딩은 기본 off(CI 는 regions 가 빈 상태)라 실데이터에 기대면 환경마다 답이 갈린다 (MSG-349).
+	 */
+	private static final double 공해상_LAT = 36.5;
+	private static final double 공해상_LON = 124.5;
 
 	/**
 	 * 표시명 검증용 합성 구역 (MSG-341). 테스트 블록을 덮는 3행×3열 사각형이고 priority 100 이라
 	 * 같은 좌표를 덮는 실 시드 구역(priority 0)을 타이브레이크로 이긴다 — 시딩 상태와 무관하게 기대값이 고정된다.
 	 */
-	private static final String ZONE_NAME = "m341성수합성";
+	private static final String ZONE_NAME = "m341공해상합성";
+
+	/**
+	 * 행정동 이름 검증용 합성 행정동 (MSG-349). 블록 [base, base+5) 을 덮어 구역 사각형(3×3)보다 넓다 —
+	 * "구역 밖인데 행정동 안" 격자를 만들 수 있다. 실존하지 않는 sido 999 대역이라 실데이터와 충돌하지 않는다.
+	 */
+	private static final String REGION_CODE = "9996000002";
+	private static final String REGION_NAME = "합성시 합성구 합성349동";
 
 	@Autowired
 	private GridQueryService gridQueryService;
@@ -56,8 +75,17 @@ class GridQueryServiceIntegrationTest {
 	@Autowired
 	private ZoneRepository zoneRepository;
 
+	@Autowired
+	private RegionRepository regionRepository;
+
 	@MockitoSpyBean
 	private ZoneNameQueryService zoneNameQueryService;
+
+	@MockitoSpyBean
+	private GridRepository gridRepository;
+
+	@MockitoSpyBean
+	private RegionQueryService regionQueryService;
 
 	@Autowired
 	private EntityManager em;
@@ -72,11 +100,16 @@ class GridQueryServiceIntegrationTest {
 	void setUp() {
 		me = userRepository.save(User.createLocalUser("grid-svc@example.com", "hash", "나")).getId();
 
-		GridIndex base = GridEncoder.decode(GridEncoder.encode(성수_LAT, 성수_LON));
+		GridIndex base = GridEncoder.decode(GridEncoder.encode(공해상_LAT, 공해상_LON));
 		baseY = base.gridY();
 		baseX = base.gridX();
 
-		occupiedGridId = GridFixtures.seedGrid(em, baseY, baseX);
+		// 격자보다 먼저 심어야 seedLabeledGrid 의 중심점 판정이 라벨을 건다 (프로덕션 upsertGrid 와 같은 규칙).
+		regionRepository.upsert(REGION_CODE, REGION_NAME, REGION_CODE.substring(0, 5),
+			RegionTestFixtures.cellBlockPolygonJson(baseY, baseY + 5, baseX, baseX + 5),
+			RegionTestFixtures.CELL_AREA_M2);
+
+		occupiedGridId = GridFixtures.seedLabeledGrid(em, baseY, baseX);
 		unoccupiedGridId = GridFixtures.seedGrid(em, baseY + 1, baseX + 1);
 		GridFixtures.seedUserGrid(em, me, occupiedGridId, 3);
 		em.flush();
@@ -93,16 +126,22 @@ class GridQueryServiceIntegrationTest {
 	}
 
 	private ViewportBounds blockBounds() {
+		return bounds(2, 2);
+	}
+
+	/** (base, base) 셀 중심 ~ (base + dyTo, base + dxTo) 셀 중심을 감싸는 bbox. */
+	private ViewportBounds bounds(long dyTo, long dxTo) {
 		GridPoint southWest = GridFixtures.pointAt(baseY + 0.5, baseX + 0.5);
-		GridPoint northEast = GridFixtures.pointAt(baseY + 2.5, baseX + 2.5);
+		GridPoint northEast = GridFixtures.pointAt(baseY + dyTo + 0.5, baseX + dxTo + 0.5);
 		return new ViewportBounds(southWest.lat(), southWest.lon(), northEast.lat(), northEast.lon());
 	}
 
 	/**
 	 * 블록 안 (baseY + dy, baseX + dx) 셀을 내 점령으로 시드한다 — 페이지 시나리오용 볼륨.
+	 * 합성 행정동 라벨까지 붙여 프로덕션 격자(탄생 시 라벨)와 같은 상태로 만든다.
 	 */
 	private String seedOccupied(long dy, long dx) {
-		String gridId = GridFixtures.seedGrid(em, baseY + dy, baseX + dx);
+		String gridId = GridFixtures.seedLabeledGrid(em, baseY + dy, baseX + dx);
 		GridFixtures.seedUserGrid(em, me, gridId, 1);
 		return gridId;
 	}
@@ -177,6 +216,49 @@ class GridQueryServiceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("미점령 격자 단일 조회도 regionName 을 준다 (MSG-349 FR-3)")
+	void 미점령_격자_단일_조회도_regionName을_준다() {
+		// 지도에서 빈 칸을 누르는 경우 — grids 저장 라벨이 없어도 중심점 재판정으로 이름이 나온다.
+		GridCellView view = gridQueryService.getCell(me, unoccupiedGridId);
+
+		assertThat(view.occupied()).isFalse();
+		assertThat(view.regionName()).isEqualTo(REGION_NAME);
+	}
+
+	@Test
+	@DisplayName("점령 격자 단일 조회의 regionName 이 저장 라벨과 같다 (MSG-349 FR-6 술어 동일성)")
+	void 점령_격자_단일_조회의_regionName이_저장_라벨과_같다() {
+		// 단일 조회는 중심점 재판정, 뷰포트는 grids 저장 라벨 — 술어가 같아 같은 격자의 이름이 갈리지 않는다.
+		String fromCenter = gridQueryService.getCell(me, occupiedGridId).regionName();
+		String fromStoredLabel = gridQueryService.getOccupiedInViewport(me, blockBounds()).get(0).regionName();
+
+		assertThat(fromCenter).isEqualTo(REGION_NAME).isEqualTo(fromStoredLabel);
+	}
+
+	@Test
+	@DisplayName("무귀속 격자 단일 조회는 regionName 이 null 이다 (MSG-349 FR-5)")
+	void 무귀속_격자_단일_조회는_regionName이_null이다() {
+		// 합성 행정동 블록에서 멀리 떨어진 서해 공해상 셀 — 어느 행정동도 덮지 않는다.
+		String openSeaGridId = GridEncoder.encode(35.0, 125.0);
+
+		GridCellView view = gridQueryService.getCell(me, openSeaGridId);
+
+		assertThat(view.regionName()).isNull();
+	}
+
+	@Test
+	@DisplayName("서비스 범위 밖 격자 단일 조회는 에러 없이 regionName 이 null 이다 (MSG-349 FR-8 · 6400 흡수)")
+	void 서비스_범위_밖_격자_단일_조회는_에러_없이_regionName_null이다() {
+		// "9999_9999" 의 중심은 위도 약 29도라 서비스 범위(33~39) 밖이다. 역지오코딩을 그대로 부르면
+		// INVALID_COORDINATE(6400)가 나가 지금까지 200 이던 응답이 깨진다 — 가드가 흡수해야 한다.
+		GridCellView view = gridQueryService.getCell(me, "9999_9999");
+
+		assertThat(view.regionName()).isNull();
+		assertThat(view.occupied()).isFalse();
+		verifyNoInteractions(regionQueryService);
+	}
+
+	@Test
 	@DisplayName("뷰포트 페이지 항목마다 구역 이름이 붙고 zones 로드는 요청당 1회다 (N+1 금지, FR-8)")
 	void 뷰포트_페이지_항목마다_구역_이름이_붙고_zones_조회는_1회다() {
 		String b = seedOccupied(0, 1);
@@ -188,6 +270,67 @@ class GridQueryServiceIntegrationTest {
 		assertThat(page.items()).extracting(OccupiedGridView::zoneCell).containsExactly("C-1", "C-2");
 		// 항목 수와 무관하게 리졸버(=zones 로드)는 매핑 진입 전 1회뿐이다
 		verify(zoneNameQueryService, times(1)).resolver();
+	}
+
+	@Test
+	@DisplayName("구역 안 격자는 zoneName 과 regionName 이 함께 실린다 (MSG-349 FR-9)")
+	void 구역_안_격자는_zoneName과_regionName이_함께_실린다() {
+		// 위치줄("부산 부산진구 서면")의 시·구 출처가 행정동이라 구역 안에서도 regionName 을 뺄 수 없다.
+		List<OccupiedGridView> result = gridQueryService.getOccupiedInViewport(me, blockBounds());
+
+		assertThat(result).hasSize(1);
+		assertThat(result.get(0).zoneName()).isEqualTo(ZONE_NAME);
+		assertThat(result.get(0).zoneCell()).isEqualTo("C-1");
+		assertThat(result.get(0).regionName()).isEqualTo(REGION_NAME);
+	}
+
+	@Test
+	@DisplayName("구역 밖 격자는 zoneName 없이 regionName 만 실린다 (MSG-349 FR-1)")
+	void 구역_밖_격자는_zoneName_없이_regionName만_실린다() {
+		// 합성 구역은 3행(base..base+2)까지고 합성 행정동은 5행(base..base+4)까지라 (3, 0) 은 구역 밖·행정동 안이다.
+		String outsideZone = seedOccupied(3, 0);
+
+		OccupiedGridPage page = gridQueryService.getOccupiedInViewport(me, bounds(3, 3), null, 10);
+
+		OccupiedGridView view = page.items().stream()
+			.filter(item -> item.gridId().equals(outsideZone))
+			.findFirst()
+			.orElseThrow();
+		assertThat(view.zoneName()).isNull();
+		assertThat(view.zoneCell()).isNull();
+		assertThat(view.regionName()).isEqualTo(REGION_NAME);
+	}
+
+	@Test
+	@DisplayName("뷰포트 조회는 행정동 이름을 추가 쿼리 없이 같은 쿼리로 읽는다 (MSG-349 비기능 성능)")
+	void 뷰포트_조회는_행정동_이름을_추가_쿼리_없이_같은_쿼리로_읽는다() {
+		seedOccupied(0, 1);
+		seedOccupied(1, 0);
+
+		OccupiedGridPage page = gridQueryService.getOccupiedInViewport(me, blockBounds(), null, 10);
+
+		assertThat(page.items()).extracting(OccupiedGridView::regionName).containsOnly(REGION_NAME);
+		// 항목 3개에 페이지 쿼리 1회뿐 — 항목당 단건 조회(N+1)도, 역지오코딩 왕복도 없다.
+		verify(gridRepository, times(1))
+			.findOccupiedPage(anyLong(), anyLong(), anyLong(), anyLong(), anyLong(), anyInt());
+		verifyNoMoreInteractions(gridRepository);
+		verifyNoInteractions(regionQueryService);
+	}
+
+	@Test
+	@DisplayName("커서 페이지네이션 순서는 조인 후에도 불변이다 (MSG-349 회귀)")
+	void 커서_페이지네이션_순서는_조인_후에도_불변이다() {
+		// 라벨 없는 격자(region_code NULL)를 섞어도 LEFT JOIN 이라 행이 빠지지 않고 (grid_y, grid_x) 순서도 그대로다.
+		String labeled = seedOccupied(0, 1);
+		String unlabeled = GridFixtures.seedGrid(em, baseY + 1, baseX);
+		GridFixtures.seedUserGrid(em, me, unlabeled, 1);
+
+		OccupiedGridPage page1 = gridQueryService.getOccupiedInViewport(me, blockBounds(), null, 2);
+		OccupiedGridPage page2 = gridQueryService.getOccupiedInViewport(me, blockBounds(), page1.nextCursor(), 2);
+
+		assertThat(gridIds(page1)).containsExactly(occupiedGridId, labeled);
+		assertThat(gridIds(page2)).containsExactly(unlabeled);
+		assertThat(page2.items().get(0).regionName()).isNull();
 	}
 
 	@Test

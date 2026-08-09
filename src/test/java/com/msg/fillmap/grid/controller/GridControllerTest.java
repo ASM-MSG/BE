@@ -39,6 +39,7 @@ class GridControllerTest {
 
 	private static final long USER_ID = 42L;
 	private static final String GRID_ID = "41642_110458";
+	private static final String REGION_NAME = "부산광역시 부산진구 부전1동";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -57,7 +58,7 @@ class GridControllerTest {
 	@DisplayName("단일 격자 조회 API 는 200 과 점령여부와 videoCount 를 반환한다")
 	void 단일_격자_조회_API는_200과_점령여부와_videoCount를_반환한다() throws Exception {
 		given(gridQueryService.getCell(anyLong(), eq(GRID_ID)))
-			.willReturn(new GridCellView(GRID_ID, true, 3, "서면", "I-6"));
+			.willReturn(new GridCellView(GRID_ID, true, 3, "서면", "I-6", REGION_NAME));
 
 		mockMvc.perform(get("/api/grids/{gridId}", GRID_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -67,7 +68,8 @@ class GridControllerTest {
 			.andExpect(jsonPath("$.data.occupied").value(true))
 			.andExpect(jsonPath("$.data.videoCount").value(3))
 			.andExpect(jsonPath("$.data.zoneName").value("서면"))
-			.andExpect(jsonPath("$.data.zoneCell").value("I-6"));
+			.andExpect(jsonPath("$.data.zoneCell").value("I-6"))
+			.andExpect(jsonPath("$.data.regionName").value(REGION_NAME));
 	}
 
 	@Test
@@ -86,7 +88,8 @@ class GridControllerTest {
 	void 뷰포트_페이지_조회는_200과_grids배열과_nextCursor를_반환한다() throws Exception {
 		given(gridQueryService.getOccupiedInViewport(anyLong(), any(ViewportBounds.class), any(), anyInt()))
 			.willReturn(new OccupiedGridPage(
-				List.of(new OccupiedGridView(GRID_ID, 41642, 110458, "서면", "I-6")), "NDE2NDNfMTEwNDYw"));
+				List.of(new OccupiedGridView(GRID_ID, 41642, 110458, "서면", "I-6", REGION_NAME)),
+				"NDE2NDNfMTEwNDYw"));
 
 		mockMvc.perform(viewportRequest())
 			.andExpect(status().isOk())
@@ -96,6 +99,7 @@ class GridControllerTest {
 			.andExpect(jsonPath("$.data.grids[0].gridX").value(110458))
 			.andExpect(jsonPath("$.data.grids[0].zoneName").value("서면"))
 			.andExpect(jsonPath("$.data.grids[0].zoneCell").value("I-6"))
+			.andExpect(jsonPath("$.data.grids[0].regionName").value(REGION_NAME))
 			.andExpect(jsonPath("$.data.nextCursor").value("NDE2NDNfMTEwNDYw"));
 	}
 
@@ -104,7 +108,7 @@ class GridControllerTest {
 	void 마지막페이지_응답의_nextCursor는_null이다() throws Exception {
 		given(gridQueryService.getOccupiedInViewport(anyLong(), any(ViewportBounds.class), any(), anyInt()))
 			.willReturn(new OccupiedGridPage(
-				List.of(new OccupiedGridView(GRID_ID, 41642, 110458, null, null)), null));
+				List.of(new OccupiedGridView(GRID_ID, 41642, 110458, null, null, null)), null));
 
 		mockMvc.perform(viewportRequest())
 			.andExpect(status().isOk())
