@@ -3,7 +3,9 @@ package com.msg.fillmap.hotzone.service;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -17,6 +19,8 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridRange;
 import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.grid.repository.GridRegionNameProjection;
+import com.msg.fillmap.grid.repository.GridRepository;
 import com.msg.fillmap.hotzone.config.HotZoneProperties;
 import com.msg.fillmap.hotzone.exception.HotZoneErrorCode;
 import com.msg.fillmap.zone.service.ZoneCellName;
@@ -51,20 +55,22 @@ public class HotZoneServiceImpl implements HotZoneService {
 	private final StringRedisTemplate redisTemplate;
 	private final HotZoneProperties properties;
 	private final ZoneNameQueryService zoneNameQueryService;
+	private final GridRepository gridRepository;
 	private final Clock clock;
 
 	@Autowired
 	public HotZoneServiceImpl(StringRedisTemplate redisTemplate, HotZoneProperties properties,
-		ZoneNameQueryService zoneNameQueryService) {
-		this(redisTemplate, properties, zoneNameQueryService, Clock.systemUTC());
+		ZoneNameQueryService zoneNameQueryService, GridRepository gridRepository) {
+		this(redisTemplate, properties, zoneNameQueryService, gridRepository, Clock.systemUTC());
 	}
 
 	/** 버킷 경계(6h) 결정적 테스트용 — 고정 Clock 주입 (HotScoreCommandServiceImpl 선례). */
 	public HotZoneServiceImpl(StringRedisTemplate redisTemplate, HotZoneProperties properties,
-		ZoneNameQueryService zoneNameQueryService, Clock clock) {
+		ZoneNameQueryService zoneNameQueryService, GridRepository gridRepository, Clock clock) {
 		this.redisTemplate = redisTemplate;
 		this.properties = properties;
 		this.zoneNameQueryService = zoneNameQueryService;
+		this.gridRepository = gridRepository;
 		this.clock = clock;
 	}
 
@@ -79,12 +85,9 @@ public class HotZoneServiceImpl implements HotZoneService {
 		}
 		// bbox 꼭짓점 4점을 GridEncoder(단일 진실 원천)로 정수 인덱스 범위로 환산해 비교한다 — 위경도 재계산 없음.
 		GridRange range = GridEncoder.viewportRange(bounds);
-		// 리졸버는 루프 진입 전 1회 — 항목마다 zones 를 다시 읽지 않는다 (MSG-341 FR-8)
-		ZoneNameResolver resolver = zoneNameQueryService.resolver();
-		List<HotZoneView> hotZones = new ArrayList<>();
+		List<TypedTuple<String>> passed = new ArrayList<>();
 		for (TypedTuple<String> tuple : top) {
-			long score = Math.round(tuple.getScore());
-			if (score < properties.minScore()) {
+			if (Math.round(tuple.getScore()) < properties.minScore()) {
 				continue;
 			}
 			GridIndex index = GridEncoder.decode(tuple.getValue());
@@ -92,11 +95,27 @@ public class HotZoneServiceImpl implements HotZoneService {
 				|| index.gridX() < range.minGridX() || index.gridX() > range.maxGridX()) {
 				continue;
 			}
-			ZoneCellName name = resolver.name(index.gridY(), index.gridX());
-			hotZones.add(new HotZoneView(tuple.getValue(), (int) index.gridY(), (int) index.gridX(), score,
-				name.zoneName(), name.zoneCell()));
+			passed.add(tuple);
 		}
-		return hotZones;
+		if (passed.isEmpty()) {
+			return List.of();
+		}
+		// 필터를 통과한 격자의 행정동 이름을 일괄 조회 1회로 받는다 — 항목마다 단건 조회(N+1)를 돌리지 않는다.
+		// 무귀속 격자는 결과에 없어 맵 miss(null)로 떨어진다 (MSG-349).
+		Map<String, String> regionNames = gridRepository.findRegionNames(
+				passed.stream().map(TypedTuple::getValue).toList()).stream()
+			.collect(Collectors.toMap(GridRegionNameProjection::getGridId, GridRegionNameProjection::getRegionName));
+		// 리졸버는 매핑 진입 전 1회 — 항목마다 zones 를 다시 읽지 않는다 (MSG-341 FR-8)
+		ZoneNameResolver resolver = zoneNameQueryService.resolver();
+		return passed.stream()
+			.map(tuple -> {
+				GridIndex index = GridEncoder.decode(tuple.getValue());
+				ZoneCellName name = resolver.name(index.gridY(), index.gridX());
+				return new HotZoneView(tuple.getValue(), (int) index.gridY(), (int) index.gridX(),
+					Math.round(tuple.getScore()), name.zoneName(), name.zoneCell(),
+					regionNames.get(tuple.getValue()));
+			})
+			.toList();
 	}
 
 	/** hotzone:top 부재 시 최근 8버킷(현재 버킷 포함, clock 기준)을 합산해 30s 캐시로 생성한다. */

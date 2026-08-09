@@ -32,7 +32,9 @@ public class HotZoneController {
 	@Operation(
 		summary = "뷰포트 내 핫구역 조회",
 		description = "지도 화면 bbox(남서~북동 좌표) 안의 핫구역을 핫스코어 내림차순으로 반환한다. "
-			+ "전국 상위 K(50)·최소 임계(3) 판정 후 뷰포트 필터 — 없으면 빈 목록이다."
+			+ "전국 상위 K(50)·최소 임계(3) 판정 후 뷰포트 필터 — 없으면 빈 목록이다.\n\n"
+			+ "항목마다 표시 이름 재료가 함께 온다: zoneName이 null이면 regionName(행정동)이 표시 이름이다"
+			+ "(폴백에는 칸 번호를 붙이지 않는다). 이름 때문에 마커마다 단건 조회를 돌릴 필요가 없다."
 	)
 	@GetMapping
 	public SuccessResponse<HotZoneListResponseDto> getHotZones(

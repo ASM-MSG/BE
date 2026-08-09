@@ -2,6 +2,13 @@ package com.msg.fillmap.hotzone.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -21,6 +28,8 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.grid.repository.GridRegionNameProjection;
+import com.msg.fillmap.grid.repository.GridRepository;
 import com.msg.fillmap.hotzone.config.HotZoneProperties;
 import com.msg.fillmap.hotzone.exception.HotZoneErrorCode;
 import com.msg.fillmap.zone.entity.Zone;
@@ -48,8 +57,12 @@ class HotZoneServiceImplTest {
 	/** 표시명 계산용 합성 구역 (MSG-341) — IN_GRID_A 만 덮는 1×1 사각형이라 A 는 이름이 있고 B 는 없다. */
 	private static final String ZONE_NAME = "m341핫구역";
 
+	/** 행정동 이름 (MSG-349) — 일괄 조회 스텁이 A 에만 이름을 주고 B 는 맵 miss(무귀속)로 둔다. */
+	private static final String REGION_NAME = "서울특별시 성동구 성수1가제1동";
+
 	private static LettuceConnectionFactory connectionFactory;
 	private static StringRedisTemplate redisTemplate;
+	private static GridRepository gridRepository;
 	private static HotZoneServiceImpl service;
 
 	@BeforeAll
@@ -69,13 +82,32 @@ class HotZoneServiceImplTest {
 			.maxGridX((int) inA.gridX())
 			.priority(0)
 			.build()));
+		// 행정동 이름 사전도 DB 대신 스텁이다 — 이 테스트의 축은 "몇 번 부르는가"와 "맵 miss 처리"라 실 DB 가 필요 없다.
+		gridRepository = mock(GridRepository.class);
 		service = new HotZoneServiceImpl(redisTemplate, new HotZoneProperties(50, 3), () -> resolver,
-			Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
+			gridRepository, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
 	}
 
 	@BeforeEach
 	void setUp() {
 		redisTemplate.delete(TOP_KEY);
+		reset(gridRepository);
+		// IN_GRID_A 만 라벨된 격자다 — INNER JOIN 이라 무귀속 격자는 결과 행 자체가 없다.
+		given(gridRepository.findRegionNames(anyCollection())).willReturn(List.of(regionRow(IN_GRID_A, REGION_NAME)));
+	}
+
+	private static GridRegionNameProjection regionRow(String gridId, String regionName) {
+		return new GridRegionNameProjection() {
+			@Override
+			public String getGridId() {
+				return gridId;
+			}
+
+			@Override
+			public String getRegionName() {
+				return regionName;
+			}
+		};
 	}
 
 	@AfterEach
@@ -116,6 +148,47 @@ class HotZoneServiceImplTest {
 		// 합성 구역이 덮는 칸은 IN_GRID_A 하나뿐이라 A 는 이름 쌍이 붙고 구역 밖인 B 는 두 필드가 null 이다
 		assertThat(hotZones).extracting(HotZoneView::zoneName).containsExactly(ZONE_NAME, null);
 		assertThat(hotZones).extracting(HotZoneView::zoneCell).containsExactly("A-1", null);
+	}
+
+	@Test
+	void 핫구역_항목마다_행정동_이름이_실린다() {
+		record(CURRENT_BUCKET, IN_GRID_A, 5);
+
+		List<HotZoneView> hotZones = service.getHotZones(BOUNDS);
+
+		assertThat(hotZones).extracting(HotZoneView::regionName).containsExactly(REGION_NAME);
+	}
+
+	@Test
+	void 핫구역_행정동_이름은_항목_수와_무관하게_일괄_조회_1회다() {
+		record(CURRENT_BUCKET, IN_GRID_A, 5);
+		record(CURRENT_BUCKET, IN_GRID_B, 4);
+
+		assertThat(service.getHotZones(BOUNDS)).hasSize(2);
+
+		// 항목이 몇 개든 조회는 1회 — 마커마다 단건 조회를 돌리면(N+1) 50칸에서 51회가 된다.
+		verify(gridRepository, times(1)).findRegionNames(anyCollection());
+	}
+
+	@Test
+	void 필터_통과_핫구역이_없으면_행정동_조회를_생략한다() {
+		record(CURRENT_BUCKET, IN_GRID_A, 1);   // 최소 임계(3) 미만이라 통과 항목 0건
+
+		assertThat(service.getHotZones(BOUNDS)).isEmpty();
+
+		// 빈 IN 목록은 SQL 문법 오류다 — 0건이면 아예 부르지 않는다.
+		verify(gridRepository, never()).findRegionNames(anyCollection());
+	}
+
+	@Test
+	void 무귀속_핫구역_격자는_regionName이_null이다() {
+		record(CURRENT_BUCKET, IN_GRID_A, 5);
+		record(CURRENT_BUCKET, IN_GRID_B, 4);
+
+		List<HotZoneView> hotZones = service.getHotZones(BOUNDS);
+
+		// 이름 사전에 없는 격자(INNER JOIN 결과에 없음)는 맵 miss 로 null 이 된다 — 예외가 아니다.
+		assertThat(hotZones).extracting(HotZoneView::regionName).containsExactly(REGION_NAME, null);
 	}
 
 	@Test
