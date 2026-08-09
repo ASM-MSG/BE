@@ -28,7 +28,21 @@ import com.msg.fillmap.response.SuccessResponse;
  * 격자 색칠 조회 API (MSG-73 · MSG-90 페이지네이션). 3-layer 얇게 — 파싱 + 서비스 호출 + SuccessResponse 변환만.
  * userId 는 SecurityContext(AuthPrincipal)에서 획득한다(개인 도감).
  */
-@Tag(name = "격자 (Grid)", description = "개인 도감 색칠 격자 조회 API — 로그인 사용자가 점령한 격자만 반환한다.")
+@Tag(
+	name = "격자 (Grid)",
+	description = "개인 도감 색칠 격자 조회 API — 로그인 사용자가 점령한 격자만 반환한다.\n\n"
+		+ "격자는 EPSG:5179 미터 평면에서 100m 로 나눈 셀이다(2026-08-08 MSG-347 전까지는 위경도 등간격 근사였다). "
+		+ "gridId 포맷 `\"{grid_y}_{grid_x}\"` 와 이 API 들의 요청·응답 구조는 그대로지만 **값은 전면 교체됐다** "
+		+ "(같은 장소가 `41642_110458` 에서 `19422_9582` 로 바뀌었다). 예전 gridId 를 저장해 둔 클라이언트는 "
+		+ "빈 결과를 받으므로 캐시를 비워야 한다.\n\n"
+		+ "셀은 위경도 축과 평행하지 않다(자오선 수렴 최대 약 1.6도). 지도에 그릴 때 남서·북동 2점으로 만든 "
+		+ "직사각형을 쓰면 어긋나므로 **꼭짓점 4점 폴리곤**으로 그린다. 화면에 보이는 격자 범위를 구할 때도 "
+		+ "2점이 아니라 꼭짓점 4점의 min/max 를 써야 가장자리 셀이 빠지지 않는다.\n\n"
+		+ "클라이언트가 같은 격자를 계산하려면 서버와 **글자 단위로 같은 proj4 정의**를 써야 한다: "
+		+ "`+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 "
+		+ "+towgs84=0,0,0,0,0,0,0 +units=m +no_defs`. "
+		+ "대조용 전국 샘플 200건은 서버 레포 `src/test/resources/fixtures/grid-epsg5179-samples.json` 에 있다."
+)
 @RestController
 @RequestMapping("/api/grids")
 @RequiredArgsConstructor
