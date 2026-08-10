@@ -1,6 +1,7 @@
 package com.msg.fillmap.video.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -15,7 +16,7 @@ import com.msg.fillmap.video.entity.Video;
 @Schema(description = "단건 영상 재생 조회 응답",
 	requiredProperties = {"videoId", "gridId", "durationSec", "processingStatus", "visibility", "status",
 		"viewCount", "recordedAt", "playbackUrl", "thumbnailUrl", "expiresInSec",
-		"zoneName", "zoneCell", "regionName"})
+		"zoneName", "zoneCell", "regionName", "highlights"})
 public record VideoPlaybackResponseDto(
 	@Schema(description = "영상(방문 이벤트) ID", example = "1042")
 	Long videoId,
@@ -60,7 +61,12 @@ public record VideoPlaybackResponseDto(
 
 	@Schema(description = "격자 중심점 행정동 이름 — 구역 밖 격자의 폴백 라벨. 무귀속(해상 등)이거나 "
 		+ "미판정이면 null", example = "서울특별시 강남구 역삼1동", nullable = true)
-	String regionName
+	String regionName,
+
+	@Schema(description = "AI 추천 하이라이트 구간 [[시작초, 끝초], ...]. 최대 3구간, 초는 소수점 둘째 자리. "
+		+ "배열 순서가 추천 우선순위(첫 요소가 최우선 추천). 없으면 null (READY 이전·FAILED·0구간 포함, "
+		+ "빈 배열은 내려가지 않는다) 예시: [[0.0, 4.25], [12.0, 18.5], [20.0, 27.5]]", nullable = true)
+	List<List<Double>> highlights
 ) {
 
 	/**
@@ -70,6 +76,11 @@ public record VideoPlaybackResponseDto(
 	 */
 	public static VideoPlaybackResponseDto of(Video video, String playbackUrl, String thumbnailUrl, Long expiresInSec,
 		String zoneName, String zoneCell, String regionName) {
+		List<List<Double>> highlights = video.getHighlights();
+		// 저장 혼재(null 또는 [])를 응답 null 하나로 정규화 (MSG-350 FR-2)
+		if (highlights != null && highlights.isEmpty()) {
+			highlights = null;
+		}
 		return new VideoPlaybackResponseDto(
 			video.getId(),
 			playbackUrl,
@@ -84,6 +95,7 @@ public record VideoPlaybackResponseDto(
 			expiresInSec,
 			zoneName,
 			zoneCell,
-			regionName);
+			regionName,
+			highlights);
 	}
 }
