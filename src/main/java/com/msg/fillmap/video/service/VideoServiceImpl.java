@@ -29,6 +29,7 @@ import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -643,7 +644,15 @@ public class VideoServiceImpl implements VideoService {
 			|| videoRepository.existsByOriginalS3Key(ORIGINAL_PREFIX + stem)) {
 			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
 		}
-		requireObjectExists(pendingKey);
+		HeadObjectResponse head = requireObjectExists(pendingKey);
+		// 실측 크기 재검증 (MSG-351 교차 리뷰 P1-1): presign 상한은 발급 시점 선언값만 묶는데, 선분석용
+		// HIGHLIGHT_PREVIEW presign(2GiB)의 키 형태가 일반 업로드와 같아 그 키로 확정하면 100MB 상한이
+		// 우회된다. 존재 확인에 이미 쓴 headObject 응답의 실제 크기로 확정 시점에 다시 막는다 —
+		// saveVideo·replaceVideo 가 이 메서드를 공유하므로 두 경로 다 닫힌다. 추가 S3 호출 없음.
+		Long contentLength = head.contentLength();
+		if (contentLength != null && contentLength > awsProperties.s3().maxUploadBytes()) {
+			throw new ApiException(VideoErrorCode.FILE_TOO_LARGE);
+		}
 		return claimPrefix + UUID.randomUUID() + stem.substring(extAt);
 	}
 
@@ -695,9 +704,10 @@ public class VideoServiceImpl implements VideoService {
 		});
 	}
 
-	private void requireObjectExists(String s3Key) {
+	/** 존재하면 headObject 응답을 돌려준다 — 호출자(confirmUpload)가 실측 크기 검증에 재사용한다 (P1-1). */
+	private HeadObjectResponse requireObjectExists(String s3Key) {
 		try {
-			s3Client.headObject(HeadObjectRequest.builder()
+			return s3Client.headObject(HeadObjectRequest.builder()
 				.bucket(awsProperties.s3().bucket())
 				.key(s3Key)
 				.build());

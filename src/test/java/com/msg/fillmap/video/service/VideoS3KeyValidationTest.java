@@ -134,6 +134,21 @@ class VideoS3KeyValidationTest {
 	}
 
 	@Test
+	@DisplayName("선분석용 대용량 presign 으로 올린 객체는 확정 단계에서 크기로 거부된다")
+	void 상한을_넘는_pending_객체는_확정할_수_없다() {
+		// HIGHLIGHT_PREVIEW presign(2GiB)의 키 형태가 일반 업로드와 같아, 확정 시 실측 크기 재검증이
+		// 없으면 100MB 상한이 그 키로 우회된다 (MSG-351 교차 리뷰 P1-1).
+		given(s3Client.headObject(any(HeadObjectRequest.class)))
+			.willReturn(HeadObjectResponse.builder().contentLength(104857601L).build());
+
+		assertThatThrownBy(() -> videoService.saveVideo(userId, request(myKey())))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.FILE_TOO_LARGE);
+
+		assertThat(userGridCount()).isZero();
+	}
+
+	@Test
 	@DisplayName("정상 업로드(실제로 S3 에 있는 내 키)는 그대로 통과한다")
 	void 정상_업로드는_통과한다() {
 		assertThatCode(() -> videoService.saveVideo(userId, request(myKey())))

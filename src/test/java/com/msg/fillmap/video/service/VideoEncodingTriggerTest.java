@@ -1,8 +1,10 @@
 package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -30,6 +32,9 @@ import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.zone.service.ZoneNameResolver;
 
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
@@ -63,9 +68,11 @@ class VideoEncodingTriggerTest {
 		org.mockito.BDDMockito.given(missionAwardService.awardOnUpload(anyLong(), anyString()))
 			.willReturn(MissionAwardResult.EMPTY);
 
-		// S3Client 목은 headObject 에서 예외를 던지지 않는다 = 객체가 존재하는 정상 업로드.
+		// S3Client 목의 headObject 응답 = 객체가 존재하고 크기 미상(상한 검증 통과)인 정상 업로드 (MSG-351 P1-1).
+		S3Client s3Client = mock(S3Client.class);
+		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
 		VideoService service = new VideoServiceImpl(repository, encodingService, statusWriter,
-			mock(S3Presigner.class), mock(software.amazon.awssdk.services.s3.S3Client.class),
+			mock(S3Presigner.class), s3Client,
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
