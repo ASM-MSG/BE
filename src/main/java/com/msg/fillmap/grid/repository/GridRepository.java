@@ -53,6 +53,44 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 	);
 
 	/**
+	 * 뷰포트 점령 격자를 행정 단위로 묶어 센 집계 (MSG-356). FROM·WHERE 술어가 findOccupiedInRange 와
+	 * 글자 그대로 같아(같은 접근 A 범위 스캔) 세는 행 집합이 개별 조회와 동일하다 — 합이 어긋날 구조가 없다(FR-3).
+	 * 묶음 키는 행정동 코드를 단위 길이(codeLen)로 자른 접두이고, 이름은 전체 경로 이름의 nameToken 번째 토큰이다.
+	 * 같은 묶음의 이름은 접두가 같아 어차피 한 값이지만 집계 함수 자리라 MIN 으로 결정적으로 단일화한다.
+	 * regions 는 LEFT JOIN 이다 — INNER 로 떨구면 무귀속 격자가 총합에서 사라져 FR-7 이 깨진다.
+	 * substring(NULL) 이 NULL 이라 무귀속 행은 특례 코드 없이 NULL 키 한 그룹으로 모인다.
+	 * center_geom 은 GEOGRAPHY 라 평면 함수(ST_X/ST_Y)를 쓰려면 ::geometry 캐스트가 필요하다.
+	 * GROUP BY·ORDER BY 가 식 대신 출력 컬럼 번호(1)인 이유: 같은 식을 두 번 쓰면 codeLen 바인딩이
+	 * 서로 다른 파라미터 자리($1, $6)가 돼 PostgreSQL 이 두 식을 같은 것으로 못 보고
+	 * "column g.region_code must appear in the GROUP BY clause" 로 거절한다 (실측).
+	 */
+	@Query(value = """
+		SELECT
+			substring(g.region_code FROM 1 FOR :codeLen)     AS "regionCode",
+			MIN(split_part(r.region_name, ' ', :nameToken))  AS "name",
+			AVG(ST_Y(g.center_geom::geometry))               AS "lat",
+			AVG(ST_X(g.center_geom::geometry))               AS "lng",
+			COUNT(*)                                         AS "count"
+		FROM user_grids ug
+		JOIN grids g ON g.grid_id = ug.grid_id
+		LEFT JOIN regions r ON r.region_code = g.region_code
+		WHERE ug.user_id = :userId
+			AND g.grid_y BETWEEN :minY AND :maxY
+			AND g.grid_x BETWEEN :minX AND :maxX
+		GROUP BY 1
+		ORDER BY 1 NULLS LAST
+		""", nativeQuery = true)
+	List<RegionAggregateProjection> aggregateOccupiedInRange(
+		@Param("userId") long userId,
+		@Param("minY") long minY,
+		@Param("maxY") long maxY,
+		@Param("minX") long minX,
+		@Param("maxX") long maxX,
+		@Param("codeLen") int codeLen,
+		@Param("nameToken") int nameToken
+	);
+
+	/**
 	 * 접근 A 페이지 — 첫 페이지 (MSG-90 keyset). ORDER BY (grid_y, grid_x) 가 uq_grids_yx(btree)
 	 * 정렬과 일치해 추가 정렬 비용이 없다. OFFSET 미사용, LIMIT 은 서비스의 lookahead(size + 1)다.
 	 * regions LEFT JOIN(MSG-349)은 정렬 키와 무관해 keyset 순서·lookahead 판정을 바꾸지 않는다.
