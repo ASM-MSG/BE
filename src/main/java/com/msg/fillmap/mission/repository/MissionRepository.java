@@ -54,6 +54,8 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 	 * 기간 조건이 IS NULL OR 형태라 무기간(코스)은 자연 생략된다(FR-12) — 코드 분기 없음. 경계는 양끝
 	 * 포함(findActive 동형). videos 조인은 v.user_id 를 ON 절에 태워 idx_videos_user_created prefix 로
 	 * 내 영상만 훑는다. status <> 'DELETED' 만 거른다 — BLINDED 는 촬영 사실이 유효하므로 포함(§D2).
+	 * ORDER BY m.id 는 응답 배열 순서의 원천이다 (MSG-363 §D3) — 집계 결과 순서는 PostgreSQL 이
+	 * 보장하지 않아, 한 업로드가 두 종류를 완료하면 completedMissions·newBadges 순서가 실행마다 흔들린다.
 	 */
 	@Query(value = """
 		SELECT m.id AS "missionId", m.title, m.type
@@ -67,6 +69,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 		WHERE m.id IN (:candidateIds)
 		GROUP BY m.id, m.title, m.type, m.target_count
 		HAVING COUNT(DISTINCT v.grid_id) >= m.target_count
+		ORDER BY m.id
 		""", nativeQuery = true)
 	List<CompletedMissionProjection> findCompleted(
 		@Param("userId") long userId,
