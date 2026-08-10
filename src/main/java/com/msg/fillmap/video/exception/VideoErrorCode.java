@@ -29,6 +29,10 @@ public enum VideoErrorCode implements ErrorCodeIfs {
 	GRID_MISMATCH(3422, HttpStatus.BAD_REQUEST, "같은 격자 안에서만 교체할 수 있습니다"),
 	INVALID_CURSOR(3423, HttpStatus.BAD_REQUEST, "유효하지 않은 커서입니다"),
 	RECORDED_AT_IN_FUTURE(3424, HttpStatus.BAD_REQUEST, "촬영 시각이 현재 시각보다 미래입니다"),
+	HIGHLIGHT_SOURCE_TOO_LONG(3425, HttpStatus.BAD_REQUEST, "3분 이하 영상만 하이라이트 분석이 가능합니다"),
+	HIGHLIGHT_SOURCE_UNREADABLE(3426, HttpStatus.BAD_REQUEST, "영상 파일을 읽을 수 없습니다. 다른 파일로 시도해주세요"),
+	// AI 연결 실패·타임아웃·5xx·파싱 불능·비활성 환경 단일 수렴 — SEARCH_UPSTREAM_ERROR(5502) 선례 (MSG-351)
+	HIGHLIGHT_UPSTREAM_ERROR(3502, HttpStatus.BAD_GATEWAY, "하이라이트 분석이 일시적으로 어렵습니다. 구간을 직접 지정해주세요"),
 	;
 
 	private final Integer errorCode;

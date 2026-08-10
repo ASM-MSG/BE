@@ -414,7 +414,12 @@ public class VideoServiceImpl implements VideoService {
 		if (allowedType == null || !allowedType.equals(request.contentType())) {
 			throw new ApiException(VideoErrorCode.UNSUPPORTED_EXTENSION);
 		}
-		if (request.contentLength() > awsProperties.s3().maxUploadBytes()) {
+		// 선분석 원본만 전용 상한 (MSG-351 D-4) — 그 외(null 포함)는 기존 100MB 그대로다.
+		// 미지의 purpose 값은 DTO @Pattern 이 컨트롤러 @Valid 단계에서 400 으로 거른다.
+		long maxUploadBytes = "HIGHLIGHT_PREVIEW".equals(request.purpose())
+			? awsProperties.s3().maxHighlightUploadBytes()
+			: awsProperties.s3().maxUploadBytes();
+		if (request.contentLength() > maxUploadBytes) {
 			throw new ApiException(VideoErrorCode.FILE_TOO_LARGE);
 		}
 

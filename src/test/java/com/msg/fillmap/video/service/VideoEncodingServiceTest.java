@@ -58,7 +58,7 @@ class VideoEncodingServiceTest {
 		ffmpegRunner = mock(FfmpegRunner.class);
 		s3Client = mock(S3Client.class);
 		AwsProperties properties = new AwsProperties(
-			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L));
+			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 
 		encodingService = new VideoEncodingServiceImpl(
 			videoRepository, statusWriter, ffmpegRunner, s3Client, properties);

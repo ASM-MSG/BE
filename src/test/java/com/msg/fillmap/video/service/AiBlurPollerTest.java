@@ -76,7 +76,7 @@ class AiBlurPollerTest {
 		encodingExecutor = new ThreadPoolTaskExecutor();   // 실제 풀 — submit/get 직렬화 경로를 그대로 탄다
 		encodingExecutor.initialize();
 		AwsProperties awsProperties = new AwsProperties(
-			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L));
+			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 		AiProperties aiProperties = new AiProperties(true, "http://ai.test", Duration.ofMinutes(30), 30000L);
 
 		poller = new AiBlurPoller(videoRepository, statusWriter, aiClient, s3Client, awsProperties, aiProperties,

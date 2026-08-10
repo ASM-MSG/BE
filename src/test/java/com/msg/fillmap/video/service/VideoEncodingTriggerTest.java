@@ -66,7 +66,7 @@ class VideoEncodingTriggerTest {
 		// S3Client 목은 headObject 에서 예외를 던지지 않는다 = 객체가 존재하는 정상 업로드.
 		VideoService service = new VideoServiceImpl(repository, encodingService, statusWriter,
 			mock(S3Presigner.class), mock(software.amazon.awssdk.services.s3.S3Client.class),
-			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
+			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
