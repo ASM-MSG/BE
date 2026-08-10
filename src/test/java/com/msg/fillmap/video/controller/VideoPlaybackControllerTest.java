@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,7 @@ class VideoPlaybackControllerTest {
 			VIDEO_ID, "https://bucket.s3/play.mp4?X-Amz-Signature=abc",
 			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
 			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
-			"서면", "I-9", "서울특별시 강남구 역삼1동"));
+			"서면", "I-9", "서울특별시 강남구 역삼1동", null));
 
 		mockMvc.perform(get(URL, VIDEO_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -71,6 +72,26 @@ class VideoPlaybackControllerTest {
 			.andExpect(jsonPath("$.data.zoneName").value("서면"))
 			.andExpect(jsonPath("$.data.zoneCell").value("I-9"))
 			.andExpect(jsonPath("$.data.regionName").value("서울특별시 강남구 역삼1동"));
+	}
+
+	@Test
+	@DisplayName("단건 조회 응답에 highlights 배열이 실린다")
+	void 단건_조회_응답에_highlights_배열이_실린다() throws Exception {
+		// record 컴포넌트 추가가 Jackson 직렬화까지 이어지는지 — [[시작초, 끝초], ...] 중첩 배열 형태를 통합 레벨에서 본다 (MSG-350).
+		given(videoService.getVideoPlayback(anyLong(), anyLong())).willReturn(new VideoPlaybackResponseDto(
+			VIDEO_ID, "https://bucket.s3/play.mp4?X-Amz-Signature=abc",
+			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
+			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
+			"서면", "I-9", "서울특별시 강남구 역삼1동",
+			List.of(List.of(0.0, 4.25), List.of(12.0, 18.5), List.of(20.0, 27.5))));
+
+		mockMvc.perform(get(URL, VIDEO_ID)
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.highlights.length()").value(3))
+			.andExpect(jsonPath("$.data.highlights[0][0]").value(0.0))
+			.andExpect(jsonPath("$.data.highlights[0][1]").value(4.25))
+			.andExpect(jsonPath("$.data.highlights[2][1]").value(27.5));
 	}
 
 	@Test

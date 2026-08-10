@@ -393,6 +393,48 @@ class VideoPlaybackServiceTest {
 		assertThat(response.regionName()).isEqualTo("부산광역시 부산진구 부전2동");
 	}
 
+	// --- AI 추천 하이라이트 노출 (MSG-350) — 저장 값(null·[]·배열 혼재)을 응답 계약(null 통일)으로 정규화.
+
+	@Test
+	@DisplayName("하이라이트가 저장된 영상은 구간 배열을 그대로 반환한다")
+	void 하이라이트가_저장된_영상은_구간_배열을_그대로_반환한다() {
+		Video v = video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L);
+		ReflectionTestUtils.setField(v, "highlights", List.of(List.of(0.0, 4.25), List.of(12.0, 18.5)));
+		givenVideo(v);
+
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
+
+		// 순서 = 추천 우선순위(FR-5) — containsExactly 로 순서까지 본다.
+		assertThat(result.highlights()).containsExactly(List.of(0.0, 4.25), List.of(12.0, 18.5));
+	}
+
+	@Test
+	@DisplayName("하이라이트가 null 인 영상은 응답도 null 이다")
+	void 하이라이트가_null인_영상은_응답도_null이다() {
+		// AI 비활성 시절 처리분 등 — Video.create 기본값이 null 이다.
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
+
+		assertThat(result.highlights()).isNull();
+	}
+
+	@Test
+	@DisplayName("하이라이트가 빈 배열이면 응답은 null 로 정규화된다")
+	void 하이라이트가_빈_배열이면_응답은_null로_정규화된다() {
+		// AI 가 0구간 반환한 케이스 — 빈 배열은 내려가지 않는다 (FR-2).
+		Video v = video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L);
+		ReflectionTestUtils.setField(v, "highlights", List.of());
+		givenVideo(v);
+
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
+
+		assertThat(result.highlights()).isNull();
+	}
+
 	@Test
 	@DisplayName("무귀속 격자의 재생 응답은 regionName 이 null 이다")
 	void 무귀속_격자의_재생_응답은_regionName이_null이다() {
