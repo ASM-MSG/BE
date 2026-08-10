@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.net.SocketTimeoutException;
+import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -21,6 +22,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -215,6 +219,37 @@ class AiClientTest {
 	}
 
 	@Test
+	void 선분석_highlights가_배열이_아니면_업스트림_예외로_매핑한다() throws Exception {
+		// 비배열 노드를 그대로 순회하면 예외가 아니라 빈 배열(= "추천 없음" 유효 응답)로 조용히 성공한다 (P2-1)
+		highlightServer.expect(requestTo(BASE_URL + "/highlights"))
+			.andRespond(withSuccess("{\"highlights\":\"garbage\"}", MediaType.APPLICATION_JSON));
+
+		Path source = sourceFile();
+		assertThatThrownBy(() -> aiClient.analyzeHighlights(source))
+			.isInstanceOf(AiClient.HighlightUpstreamException.class);
+	}
+
+	@Test
+	void 선분석_구간이_숫자_2개_배열이_아니면_업스트림_예외로_매핑한다() throws Exception {
+		List<String> malformedBodies = List.of(
+			"{\"highlights\":[[0.0]]}",              // 원소 1개짜리 구간
+			"{\"highlights\":[[\"a\",\"b\"]]}",      // 숫자가 아닌 원소
+			"{\"highlights\":[{\"start\":0.0}]}");   // 배열이 아닌 구간
+		// MockRestServiceServer 는 첫 요청 이후 expect 추가를 금지한다 — 기대 응답을 전부 먼저 등록한다.
+		for (String body : malformedBodies) {
+			highlightServer.expect(requestTo(BASE_URL + "/highlights"))
+				.andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+		}
+
+		Path source = sourceFile();
+		for (String body : malformedBodies) {
+			assertThatThrownBy(() -> aiClient.analyzeHighlights(source))
+				.as("malformed body: " + body)
+				.isInstanceOf(AiClient.HighlightUpstreamException.class);
+		}
+	}
+
+	@Test
 	void 선분석_422는_원본_불량_예외로_매핑한다() throws Exception {
 		highlightServer.expect(requestTo(BASE_URL + "/highlights"))
 			.andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT));
@@ -232,6 +267,19 @@ class AiClientTest {
 		Path source = sourceFile();
 		assertThatThrownBy(() -> aiClient.analyzeHighlights(source))
 			.isInstanceOf(AiClient.HighlightUpstreamException.class);
+	}
+
+	@Test
+	void 선분석_전용_팩토리는_JDK_HttpClient_기반이고_교환_전체_시한이_120초다() {
+		// SimpleClientHttpRequestFactory(HttpURLConnection)의 read timeout 은 요청 본문 쓰기를 안 묶는다 (P1-B).
+		// JdkClientHttpRequestFactory 는 readTimeout 을 HttpRequest.timeout() 으로 걸어 2GiB 본문 전송까지
+		// 교환 전체(전송+처리+응답)의 단일 시한이 된다.
+		ClientHttpRequestFactory factory = AiClient.highlightRequestFactory();
+
+		assertThat(factory).isInstanceOf(JdkClientHttpRequestFactory.class);
+		assertThat(ReflectionTestUtils.getField(factory, "readTimeout")).isEqualTo(Duration.ofSeconds(120));
+		HttpClient httpClient = (HttpClient) ReflectionTestUtils.getField(factory, "httpClient");
+		assertThat(httpClient.connectTimeout()).contains(Duration.ofSeconds(5));
 	}
 
 	/** FileSystemResource 전송(D-5)이라 실존 파일이 필요하다 — 내용은 계약과 무관한 더미. */
