@@ -41,7 +41,7 @@ class UserMissionRepositoryTest {
 	@DisplayName("스탬프 INSERT 는 성공 시 1을 반환한다")
 	void 스탬프_INSERT는_성공_시_1을_반환한다() {
 		long me = newUser();
-		long mission = newMission();
+		long mission = newMission("EVENT");
 
 		assertThat(userMissionRepository.insertIgnoreConflict(me, mission)).isEqualTo(1);
 	}
@@ -50,24 +50,31 @@ class UserMissionRepositoryTest {
 	@DisplayName("같은 미션 스탬프 중복 INSERT 는 0을 반환한다 — PK 충돌 무시(FR-14)")
 	void 같은_미션_스탬프_중복_INSERT는_0을_반환한다() {
 		long me = newUser();
-		long mission = newMission();
+		long mission = newMission("EVENT");
 		userMissionRepository.insertIgnoreConflict(me, mission);
 
 		assertThat(userMissionRepository.insertIgnoreConflict(me, mission)).isZero();
 	}
 
 	@Test
-	@DisplayName("countMyStamps 는 내 스탬프 수만 센다 — 타 사용자 행 미포함")
-	void countMyStamps는_내_스탬프_수만_센다() {
+	@DisplayName("countMyStampsByType 은 그 종류의 내 스탬프만 센다 — 타 사용자·타 종류 미포함(MSG-363 §D4)")
+	void countMyStampsByType은_그_종류의_내_스탬프만_센다() {
 		long me = newUser();
 		long other = newUser();
-		long first = newMission();
-		long second = newMission();
-		userMissionRepository.insertIgnoreConflict(me, first);
-		userMissionRepository.insertIgnoreConflict(me, second);
-		userMissionRepository.insertIgnoreConflict(other, first);
+		long firstEvent = newMission("EVENT");
+		long secondEvent = newMission("EVENT");
+		long popup = newMission("POPUP");
+		userMissionRepository.insertIgnoreConflict(me, firstEvent);
+		userMissionRepository.insertIgnoreConflict(me, secondEvent);
+		userMissionRepository.insertIgnoreConflict(me, popup);
+		userMissionRepository.insertIgnoreConflict(other, firstEvent);
 
-		assertThat(userMissionRepository.countMyStamps(me)).isEqualByComparingTo(BigDecimal.valueOf(2));
+		assertThat(userMissionRepository.countMyStampsByType(me, "EVENT"))
+			.isEqualByComparingTo(BigDecimal.valueOf(2));
+		assertThat(userMissionRepository.countMyStampsByType(me, "POPUP"))
+			.isEqualByComparingTo(BigDecimal.ONE);
+		assertThat(userMissionRepository.countMyStampsByType(me, "COURSE"))
+			.isEqualByComparingTo(BigDecimal.ZERO);
 	}
 
 	@Test
@@ -104,12 +111,13 @@ class UserMissionRepositoryTest {
 		return userRepository.save(User.createLocalUser(email, "hash", "스탬프테스터")).getId();
 	}
 
-	private long newMission() {
+	private long newMission(String type) {
 		String title = "MSG223-stamp-" + System.nanoTime();
 		em.createNativeQuery("""
 				INSERT INTO missions (type, title, target_count)
-				VALUES ('EVENT', :title, 1)
+				VALUES (:type, :title, 1)
 				""")
+			.setParameter("type", type)
 			.setParameter("title", title)
 			.executeUpdate();
 		return ((Number) em.createNativeQuery("SELECT id FROM missions WHERE title = :title")

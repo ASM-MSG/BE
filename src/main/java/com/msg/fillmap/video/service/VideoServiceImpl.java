@@ -182,7 +182,7 @@ public class VideoServiceImpl implements VideoService {
 		// 스트릭 (MSG-200): 아무 업로드(재방문 포함)가 인정 이벤트라 분기 바깥. 갱신·꾸준함 뱃지 판정은
 		// 스트릭 도메인 몫 — 여기서는 획득분을 응답에 합류시키기만 한다.
 		newBadges.addAll(streakCommandService.recordUpload(userId));
-		// 미션 판정 (MSG-223): 방문(videos 이벤트)이 근거라 이 역시 분기 바깥. 판정·스탬프·MISSION_COUNT
+		// 미션 판정 (MSG-223): 방문(videos 이벤트)이 근거라 이 역시 분기 바깥. 판정·스탬프·종류별 미션
 		// 뱃지는 미션 도메인 몫 — 여기서는 완료 스탬프를 응답에 싣고 획득 뱃지를 합류시키기만 한다(§D2).
 		MissionAwardResult missionAward = missionAwardService.awardOnUpload(userId, gridId);
 		newBadges.addAll(missionAward.newBadges());
