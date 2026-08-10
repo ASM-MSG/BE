@@ -79,7 +79,7 @@ class VideoPlaybackServiceTest {
 			.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("ak", "sk")))
 			.build();
 		AwsProperties properties = new AwsProperties(
-			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L));
+			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 		thumbnailUrlPresigner = new ThumbnailUrlPresigner(presigner, properties);
 
 		friendshipQueryService = mock(FriendshipQueryService.class);

@@ -56,7 +56,7 @@ class VideoGridQueryServiceTest {
 			.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("ak", "sk")))
 			.build();
 		AwsProperties properties = new AwsProperties(
-			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L));
+			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 
 		videoService = new VideoServiceImpl(
 			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),

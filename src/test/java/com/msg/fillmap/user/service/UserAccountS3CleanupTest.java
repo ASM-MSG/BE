@@ -56,7 +56,7 @@ class UserAccountS3CleanupTest {
 			.willReturn(DeleteObjectsResponse.builder().build());
 		given(userRepository.deleteUser(USER_ID)).willReturn(1);
 		service = new UserServiceImpl(userRepository, refreshTokenService, tokenProvider, s3Client,
-			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)));
+			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)));
 	}
 
 	private List<List<String>> deletedKeyBatches() {

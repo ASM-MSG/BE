@@ -42,6 +42,8 @@ import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
@@ -64,6 +66,8 @@ class VideoRecordedAtValidationTest {
 	void setUp() {
 		repository = mock(VideoRepository.class);
 		s3Client = mock(S3Client.class);
+		// 확정의 실측 크기 검증(MSG-351 P1-1)이 headObject 응답을 읽는다 — 스텁이 없으면 null 로 NPE.
+		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
 		// 미션 판정 목 — record 반환 타입은 Mockito 기본값이 null 이라 EMPTY 를 명시한다 (MSG-223).
 		MissionAwardService missionAwardService = mock(MissionAwardService.class);
 		given(missionAwardService.awardOnUpload(anyLong(), anyString())).willReturn(MissionAwardResult.EMPTY);
@@ -71,7 +75,7 @@ class VideoRecordedAtValidationTest {
 		// 13번째 인자가 고정 클럭 — 프로덕션은 12-인자 @Autowired 생성자가 Clock.systemUTC() 로 위임한다.
 		service = new VideoServiceImpl(repository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
 			mock(S3Presigner.class), s3Client,
-			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L)),
+			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),

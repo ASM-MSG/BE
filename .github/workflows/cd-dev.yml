@@ -47,6 +47,10 @@ jobs:
           script: |
             set -e
             cd /home/${{ secrets.DEV_EC2_USER }}
+            # ffmpeg 는 인코딩·선분석 probe 의 런타임 의존인데, 설치가 문서 한 줄(docs/spec/MSG-65.md D3
+            # "인프라 담당이 1회 실행")뿐이라 인스턴스 교체 때 유실됐다. 사람 기억 대신 매 배포가
+            # 보장한다 — 설치돼 있으면 0.1초 통과, 새 인스턴스면 다음 배포가 알아서 복구 (멱등).
+            command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
             mv -f fillmap-0.0.1-SNAPSHOT.jar app.jar
             sudo systemctl restart fillmap-dev
 

@@ -23,6 +23,8 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
+import com.msg.fillmap.video.dto.HighlightPreviewRequestDto;
+import com.msg.fillmap.video.dto.HighlightPreviewResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
 import com.msg.fillmap.video.dto.VideoPlaybackResponseDto;
@@ -32,6 +34,7 @@ import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 import com.msg.fillmap.video.dto.VideoVisibilityRequestDto;
 import com.msg.fillmap.video.dto.VideoVisibilityResponseDto;
+import com.msg.fillmap.video.service.HighlightPreviewService;
 import com.msg.fillmap.video.service.VideoService;
 
 @Tag(name = "영상 (Video)", description = "영상 업로드·교체·삭제 API. 업로드는 presigned URL 발급 → S3 직접 업로드 → 메타데이터 저장 순서다.")
@@ -41,6 +44,7 @@ import com.msg.fillmap.video.service.VideoService;
 public class VideoController {
 
 	private final VideoService videoService;
+	private final HighlightPreviewService highlightPreviewService;
 
 	@Operation(
 		summary = "영상 메타데이터 저장 (업로드 확정)",
@@ -65,6 +69,23 @@ public class VideoController {
 		@Valid @RequestBody PresignedUrlRequestDto request
 	) {
 		return SuccessResponse.of(videoService.issuePresignedUrl(principal.userId(), request));
+	}
+
+	@Operation(
+		summary = "하이라이트 선분석",
+		description = "업로드 확정 전 원본(presign purpose=HIGHLIGHT_PREVIEW 로 올린 pending 키)의 AI 하이라이트 "
+			+ "구간을 동기로 계산해 돌려준다. 원본 길이에 따라 응답까지 수 초에서 수십 초 걸린다(30초 1080p 기준 "
+			+ "5초 내외). highlights 가 빈 배열이면 추천 없음이니 FE 는 추천 단계를 스킵한다. 실패 시 FE 는 직접 구간 "
+			+ "지정으로 폴백한다 — 3502(분석 서버 문제, 재시도 가능)·3426(원본 파일 불량, 재시도 무의미)·3425(3분 "
+			+ "초과)·3413(400, 허용 크기 초과). 결과는 저장되지 않는 임시 값이며, 같은 키로 이후 업로드 확정"
+			+ "(POST /api/videos)이 가능하다."
+	)
+	@PostMapping("/highlight-preview")
+	public SuccessResponse<HighlightPreviewResponseDto> highlightPreview(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Valid @RequestBody HighlightPreviewRequestDto request
+	) {
+		return SuccessResponse.of(highlightPreviewService.analyze(principal.userId(), request));
 	}
 
 	@Operation(

@@ -111,13 +111,14 @@ class FfmpegRunnerTest {
 	}
 
 	@Test
-	void 손상된_파일이면_예외를_던진다(@TempDir Path dir) throws Exception {
+	void 손상된_파일이면_파일_불량_예외를_던진다(@TempDir Path dir) throws Exception {
 		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
 		Path broken = dir.resolve("broken.mp4");
 		Files.write(broken, new byte[2048]);
 
+		// 인프라 실패(타임아웃·바이너리 부재)와 구분되는 파일 불량 타입 — 선분석 3426 분류 근거 (MSG-351 P2-2)
 		assertThatThrownBy(() -> runner.probeDurationSec(broken))
-			.isInstanceOf(IllegalStateException.class);
+			.isInstanceOf(FfmpegRunner.InvalidMediaException.class);
 	}
 
 	/**
@@ -136,6 +137,21 @@ class FfmpegRunnerTest {
 
 		assertThat(System.currentTimeMillis() - started)
 			.as("타임아웃 300ms 안에 끊겨야 한다 (행 프로세스를 30초 기다리면 안 됨)")
+			.isLessThan(5_000);
+	}
+
+	/** 선분석 경로가 쓰는 호출별 타임아웃(P1-2)이 인스턴스 기본값(10분)을 이기는지 본다. ffmpeg 없이도 돈다. */
+	@Test
+	void 호출별_타임아웃이_기본값보다_우선한다() {
+		long started = System.currentTimeMillis();
+
+		assertThatThrownBy(() -> runner.runForTest(List.of("sleep", "30"), Duration.ofMillis(300)))
+			.isInstanceOf(IllegalStateException.class)
+			.isNotInstanceOf(FfmpegRunner.InvalidMediaException.class)   // 타임아웃은 파일 불량이 아니다 (P2-2)
+			.hasMessageContaining("타임아웃");
+
+		assertThat(System.currentTimeMillis() - started)
+			.as("기본 10분이 아니라 호출별 300ms 로 끊겨야 한다")
 			.isLessThan(5_000);
 	}
 }

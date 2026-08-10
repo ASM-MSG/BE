@@ -25,7 +25,9 @@ public record AwsProperties(
 		@NotBlank
 		@Pattern(regexp = "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", message = "유효한 S3 버킷 이름이 아닙니다")
 		String bucket,
-		@Positive long maxUploadBytes
+		@Positive long maxUploadBytes,
+		// 선분석(purpose=HIGHLIGHT_PREVIEW) 원본 전용 상한 — 3분 4K 60fps 최악 약 2GB 커버 (MSG-351 D-4)
+		@Positive long maxHighlightUploadBytes
 	) {
 	}
 }

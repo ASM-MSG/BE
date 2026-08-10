@@ -42,6 +42,7 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 class VideoPresignTest {
 
 	private static final long MAX_UPLOAD_BYTES = 104857600L;   // 100MB
+	private static final long MAX_HIGHLIGHT_UPLOAD_BYTES = 2147483648L;   // 2GiB (MSG-351 D-4)
 	private static final long USER_ID = 42L;
 
 	private VideoService videoService;
@@ -53,7 +54,8 @@ class VideoPresignTest {
 			.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("ak", "sk")))
 			.build();
 		AwsProperties properties = new AwsProperties(
-			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", MAX_UPLOAD_BYTES));
+			"ap-northeast-2",
+			new AwsProperties.S3("fillmap-video-dev", MAX_UPLOAD_BYTES, MAX_HIGHLIGHT_UPLOAD_BYTES));
 
 		// presign 경로는 DB 도 인코딩도 S3 조회도 타지 않는다.
 		videoService = new VideoServiceImpl(
@@ -67,7 +69,7 @@ class VideoPresignTest {
 	@Test
 	void mp4_요청이면_s3Key가_videos_pending_userId_uuid_mp4_형식이다() {
 		PresignedUrlResponseDto response = videoService.issuePresignedUrl(
-			USER_ID, new PresignedUrlRequestDto("mp4", "video/mp4", 8388608L));
+			USER_ID, new PresignedUrlRequestDto("mp4", "video/mp4", 8388608L, null));
 
 		assertThat(response.s3Key()).matches("videos/pending/42/[0-9a-f-]{36}\\.mp4");
 		assertThat(response.uploadUrl()).contains("fillmap-video-dev");
@@ -77,7 +79,7 @@ class VideoPresignTest {
 	@Test
 	void avi_확장자는_UNSUPPORTED_EXTENSION_을_던진다() {
 		assertThatThrownBy(() -> videoService.issuePresignedUrl(
-			USER_ID, new PresignedUrlRequestDto("avi", "video/x-msvideo", 8388608L)))
+			USER_ID, new PresignedUrlRequestDto("avi", "video/x-msvideo", 8388608L, null)))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.UNSUPPORTED_EXTENSION);
 	}
@@ -85,7 +87,7 @@ class VideoPresignTest {
 	@Test
 	void mp4에_video_quicktime_을_보내면_거부한다() {
 		assertThatThrownBy(() -> videoService.issuePresignedUrl(
-			USER_ID, new PresignedUrlRequestDto("mp4", "video/quicktime", 8388608L)))
+			USER_ID, new PresignedUrlRequestDto("mp4", "video/quicktime", 8388608L, null)))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.UNSUPPORTED_EXTENSION);
 	}
@@ -93,7 +95,24 @@ class VideoPresignTest {
 	@Test
 	void 상한_초과_크기는_FILE_TOO_LARGE_를_던진다() {
 		assertThatThrownBy(() -> videoService.issuePresignedUrl(
-			USER_ID, new PresignedUrlRequestDto("mp4", "video/mp4", MAX_UPLOAD_BYTES + 1)))
+			USER_ID, new PresignedUrlRequestDto("mp4", "video/mp4", MAX_UPLOAD_BYTES + 1, null)))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.FILE_TOO_LARGE);
+	}
+
+	@Test
+	void purpose가_하이라이트면_전용_상한이_적용된다() {
+		// 500MB — 기존 상한(100MB)은 넘지만 선분석 전용 상한(2GiB) 아래다 (MSG-351 D-4)
+		PresignedUrlResponseDto response = videoService.issuePresignedUrl(
+			USER_ID, new PresignedUrlRequestDto("mp4", "video/mp4", 524288000L, "HIGHLIGHT_PREVIEW"));
+
+		assertThat(response.s3Key()).matches("videos/pending/42/[0-9a-f-]{36}\\.mp4");
+	}
+
+	@Test
+	void purpose_없는_발급은_기존_상한_그대로다() {
+		assertThatThrownBy(() -> videoService.issuePresignedUrl(
+			USER_ID, new PresignedUrlRequestDto("mp4", "video/mp4", 524288000L, null)))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.FILE_TOO_LARGE);
 	}
@@ -106,7 +125,7 @@ class VideoPresignTest {
 	@Test
 	void presigned_URL_은_content_length_와_content_type_을_서명한다() {
 		PresignedUrlResponseDto response = videoService.issuePresignedUrl(
-			USER_ID, new PresignedUrlRequestDto("mp4", "video/mp4", 8388608L));
+			USER_ID, new PresignedUrlRequestDto("mp4", "video/mp4", 8388608L, null));
 
 		assertThat(signedHeadersOf(response.uploadUrl()))
 			.contains("content-length", "content-type");
