@@ -37,7 +37,9 @@
 `java -jar` 로 직접 실행하는 구조다(`.github/workflows/cd-dev.yml`). 따라서 "런타임 이미지에 포함"이
 성립하지 않는다.
 
-- **dev/prod EC2**: `sudo apt-get install -y ffmpeg` (인프라 담당이 1회 실행)
+- **dev/prod EC2**: ~~`sudo apt-get install -y ffmpeg` (인프라 담당이 1회 실행)~~ → **CD가 매 배포
+  멱등 설치로 보장** (`cd-dev.yml` 재시작 스텝, 2026-08-10 이관 — "사람이 1회 실행" 방식은
+  인스턴스 교체 때 유실 사고가 났다. MSG-351 작업 로그 참조)
 - **로컬**: `brew install ffmpeg`
 - 앱은 PATH 의 `ffmpeg`/`ffprobe` 를 호출한다. 경로를 설정으로 빼지 않는다(YAGNI).
 - **CI 에는 ffmpeg 를 설치하지 않는다.** 실 ffmpeg 테스트(`FfmpegRunnerTest`)는 바이너리가 없으면

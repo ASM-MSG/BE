@@ -47,6 +47,8 @@ jobs:
           script: |
             set -e
             cd /home/${{ secrets.PROD_EC2_USER }}/fillmap-prod
+            # ffmpeg 는 인코딩·선분석 probe 의 런타임 의존 — cd-dev.yml 과 같은 멱등 보장 (MSG-351)
+            command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
             mv -f fillmap-0.0.1-SNAPSHOT.jar app.jar
             sudo systemctl restart fillmap-prod
 
