@@ -3,6 +3,7 @@ package com.msg.fillmap.mission.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -29,9 +30,10 @@ import com.msg.fillmap.mission.repository.UserMissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionAwardServiceImpl;
 
 /**
- * awardOnUpload 의 조기 종료(FR-18)·"INSERT 성공분만 응답" 필터(FR-14)·MISSION_COUNT 뱃지 배선(FR-17)
- * 단위 검증. 경합 타이밍(판정과 INSERT 사이의 상대 커밋)은 통합 테스트로 결정적 재현이 안 돼 mock 으로
- * 가른다 — BadgeAwardServiceTest 선례. 쿼리 자체는 MissionAwardQueryTest 가 실 DB 로 본다.
+ * awardOnUpload 의 조기 종료(FR-18)·"INSERT 성공분만 응답" 필터(FR-14)·종류별 뱃지 배선
+ * (MSG-363 FR-1·FR-6) 단위 검증. 경합 타이밍(판정과 INSERT 사이의 상대 커밋)은 통합 테스트로
+ * 결정적 재현이 안 돼 mock 으로 가른다 — BadgeAwardServiceTest 선례. 쿼리 자체는
+ * MissionAwardQueryTest 가 실 DB 로 본다.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("MissionAwardService 판정·스탬프 발급")
@@ -72,8 +74,8 @@ class MissionAwardServiceTest {
 		given(missionRepository.findCompleted(USER_ID, List.of(3L)))
 			.willReturn(List.of(completed(3L, "성수 골목 코스", "COURSE")));
 		given(userMissionRepository.insertIgnoreConflict(USER_ID, 3L)).willReturn(1);
-		given(userMissionRepository.countMyStamps(USER_ID)).willReturn(BigDecimal.ONE);
-		given(badgeAwardService.award(eq(USER_ID), eq(BadgeConditionType.MISSION_COUNT), any()))
+		given(userMissionRepository.countMyStampsByType(USER_ID, "COURSE")).willReturn(BigDecimal.ONE);
+		given(badgeAwardService.award(eq(USER_ID), eq(BadgeConditionType.COURSE_COUNT), any()))
 			.willReturn(List.of());
 
 		MissionAwardResult result = missionAwardService.awardOnUpload(USER_ID, GRID_ID);
@@ -91,8 +93,8 @@ class MissionAwardServiceTest {
 		// 판정과 INSERT 사이 동시 업로드의 상대 트랜잭션이 4번을 먼저 발급한 경합 — 내 INSERT 는 0.
 		given(userMissionRepository.insertIgnoreConflict(USER_ID, 3L)).willReturn(1);
 		given(userMissionRepository.insertIgnoreConflict(USER_ID, 4L)).willReturn(0);
-		given(userMissionRepository.countMyStamps(USER_ID)).willReturn(BigDecimal.ONE);
-		given(badgeAwardService.award(eq(USER_ID), eq(BadgeConditionType.MISSION_COUNT), any()))
+		given(userMissionRepository.countMyStampsByType(USER_ID, "COURSE")).willReturn(BigDecimal.ONE);
+		given(badgeAwardService.award(eq(USER_ID), eq(BadgeConditionType.COURSE_COUNT), any()))
 			.willReturn(List.of());
 
 		MissionAwardResult result = missionAwardService.awardOnUpload(USER_ID, GRID_ID);
@@ -103,36 +105,124 @@ class MissionAwardServiceTest {
 	}
 
 	@Test
-	@DisplayName("첫 스탬프에 MISSION_COUNT 1 뱃지가 함께 지급된다 (FR-17)")
-	void 첫_스탬프에_MISSION_COUNT_1_뱃지가_함께_지급된다() {
-		given(missionRepository.findAwardCandidateIds(GRID_ID, USER_ID)).willReturn(List.of(3L));
-		given(missionRepository.findCompleted(USER_ID, List.of(3L)))
-			.willReturn(List.of(completed(3L, "성수 골목 코스", "COURSE")));
-		given(userMissionRepository.insertIgnoreConflict(USER_ID, 3L)).willReturn(1);
-		given(userMissionRepository.countMyStamps(USER_ID)).willReturn(BigDecimal.ONE);
-		given(badgeAwardService.award(USER_ID, BadgeConditionType.MISSION_COUNT, BigDecimal.ONE))
-			.willReturn(List.of(badge(12L, "MISSION_1")));
-
-		MissionAwardResult result = missionAwardService.awardOnUpload(USER_ID, GRID_ID);
-
-		assertThat(result.newBadges()).extracting(EarnedBadgeResponseDto::code).containsExactly("MISSION_1");
-	}
-
-	@Test
-	@DisplayName("스탬프 5개째에 다음 티어가 지급된다 — metric 은 내 스탬프 총수(FR-17)")
-	void 스탬프_5개째에_다음_티어가_지급된다() {
+	@DisplayName("축제 미션 완료는 축제 축으로만 판정된다 — 종류 간 합산 없음(MSG-363 FR-1)")
+	void 축제_미션_완료는_축제_축으로만_판정된다() {
 		given(missionRepository.findAwardCandidateIds(GRID_ID, USER_ID)).willReturn(List.of(9L));
 		given(missionRepository.findCompleted(USER_ID, List.of(9L)))
 			.willReturn(List.of(completed(9L, "여름 축제", "EVENT")));
 		given(userMissionRepository.insertIgnoreConflict(USER_ID, 9L)).willReturn(1);
-		BigDecimal five = BigDecimal.valueOf(5);
-		given(userMissionRepository.countMyStamps(USER_ID)).willReturn(five);
-		given(badgeAwardService.award(USER_ID, BadgeConditionType.MISSION_COUNT, five))
-			.willReturn(List.of(badge(13L, "MISSION_5")));
+		given(userMissionRepository.countMyStampsByType(USER_ID, "EVENT")).willReturn(BigDecimal.ONE);
+		given(badgeAwardService.award(USER_ID, BadgeConditionType.EVENT_COUNT, BigDecimal.ONE))
+			.willReturn(List.of(badge(18L, "EVENT_1")));
 
 		MissionAwardResult result = missionAwardService.awardOnUpload(USER_ID, GRID_ID);
 
-		assertThat(result.newBadges()).extracting(EarnedBadgeResponseDto::code).containsExactly("MISSION_5");
+		assertThat(result.newBadges()).extracting(EarnedBadgeResponseDto::code).containsExactly("EVENT_1");
+		then(badgeAwardService).should()
+			.award(USER_ID, BadgeConditionType.EVENT_COUNT, BigDecimal.ONE);
+		then(badgeAwardService).should(never())
+			.award(anyLong(), eq(BadgeConditionType.COURSE_COUNT), any());
+		then(badgeAwardService).should(never())
+			.award(anyLong(), eq(BadgeConditionType.POPUP_COUNT), any());
+	}
+
+	@Test
+	@DisplayName("한 업로드가 축제와 팝업을 동시에 완료하면 두 축이 각각 판정된다 (엣지 케이스 1)")
+	void 한_업로드가_축제와_팝업을_동시에_완료하면_두_축이_각각_판정된다() {
+		given(missionRepository.findAwardCandidateIds(GRID_ID, USER_ID)).willReturn(List.of(9L, 11L));
+		given(missionRepository.findCompleted(USER_ID, List.of(9L, 11L)))
+			.willReturn(List.of(completed(9L, "여름 축제", "EVENT"), completed(11L, "성수 팝업", "POPUP")));
+		given(userMissionRepository.insertIgnoreConflict(USER_ID, 9L)).willReturn(1);
+		given(userMissionRepository.insertIgnoreConflict(USER_ID, 11L)).willReturn(1);
+		given(userMissionRepository.countMyStampsByType(USER_ID, "EVENT")).willReturn(BigDecimal.ONE);
+		given(userMissionRepository.countMyStampsByType(USER_ID, "POPUP")).willReturn(BigDecimal.ONE);
+		given(badgeAwardService.award(USER_ID, BadgeConditionType.EVENT_COUNT, BigDecimal.ONE))
+			.willReturn(List.of(badge(18L, "EVENT_1")));
+		given(badgeAwardService.award(USER_ID, BadgeConditionType.POPUP_COUNT, BigDecimal.ONE))
+			.willReturn(List.of(badge(24L, "POPUP_1")));
+
+		MissionAwardResult result = missionAwardService.awardOnUpload(USER_ID, GRID_ID);
+
+		// 순서는 완료 스탬프 발급 순서를 따른다 (LinkedHashSet).
+		assertThat(result.newBadges()).extracting(EarnedBadgeResponseDto::code)
+			.containsExactly("EVENT_1", "POPUP_1");
+	}
+
+	@Test
+	@DisplayName("같은 종류 미션 두 개를 완료해도 그 축 판정은 한 번이다 — metric 이 종류 총계라 (MSG-363 §D3)")
+	void 같은_종류_미션_두_개를_완료해도_그_축_판정은_한_번이다() {
+		given(missionRepository.findAwardCandidateIds(GRID_ID, USER_ID)).willReturn(List.of(9L, 10L));
+		given(missionRepository.findCompleted(USER_ID, List.of(9L, 10L)))
+			.willReturn(List.of(completed(9L, "여름 축제", "EVENT"), completed(10L, "가을 축제", "EVENT")));
+		given(userMissionRepository.insertIgnoreConflict(USER_ID, 9L)).willReturn(1);
+		given(userMissionRepository.insertIgnoreConflict(USER_ID, 10L)).willReturn(1);
+		BigDecimal two = BigDecimal.valueOf(2);
+		given(userMissionRepository.countMyStampsByType(USER_ID, "EVENT")).willReturn(two);
+		given(badgeAwardService.award(USER_ID, BadgeConditionType.EVENT_COUNT, two))
+			.willReturn(List.of(badge(18L, "EVENT_1")));
+
+		MissionAwardResult result = missionAwardService.awardOnUpload(USER_ID, GRID_ID);
+
+		assertThat(result.newBadges()).extracting(EarnedBadgeResponseDto::code).containsExactly("EVENT_1");
+		then(badgeAwardService).should().award(anyLong(), any(), any());
+	}
+
+	@Test
+	@DisplayName("구역·테마·지속 미션 완료는 어떤 뱃지도 판정하지 않는다 — 화면 칩이 없는 유형(MSG-363 FR-6)")
+	void 구역_테마_지속_미션_완료는_어떤_뱃지도_판정하지_않는다() {
+		given(missionRepository.findAwardCandidateIds(GRID_ID, USER_ID)).willReturn(List.of(7L));
+		given(missionRepository.findCompleted(USER_ID, List.of(7L)))
+			.willReturn(List.of(completed(7L, "성동구 한 바퀴", "AREA")));
+		given(userMissionRepository.insertIgnoreConflict(USER_ID, 7L)).willReturn(1);
+
+		MissionAwardResult result = missionAwardService.awardOnUpload(USER_ID, GRID_ID);
+
+		assertThat(result.completedMissions())
+			.extracting(CompletedMissionResponseDto::missionId)
+			.containsExactly(7L);
+		assertThat(result.newBadges()).isEmpty();
+		then(badgeAwardService).should(never()).award(anyLong(), any(), any());
+		then(userMissionRepository).should(never()).countMyStampsByType(anyLong(), anyString());
+	}
+
+	@Test
+	@DisplayName("칩 없는 유형이 먼저 완료돼도 뒤따르는 축은 판정된다 — 건너뛰기지 중단이 아니다(FR-6)")
+	void 칩_없는_유형이_먼저_완료돼도_뒤따르는_축은_판정된다() {
+		given(missionRepository.findAwardCandidateIds(GRID_ID, USER_ID)).willReturn(List.of(7L, 9L));
+		given(missionRepository.findCompleted(USER_ID, List.of(7L, 9L)))
+			.willReturn(List.of(completed(7L, "성동구 한 바퀴", "AREA"), completed(9L, "여름 축제", "EVENT")));
+		given(userMissionRepository.insertIgnoreConflict(USER_ID, 7L)).willReturn(1);
+		given(userMissionRepository.insertIgnoreConflict(USER_ID, 9L)).willReturn(1);
+		given(userMissionRepository.countMyStampsByType(USER_ID, "EVENT")).willReturn(BigDecimal.ONE);
+		given(badgeAwardService.award(USER_ID, BadgeConditionType.EVENT_COUNT, BigDecimal.ONE))
+			.willReturn(List.of(badge(18L, "EVENT_1")));
+
+		MissionAwardResult result = missionAwardService.awardOnUpload(USER_ID, GRID_ID);
+
+		// 매핑에 없는 AREA 가 앞에 있어도 뒤의 EVENT 축까지 루프가 이어져야 한다 — break 면 여기서 빈다.
+		assertThat(result.completedMissions()).extracting(CompletedMissionResponseDto::missionId)
+			.containsExactly(7L, 9L);
+		assertThat(result.newBadges()).extracting(EarnedBadgeResponseDto::code).containsExactly("EVENT_1");
+	}
+
+	@Test
+	@DisplayName("경합으로 발급되지 않은 스탬프의 종류는 판정 축에 들어가지 않는다 (MSG-363 §D3)")
+	void 경합으로_발급되지_않은_스탬프의_종류는_판정_축에_들어가지_않는다() {
+		given(missionRepository.findAwardCandidateIds(GRID_ID, USER_ID)).willReturn(List.of(9L, 11L));
+		given(missionRepository.findCompleted(USER_ID, List.of(9L, 11L)))
+			.willReturn(List.of(completed(9L, "여름 축제", "EVENT"), completed(11L, "성수 팝업", "POPUP")));
+		given(userMissionRepository.insertIgnoreConflict(USER_ID, 9L)).willReturn(1);
+		given(userMissionRepository.insertIgnoreConflict(USER_ID, 11L)).willReturn(0);
+		given(userMissionRepository.countMyStampsByType(USER_ID, "EVENT")).willReturn(BigDecimal.ONE);
+		given(badgeAwardService.award(USER_ID, BadgeConditionType.EVENT_COUNT, BigDecimal.ONE))
+			.willReturn(List.of(badge(18L, "EVENT_1")));
+
+		MissionAwardResult result = missionAwardService.awardOnUpload(USER_ID, GRID_ID);
+
+		assertThat(result.newBadges()).extracting(EarnedBadgeResponseDto::code).containsExactly("EVENT_1");
+		then(badgeAwardService).should(never())
+			.award(anyLong(), eq(BadgeConditionType.POPUP_COUNT), any());
+		then(userMissionRepository).should(never()).countMyStampsByType(USER_ID, "POPUP");
 	}
 
 	@Test

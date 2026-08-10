@@ -11,7 +11,7 @@ import com.msg.fillmap.mission.entity.UserMission;
 import com.msg.fillmap.mission.entity.UserMissionId;
 
 /**
- * 스탬프 리포지토리 (MSG-223). 발급 INSERT 와 MISSION_COUNT 뱃지 판정용 집계(metric)를 담는다 —
+ * 스탬프 리포지토리 (MSG-223). 발급 INSERT 와 미션 뱃지 판정용 집계(metric)를 담는다 —
  * UserBadgeRepository 의 지급·집계 배치 패턴 미러.
  */
 public interface UserMissionRepository extends JpaRepository<UserMission, UserMissionId> {
@@ -30,10 +30,16 @@ public interface UserMissionRepository extends JpaRepository<UserMission, UserMi
 	int insertIgnoreConflict(@Param("userId") long userId, @Param("missionId") long missionId);
 
 	/**
-	 * 미션 뱃지(MISSION_COUNT)의 판정값 — 내 스탬프 총수(FR-17). 비회수(FR-15)라 단조 증가 —
-	 * 뱃지 비회수 원칙과 정합. user_missions PK prefix 를 탄다. ::numeric 캐스트는 award() 의
-	 * metric 타입(BigDecimal)에 맞추기 위함(countMyVideos 선례).
+	 * 미션 뱃지의 판정값 — 그 종류의 내 스탬프 수 (MSG-363 §D4). 축이 축제·코스·팝업으로 갈리면서
+	 * 종류를 합산하던 countMyStamps 를 대체했다. 비회수(FR-15)라 단조 증가 — 뱃지 비회수 원칙과 정합.
+	 * user_missions PK prefix 로 내 스탬프만 훑고 missions PK 로 조인하므로 추가 인덱스가 필요 없다.
+	 * ::numeric 캐스트는 award() 의 metric 타입(BigDecimal)에 맞추기 위함(countMyVideos 선례).
 	 */
-	@Query(value = "SELECT COUNT(*)::numeric FROM user_missions WHERE user_id = :userId", nativeQuery = true)
-	BigDecimal countMyStamps(@Param("userId") long userId);
+	@Query(value = """
+		SELECT COUNT(*)::numeric
+		FROM user_missions um
+		JOIN missions m ON m.id = um.mission_id
+		WHERE um.user_id = :userId AND m.type = :type
+		""", nativeQuery = true)
+	BigDecimal countMyStampsByType(@Param("userId") long userId, @Param("type") String type);
 }

@@ -103,9 +103,11 @@ class VideoMissionIntegrationTest {
 
 		VideoUploadResponseDto response = videoService.saveVideo(userId, uploadRequest(미션격자_LAT, 미션격자_LON));
 
-		// 첫 업로드라 첫 발자국(EXPLORER_1)과 첫 스탬프(MISSION_1)가 한 응답에 실린다.
+		// 첫 업로드라 첫 발자국(EXPLORER_1)과 첫 축제 스탬프(EVENT_1)가 한 응답에 실린다 — 축제 미션이라
+		// 축제 축으로만 판정된다(MSG-363 FR-1). 은퇴한 MISSION_1 은 이제 어떤 완료로도 지급되지 않는다.
 		assertThat(response.newBadges()).extracting(EarnedBadgeResponseDto::code)
-			.contains("EXPLORER_1", "MISSION_1");
+			.contains("EXPLORER_1", "EVENT_1")
+			.doesNotContain("MISSION_1");
 	}
 
 	@Test

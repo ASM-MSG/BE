@@ -19,11 +19,14 @@ public interface BadgeRepository extends JpaRepository<Badge, Long> {
 	 * 티어를 동시에 충족하면 전부 지급하기 위해). condition_value 는 전 종류 공통 {"value": N} 포맷이라
 	 * 이 판정식 하나가 격자 수·업로드 수·수집률 등 모든 종류에 그대로 쓰인다.
 	 * 대부분의 행동은 0건으로 끝난다 — 판정 비용 = 인덱스드 카운트 + 이 SELECT 1회.
+	 * retired_at 이 있는 뱃지는 후보에서 뺀다 (MSG-363 §D2) — 은퇴 = "더 이상 새로 주지 않는다"이고,
+	 * 이미 받은 사람의 이력은 user_badges 에 그대로 남는다(FR-4).
 	 */
 	@Query(value = """
 		SELECT b.id AS "badgeId", b.code, b.name, b.description, b.icon_url AS "iconUrl"
 		FROM badges b
 		WHERE b.condition_type = :type
+		  AND b.retired_at IS NULL
 		  AND (b.condition_value->>'value')::numeric <= :metric
 		  AND NOT EXISTS (SELECT 1 FROM user_badges ub WHERE ub.user_id = :userId AND ub.badge_id = b.id)
 		ORDER BY (b.condition_value->>'value')::numeric
@@ -38,12 +41,14 @@ public interface BadgeRepository extends JpaRepository<Badge, Long> {
 	 * 임박 후보 조회 (docs/spec/MSG-314.md D1) — 같은 축에서 아직 못 받은 티어 중 condition_value 가 정확히
 	 * metric + 1 인 뱃지. 티어 값은 축 안에서 서로 다르므로(V9·V10·V12 시딩) 결과는 호출당 최대 1건이다.
 	 * 지급 조건(value <= metric)과 서로소라 한 뱃지가 획득·임박 둘 다에 걸릴 수 없다. SELECT 목록을
-	 * findEligible 과 같게 맞춰 EligibleBadgeProjection 을 재사용한다.
+	 * findEligible 과 같게 맞춰 EligibleBadgeProjection 을 재사용한다. 은퇴 뱃지는 지급되지 않으므로
+	 * 임박 알림도 보내지 않는다 (MSG-363 §D2).
 	 */
 	@Query(value = """
 		SELECT b.id AS "badgeId", b.code, b.name, b.description, b.icon_url AS "iconUrl"
 		FROM badges b
 		WHERE b.condition_type = :type
+		  AND b.retired_at IS NULL
 		  AND (b.condition_value->>'value')::numeric = :metric + 1
 		  AND NOT EXISTS (SELECT 1 FROM user_badges ub WHERE ub.user_id = :userId AND ub.badge_id = b.id)
 		""", nativeQuery = true)
@@ -59,6 +64,8 @@ public interface BadgeRepository extends JpaRepository<Badge, Long> {
 	 * user_badges PK(user_id, badge_id) prefix 를 타므로 추가 인덱스가 필요 없다. isNew 는 이 SELECT
 	 * 시점의 notified_at NULL 여부 — 스탬프(markMyBadgesNotified)는 그 뒤 같은 트랜잭션에서 찍는다(§D3).
 	 * 정렬은 badges.id ASC = 시딩 순 = 축별·티어 오름차순(§D6, 도감 "빈 칸이 그 자리에" UX).
+	 * 은퇴 뱃지(MSG-363 §D2)만 이 마스터 driven 규칙에서 빠진다 — 획득자에게는 계속 보이지만(FR-4)
+	 * 미획득자에게는 행 자체를 감춘다. 영원히 못 받는 칸을 회색으로 남기지 않기 위해서다(FR-4).
 	 */
 	@Query(value = """
 		SELECT b.id AS "badgeId", b.code, b.name, b.description, b.icon_url AS "iconUrl",
@@ -68,6 +75,7 @@ public interface BadgeRepository extends JpaRepository<Badge, Long> {
 		       ub.featured_rank AS "featuredRank"
 		FROM badges b
 		LEFT JOIN user_badges ub ON ub.badge_id = b.id AND ub.user_id = :userId
+		WHERE b.retired_at IS NULL OR ub.user_id IS NOT NULL
 		ORDER BY b.id
 		""", nativeQuery = true)
 	List<MyBadgeProjection> findAllWithMyStatus(@Param("userId") long userId);
