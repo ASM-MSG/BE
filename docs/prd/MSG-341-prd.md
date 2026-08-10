@@ -158,7 +158,7 @@ classDiagram
 | `usergrid/service/impl/UserGridQueryServiceImpl.java` | 수정 (도감 목록, 지역별 갤러리 매핑) | B |
 | `friend/dto/FriendCollectionGridResponseDto.java` | 수정 (필드 2개) | B |
 | `friend/service/FriendServiceImpl.java` | 수정 (친구 격자 뷰포트, 최근 수집 격자 매핑) | B |
-| `docs/MSG-234.md` | 수정 (§D3 결정 변경 배너) | 문서 |
+| `docs/spec/MSG-234.md` | 수정 (§D3 결정 변경 배너) | 문서 |
 | `.claude/rules/glossary.md` | 수정 (표시명 항목의 "계산은 FE-local" 문구 개정) | 문서 |
 | `../LLM-WIKI/04-decisions/ADR 격자 표시명 zone.md` | 수정 (결정 변경 기록) | 문서 |
 

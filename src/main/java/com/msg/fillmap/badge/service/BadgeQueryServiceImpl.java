@@ -13,7 +13,7 @@ import com.msg.fillmap.badge.repository.MyBadgeProjection;
 import com.msg.fillmap.badge.repository.UserBadgeRepository;
 
 /**
- * 목록 SELECT → 미확인 스탬프 → 매핑 (docs/MSG-201.md §D3). 스탬프 UPDATE 가 있어 readOnly 가 아니다 —
+ * 목록 SELECT → 미확인 스탬프 → 매핑 (docs/spec/MSG-201.md §D3). 스탬프 UPDATE 가 있어 readOnly 가 아니다 —
  * 확인 처리가 별도 PATCH 로 옮겨지면(기획 확정 시) 이 조회는 readOnly 가 된다. 같은 사용자의 동시 조회
  * 2건이 둘 다 isNew true 를 볼 수 있으나 NEW 표시가 두 번 보일 뿐이라 원자화하지 않는다(§D3 비고).
  */

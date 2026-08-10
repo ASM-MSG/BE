@@ -34,7 +34,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  * region_stats recompute 동시성 회귀 (MSG-165, 실 PostGIS). 같은 사용자가 같은 행정동의 서로 다른 격자 2개를
  * 거의 동시에 첫 점령하는 두 트랜잭션이, per-user advisory 락(MSG-155 선반영)으로 recompute 가 직렬화돼
  * 최종 collected_count = 2 로 수렴하는지 검증한다. 락이 없으면 두 recompute 가 서로의 미커밋 user_grids 를
- * 못 보고 각자 1 을 써 lost update(최종 1)가 난다 — 이 테스트가 그 회귀를 잡는다(설계 근거는 docs/MSG-165.md).
+ * 못 보고 각자 1 을 써 lost update(최종 1)가 난다 — 이 테스트가 그 회귀를 잡는다(설계 근거는 docs/spec/MSG-165.md).
  *
  * <p>결정적 대기 프로토콜(고정 sleep 없이 스케줄링 지연에 무관): 배리어는 두 user_grids 삽입 완료 직후·refresh
  * 진입 직전에 둬 두 미커밋 점령을 공존시킨다. 이어 각 워커는 refresh 리턴 직후 자기 done 플래그를 set 하고,

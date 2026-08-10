@@ -31,7 +31,7 @@ import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 
 /**
- * 뱃지 임박(BADGE_NEAR) 판정·상한·멱등 통합 검증 (실 PostGIS, docs/MSG-314.md). 생애 1회(D2)·하루
+ * 뱃지 임박(BADGE_NEAR) 판정·상한·멱등 통합 검증 (실 PostGIS, docs/spec/MSG-314.md). 생애 1회(D2)·하루
  * 1건(D3)·일 경계(D4)를 실제 DB 제약과 쿼리로 관찰해야 하므로 @Transactional 격리를 못 쓴다 —
  * 합성 유저를 커밋해 두고 @AfterEach 에서 users 지정 삭제로 걷어낸다 (user_badges·notifications
  * 모두 ON DELETE CASCADE — BadgeNotificationIntegrationTest 선례).

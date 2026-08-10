@@ -35,7 +35,7 @@ public interface BadgeRepository extends JpaRepository<Badge, Long> {
 	);
 
 	/**
-	 * 임박 후보 조회 (docs/MSG-314.md D1) — 같은 축에서 아직 못 받은 티어 중 condition_value 가 정확히
+	 * 임박 후보 조회 (docs/spec/MSG-314.md D1) — 같은 축에서 아직 못 받은 티어 중 condition_value 가 정확히
 	 * metric + 1 인 뱃지. 티어 값은 축 안에서 서로 다르므로(V9·V10·V12 시딩) 결과는 호출당 최대 1건이다.
 	 * 지급 조건(value <= metric)과 서로소라 한 뱃지가 획득·임박 둘 다에 걸릴 수 없다. SELECT 목록을
 	 * findEligible 과 같게 맞춰 EligibleBadgeProjection 을 재사용한다.
@@ -54,7 +54,7 @@ public interface BadgeRepository extends JpaRepository<Badge, Long> {
 	);
 
 	/**
-	 * 내 뱃지 전체 목록 (docs/MSG-201.md §D2·D6) — 마스터 driven: 시딩된 뱃지는 획득 여부와 무관하게
+	 * 내 뱃지 전체 목록 (docs/spec/MSG-201.md §D2·D6) — 마스터 driven: 시딩된 뱃지는 획득 여부와 무관하게
 	 * 전부 나오고, 미시딩 축은 행 자체가 없다. LEFT JOIN 의 ub.user_id = :userId equi 가
 	 * user_badges PK(user_id, badge_id) prefix 를 타므로 추가 인덱스가 필요 없다. isNew 는 이 SELECT
 	 * 시점의 notified_at NULL 여부 — 스탬프(markMyBadgesNotified)는 그 뒤 같은 트랜잭션에서 찍는다(§D3).

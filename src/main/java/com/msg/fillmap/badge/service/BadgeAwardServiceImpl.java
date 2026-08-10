@@ -32,7 +32,7 @@ import com.msg.fillmap.notification.service.NotificationCommandService;
  * 실제로 성공한(영향 행 1) 뱃지만 담는다: 동시 요청 경합에서 상대 트랜잭션이 같은 뱃지를 먼저
  * 지급했다면 내 INSERT 는 ON CONFLICT 로 0 을 받고, 그 뱃지는 "이 요청으로 새로 획득한" 게 아니므로
  * 응답에서 제외한다. PostgreSQL 은 conflict 판정 전에 선행 트랜잭션 커밋을 기다리므로 이 필터는
- * 경합에서도 안전하다. 상세 결정: docs/MSG-239.md §D5 (+ Codex 교차 리뷰로 성공분만 반환으로 강화).
+ * 경합에서도 안전하다. 상세 결정: docs/spec/MSG-239.md §D5 (+ Codex 교차 리뷰로 성공분만 반환으로 강화).
  *
  * <p>지급 루프 뒤에는 임박 판정(MSG-314)이 이어진다 — 다음 티어까지 정확히 1 남은 순간을 잡아
  * BADGE_NEAR 알림을 같은 커밋에 기록한다. 획득(value <= metric)과 임박(value = metric + 1)은
@@ -107,7 +107,7 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
 	}
 
 	/**
-	 * 뱃지 임박 알림 기록 (docs/MSG-314.md). 생애 1회는 이벤트 키 유니크 + DO NOTHING(D2)이, 하루 1건은
+	 * 뱃지 임박 알림 기록 (docs/spec/MSG-314.md). 생애 1회는 이벤트 키 유니크 + DO NOTHING(D2)이, 하루 1건은
 	 * try 잠금 획득 후의 존재 확인(D3)이 강제한다 — 잠금을 못 잡으면 대기 대신 그 시도만 스킵한다
 	 * (블로킹이면 업로드 트랜잭션의 streaks 행 잠금과 순서 사이클로 데드락, tryAcquireBadgeNearLock 주석).
 	 * 잠금이 존재 확인보다 반드시 앞이다 — 뒤집히면 select-then-act 경합이 재발한다 (PR #114).

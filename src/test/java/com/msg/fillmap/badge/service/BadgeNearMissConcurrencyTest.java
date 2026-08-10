@@ -26,7 +26,7 @@ import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 
 /**
- * 뱃지 임박 하루 1건 상한의 경합 제어 회귀 (docs/MSG-314.md D3, 실 PostGIS). 잠금이 비대기
+ * 뱃지 임박 하루 1건 상한의 경합 제어 회귀 (docs/spec/MSG-314.md D3, 실 PostGIS). 잠금이 비대기
  * (pg_try_advisory_xact_lock — 블로킹이면 업로드 트랜잭션의 streaks 행 잠금과 순서 사이클로 데드락,
  * Codex 1R P2)라 블로킹 대기 관찰 프로토콜(RegionStatsConcurrencyTest의 pg_blocking_pids)이 성립하지
  * 않는다. 대신 별도 raw 커넥션이 같은 키('badge_near:{userId}')의 잠금을 쥔 상태를 고정해 두 국면을

@@ -1,6 +1,6 @@
 ---
 name: spec-writer
-description: FillMap MSG-XX 티켓을 개발 스펙 문서(docs/MSG-XXX.md)로 변환한다. spec-driven-dev 오케스트레이터가 개발 착수 전 이 에이전트를 먼저 호출한다.
+description: FillMap MSG-XX 티켓을 개발 스펙 문서(docs/spec/MSG-XXX.md)로 변환한다. spec-driven-dev 오케스트레이터가 개발 착수 전 이 에이전트를 먼저 호출한다.
 tools: Read, Grep, Glob, Write, WebFetch
 ---
 
@@ -9,7 +9,7 @@ tools: Read, Grep, Glob, Write, WebFetch
 ## 핵심 역할
 
 MSG-XX 티켓(사용자가 대화로 준 설명, 또는 Jira의 MSG 프로젝트 티켓)을 받아
-`docs/MSG-XXX.md` 스펙 문서를 작성한다. 이 문서는 grid-developer/auth-developer가 TDD를
+`docs/spec/MSG-XXX.md` 스펙 문서를 작성한다. 이 문서는 grid-developer/auth-developer가 TDD를
 시작하는 유일한 입력이므로, 모호함을 남기지 않는 것이 핵심 책임이다.
 
 ## 작업 원칙
@@ -46,7 +46,7 @@ MSG-XX 티켓(사용자가 대화로 준 설명, 또는 Jira의 MSG 프로젝트
    작성한 파일에서 패턴 `—|–`를 검색해 0건임을 확인하는 것까지가 작성이다.
    기존 스펙의 소급 재작성은 하지 않는다 — 신규 작성분과 신규 추가 절부터 적용.
 7. **PRD 경로도 면제 근거도 없는 프롬프트는 게이트 미통과다 — 스펙을 작성하지 않는다.**
-   `docs/MSG-*.md` 파일을 만들지 말고 즉시 "PRD/면제 근거 없이 호출됨(게이트 우회) — 게이트를
+   `docs/spec/MSG-*.md` 파일을 만들지 말고 즉시 "PRD/면제 근거 없이 호출됨(게이트 우회) — 게이트를
    거쳐 재호출하라"만 반환한다. 경고를 달고 작성하는 절충은 없다 — 파일이 생기는 순간 다음
    단계(구현)가 그것을 정본으로 소비해 게이트가 무의미해진다. 면제 근거가 왔으면 티켓 설명으로
    작성한다 — 면제 기준은 CLAUDE.md "개발 파이프라인" 절이 단일 정본("이 작업이 제품 요구사항을
@@ -60,7 +60,7 @@ MSG-XX 티켓(사용자가 대화로 준 설명, 또는 Jira의 MSG 프로젝트
 **입력**: MSG-XX 티켓 번호 + 다음 중 하나 — ① PRD 경로(전용/공유/kebab — 정본, 최우선)
 ② 면제 근거 + 티켓 설명/Jira 조회 결과. ①만 있어도 충분하며, 둘 다 없으면 게이트 우회로 취급한다.
 
-**출력**: `docs/MSG-{번호}.md` 파일. 최소 구성:
+**출력**: `docs/spec/MSG-{번호}.md` 파일. 최소 구성:
 
 ```markdown
 # MSG-XXX: {제목}

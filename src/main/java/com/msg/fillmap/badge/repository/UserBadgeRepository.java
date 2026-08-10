@@ -16,7 +16,7 @@ import com.msg.fillmap.badge.entity.UserBadgeId;
 /**
  * 획득 뱃지 리포지토리 (MSG-239). 지급 INSERT·대표 뱃지 교체 UPDATE 와, 뱃지 조건 판정에 쓰는 사용자별
  * 집계(metric) 쿼리 3종을 담는다. 집계가 videos·user_grids 등 남의 테이블을 읽더라도 "뱃지 판정용"이라는
- * 용도가 badge 도메인 소속이므로 각 도메인 리포지토리에 흩뿌리지 않고 여기 모은다. 상세: docs/MSG-239.md.
+ * 용도가 badge 도메인 소속이므로 각 도메인 리포지토리에 흩뿌리지 않고 여기 모은다. 상세: docs/spec/MSG-239.md.
  */
 public interface UserBadgeRepository extends JpaRepository<UserBadge, UserBadgeId> {
 
@@ -64,7 +64,7 @@ public interface UserBadgeRepository extends JpaRepository<UserBadge, UserBadgeI
 	Optional<BigDecimal> findMyRegionProgress(@Param("userId") long userId, @Param("gridId") String gridId);
 
 	/**
-	 * 미확인(새 뱃지) 확인 스탬프 (docs/MSG-201.md §D3) — 조회 응답에 실제로 실린 미확인 행에만
+	 * 미확인(새 뱃지) 확인 스탬프 (docs/spec/MSG-201.md §D3) — 조회 응답에 실제로 실린 미확인 행에만
 	 * notified_at 을 기록한다. IN 리스트로 좁히는 이유: user 전체 NULL UPDATE 면 SELECT 와 UPDATE 사이에
 	 * 소급 시딩(V10+ 류)이 끼워 넣은 행을 노출된 적 없는데 확인 처리할 수 있다. notified_at IS NULL
 	 * 가드는 동기 지급분(이미 now() 기록)·기확인분의 무의미 UPDATE 를 막는다.
@@ -87,7 +87,7 @@ public interface UserBadgeRepository extends JpaRepository<UserBadge, UserBadgeI
 	Object acquireFeaturedLock(@Param("userId") long userId);
 
 	/**
-	 * 임박 알림 하루 1건용 사용자 단위 advisory 트랜잭션 잠금 — 비대기 try (docs/MSG-314.md D3).
+	 * 임박 알림 하루 1건용 사용자 단위 advisory 트랜잭션 잠금 — 비대기 try (docs/spec/MSG-314.md D3).
 	 * notifications 의 유니크 제약은 (user_id, event_key) 하나뿐이라 "오늘 기록 존재 확인 → 기록"이
 	 * select-then-act 로 남는데, 이 잠금을 못 잡은(false) 쪽이 그 시도의 임박 기록을 포기해 상한이 지켜진다.
 	 * 블로킹 방식(acquireFeaturedLock 형)이 아닌 이유: 업로드 트랜잭션은 user_grids → streaks 순으로 행

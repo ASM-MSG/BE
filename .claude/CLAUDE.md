@@ -51,7 +51,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 구현 기준이라 적고 있어도 **구현 사실은 status.md가 이긴다** (위키는 작성 시점 스냅숏이다).
 
 문서 종류가 아니라 **읽는 목적**으로 가른다. 스펙을 **쓸 때**는 기존 결정과 부딪히는지 보러 위키를
-조회하고(조건 1), 이미 쓰인 `docs/MSG-*.md`의 **구현 지시를 따를 때**는 레포가 정본이다.
+조회하고(조건 1), 이미 쓰인 `docs/spec/MSG-*.md`의 **구현 지시를 따를 때**는 레포가 정본이다.
 
 조회는 **타겟 grep만** 한다(전체 탐색 금지). frontmatter의 `keywords`/`aliases`에 한·영 동의어가
 들어 있으니 그것으로 검색한다. 진입점: `index.md`(전체 지도) · `hot.md`(최근 작업) ·
@@ -69,7 +69,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 ## 개발 파이프라인 — PRD 필수
 
 ```text
-아이디어/티켓 → PRD(docs/prd/*.md) → 스펙(docs/MSG-XXX.md) → 구현
+아이디어/티켓 → PRD(docs/prd/*.md) → 스펙(docs/spec/MSG-XXX.md) → 구현
                  ↑ 필수 게이트
 ```
 
@@ -88,7 +88,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 
 ## 작업 로그 — 런타임 동작 기록
 
-구현을 마치면 스펙 문서(`docs/MSG-XXX.md`) 작업 로그에 diff 요약만 남기지 않는다.
+구현을 마치면 스펙 문서(`docs/spec/MSG-XXX.md`) 작업 로그에 diff 요약만 남기지 않는다.
 **데이터 저장 위치**(테이블·Redis 키·S3 경로) · **실행 쿼리**(핵심 SQL 실측) ·
 **예외 흐름**(어디서 던져져 어느 핸들러가 어떤 developCode로 변환) · **빈 동작**(생명주기·
 스케줄러·트랜잭션 프록시 경계)을 해당되는 만큼 함께 기록한다. 상세 기준:
@@ -98,7 +98,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 
 - **prd-writer** — PRD(제품 요구사항 문서) 생성 (`docs/prd/*.md`), **티켓·스펙보다 선행 · 필수 게이트**
   트리거: "PRD 만들어줘", "요구사항 문서 정리해줘", "개발 전에 문서부터"
-- **spec-writer** — 개발 스펙 문서 생성 (`docs/MSG-XXX.md`)
+- **spec-writer** — 개발 스펙 문서 생성 (`docs/spec/MSG-XXX.md`)
   트리거: "MSG-XX 스펙 만들어줘", "스펙 문서 정리해줘"
 - **spec-driven-dev** — 스펙 기반 TDD 개발 (grid-developer/auth-developer/convention-reviewer 팀 조율)
   트리거: "MSG-XX 개발 시작", "스펙대로 개발해줘", "MSG-XX 이어서/다시 개발"

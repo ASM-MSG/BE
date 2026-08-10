@@ -5,7 +5,7 @@ description: MSG-XX 스펙 문서를 기반으로 grid-developer/auth-developer/
 
 # Spec-Driven Dev Orchestrator
 
-`docs/MSG-XXX.md` 스펙을 읽고 grid-developer(Owner A) / auth-developer(Owner B) /
+`docs/spec/MSG-XXX.md` 스펙을 읽고 grid-developer(Owner A) / auth-developer(Owner B) /
 convention-reviewer 팀을 조율해 실제 코드와 테스트를 완성하는 오케스트레이터.
 
 팀 운영 방식(이름 붙여 스폰, `SendMessage` 통신, `TaskCreate` 작업 보드, 점진적 QA,
@@ -17,7 +17,7 @@ convention-reviewer 팀을 조율해 실제 코드와 테스트를 완성하는 
 
 | 팀원 이름 | 에이전트 타입 | 역할 | 산출물 |
 |-----------|--------------|------|--------|
-| `spec-writer` | `spec-writer` | 스펙 문서 없을 때만 선행 호출 | `docs/MSG-{번호}.md` |
+| `spec-writer` | `spec-writer` | 스펙 문서 없을 때만 선행 호출 | `docs/spec/MSG-{번호}.md` |
 | `grid-dev` | `grid-developer` | Owner A 구현 (지도 인프라) | Owner A 패키지 하위 `src/main/java/**`, 테스트 |
 | `auth-dev` | `auth-developer` | Owner B 구현 (콘텐츠/인증) | Owner B 패키지 하위 `src/main/java/**`, 테스트 |
 | `reviewer` | `convention-reviewer` | 컨벤션·계약·빌드 검증 | 리뷰 결과(위반 목록 또는 통과) |
@@ -33,7 +33,7 @@ convention-reviewer 팀을 조율해 실제 코드와 테스트를 완성하는 
 ### Phase 0: 컨텍스트 확인
 
 0. **PRD 게이트 (필수, 건너뛰기 금지)**: 이 티켓을 **커버하는 PRD**의 존재를 **스펙보다 먼저** 확인한다.
-   **판별 전에 티켓 맥락부터 확보한다** — 기존 스펙(`docs/MSG-{번호}.md`)·대화에 없으면 Jira 조회.
+   **판별 전에 티켓 맥락부터 확보한다** — 기존 스펙(`docs/spec/MSG-{번호}.md`)·대화에 없으면 Jira 조회.
    공유 PRD 지목("선행 정본: ..." 문구)이 그 맥락 안에 있어서, 맥락 없이 판별하면 커버되는 티켓을
    "PRD 없음"으로 오판해 중복 PRD를 만든다.
    판별 순서 — ① 전용 `docs/prd/MSG-{번호}-prd.md` ② 확보한 맥락(스펙·대화·티켓)이 정본으로
@@ -79,7 +79,7 @@ convention-reviewer 팀을 조율해 실제 코드와 테스트를 완성하는 
      구현에 들어가지 않는다(구 티켓 이어받기가 이 구멍으로 가장 자주 샌다).
    - **면제 기준** (위 "없음" 분기의 선판단에서 사용): CLAUDE.md "개발 파이프라인" 절이 단일 정본 —
      "이 작업이 제품 요구사항을 새로 만들거나 바꾸는가" 하나로 판단한다.
-1. `docs/MSG-{번호}.md` 존재 여부 확인.
+1. `docs/spec/MSG-{번호}.md` 존재 여부 확인.
    - **없음** → **spec-writer 스킬을 실행한다**(에이전트 직호출 금지 — 맥락 확보·게이트·프롬프트
      조립·검증이 그 스킬 한 곳에 있고, 여기서 에이전트를 직접 부르면 그 계약이 복제·우회된다).
      게이트 0에서 이미 확인한 **실제 PRD 경로 또는 면제 근거**를 스킬에 전달해 중복 판별을
@@ -94,7 +94,7 @@ convention-reviewer 팀을 조율해 실제 코드와 테스트를 완성하는 
 
 ### Phase 1: 오너 판정 및 팀 결정
 
-`docs/MSG-{번호}.md`의 `**Owner**` 필드를 읽는다.
+`docs/spec/MSG-{번호}.md`의 `**Owner**` 필드를 읽는다.
 
 | Owner | 스폰할 개발 에이전트 |
 |-------|---------------------|
@@ -109,7 +109,7 @@ convention-reviewer 팀을 조율해 실제 코드와 테스트를 완성하는 
 ```
 Agent(name: "grid-dev", subagent_type: "grid-developer",
       run_in_background: true,
-      prompt: "docs/MSG-{번호}.md 스펙을 읽고 Owner A 범위를 구현하라. ...")
+      prompt: "docs/spec/MSG-{번호}.md 스펙을 읽고 Owner A 범위를 구현하라. ...")
 
 Agent(name: "auth-dev", subagent_type: "auth-developer",
       run_in_background: true, prompt: "...") // Owner B/공동일 때만
@@ -157,7 +157,7 @@ Agent(name: "reviewer", subagent_type: "convention-reviewer",
 
 ## 테스트 시나리오
 
-**정상 흐름**: "MSG-42 개발 시작해줘" → `docs/prd/MSG-42-prd.md`·`docs/MSG-42.md` 둘 다 존재
+**정상 흐름**: "MSG-42 개발 시작해줘" → `docs/prd/MSG-42-prd.md`·`docs/spec/MSG-42.md` 둘 다 존재
 확인(Owner A) → `grid-dev` + `reviewer` 스폰 → 모듈별 점진적 리뷰 → `./gradlew build` 통과 →
 커밋 메시지 후보 제시.
 
