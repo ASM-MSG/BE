@@ -32,9 +32,11 @@ import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.entity.FriendshipStatus;
 import com.msg.fillmap.friend.service.FriendService;
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.grid.service.OccupiedGridView;
+import com.msg.fillmap.grid.service.RegionAggregateView;
 import com.msg.fillmap.user.entity.GridColor;
 import com.msg.fillmap.user.entity.UserRole;
 import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
@@ -235,6 +237,92 @@ class FriendControllerTest {
 		mockMvc.perform(get("/api/friends/7/grids")
 				.param("swLat", "37.50")
 				.param("swLng", "127.00")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(4401));
+	}
+
+	@Test
+	@DisplayName("친구 집계 응답은 내 집계 조회와 같은 형상이다 — principal·경로 userId·단위가 서비스로 전달된다 (MSG-356 FR-4)")
+	void 친구_집계_응답은_내_집계_조회와_같은_형상이다() throws Exception {
+		given(friendService.getFriendGridAggregates(
+			USER_ID, 7L, new ViewportBounds(35.10, 128.90, 35.30, 129.20), RegionUnit.DONG))
+			.willReturn(List.of(
+				new RegionAggregateView("2623058000", "부전2동", 35.162, 129.065, 31),
+				// 행정동 미판정 묶음도 제외 없이 항목으로 실린다 (FR-7).
+				new RegionAggregateView(null, null, 35.101, 129.032, 2)));
+
+		mockMvc.perform(get("/api/friends/7/grids/aggregation")
+				.param("swLat", "35.10")
+				.param("swLng", "128.90")
+				.param("neLat", "35.30")
+				.param("neLng", "129.20")
+				.param("unit", "DONG")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data", Matchers.hasSize(2)))
+			.andExpect(jsonPath("$.data[0].regionCode").value("2623058000"))
+			.andExpect(jsonPath("$.data[0].name").value("부전2동"))
+			.andExpect(jsonPath("$.data[0].lat").value(35.162))
+			.andExpect(jsonPath("$.data[0].lng").value(129.065))
+			.andExpect(jsonPath("$.data[0].count").value(31))
+			.andExpect(jsonPath("$.data[0].*", Matchers.hasSize(5)))
+			.andExpect(jsonPath("$.data[1].regionCode").value(Matchers.nullValue()))
+			.andExpect(jsonPath("$.data[1].name").value(Matchers.nullValue()))
+			.andExpect(jsonPath("$.data[1].count").value(2));
+	}
+
+	@Test
+	@DisplayName("소문자 unit 도 허용된다 — 대소문자 무관 (MSG-356)")
+	void 소문자_unit도_허용된다() throws Exception {
+		given(friendService.getFriendGridAggregates(
+			USER_ID, 7L, new ViewportBounds(35.10, 128.90, 35.30, 129.20), RegionUnit.SIGUNGU))
+			.willReturn(List.of());
+
+		mockMvc.perform(get("/api/friends/7/grids/aggregation")
+				.param("swLat", "35.10")
+				.param("swLng", "128.90")
+				.param("neLat", "35.30")
+				.param("neLng", "129.20")
+				.param("unit", "sigungu")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data", Matchers.hasSize(0)));
+
+		verify(friendService).getFriendGridAggregates(
+			USER_ID, 7L, new ViewportBounds(35.10, 128.90, 35.30, 129.20), RegionUnit.SIGUNGU);
+	}
+
+	@Test
+	@DisplayName("unit 누락·미지원 값은 4405 다 — 내 집계 조회와 같은 에러 (MSG-356)")
+	void unit_누락이나_미지원_값은_4405다() throws Exception {
+		mockMvc.perform(get("/api/friends/7/grids/aggregation")
+				.param("swLat", "35.10")
+				.param("swLng", "128.90")
+				.param("neLat", "35.30")
+				.param("neLng", "129.20")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(4405));
+
+		mockMvc.perform(get("/api/friends/7/grids/aggregation")
+				.param("swLat", "35.10")
+				.param("swLng", "128.90")
+				.param("neLat", "35.30")
+				.param("neLng", "129.20")
+				.param("unit", "EUPMYEON")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(4405));
+	}
+
+	@Test
+	@DisplayName("집계 조회도 뷰포트 파라미터가 빠지면 4401 이다 (MSG-356)")
+	void 집계_뷰포트_파라미터_누락은_4401이다() throws Exception {
+		mockMvc.perform(get("/api/friends/7/grids/aggregation")
+				.param("swLat", "35.10")
+				.param("unit", "DONG")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.developCode").value(4401));

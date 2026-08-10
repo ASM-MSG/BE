@@ -3,6 +3,7 @@ package com.msg.fillmap.friend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
@@ -23,10 +24,12 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.grid.service.OccupiedGridView;
+import com.msg.fillmap.grid.service.RegionAggregateView;
 import com.msg.fillmap.region.RegionTestFixtures;
 import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.user.entity.User;
@@ -39,10 +42,11 @@ import com.msg.fillmap.zone.entity.Zone;
  * 검증(MSG-349)만 999 대역 합성 행정동을 그 자리에 심어 쓴다
  * (FriendProfileIntegrationTest 패턴). 검증 축 = 친구 도감만 보인다(내 격자 불포함)·커서 페이지네이션·
  * 관계 은닉(실패 전건 9424)·검증 규칙이 내 조회와 같다(4401/4402/4403/4404)·판정 순서(9424 우선).
+ * 같은 판정 하나를 거쳐 위임하는 축소 뷰 집계 조회(MSG-356)도 여기서 함께 고정한다.
  */
 @SpringBootTest
 @Transactional
-@DisplayName("친구 격자 뷰포트 조회 (실 DB)")
+@DisplayName("친구 격자 뷰포트·집계 조회 (실 DB)")
 class FriendGridViewportTest {
 
 	// 서해 공해상 — 어떤 행정동에도 안 속하는 기준점.
@@ -281,6 +285,63 @@ class FriendGridViewportTest {
 			stranger.getId(), friend.getId(), inverted, null, DEFAULT_SIZE))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
+	}
+
+	@Test
+	@DisplayName("친구가 점령한 격자만 행정 단위로 묶여 집계된다 — 내 격자는 섞이지 않는다 (MSG-356 FR-4)")
+	void 친구_집계는_ACCEPTED_관계에서_친구_기준으로_집계된다() {
+		seedRegion(baseY, baseY + 3, baseX, baseX + 3);
+		occupyLabeled(friend, 0, 0);
+		occupyLabeled(friend, 1, 0);
+		occupyLabeled(me, 2, 0);
+
+		List<RegionAggregateView> aggregates = friendAggregates(bounds(0, 0, 3, 3), RegionUnit.DONG);
+
+		assertThat(aggregates).singleElement().satisfies(item -> {
+			assertThat(item.regionCode()).isEqualTo(REGION_CODE);
+			assertThat(item.name()).isEqualTo("합성349동");
+			// 내 격자(2, 0)가 같은 행정동 안에 있어도 세지 않는다 — 집계 대상은 친구 소유 점령분뿐이다.
+			assertThat(item.count()).isEqualTo(2);
+		});
+	}
+
+	@Test
+	@DisplayName("요청한 집계 단위가 그대로 위임된다 — friend 는 단위를 해석하지 않는다 (MSG-356)")
+	void 요청한_집계_단위가_그대로_위임된다() {
+		// 위임 한 줄이 단위를 떨구거나 고정값을 넣지 않는지 고정한다 — 묶음 키·이름이 단위마다 달라지는 것이 신호다.
+		seedRegion(baseY, baseY + 3, baseX, baseX + 3);
+		occupyLabeled(friend, 0, 0);
+
+		List<RegionAggregateView> aggregates = friendAggregates(bounds(0, 0, 3, 3), RegionUnit.SIGUNGU);
+
+		assertThat(aggregates).singleElement().satisfies(item -> {
+			assertThat(item.regionCode()).isEqualTo(REGION_CODE.substring(0, 5));
+			assertThat(item.name()).isEqualTo("합성구");
+		});
+	}
+
+	@Test
+	@DisplayName("친구 집계도 실패는 9424 하나다 — 비친구·본인 ID·대기 중 상대·미존재 userId (MSG-356 FR-4)")
+	void 비친구의_친구_집계_요청은_9424_단일_실패다() {
+		User stranger = seedUser("남");
+		User pending = seedUser("대기");
+		friendService.request(pending.getId(), me.getFriendCode());
+
+		assertAggregateRejected(stranger.getId(), friend.getId());
+		assertAggregateRejected(me.getId(), me.getId());
+		assertAggregateRejected(me.getId(), pending.getId());
+		assertAggregateRejected(me.getId(), UNKNOWN_USER_ID);
+	}
+
+	private void assertAggregateRejected(long userId, long targetUserId) {
+		assertThatThrownBy(() -> friendService.getFriendGridAggregates(
+			userId, targetUserId, bounds(0, 0, 3, 3), RegionUnit.DONG))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
+	}
+
+	private List<RegionAggregateView> friendAggregates(ViewportBounds bounds, RegionUnit unit) {
+		return friendService.getFriendGridAggregates(me.getId(), friend.getId(), bounds, unit);
 	}
 
 	private OccupiedGridPage friendGrids(ViewportBounds bounds, String cursor, int size) {
