@@ -1,17 +1,23 @@
 package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.net.SocketTimeoutException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -32,14 +38,21 @@ class AiClientTest {
 	private static final String BASE_URL = "http://ai.test";
 
 	private MockRestServiceServer server;
+	private MockRestServiceServer highlightServer;
 	private AiClient aiClient;
+
+	@TempDir
+	private Path tempDir;
 
 	@BeforeEach
 	void setUp() {
 		RestClient.Builder builder = RestClient.builder();
 		server = MockRestServiceServer.bindTo(builder).build();
+		// 선분석 전용 RestClient(MSG-351 D-5)는 별도 builder 로 조립되므로 서버도 따로 바인딩한다.
+		RestClient.Builder highlightBuilder = RestClient.builder();
+		highlightServer = MockRestServiceServer.bindTo(highlightBuilder).build();
 		AiProperties properties = new AiProperties(true, BASE_URL, Duration.ofMinutes(30), 30000L);
-		aiClient = new AiClient(builder, properties);
+		aiClient = new AiClient(builder, highlightBuilder, properties);
 	}
 
 	@Test
@@ -187,5 +200,42 @@ class AiClientTest {
 			.andRespond(withStatus(HttpStatus.CONFLICT));
 
 		assertThat(aiClient.downloadBlurred("job-1")).isNull();
+	}
+
+	@Test
+	void 선분석은_highlights_구간_배열을_파싱해_반환한다() throws Exception {
+		highlightServer.expect(requestTo(BASE_URL + "/highlights"))
+			.andExpect(method(HttpMethod.POST))
+			.andRespond(withSuccess("{\"highlights\":[[0.0,5.12],[10.0,16.4]]}", MediaType.APPLICATION_JSON));
+
+		List<List<Double>> highlights = aiClient.analyzeHighlights(sourceFile());
+
+		assertThat(highlights).containsExactly(List.of(0.0, 5.12), List.of(10.0, 16.4));
+		highlightServer.verify();
+	}
+
+	@Test
+	void 선분석_422는_원본_불량_예외로_매핑한다() throws Exception {
+		highlightServer.expect(requestTo(BASE_URL + "/highlights"))
+			.andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT));
+
+		Path source = sourceFile();
+		assertThatThrownBy(() -> aiClient.analyzeHighlights(source))
+			.isInstanceOf(AiClient.HighlightSourceRejectedException.class);
+	}
+
+	@Test
+	void 선분석_타임아웃은_업스트림_예외로_매핑한다() throws Exception {
+		highlightServer.expect(requestTo(BASE_URL + "/highlights"))
+			.andRespond(withException(new SocketTimeoutException("read timeout")));
+
+		Path source = sourceFile();
+		assertThatThrownBy(() -> aiClient.analyzeHighlights(source))
+			.isInstanceOf(AiClient.HighlightUpstreamException.class);
+	}
+
+	/** FileSystemResource 전송(D-5)이라 실존 파일이 필요하다 — 내용은 계약과 무관한 더미. */
+	private Path sourceFile() throws Exception {
+		return Files.writeString(tempDir.resolve("source.mp4"), "dummy-video-bytes");
 	}
 }
