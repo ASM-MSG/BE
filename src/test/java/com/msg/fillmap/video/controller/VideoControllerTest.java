@@ -24,6 +24,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
+import com.msg.fillmap.video.service.HighlightPreviewService;
 import com.msg.fillmap.video.service.VideoService;
 
 @WebMvcTest(VideoController.class)
@@ -43,6 +44,10 @@ class VideoControllerTest {
 	@MockitoBean
 	private VideoService videoService;
 
+	// 컨트롤러 생성자 의존이라 @WebMvcTest 컨텍스트에 없으면 기동이 깨진다 — 이 파일의 검증엔 미사용 (MSG-351)
+	@MockitoBean
+	private HighlightPreviewService highlightPreviewService;
+
 	@Test
 	@DisplayName("duration 이 30 초를 초과하면 400 을 반환하고 서비스는 호출되지 않는다")
 	void duration_31이면_400() throws Exception {
@@ -60,7 +65,7 @@ class VideoControllerTest {
 	@Test
 	@DisplayName("presigned URL 요청에 contentLength 가 없으면 400 을 반환하고 서비스는 호출되지 않는다")
 	void contentLength_누락이면_400() throws Exception {
-		PresignedUrlRequestDto request = new PresignedUrlRequestDto("mp4", "video/mp4", null);
+		PresignedUrlRequestDto request = new PresignedUrlRequestDto("mp4", "video/mp4", null, null);
 
 		mockMvc.perform(post(PRESIGNED_URL)
 				.contentType(MediaType.APPLICATION_JSON)
