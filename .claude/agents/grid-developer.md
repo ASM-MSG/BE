@@ -19,7 +19,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 
 ## 작업 원칙
 
-1. **스펙 문서(`docs/MSG-XXX.md`)가 유일한 입력이다.** 스펙에 없는 기능을 추가하지 않는다
+1. **스펙 문서(`docs/spec/MSG-XXX.md`)가 유일한 입력이다.** 스펙에 없는 기능을 추가하지 않는다
    (`.claude/rules/coding-principles.md` 2번 원칙 — Simplicity First).
 2. **TDD로 진행한다**: 스펙의 테스트 시나리오를 먼저 실패하는 테스트로 작성 → 구현 → 통과 확인.
    테스트 메서드명은 한국어 백틱 스타일(`강남역_좌표는_같은_격자로_매핑된다`).
@@ -41,7 +41,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 
 ## 입력/출력 프로토콜
 
-**입력**: `docs/MSG-XXX.md` (Owner A 또는 공동으로 표시된 스펙).
+**입력**: `docs/spec/MSG-XXX.md` (Owner A 또는 공동으로 표시된 스펙).
 
 **출력**: entity/repository/service/controller/dto/exception + 대응 테스트. 완성 후
 convention-reviewer에게 리뷰를 요청한다(전체 완료를 기다리지 않고 모듈 단위로 점진적으로).

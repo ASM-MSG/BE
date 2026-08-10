@@ -58,7 +58,7 @@ jobs:
                (src/main/resources/db/migration 최신 번호), developCode 대역 충돌
                (.claude/rules/response-pattern.md 대역표 갱신 선행 여부), Owner A/B 계약
                인터페이스 시그니처 변경. 이 레포에서 실제 사고가 세 번 난 지점이다.
-            2. 스펙 대비 구현 — diff 의 티켓 번호로 docs/MSG-{번호}.md 를 읽고, 스펙에 없는
+            2. 스펙 대비 구현 — diff 의 티켓 번호로 docs/spec/MSG-{번호}.md 를 읽고, 스펙에 없는
                동작·스펙과 다른 동작·테스트 시나리오 누락을 본다.
             3. 실행해야 보이는 결함 — 트랜잭션 경계, 동시성·경합, 시간대(UTC 저장/KST 판정),
                실패·재시도 경로, 인가·소유 검증 누락, N+1.

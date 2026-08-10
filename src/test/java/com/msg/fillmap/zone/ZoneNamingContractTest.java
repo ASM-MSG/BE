@@ -34,8 +34,8 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
  * 판정 대상은 실물 {@link ZoneNameResolver} 다 (D-3 — 계산이 서버로 오면서 테스트 안에 두었던 참조 구현은
  * 삭제됐다). 판정 기준은 분리 기대값(expectedZoneName·expectedZoneCell) 직접 비교이고,
  * 하위 호환으로 남은 통짜 expected 와의 정합은 별도 가드 테스트가 지킨다 (D-4).
- * 근거 결정: docs/MSG-234.md 의 §D2(명명 산술)·§D4(폴백)·§D5(겹침 결정성), docs/MSG-259.md 의 D-4(픽스처),
- * docs/MSG-341.md 의 D-3·D-4.
+ * 근거 결정: docs/spec/MSG-234.md 의 §D2(명명 산술)·§D4(폴백)·§D5(겹침 결정성), docs/spec/MSG-259.md 의 D-4(픽스처),
+ * docs/spec/MSG-341.md 의 D-3·D-4.
  */
 @DisplayName("격자 표시명 명명 계약 (픽스처 zone-naming.json 이 실행형 정본)")
 class ZoneNamingContractTest {

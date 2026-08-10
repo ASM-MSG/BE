@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FillMap Redis 핫구역 구현, 코드에서 응답까지</title>
+<style>
+	:root {
+		--bg: #f5f2eb;
+		--paper: #fffdf8;
+		--ink: #17221f;
+		--muted: #5d6a65;
+		--line: #d8ded9;
+		--green: #126a52;
+		--green-soft: #dcefe7;
+		--blue: #235e83;
+		--blue-soft: #e1eef6;
+		--amber: #8b5a16;
+		--amber-soft: #f7ead3;
+		--red: #973b34;
+		--red-soft: #f7e1df;
+		--code: #10201b;
+		--code-ink: #eaf5ef;
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--ink);
+		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+		line-height: 1.72;
+	}
+	main { width: min(1120px, calc(100% - 32px)); margin: 32px auto 72px; }
+	header, section, footer {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 18px;
+		box-shadow: 0 10px 30px rgba(29, 48, 41, 0.06);
+	}
+	header { padding: 42px 48px 36px; }
+	section { margin-top: 22px; padding: 36px 42px; }
+	footer { margin-top: 22px; padding: 22px 32px; color: var(--muted); font-size: 14px; }
+	h1 { max-width: 760px; margin: 0 0 14px; font-size: clamp(34px, 5vw, 58px); line-height: 1.08; letter-spacing: -0.04em; }
+	h2 { margin: 0 0 18px; font-size: 28px; line-height: 1.25; letter-spacing: -0.025em; }
+	h3 { margin: 28px 0 10px; font-size: 20px; }
+	p, ul, ol, dl, .measure { max-width: 72ch; }
+	p { margin: 10px 0 16px; }
+	.lead { font-size: 19px; color: #33443e; }
+	.kicker { margin: 0 0 10px; color: var(--green); font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+	.meta { display: grid; grid-template-columns: 120px 1fr; gap: 6px 16px; margin: 28px 0 0; }
+	.meta dt { color: var(--muted); font-weight: 700; }
+	.meta dd { margin: 0; }
+	.summary {
+		margin-top: 26px;
+		padding: 18px 20px;
+		border-left: 5px solid var(--green);
+		background: var(--green-soft);
+		border-radius: 4px 12px 12px 4px;
+		font-size: 18px;
+		font-weight: 700;
+	}
+	.diagram { overflow-x: auto; margin: 26px -8px 8px; padding: 8px; }
+	svg { display: block; min-width: 940px; width: 100%; height: auto; }
+	.card-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 22px 0; }
+	.card { border: 1px solid var(--line); border-radius: 14px; padding: 18px; background: #fff; }
+	.card b { display: block; margin-bottom: 6px; color: var(--green); font-size: 18px; }
+	.card p { margin: 0; font-size: 14px; color: #40514b; }
+	.table-wrap { overflow-x: auto; margin: 20px 0; }
+	table { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 14px; }
+	th, td { padding: 13px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+	th { background: #eef3f0; color: #31443d; font-size: 13px; }
+	code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 0.92em; }
+	p code, li code, td code { padding: 2px 5px; border-radius: 5px; background: #edf1ee; color: #1b4f3f; }
+	.code-block {
+		margin: 18px 0;
+		padding: 20px 22px;
+		background: var(--code);
+		color: var(--code-ink);
+		border-radius: 14px;
+		overflow-x: auto;
+		font: 13px/1.65 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+	}
+	.code-block .kw { color: #8fd7ff; }
+	.code-block .str { color: #f6d58a; }
+	.code-block .fn { color: #9ee7bd; }
+	.code-block .cm { color: #8ba399; }
+	.annotated { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(230px, 0.8fr); gap: 14px; align-items: start; }
+	.notes { margin-top: 18px; display: grid; gap: 10px; }
+	.note { border-radius: 12px; padding: 13px 15px; background: var(--blue-soft); color: #234b64; font-size: 14px; }
+	.note.warn { background: var(--amber-soft); color: #6f4816; }
+	.note.risk { background: var(--red-soft); color: #78312c; }
+	.flow { display: grid; grid-template-columns: repeat(8, minmax(80px, 1fr)); gap: 7px; margin: 22px 0 8px; }
+	.bucket { min-height: 78px; padding: 12px 8px; border: 1px solid #a8c9bd; border-radius: 10px; background: var(--green-soft); text-align: center; }
+	.bucket.current { border: 2px solid var(--green); background: #c8e7dc; }
+	.bucket b, .bucket span { display: block; }
+	.bucket span { color: var(--muted); font-size: 12px; }
+	.formula { margin: 18px 0; padding: 18px 20px; border-radius: 12px; background: #eef2ef; font-family: "SFMono-Regular", Consolas, monospace; overflow-x: auto; }
+	.callout { margin: 20px 0; padding: 18px 20px; border: 1px solid #e0b568; border-radius: 12px; background: var(--amber-soft); }
+	.callout.risk { border-color: #d49590; background: var(--red-soft); }
+	.callout h3 { margin: 0 0 8px; }
+	.checks { padding-left: 22px; }
+	.checks li { margin: 7px 0; }
+	.badge { display: inline-block; margin-right: 5px; padding: 2px 8px; border-radius: 999px; background: #e6ece8; color: #3f514a; font-size: 12px; font-weight: 700; }
+	.source-list { font-size: 14px; color: #40514b; }
+	.footnotes { font-size: 14px; color: #40514b; }
+	.footnotes li { margin-bottom: 10px; }
+	.small { font-size: 13px; color: var(--muted); }
+	@media (max-width: 820px) {
+		header, section { padding: 28px 22px; }
+		.card-grid { grid-template-columns: 1fr; }
+		.annotated { grid-template-columns: 1fr; }
+		.flow { grid-template-columns: repeat(4, minmax(80px, 1fr)); }
+		.meta { grid-template-columns: 92px 1fr; }
+	}
+</style>
+</head>
+<body>
+<main>
+<header>
+	<p class="kicker">FillMap backend explainer</p>
+	<h1>Redis 핫구역 구현, 코드에서 응답까지</h1>
+	<p class="lead">
+		현재 코드는 커밋된 영상 업로드를 100m 격자별로 세고, 최근 시간대의 전국 상위 격자를
+		지도 화면에 돌려준다. 여기서 Redis는 단순 응답 캐시가 아니다. 시간 버킷별 집계 원장과
+		30초짜리 조회 캐시를 함께 맡는다.
+	</p>
+	<dl class="meta">
+		<dt>Date</dt><dd>2026-08-07</dd>
+		<dt>Input shape</dt><dd>concept</dd>
+		<dt>Subject</dt><dd>현재 Redis 핫구역 집계 및 조회 구현, MSG-183, MSG-184, MSG-233</dd>
+	</dl>
+	<div class="summary">
+		한 문장으로 보면 이렇다. 업로드 1건을 해당 격자의 점수 1점으로 기록하고, UTC 6시간 버킷
+		8개를 합쳐 전국 상위 50개 중 점수 3 이상만 반환한다.
+	</div>
+</header>
+
+<section>
+	<h2>전체 흐름부터 잡기</h2>
+	<div class="diagram" aria-label="업로드부터 핫구역 응답까지의 전체 흐름">
+	<svg viewBox="0 0 1080 520" role="img" aria-labelledby="flow-title flow-desc">
+		<title id="flow-title">FillMap 핫구역 전체 흐름</title>
+		<desc id="flow-desc">영상 업로드 커밋 후 비동기 워커가 Redis 시간 버킷 점수를 올리고, 조회 요청은 여덟 버킷을 합산한 캐시에서 전국 상위 50개를 읽은 뒤 점수와 뷰포트로 필터한다.</desc>
+		<defs>
+			<marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+				<path d="M0,0 L0,6 L9,3 z" fill="#55736a"/>
+			</marker>
+			<filter id="halo" x="-15%" y="-15%" width="130%" height="130%">
+				<feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#17362c" flood-opacity="0.15"/>
+			</filter>
+		</defs>
+		<rect x="20" y="32" width="188" height="90" rx="14" fill="#e1eef6" stroke="#79a9c6" filter="url(#halo)"/>
+		<text x="114" y="65" text-anchor="middle" font-size="16" font-weight="700" fill="#183f57">VideoServiceImpl</text>
+		<text x="114" y="91" text-anchor="middle" font-size="13" fill="#315d75">DB 트랜잭션 커밋</text>
+		<text x="114" y="109" text-anchor="middle" font-size="12" fill="#557786">afterCommit 콜백</text>
+
+		<rect x="274" y="32" width="188" height="90" rx="14" fill="#dcefe7" stroke="#72b49d" filter="url(#halo)"/>
+		<text x="368" y="65" text-anchor="middle" font-size="16" font-weight="700" fill="#174b3b">단일 데몬 워커</text>
+		<text x="368" y="91" text-anchor="middle" font-size="13" fill="#376b5b">LinkedBlockingQueue</text>
+		<text x="368" y="109" text-anchor="middle" font-size="12" fill="#55776c">최대 10,000건</text>
+
+		<rect x="528" y="20" width="250" height="116" rx="14" fill="#fff5df" stroke="#d7aa57" filter="url(#halo)"/>
+		<text x="653" y="52" text-anchor="middle" font-size="16" font-weight="700" fill="#684313">Redis 버킷 ZSET</text>
+		<text x="653" y="77" text-anchor="middle" font-size="13" fill="#765620">hotzone:{bucketId}</text>
+		<text x="653" y="99" text-anchor="middle" font-size="12" fill="#7b643b">member = gridId</text>
+		<text x="653" y="117" text-anchor="middle" font-size="12" fill="#7b643b">score = 업로드 수, TTL 54h</text>
+
+		<path d="M208,77 L274,77" stroke="#55736a" stroke-width="2" marker-end="url(#arrow)"/>
+		<text x="241" y="64" text-anchor="middle" font-size="11" fill="#4b665e">enqueue</text>
+		<path d="M462,77 L528,77" stroke="#55736a" stroke-width="2" marker-end="url(#arrow)"/>
+		<text x="495" y="64" text-anchor="middle" font-size="11" fill="#4b665e">Lua</text>
+
+		<rect x="20" y="264" width="188" height="90" rx="14" fill="#e1eef6" stroke="#79a9c6" filter="url(#halo)"/>
+		<text x="114" y="297" text-anchor="middle" font-size="16" font-weight="700" fill="#183f57">GET /api/hotzones</text>
+		<text x="114" y="322" text-anchor="middle" font-size="13" fill="#315d75">남서, 북동 좌표</text>
+		<text x="114" y="342" text-anchor="middle" font-size="12" fill="#557786">인증은 공통 정책</text>
+
+		<rect x="274" y="252" width="214" height="116" rx="14" fill="#dcefe7" stroke="#72b49d" filter="url(#halo)"/>
+		<text x="381" y="284" text-anchor="middle" font-size="16" font-weight="700" fill="#174b3b">캐시 보장 Lua</text>
+		<text x="381" y="309" text-anchor="middle" font-size="12" fill="#376b5b">없으면 최근 8버킷</text>
+		<text x="381" y="328" text-anchor="middle" font-size="12" fill="#376b5b">ZUNIONSTORE</text>
+		<text x="381" y="347" text-anchor="middle" font-size="12" fill="#55776c">hotzone:top, TTL 30s</text>
+
+		<rect x="554" y="252" width="214" height="116" rx="14" fill="#fff5df" stroke="#d7aa57" filter="url(#halo)"/>
+		<text x="661" y="284" text-anchor="middle" font-size="16" font-weight="700" fill="#684313">전국 상위 50</text>
+		<text x="661" y="309" text-anchor="middle" font-size="12" fill="#765620">ZREVRANGE WITHSCORES</text>
+		<text x="661" y="328" text-anchor="middle" font-size="12" fill="#765620">score 3 미만 제거</text>
+		<text x="661" y="347" text-anchor="middle" font-size="12" fill="#7b643b">뷰포트 밖 제거</text>
+
+		<rect x="834" y="264" width="214" height="90" rx="14" fill="#f0e8f6" stroke="#aa86c4" filter="url(#halo)"/>
+		<text x="941" y="297" text-anchor="middle" font-size="16" font-weight="700" fill="#563568">HotZoneView</text>
+		<text x="941" y="322" text-anchor="middle" font-size="13" fill="#6c4f7c">gridId, gridY, gridX</text>
+		<text x="941" y="342" text-anchor="middle" font-size="12" fill="#7e6689">score 내림차순</text>
+
+		<path d="M208,309 L274,309" stroke="#55736a" stroke-width="2" marker-end="url(#arrow)"/>
+		<path d="M488,309 L554,309" stroke="#55736a" stroke-width="2" marker-end="url(#arrow)"/>
+		<path d="M768,309 L834,309" stroke="#55736a" stroke-width="2" marker-end="url(#arrow)"/>
+		<path d="M653,136 C653,194 381,194 381,252" fill="none" stroke="#8c7a4e" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#arrow)"/>
+		<text x="520" y="188" text-anchor="middle" font-size="12" fill="#6d6041">현재 포함 8개 키를 읽음</text>
+
+		<rect x="274" y="424" width="494" height="66" rx="13" fill="#f7e1df" stroke="#d3918c"/>
+		<text x="521" y="451" text-anchor="middle" font-size="14" font-weight="700" fill="#78312c">핫구역 알림은 별도 하류 기능</text>
+		<text x="521" y="474" text-anchor="middle" font-size="12" fill="#814a46">10분마다 전국 결과와 notification:hotzone:last SET을 비교</text>
+		<path d="M661,368 C661,401 610,411 610,424" fill="none" stroke="#9c625d" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+	</svg>
+	</div>
+	<p>
+		쓰기와 읽기는 서로 다른 경로다. 쓰기는 영상 업로드가 커밋된 뒤 대기열에 신호를 넣고 바로
+		빠진다. 읽기는 HTTP 요청마다 합산 캐시가 있는지 확인한 뒤 상위 격자만 가져온다. 알림은 이
+		조회 결과를 10분마다 소비하는 별도 기능이지, 핫구역 점수를 만드는 로직은 아니다.
+	</p>
+</section>
+
+<section>
+	<h2>무엇을 핫스코어로 세는가</h2>
+	<div class="card-grid">
+		<div class="card"><b>세는 것</b><p><code>saveVideo</code> 트랜잭션이 커밋된 영상 업로드. 같은 사용자가 같은 격자에 다시 올려도 매번 1점이다.</p></div>
+		<div class="card"><b>세지 않는 것</b><p>영상 교체와 삭제, 조회 수, 좋아요, 현재 위치, 고유 사용자 수는 점수에 들어가지 않는다.</p></div>
+		<div class="card"><b>정확성 수준</b><p>통계 원장이 아니라 근사 순위다. Redis 신호 유실과 삭제 후 잔존을 제품 요구사항이 허용한다.</p></div>
+	</div>
+	<p>
+		점수를 올리는 기준은 인코딩 완료가 아니라 DB 커밋이다. 영상이 나중에 인코딩 실패 상태가 돼도
+		이미 기록한 점수는 빼지 않는다. 공개 범위로도 분기하지 않으므로 현재 코드는 <code>PRIVATE</code>
+		업로드도 센다. <code>userId</code>를 Redis에 저장하지 않아서 사용자별 중복 제거도 없다.
+	</p>
+	<div class="callout">
+		<h3>여기서 “방문”의 뜻</h3>
+		<p>
+			핫구역 문맥의 방문은 위치 센서가 잡은 체류가 아니다. 사용자가 그 격자에서 영상을 업로드해
+			<code>videos</code> 행이 커밋된 사건이다. 서비스의 점령 여부와 무관해서 재방문 업로드도 센다.
+		</p>
+	</div>
+</section>
+
+<section>
+	<h2>Redis에는 이렇게 저장된다</h2>
+	<p>
+		핵심 자료구조는 Redis Sorted Set<sup>[1]</sup>이다. 같은 격자 ID를 member로 두고 점수를
+		업로드 수로 쓰면 <code>ZINCRBY</code> 한 번으로 누적할 수 있고, 점수 내림차순 상위 조회도
+		같은 자료구조에서 해결된다.
+	</p>
+	<div class="table-wrap">
+	<table>
+		<thead><tr><th>키</th><th>Redis 자료형</th><th>member와 score</th><th>수명</th><th>역할</th></tr></thead>
+		<tbody>
+		<tr>
+			<td><code>hotzone:{bucketId}</code></td>
+			<td>Sorted Set</td>
+			<td><code>member = "41642_110458"</code><br><code>score = 업로드 건수</code></td>
+			<td>마지막 증분 뒤 54시간</td>
+			<td>UTC 6시간 구간 하나의 집계 원장</td>
+		</tr>
+		<tr>
+			<td><code>hotzone:top</code></td>
+			<td>Sorted Set</td>
+			<td><code>member = gridId</code><br><code>score = 최근 8버킷 합계</code></td>
+			<td>30초</td>
+			<td>조회용 합산 캐시</td>
+		</tr>
+		<tr>
+			<td><code>notification:hotzone:last</code></td>
+			<td>Set</td>
+			<td><code>member = 직전 주기의 핫구역 gridId</code></td>
+			<td>명시 TTL 없음</td>
+			<td>알림 진입 전이 비교용 스냅숏</td>
+		</tr>
+		</tbody>
+	</table>
+	</div>
+	<p>
+		<code>gridId</code>는 <code>GridEncoder</code>가 위도와 경도를 격자 간격으로 나눈 뒤
+		내림해 만든 <code>"{gridY}_{gridX}"</code> 문자열이다. Redis에는 좌표나 사용자 ID를 따로
+		넣지 않는다. Spring 쪽에서는 <code>StringRedisTemplate</code>을 쓰므로 키와 member는 문자열,
+		Sorted Set의 score는 Redis 내부 부동소수점 수다. 현재 증분이 항상 정수 1이라 조회할 때
+		<code>Math.round</code>로 <code>long</code>에 옮긴다.
+	</p>
+	<div class="formula">bucketId = floor(현재 UTC epochSeconds / 21,600)</div>
+	<p>
+		TTL<sup>[2]</sup>은 48시간 판정 장치가 아니라 오래된 키를 치우는 장치다. 실제 판정 범위는
+		조회 시 선택하는 버킷 ID 8개가 정한다. 그래서 54시간이 지나지 않은 예전 키가 Redis에 남아
+		있어도 합산 대상에서 빠진다.
+	</p>
+</section>
+
+<section>
+	<h2>쓰기 로직은 커밋, 대기열, Lua 세 단계다</h2>
+	<div class="annotated">
+		<div>
+			<div class="code-block"><span class="cm">// VideoServiceImpl.saveVideo</span>
+<span class="fn">afterCommit</span>(() -&gt; hotScoreCommandService.<span class="fn">recordUpload</span>(gridId));
+
+<span class="cm">// HotScoreCommandServiceImpl.recordUpload</span>
+String key = <span class="str">"hotzone:"</span>
+    + clock.instant().getEpochSecond() / <span class="str">21600L</span>;
+executor.execute(() -&gt; <span class="fn">increment</span>(key, gridId));
+
+<span class="cm">-- Redis Lua</span>
+redis.call(<span class="str">'ZINCRBY'</span>, KEYS[1], 1, ARGV[1])
+redis.call(<span class="str">'EXPIRE'</span>, KEYS[1], ARGV[2])
+return 1</div>
+		</div>
+		<div class="notes">
+			<div class="note"><b>1. 커밋 뒤 실행</b><br>트랜잭션이 롤백되면 Redis에 유령 점수가 남지 않는다. 트랜잭션이 없는 테스트에서는 즉시 실행한다.</div>
+			<div class="note"><b>2. 버킷은 호출 시각에 확정</b><br>워커가 밀려 6시간 경계를 넘겨도 원래 호출 시각의 키에 기록한다.</div>
+			<div class="note"><b>3. Lua로 묶음</b><br><code>ZINCRBY</code>와 <code>EXPIRE</code>를 원자 실행<sup>[3]</sup>해 TTL 없는 버킷 키가 남는 틈을 없앤다.</div>
+		</div>
+	</div>
+	<p>
+		대기열은 <code>LinkedBlockingQueue&lt;Runnable&gt;</code> 10,000칸, 워커는 데몬 스레드
+		하나다. <code>recordUpload</code>가 Redis 응답을 기다리지 않으므로 정상 상태의 업로드 응답은
+		Redis 왕복 시간과 분리된다. 애플리케이션 종료 때는 최대 5초 동안 큐를 비우고, 그 안에 끝나지
+		않은 작업은 버린다.
+	</p>
+	<div class="callout risk">
+		<h3>실패 정책은 “업로드를 살리고 점수 1건을 버린다”</h3>
+		<p>
+			Redis 오류와 큐 포화 예외는 구현 안에서 잡아 경고 로그만 남긴다. 핫스코어가 원본 데이터가
+			아니라 근사 순위이기 때문이다. 다만 큐 포화 때 요청 스레드가 예외 스택 로그를 쓰므로 극단적인
+			버스트에서는 응답 분리 효과가 약해진다는 실측 결과가 있다.
+		</p>
+	</div>
+</section>
+
+<section>
+	<h2>“최근 48시간”은 고정 버킷 8개의 근사다</h2>
+	<div class="flow" aria-label="현재 버킷을 포함한 최근 여덟 개의 6시간 버킷">
+		<div class="bucket"><b>C-7</b><span>6시간</span></div>
+		<div class="bucket"><b>C-6</b><span>6시간</span></div>
+		<div class="bucket"><b>C-5</b><span>6시간</span></div>
+		<div class="bucket"><b>C-4</b><span>6시간</span></div>
+		<div class="bucket"><b>C-3</b><span>6시간</span></div>
+		<div class="bucket"><b>C-2</b><span>6시간</span></div>
+		<div class="bucket"><b>C-1</b><span>6시간</span></div>
+		<div class="bucket current"><b>C</b><span>진행 중</span></div>
+	</div>
+	<p>
+		조회는 현재 버킷 <code>C</code>와 앞의 7개를 더한다. 현재 버킷은 아직 다 차지 않았으므로 실제
+		포함 범위는 조회 시각에 따라 42시간에서 48시간 사이다. 정확히 현재 시각에서 48시간 전까지를
+		자르는 슬라이딩 윈도우가 아니다. 대신 6시간 버킷 8개만 합치면 돼 구조가 단순하다.
+	</p>
+	<div class="formula">hotzone:top = ZUNIONSTORE(C-7, C-6, C-5, C-4, C-3, C-2, C-1, C)</div>
+	<p>
+		각 버킷 가중치는 모두 1이다. 오래된 업로드를 덜 치는 시간 감쇠도 없다. 1시간 버킷이면 경계
+		오차는 줄지만 합칠 키가 48개로 늘어난다. 현재 설계는 핫구역을 정밀 통계가 아닌 탐색 신호로
+		보며, 정밀도보다 합산 키 수와 구현 단순성을 택했다.
+	</p>
+</section>
+
+<section>
+	<h2>조회는 합산 캐시를 만든 뒤 전국 상위 50개만 본다</h2>
+	<div class="annotated">
+		<div class="code-block"><span class="kw">if</span> redis.call(<span class="str">'EXISTS'</span>, KEYS[1]) == 0 <span class="kw">then</span>
+    redis.call(<span class="str">'ZUNIONSTORE'</span>, KEYS[1], #KEYS - 1,
+        unpack(KEYS, 2))
+    redis.call(<span class="str">'EXPIRE'</span>, KEYS[1], ARGV[1])
+<span class="kw">end</span>
+
+Set&lt;TypedTuple&lt;String&gt;&gt; top = redisTemplate.opsForZSet()
+    .<span class="fn">reverseRangeWithScores</span>(<span class="str">"hotzone:top"</span>, 0, topK - 1L);
+
+<span class="kw">for</span> (TypedTuple&lt;String&gt; tuple : top) {
+    <span class="kw">if</span> (score &lt; minScore) <span class="kw">continue</span>;
+    <span class="kw">if</span> (outsideViewport) <span class="kw">continue</span>;
+    hotZones.add(<span class="kw">new</span> HotZoneView(gridId, gridY, gridX, score));
+}</div>
+		<div class="notes">
+			<div class="note"><b>캐시가 있으면</b><br>Lua는 <code>EXISTS</code>만 확인하고 합산을 건너뛴다.</div>
+			<div class="note"><b>캐시가 없으면</b><br>최근 8개 ZSET을 합쳐 <code>hotzone:top</code>을 만들고 30초 TTL을 건다.</div>
+			<div class="note warn"><b>필터 순서가 중요</b><br>전국 상위 K를 먼저 자르고 점수와 뷰포트를 뒤에서 거른다.</div>
+		</div>
+	</div>
+	<ol class="checks">
+		<li>남서와 북동 좌표가 유한한지, 범위가 뒤집히지 않았는지 검사한다.</li>
+		<li><code>hotzone:top</code>을 보장한다. 비어 있으면 빈 목록을 반환한다.</li>
+		<li>점수 내림차순으로 전국 상위 <code>topK</code>, 기본 50개를 가져온다.</li>
+		<li>점수 <code>minScore</code>, 기본 3점 미만을 버린다.</li>
+		<li>격자 ID를 정수 인덱스로 풀어 요청 뷰포트 밖 격자를 버린다.</li>
+	</ol>
+	<div class="callout">
+		<h3>뷰포트 상위 50이 아니라 전국 상위 50이다</h3>
+		<p>
+			예를 들어 어떤 격자가 현재 화면 안에서 가장 뜨겁더라도 전국 순위가 51위면 응답에 없다.
+			반대로 전국 상위 50 중 화면 안에 들어온 격자만 남으므로 결과가 50개보다 훨씬 적거나 0개일
+			수 있다. 이 순서 덕분에 애플리케이션 필터 비용은 항상 최대 50건이다.
+		</p>
+	</div>
+	<p>
+		캐시 확인과 합산, TTL 설정도 Lua 한 번으로 묶였다. Redis는 한 Lua 스크립트를 실행하는 동안
+		다른 명령을 끼워 넣지 않는다. 첫 요청이 합산 중이면 뒤 요청은 기다렸다가, 캐시가 이미 생긴 것을
+		보고 합산을 건너뛴다. 그래서 캐시 스탬피드<sup>[4]</sup>는 없지만, 합산이 오래 걸리면 뒤 요청이
+		줄 서는 head-of-line 지연<sup>[5]</sup>은 생길 수 있다.
+	</p>
+</section>
+
+<section>
+	<h2>API가 돌려주는 값</h2>
+	<div class="code-block">GET /api/hotzones?swLat=37.50&amp;swLng=127.00&amp;neLat=37.55&amp;neLng=127.05
+
+{
+	<span class="str">"developCode"</span>: 200,
+	<span class="str">"message"</span>: <span class="str">"성공"</span>,
+  <span class="str">"data"</span>: {
+    <span class="str">"hotZones"</span>: [
+      {
+        <span class="str">"gridId"</span>: <span class="str">"41677_110443"</span>,
+        <span class="str">"gridY"</span>: 41677,
+        <span class="str">"gridX"</span>: 110443,
+        <span class="str">"score"</span>: 7
+      }
+    ]
+  }
+}</div>
+	<p>
+		서비스 내부 자료형은 <code>List&lt;HotZoneView&gt;</code>이고, 각 항목은
+		<code>record HotZoneView(String gridId, int gridY, int gridX, long score)</code>다. 컨트롤러가
+		이를 <code>HotZoneResponseDto</code>로 옮긴다. 사용자 ID와 좌표 원본은 응답에 없다.
+	</p>
+	<div class="table-wrap">
+	<table>
+		<thead><tr><th>상황</th><th>현재 동작</th></tr></thead>
+		<tbody>
+		<tr><td>핫구역이 없음</td><td><code>hotZones: []</code>, 정상 응답</td></tr>
+		<tr><td>필수 좌표 누락</td><td><code>@RequestParam</code>과 전역 처리기가 HTTP 400 처리</td></tr>
+		<tr><td>NaN, Infinity, 뒤집힌 범위</td><td>HTTP 400, <code>INVALID_VIEWPORT</code>, 코드 8400</td></tr>
+		<tr><td>쓰기 중 Redis 장애</td><td>업로드 성공 유지, 점수 신호 1건 유실 가능, 경고 로그</td></tr>
+		<tr><td>조회 중 Redis 장애</td><td><code>HotZoneServiceImpl</code>은 예외를 삼키지 않으므로 요청 경로로 전파</td></tr>
+		</tbody>
+	</table>
+	</div>
+	<p>
+		조회 방식은 polling<sup>[6]</sup>이다. 핫구역 변화에 초 단위 실시간성이 필요하지 않고 30초
+		정도의 낡은 결과를 허용하므로 WebSocket 연결과 분산 pub/sub을 만들지 않았다.
+	</p>
+</section>
+
+<section>
+	<h2>왜 Redis와 Sorted Set을 택했나</h2>
+	<div class="table-wrap">
+	<table>
+		<thead><tr><th>설계 요구</th><th>현재 선택</th><th>얻은 것</th><th>치른 대가</th></tr></thead>
+		<tbody>
+		<tr><td>업로드마다 빠른 증분</td><td><code>ZINCRBY</code></td><td>격자별 O(log N) 누적, 읽기 쉬운 순위</td><td>사용자별 중복 제거 없음</td></tr>
+		<tr><td>시간이 지나면 자동 제외</td><td>UTC 6시간 키 분할</td><td>삭제 배치 없이 룩백만 바꾸면 됨</td><td>정확한 48시간이 아니라 42~48시간</td></tr>
+		<tr><td>전국 상위 몇 개</td><td>Sorted Set 역순 조회</td><td>별도 정렬 없이 상위 50</td><td>뷰포트 지역 순위가 아닌 전국 순위</td></tr>
+		<tr><td>조회 부하 흡수</td><td><code>hotzone:top</code> 30초 캐시</td><td>적중 시 합산 없이 캐시 확인과 상위 조회만 실행</td><td>만료 순간 합산이 Redis를 잠시 점유</td></tr>
+		<tr><td>업로드 성공 우선</td><td>비동기 유계 큐, 실패 비전파</td><td>정상 Redis 지연을 응답에서 분리</td><td>포화와 장애 때 점수 유실 허용</td></tr>
+		</tbody>
+	</table>
+	</div>
+	<p>
+		PostgreSQL에 집계 테이블을 만들지 않은 이유도 같은 맥락이다. 원본 업로드는 이미
+		<code>videos</code>에 있고, 핫구역은 48시간 안에 사라지는 파생 순위다. DB 트랜잭션 정합성과
+		영구 보관을 추가할 이득보다 DDL, 쓰기 경합, 청소 배치 비용이 더 크다고 본 설계다. 다만 Redis
+		집계를 <code>videos</code>에서 다시 만드는 복구 작업도 현재는 없다. Redis 유실 시 48시간 동안
+		비어 보이는 것을 허용한다.
+	</p>
+</section>
+
+<section>
+	<h2>실측으로 확인된 현재 천장</h2>
+	<p>
+		2026-08-06 로컬 부하 측정은 구조가 당장 병목은 아니라는 근거를 남겼다. 숫자는 같은 노트북에서의
+		상대 비교로만 봐야 하며 EC2 절대 성능으로 옮기면 안 된다.
+	</p>
+	<div class="card-grid">
+		<div class="card"><b>2,000 RPS</b><p>60초 유지, 실패 0건, 중앙값 0.75ms. 조회 처리량 자체는 병목이 아니었다.</p></div>
+		<div class="card"><b>합산 0.4ms → 29.4ms</b><p>고유 격자 946개와 46,697개를 비교한 운영 Lua 전체 중앙값. 격자 수에 거의 비례했다.</p></div>
+		<div class="card"><b>워커 약 5,072건/s</b><p>단일 워커 처리율. 10,000칸 큐는 이 속도에서 약 2초짜리 버스트를 흡수한다.</p></div>
+	</div>
+	<p>
+		46,697개 조건의 실제 부하 중 <code>ZUNIONSTORE</code> 한 번은 평균 44.97ms였다. 중복 합산은
+		없었지만 그 시간 동안 Redis의 뒤 요청이 기다렸다. 반면 현재 운영 Redis의 실제 격자 수는 이
+		측정에서 세지 않았다. “지금은 1ms 아래일 것”이라는 판단은 현재 규모가 수천 단위라는 추정에
+		기댄다.
+	</p>
+	<div class="callout">
+		<h3>언제 다시 봐야 하나</h3>
+		<p>
+			활성 고유 격자가 만 단위에 접근하거나, 30초 만료 시점의 꼬리 지연이 SLO에 가까워질 때다.
+			그때 먼저 줄여야 할 것은 잠금이 아니라 <code>ZUNIONSTORE</code>가 합치는 데이터 양이다.
+			현재 Lua가 이미 합산을 한 번만 실행하게 만든다.
+		</p>
+	</div>
+</section>
+
+<section>
+	<h2>읽고 나서 기억할 경계</h2>
+	<ul class="checks">
+		<li><span class="badge">정의</span> 핫구역은 실시간 인구 밀도가 아니라 최근 업로드 이벤트 순위다.</li>
+		<li><span class="badge">원본</span> <code>videos</code>가 영구 원본이고 Redis 점수는 복구하지 않는 근사 집계다.</li>
+		<li><span class="badge">시간</span> 48시간은 정확한 슬라이딩 창이 아니라 6시간 버킷 8개의 42~48시간 근사다.</li>
+		<li><span class="badge">순위</span> 뷰포트별 상위가 아니라 전국 상위 50을 먼저 자른다.</li>
+		<li><span class="badge">정합성</span> DB 커밋 뒤 점수를 올리지만 인코딩 실패와 영상 삭제는 되돌리지 않는다.</li>
+		<li><span class="badge">장애</span> 쓰기 실패는 업로드를 살리려고 삼키고, 조회 실패는 현재 서비스 밖으로 전파한다.</li>
+		<li><span class="badge">캐시</span> 버킷 ZSET은 집계 원장이고 <code>hotzone:top</code>만 30초 응답 캐시다.</li>
+	</ul>
+</section>
+
+<section>
+	<h2>코드 근거</h2>
+	<ul class="source-list">
+		<li><code>VideoServiceImpl.java:139-185, 357-369</code>, 업로드 저장과 <code>afterCommit</code> 배선</li>
+		<li><code>HotScoreCommandServiceImpl.java:35-107</code>, 버킷 키, Lua 증분, 대기열과 종료 드레인</li>
+		<li><code>HotZoneServiceImpl.java:30-112</code>, 8버킷 합산 캐시와 판정 순서</li>
+		<li><code>GridEncoder.java:18-28</code>, <code>gridId</code> 문자열 생성과 해석</li>
+		<li><code>HotZoneProperties.java:13-25</code>, <code>topK=50</code>, <code>minScore=3</code> 설정</li>
+		<li><code>HotZoneEntryDetector.java:25-103</code>, 10분 진입 감지와 Redis SET 스냅숏</li>
+		<li><code>docs/spec/MSG-233.md</code>, 산식과 저장 구조의 설계 정본</li>
+		<li><code>docs/explainers/MSG-321-hotzone-load-test.html</code>, 조회와 워커 부하 실측</li>
+		<li><code>../LLM-WIKI/04-decisions/ADR viewport polling SLO.md</code>, polling 채택 근거</li>
+	</ul>
+
+	<h3>용어 각주</h3>
+	<ol class="footnotes">
+		<li><b>[1] Sorted Set</b>: member마다 숫자 score를 붙여 정렬해 두는 Redis 자료구조다. 같은 member의 점수를 올릴 수 있고 상위 순위를 바로 읽을 수 있어 격자별 집계에 맞는다.</li>
+		<li><b>[2] TTL</b>: 키가 자동으로 삭제되기까지 남은 시간이다. 여기서는 버킷 청소와 합산 캐시 갱신 주기를 정하지만, 48시간 판정 자체는 버킷 룩백이 맡는다.</li>
+		<li><b>[3] 원자 실행</b>: Lua 안의 명령 묶음 사이에 다른 Redis 명령이 끼어들지 않는다. 점수만 오르고 TTL이 빠지는 중간 상태, 합산 캐시만 생기고 TTL이 빠지는 중간 상태를 막는다.</li>
+		<li><b>[4] 캐시 스탬피드</b>: 캐시가 사라진 순간 여러 요청이 같은 값을 동시에 다시 계산하는 현상이다. 현재 Lua는 첫 합산이 끝난 뒤 후속 요청이 캐시 존재를 보게 해 중복 합산을 막는다.</li>
+		<li><b>[5] head-of-line 지연</b>: 앞선 긴 작업 하나 때문에 뒤의 짧은 작업까지 줄 서서 기다리는 현상이다. 큰 <code>ZUNIONSTORE</code>가 실행되는 동안 같은 Redis의 뒤 명령이 기다리는 상황이 여기에 해당한다.</li>
+		<li><b>[6] polling</b>: 클라이언트가 일정 시점마다 서버에 최신 값을 다시 묻는 방식이다. 핫구역은 30초 정도의 지연을 허용해 서버가 먼저 밀어주는 WebSocket 대신 이 방식을 쓴다.</li>
+	</ol>
+</section>
+
+<footer>
+	Composed 2026-08-07 15:01:57 KST by ce-explain<br>
+	<span class="small">Source basis: workspace HEAD 1bcb13c and the current working tree. No external network sources were used.</span>
+</footer>
+</main>
+</body>
+</html>

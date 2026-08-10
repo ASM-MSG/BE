@@ -279,6 +279,48 @@
 	}
 
 	.foot { color: var(--fg-soft); font-size: 13px; margin-top: 56px; border-top: 1px solid var(--line); padding-top: 16px; }
+	@media print {
+		:root, :root[data-theme="dark"] {
+			--bg: #ffffff;
+			--bg-soft: #f6f7f9;
+			--bg-code: #f2f4f7;
+			--fg: #1b1f24;
+			--fg-soft: #5b6673;
+			--line: #dfe3e8;
+			--accent: #2d6cdf;
+			--accent-soft: #eaf1fd;
+			--warn: #b4690e;
+			--warn-soft: #fdf3e3;
+			--danger: #c0392b;
+			--danger-soft: #fdeeec;
+			--ok: #1f7a4d;
+			--ok-soft: #e9f6ef;
+		}
+		body { font-size: 10.5pt; line-height: 1.55; }
+		.wrap {
+			display: block;
+			max-width: none;
+			padding: 0;
+		}
+		nav.toc {
+			position: static;
+			border-left: none;
+			padding-left: 0;
+			margin-bottom: 24px;
+			column-count: 2;
+			column-gap: 32px;
+		}
+		nav.toc a { break-inside: avoid; }
+		h2 { break-before: page; break-after: avoid; }
+		h1 + p + h2, header + h2 { break-before: auto; }
+		h3, h4 { break-after: avoid; }
+		.case, .box, .metric, table, pre, .diagram, .note { break-inside: avoid; }
+		.scroll-x { overflow: visible; }
+		table { font-size: 9pt; }
+		pre { white-space: pre-wrap; font-size: 8.5pt; }
+		a { color: inherit; text-decoration: none; }
+		.diagram svg { max-width: 100%; height: auto; }
+	}
 </style>
 </head>
 <body>
@@ -304,8 +346,8 @@
 	<a href="#glossary">5. 용어</a>
 	<p class="rel" style="margin-bottom:4px">관련</p>
 	<a href="MSG-132-troubleshooting.html">트러블슈팅: 격자 점령 (MSG-132)</a>
-	<a href="MSG-179.md">발송 파이프라인 스펙 (MSG-179)</a>
-	<a href="prd/MSG-313-prd.md">알림 다양화 PRD (MSG-313)</a>
+	<a href="../MSG-179.md">발송 파이프라인 스펙 (MSG-179)</a>
+	<a href="../prd/MSG-313-prd.md">알림 다양화 PRD (MSG-313)</a>
 </nav>
 
 <main>
@@ -1128,10 +1170,10 @@
 </div>
 
 <p class="foot">
-	스펙 문서: <code>docs/MSG-178.md</code>(토큰) · <code>docs/MSG-179.md</code>(파이프라인) ·
-	<code>docs/MSG-180.md</code>(설정) · <code>docs/MSG-181.md</code>(트리거) ·
-	<code>docs/MSG-313.md</code>(영상) · <code>docs/MSG-314.md</code>(뱃지 임박) ·
-	<code>docs/MSG-315.md</code>(주간 요약)<br>
+	스펙 문서: <code>docs/spec/MSG-178.md</code>(토큰) · <code>docs/spec/MSG-179.md</code>(파이프라인) ·
+	<code>docs/spec/MSG-180.md</code>(설정) · <code>docs/spec/MSG-181.md</code>(트리거) ·
+	<code>docs/spec/MSG-313.md</code>(영상) · <code>docs/spec/MSG-314.md</code>(뱃지 임박) ·
+	<code>docs/spec/MSG-315.md</code>(주간 요약)<br>
 	요구사항 정본: <code>docs/prd/MSG-178-prd.md</code> · <code>docs/prd/MSG-313-prd.md</code><br>
 	핵심 코드: <code>com.msg.fillmap.notification</code>(30파일) ·
 	<code>VideoStatusWriter</code> · <code>BadgeAwardServiceImpl</code> ·

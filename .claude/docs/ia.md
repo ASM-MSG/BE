@@ -63,10 +63,10 @@
 | 다이어그램 문구 | 확정 정책 | 근거 |
 |---|---|---|
 | ① "미점령 격자 미표시" | 격자망(점선)은 **상시 표시**, 채움색만 점령 격자에 | glossary 2026-08-04 (피그마 ver8 실측). 서버 계약은 불변 — 응답에는 점령 격자만 |
-| ③ "조회수로 순위 산정" | 핫스코어 신호는 **업로드(방문 이벤트)만**. 좋아요는 MSG-275 구현 후의 확장 지점 | glossary 핫구역, `docs/MSG-233.md` |
+| ③ "조회수로 순위 산정" | 핫스코어 신호는 **업로드(방문 이벤트)만**. 좋아요는 MSG-275 구현 후의 확장 지점 | glossary 핫구역, `docs/spec/MSG-233.md` |
 | 소셜 = P2 | 친구·친구 도감 레이어는 **MVP** | glossary 2026-08-04, `docs/prd/MSG-187-prd.md` |
-| UJ "공개 범위 기본 PRIVATE" | 미지정 업로드는 **PUBLIC**. 공개범위는 PUBLIC·FRIENDS·PRIVATE 3값 | glossary 친구 공개(FRIENDS), `docs/MSG-285.md` |
-| ④ 표시명 = "행정동 이름·무귀속" 2가지 | 구역(zone) 안이면 **"{zone명} {행}-{열}"**(예 "서면 A-14"), 밖이면 행정동 폴백, 둘 다 없으면 표시명 없음. 계산은 FE-local | glossary 표시명, `docs/MSG-234.md`·`MSG-259.md` |
+| UJ "공개 범위 기본 PRIVATE" | 미지정 업로드는 **PUBLIC**. 공개범위는 PUBLIC·FRIENDS·PRIVATE 3값 | glossary 친구 공개(FRIENDS), `docs/spec/MSG-285.md` |
+| ④ 표시명 = "행정동 이름·무귀속" 2가지 | 구역(zone) 안이면 **"{zone명} {행}-{열}"**(예 "서면 A-14"), 밖이면 행정동 폴백, 둘 다 없으면 표시명 없음. 계산은 FE-local | glossary 표시명, `docs/spec/MSG-234.md`·`MSG-259.md` |
 | 알림 설정 = P2 | 설정 API 구현 완료 — 카테고리 5종 토글 | MSG-180(설정)·313~315(카테고리 확장) |
 
 ## 구현 갭 (백엔드 관점)

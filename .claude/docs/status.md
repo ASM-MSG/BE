@@ -20,8 +20,8 @@
 - **구현 XXX** = 그 패키지를 실제로 짠 **주 구현자**(git 커밋·라인 기여 기준, 한쪽이 뚜렷하지
   않으면 "공동"). 사람 이력이라 사실 기록일 뿐이고, 위 두 판정에는 쓰지 않는다.
 
-`zone`의 Owner A 배정 근거는 `docs/MSG-234.md`(§Owner 판정 — 산출물이 전부 지도 인프라 안)이고
-`docs/MSG-259.md`가 확정했다. CLAUDE.md 협업 원칙의 패키지 목록에 이 패키지가 빠져 있었는데,
+`zone`의 Owner A 배정 근거는 `docs/spec/MSG-234.md`(§Owner 판정 — 산출물이 전부 지도 인프라 안)이고
+`docs/spec/MSG-259.md`가 확정했다. CLAUDE.md 협업 원칙의 패키지 목록에 이 패키지가 빠져 있었는데,
 미배정이 아니라 목록 누락이라 2026-08-07에 채웠다.
 
 **둘은 자주 어긋난다.** 실제로 Owner B 도메인(friend·moderation·badge·streak·usergrid) 대부분을

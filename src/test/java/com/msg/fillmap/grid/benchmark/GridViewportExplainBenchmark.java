@@ -25,7 +25,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  * <pre>GRID_BENCHMARK=true ./gradlew test --tests "com.msg.fillmap.grid.benchmark.GridViewportExplainBenchmark"</pre>
  *
  * <p>@Transactional 롤백이라 시드 데이터는 DB 에 남지 않는다(스키마·데이터 무변경 — EXPLAIN 실행만).
- * 출력 계획을 docs/MSG-73.md 작업 로그에 기록한다. 최종 채택은 MSG-128 관측 하 k6 부하테스트 후 결정(보류).
+ * 출력 계획을 docs/spec/MSG-73.md 작업 로그에 기록한다. 최종 채택은 MSG-128 관측 하 k6 부하테스트 후 결정(보류).
  */
 @SpringBootTest
 @Transactional

@@ -14,7 +14,7 @@ PRD의 핵심 입력은 대화에 흐르는 아이디어·요구·맥락이라, 
 | 문서 | 질문 | 담당 |
 |------|------|------|
 | PRD (`docs/prd/*.md`) | 무엇을, 왜 만드는가 | **prd-writer (이 스킬)** |
-| 스펙 (`docs/MSG-XXX.md`) | 어떻게 구현하는가 | spec-writer |
+| 스펙 (`docs/spec/MSG-XXX.md`) | 어떻게 구현하는가 | spec-writer |
 | 코드 | 구현 | spec-driven-dev |
 
 파이프라인: 아이디어 → **PRD** → (지라 티켓) → 스펙 → 구현.

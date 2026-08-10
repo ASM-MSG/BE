@@ -7,7 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import com.msg.fillmap.badge.repository.MyBadgeProjection;
 
 /**
- * 내 뱃지 목록 행 (GET /api/badges 응답 — docs/MSG-201.md §D2). 획득+미획득 전체 뱃지가 한 배열로
+ * 내 뱃지 목록 행 (GET /api/badges 응답 — docs/spec/MSG-201.md §D2). 획득+미획득 전체 뱃지가 한 배열로
  * 나가고, 미획득 행은 earned false + earnedAt·featuredRank null + isNew false 다(3값 boolean 금지).
  * 진열장은 FE 가 earned true 를 earnedAt 내림차순 정렬해 파생한다(§D4) — 별도 필드 없음.
  */

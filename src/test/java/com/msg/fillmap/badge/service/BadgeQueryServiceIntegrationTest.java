@@ -20,7 +20,7 @@ import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 
 /**
- * 내 뱃지 목록 조회·미확인 스탬프 통합 검증 (실 PostGIS, docs/MSG-201.md 테스트 모듈 1). 공유 로컬 DB —
+ * 내 뱃지 목록 조회·미확인 스탬프 통합 검증 (실 PostGIS, docs/spec/MSG-201.md 테스트 모듈 1). 공유 로컬 DB —
  * 합성 유저만 만들고 @Transactional 롤백, badges 마스터(V9~V12 시딩분)는 불가침·단언은 code 기준.
  * 스탬프 UPDATE 는 같은 트랜잭션 내 재조회(서비스 2회 호출·native SELECT)로 관찰한다.
  * 스펙의 "미시딩 축" 예시(STREAK 등)는 작성 후 V10·V12 로 시딩돼 자동 노출됐다 — 스펙이 예고한

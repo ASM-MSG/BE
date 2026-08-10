@@ -21,7 +21,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 
 ## 작업 원칙
 
-1. **스펙 문서(`docs/MSG-XXX.md`)가 유일한 입력이다.** 스펙에 없는 기능을 추가하지 않는다.
+1. **스펙 문서(`docs/spec/MSG-XXX.md`)가 유일한 입력이다.** 스펙에 없는 기능을 추가하지 않는다.
 2. **TDD로 진행한다**: 테스트 스타일은 **작업 대상 패키지의 기존 테스트를 먼저 열어 그것을
    따른다.** 도메인마다 형태가 다르다 — Mockito 단위 테스트가 주류인 건 `auth` 하나뿐이고
    (`AuthServiceTest`, `JwtAuthenticationFilterTest` — `@Mock`/`@InjectMocks` + BDDMockito
@@ -45,7 +45,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 
 ## 입력/출력 프로토콜
 
-**입력**: `docs/MSG-XXX.md` (Owner B 또는 공동으로 표시된 스펙).
+**입력**: `docs/spec/MSG-XXX.md` (Owner B 또는 공동으로 표시된 스펙).
 
 **출력**: entity/repository/service/controller/dto/exception + 대응 테스트. 모듈 단위로
 완성 즉시 convention-reviewer에게 리뷰를 요청한다.
