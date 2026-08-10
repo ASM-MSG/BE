@@ -21,6 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridFixtures;
+import com.msg.fillmap.grid.repository.GridRepository;
 import com.msg.fillmap.hotzone.config.HotZoneProperties;
 import com.msg.fillmap.hotzone.service.HotZoneServiceImpl;
 import com.msg.fillmap.notification.service.NotificationCommandService;
@@ -57,6 +58,9 @@ class HotZoneEntryDetectorTest {
 	private StringRedisTemplate redisTemplate;
 
 	@Autowired
+	private GridRepository gridRepository;
+
+	@Autowired
 	private UserGridQueryService userGridQueryService;
 
 	@Autowired
@@ -81,9 +85,10 @@ class HotZoneEntryDetectorTest {
 	void setUp() {
 		Clock fixedClock = Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC);
 		detector = new HotZoneEntryDetector(
-			// 진입 검출은 격자 ID 만 보므로 표시명 리졸버는 빈 스냅샷이면 충분하다 (MSG-341)
+			// 진입 검출은 격자 ID 만 보므로 표시명 리졸버는 빈 스냅샷이면 충분하다 (MSG-341).
+			// 행정동 이름 일괄 조회(MSG-349)도 같은 이유로 실 리포지토리를 그대로 쓴다 — 이름은 검출 판정에 안 쓰인다.
 			new HotZoneServiceImpl(redisTemplate, new HotZoneProperties(50, 3),
-				() -> new ZoneNameResolver(List.of()), fixedClock),
+				() -> new ZoneNameResolver(List.of()), gridRepository, fixedClock),
 			userGridQueryService, notificationCommandService, redisTemplate, fixedClock);
 		tx = new TransactionTemplate(txManager);
 		cleanRedis();

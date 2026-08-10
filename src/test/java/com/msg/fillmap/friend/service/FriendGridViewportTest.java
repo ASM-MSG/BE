@@ -27,13 +27,16 @@ import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.grid.service.OccupiedGridView;
+import com.msg.fillmap.region.RegionTestFixtures;
+import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.zone.entity.Zone;
 
 /**
  * 친구 격자 뷰포트 조회 (MSG-187 D2·D3, 실 DB). @Transactional 롤백 격리로 공유 로컬 DB 에 시드를 남기지
- * 않고, 합성 격자는 서해 공해상 기준점(행정동 무귀속)이라 regions 를 건드리지 않는다
+ * 않고, 합성 격자는 서해 공해상 기준점(실 행정동 무귀속)이라 실데이터 판정에 끼어들지 않는다 — 행정동 이름
+ * 검증(MSG-349)만 999 대역 합성 행정동을 그 자리에 심어 쓴다
  * (FriendProfileIntegrationTest 패턴). 검증 축 = 친구 도감만 보인다(내 격자 불포함)·커서 페이지네이션·
  * 관계 은닉(실패 전건 9424)·검증 규칙이 내 조회와 같다(4401/4402/4403/4404)·판정 순서(9424 우선).
  */
@@ -46,6 +49,11 @@ class FriendGridViewportTest {
 	private static final double SEA_LAT = 36.2;
 	private static final double SEA_LON = 124.2;
 
+	// 행정동 이름 위임 검증용 합성 행정동 (MSG-349). 실존하지 않는 sido 999 대역이라 실데이터와 충돌하지 않고,
+	// 트랜잭션 롤백으로 공유 로컬 DB 에 남지 않는다.
+	private static final String REGION_CODE = "9996000003";
+	private static final String REGION_NAME = "합성시 합성구 합성349동";
+
 	private static final long UNKNOWN_USER_ID = 999_999_999L;
 
 	private static final int DEFAULT_SIZE = 1000;
@@ -55,6 +63,9 @@ class FriendGridViewportTest {
 
 	@Autowired
 	private UserRepository userRepository;
+
+	@Autowired
+	private RegionRepository regionRepository;
 
 	@Autowired
 	private EntityManager em;
@@ -111,10 +122,25 @@ class FriendGridViewportTest {
 	}
 
 	@Test
+	@DisplayName("친구 격자 조회에도 행정동 이름이 실린다 (MSG-349 FR-1)")
+	void 친구_격자_조회에도_행정동_이름이_실린다() {
+		// friend 쪽 파일은 한 줄도 안 바뀐다 — GridQueryService 위임 경로가 이름을 그대로 실어 오는지 고정한다.
+		seedRegion(baseY, baseY + 3, baseX, baseX + 3);
+		String labeled = occupyLabeled(friend, 0, 0);
+		String unlabeled = occupy(friend, 1, 0);
+
+		OccupiedGridPage page = friendGrids(bounds(0, 0, 3, 3), null, DEFAULT_SIZE);
+
+		// 라벨 없는 격자도 항목에서 빠지지 않고 이름만 빈다 (LEFT JOIN).
+		assertThat(page.items()).extracting(OccupiedGridView::gridId).containsExactly(labeled, unlabeled);
+		assertThat(page.items()).extracting(OccupiedGridView::regionName).containsExactly(REGION_NAME, null);
+	}
+
+	@Test
 	@DisplayName("구역 밖 친구 격자는 두 필드가 모두 null 이다")
 	void 구역_밖_친구_격자는_두_필드가_모두_null이다() {
-		// 구역을 아예 안 심으면(서해 공해상은 시드 구역과 무관) NONE 이 그대로 내려온다 — 오버레이는
-		// 라벨을 그리지 않으므로 여기에 행정동 폴백 재료를 싣지 않는 게 계약이다.
+		// 구역을 아예 안 심으면(서해 공해상은 시드 구역과 무관) NONE 이 그대로 내려온다 — 이때 표시 이름은
+		// 같은 항목의 regionName(행정동)이다 (MSG-349, 위 테스트가 그 축을 본다).
 		occupy(friend, 0, 0);
 
 		OccupiedGridPage page = friendGrids(bounds(0, 0, 3, 3), null, DEFAULT_SIZE);
@@ -292,6 +318,20 @@ class FriendGridViewportTest {
 		String gridId = GridFixtures.seedGrid(em, baseY + dy, baseX + dx);
 		GridFixtures.seedUserGrid(em, user.getId(), gridId, 1);
 		return gridId;
+	}
+
+	/** occupy 와 같되 중심점 판정으로 행정동 라벨까지 붙인다 — 프로덕션 격자(탄생 시 라벨) 재현. */
+	private String occupyLabeled(User user, long dy, long dx) {
+		String gridId = GridFixtures.seedLabeledGrid(em, baseY + dy, baseX + dx);
+		GridFixtures.seedUserGrid(em, user.getId(), gridId, 1);
+		return gridId;
+	}
+
+	/** 격자 인덱스 사각형을 덮는 합성 행정동 하나를 심는다 — 라벨이 붙으려면 격자보다 먼저 있어야 한다. */
+	private void seedRegion(long minGridY, long maxGridY, long minGridX, long maxGridX) {
+		regionRepository.upsert(REGION_CODE, REGION_NAME, REGION_CODE.substring(0, 5),
+			RegionTestFixtures.cellBlockPolygonJson(minGridY, maxGridY, minGridX, maxGridX),
+			RegionTestFixtures.CELL_AREA_M2);
 	}
 
 	/** 셀 중심 좌표로 bbox 를 만든다 — 서비스가 GridEncoder 로 되돌려 인덱스 범위 [from, to] 를 얻는다. */

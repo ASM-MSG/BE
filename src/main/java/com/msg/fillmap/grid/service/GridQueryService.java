@@ -13,6 +13,8 @@ public interface GridQueryService {
 	/**
 	 * 단일 격자 색칠 상태: 로그인 사용자의 점령 여부 + videoCount. 미점령이면 occupied=false, videoCount=0.
 	 * gridId 포맷 불량이면 GridErrorCode.INVALID_GRID_ID.
+	 * 표시명 재료로 zoneName/zoneCell(MSG-341)과 regionName(행정동, MSG-349)을 함께 담는다 —
+	 * regionName 은 중심점 재판정이라 미점령 격자에도 나오고, 무귀속·서비스 범위 밖이면 null 이다(에러 아님).
 	 */
 	GridCellView getCell(long userId, String gridId);
 

@@ -53,7 +53,10 @@ public class GridController {
 	@Operation(
 		summary = "단일 격자 색칠 상태 조회",
 		description = "특정 격자를 내가 점령(색칠)했는지와 내 영상 수를 반환한다. "
-			+ "미점령 격자도 404가 아니라 occupied=false로 응답한다."
+			+ "미점령 격자도 404가 아니라 occupied=false로 응답한다.\n\n"
+			+ "표시 이름 재료가 함께 온다: zoneName이 null이면 regionName(행정동)이 표시 이름이다"
+			+ "(폴백에는 칸 번호를 붙이지 않는다). regionName은 아직 아무도 영상을 올리지 않은 격자에도 실리고, "
+			+ "어느 행정동에도 속하지 않거나 서비스 범위(한국) 밖인 격자면 null이다(에러가 아니다)."
 	)
 	@GetMapping("/{gridId}")
 	public SuccessResponse<GridCellResponseDto> getCell(
@@ -70,7 +73,9 @@ public class GridController {
 		description = "지도 화면 bbox(남서~북동 좌표) 안에서 내가 점령한 격자를 (grid_y, grid_x) 오름차순으로 반환한다. "
 			+ "응답의 nextCursor를 다음 요청 cursor에 넣어 이어서 조회한다. bbox span 상한은 0.5도로 위도·경도 "
 			+ "각 변에 따로 적용된다(정확히 0.5도는 허용). 초과 시 잘라서 응답하지 않고 400 + developCode "
-			+ "4402(VIEWPORT_TOO_LARGE)로 거절한다."
+			+ "4402(VIEWPORT_TOO_LARGE)로 거절한다.\n\n"
+			+ "항목마다 표시 이름 재료가 함께 온다: zoneName이 null이면 regionName(행정동)이 표시 이름이다"
+			+ "(폴백에는 칸 번호를 붙이지 않는다). 이름 때문에 다른 API를 더 호출할 필요가 없다."
 	)
 	@GetMapping
 	public SuccessResponse<OccupiedGridPageResponseDto> getOccupiedInViewport(

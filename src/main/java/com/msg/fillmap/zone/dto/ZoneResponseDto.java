@@ -5,10 +5,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import com.msg.fillmap.zone.entity.Zone;
 
 /**
- * 구역 목록 응답 (MSG-234 GET /api/zones). FE 가 캐시해 gridId 로 표시명을 로컬 산술하고 구역 오버레이에 쓴다(§D3).
+ * 구역 목록 응답 (MSG-234 GET /api/zones). 검색바 구역 이동(§D6)과 구역 범위 오버레이용이다 —
+ * 표시명은 서버가 계산해 격자 응답에 싣는다(MSG-341, 구역 밖 폴백은 MSG-349 regionName).
  * 식별자는 재시딩·환경 무관 안정 참조인 zoneKey 를 노출한다(DB 생성 id 는 환경마다 달라 노출하지 않음, §D5).
  */
-@Schema(description = "격자 표시명 계산용 구역(zone). 정수 사각형 + 이름 + 소속 행정동.",
+@Schema(description = "구역(zone)의 이름과 격자 사각형 범위 — 검색바 구역 이동·범위 오버레이용. "
+	+ "격자 표시명은 서버가 계산해 격자 응답에 함께 싣는다.",
 	requiredProperties = {"zoneKey", "name", "minGridY", "maxGridY", "minGridX", "maxGridX", "priority", "regionCode"})
 public record ZoneResponseDto(
 	@Schema(description = "안정 식별자 slug (zones.zone_key) — 클라이언트 참조·타이브레이크 기준", example = "seomyeon")
