@@ -13,7 +13,7 @@
         <mxCell id="ttl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=16;fontStyle=1;fontColor=#2B2B2B;" value="FillMap · System Architecture v2 — 논리 뷰 (2026.07)" vertex="1">
           <mxGeometry height="26" width="700" x="30" y="-46" as="geometry" />
         </mxCell>
-        <mxCell id="sub" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=10;fontColor=#6B7075;" value="역할(Client·Gateway·Service·Cache·Queue·Worker·Scheduler·Data)만 표기 — 기술 선택·구현 상태는 SA v2와 CA가 담당 · 금색 = 신규 미션 도메인" vertex="1">
+        <mxCell id="sub" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;fontSize=10;fontColor=#6B7075;" value="역할(Client·Gateway·Service·Cache·Queue·Worker·Scheduler·Data)만 표기 · 기술 선택·구현 상태는 SA v2와 CA가 담당 · 금색 = 신규 미션 도메인 · 서비스 9종은 SA v2 ③ 서비스 계약 열과 1:1로 대응한다" vertex="1">
           <mxGeometry height="18" width="1100" x="30" y="-18" as="geometry" />
         </mxCell>
         <mxCell id="grp1" parent="1" style="rounded=1;arcSize=3;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#8A8F94;strokeWidth=1.2;dashed=1;dashPattern=6 4;verticalAlign=top;align=left;spacingLeft=8;fontStyle=1;fontSize=11;fontColor=#5B6066;" value="Client" vertex="1">
@@ -34,8 +34,8 @@
         <mxCell id="grp6" parent="1" style="rounded=1;arcSize=3;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#8A8F94;strokeWidth=1.2;dashed=1;dashPattern=6 4;verticalAlign=top;align=left;spacingLeft=8;fontStyle=1;fontSize=11;fontColor=#5B6066;" value="Gateway" vertex="1">
           <mxGeometry height="94" width="218" x="330" y="150" as="geometry" />
         </mxCell>
-        <mxCell id="b7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#333333;strokeWidth=1;fontSize=10.5;fontColor=#2B2B2B;shadow=0;" value="API Gateway" vertex="1">
-          <mxGeometry height="36" width="190" x="344" y="180" as="geometry" />
+        <mxCell id="b7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#333333;strokeWidth=1;fontSize=10.5;fontColor=#2B2B2B;shadow=0;" value="API Gateway&lt;div style=&quot;font-size:8px;font-weight:normal;color:#5F6873;&quot;&gt;CA v2 · ALB + AWS WAF&lt;/div&gt;" vertex="1">
+          <mxGeometry height="44" width="190" x="344" y="176" as="geometry" />
         </mxCell>
         <mxCell id="grp8" parent="1" style="rounded=1;arcSize=3;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#8A8F94;strokeWidth=1.2;dashed=1;dashPattern=6 4;verticalAlign=top;align=left;spacingLeft=8;fontStyle=1;fontSize=11;fontColor=#5B6066;" value="Service" vertex="1">
           <mxGeometry height="190" width="622" x="630" y="90" as="geometry" />

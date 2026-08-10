@@ -75,6 +75,33 @@ AI만 별도 FastAPI 서버로 분리돼 있다 (`.claude/docs/infrastructure.md
 > SysA 다이어그램에서 각 서비스 카드 상단의 SA3 컬러 스트립이 위 매핑을 1:1로 표현한다
 > (같은 색·이름 = 같은 서비스). SysA는 SA와 같은 시스템의 다른 줌 레벨이다.
 
+### SA ③ 서비스 계약 ↔ SysA 서비스 (2026-08-07 추가)
+
+SA의 ③열은 **코드의 계약 인터페이스**를 그리고 SysA는 **논리 서비스**를 그린다. 줌 레벨이
+달라 개수가 어긋나 보이므로 대응을 여기서 못 박는다. SA 다이어그램의 각 칸에도 같은 값이
+작은 글씨로 병기돼 있다.
+
+| SA ③ 서비스 계약 | SysA 서비스 |
+|---|---|
+| `AuthService` · `UserService` | Auth |
+| `GridQueryService` · `HotZoneService` | Grid |
+| `VideoService` + 인코딩 워커 | Video |
+| `RegionService` | Region |
+| `UserGridQueryService` | Collection |
+| `MissionService` | Mission |
+| `SocialService` | Social |
+| `NotificationService` (`NotificationCommandService`·`NotificationPreferenceService`·`PushTokenService`) | Notification |
+| `ModerationService` | Moderation |
+
+**`~QueryService` 접미사는 CQRS가 아니다.** Owner A와 Owner B의 도메인 경계를 넘는 호출을
+인터페이스 하나로만 받으려고 둔 **계약 인터페이스**이고, 이름이 Query인 건 경계를 넘는 호출이
+읽기뿐이기 때문이다(`GridQueryService`·`UserGridQueryService` — CLAUDE.md 협업 원칙).
+쓰기 경로는 각 도메인 안에 있고 별도 Command 모델로 갈라 두지 않았다.
+
+**API 경로는 전부 `/api` 접두사이고 버전은 붙이지 않는다** (컨트롤러 16개 전수 확인,
+2026-08-07). 다이어그램 라벨도 이 규칙으로 통일했다. `/api/v1` 도입은 MVP 범위 밖이고,
+넣으려면 컨트롤러와 FE 계약을 함께 옮겨야 한다.
+
 ### SysA — 서비스 ↔ 데이터 저장소 통신
 
 각 서비스가 실제로 읽고 쓰는 저장소(SysA 다이어그램의 실선 = 실시간 요청/응답):
@@ -243,6 +270,22 @@ EC2에 Docker 컨테이너로 배포하며 `c7g.medium`(1 vCPU / 2GB) 이상을 
 | CloudWatch | 전 서비스 로그·메트릭 |
 | Secrets Manager | DB·Key 관리 |
 | AWS WAF | IP-Rate Limit·요청 제한 |
+
+## 논리(SysA) ↔ 물리(CA) 대응 (2026-08-07 추가)
+
+SysA는 역할만 그리므로 이름이 AWS 서비스명과 다르다. 헷갈리기 쉬운 것만 적는다.
+
+| SysA (논리) | CA (물리) |
+|---|---|
+| API Gateway | **ALB (Active-Active) + AWS WAF** — AWS API Gateway가 아니다 |
+| Service 9종 | Spring Boot API #1·#2 컨테이너 (단일 애플리케이션) |
+| Message Queue (Event Queue) | Kafka (EC2) |
+| Cache 3종 (Token·Hot Zone·Mission) | ElastiCache Redis 한 인스턴스 위 논리 분리 |
+| Worker (이벤트·배치) | 같은 Spring Boot 안의 `@Scheduled`·컨슈머, AI만 FastAPI 서버 분리 |
+| Main Database | RDS PostgreSQL + PostGIS (Primary·Standby) |
+| Object Storage | S3 (원본·인코딩본) |
+
+두 다이어그램 모두 해당 도형에 상대 쪽 이름을 병기해 뒀다.
 
 ## 다이어그램 범례 (참고)
 
