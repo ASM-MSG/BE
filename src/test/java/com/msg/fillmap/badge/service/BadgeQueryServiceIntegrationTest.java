@@ -81,8 +81,10 @@ class BadgeQueryServiceIntegrationTest {
 	void 미시딩_축의_뱃지는_목록에_없다() {
 		List<MyBadgeResponseDto> result = badgeQueryService.findMyBadges(me);
 
-		// 목록 행 수 = 마스터 행 수 — 시딩 안 된 축(현재 SPECIAL)은 행 자체가 없다는 것과 동치.
-		Number masterCount = (Number) em.createNativeQuery("SELECT COUNT(*) FROM badges").getSingleResult();
+		// 목록 행 수 = 현역 마스터 행 수 — 시딩 안 된 축(현재 SPECIAL)은 행 자체가 없다는 것과 동치.
+		// 은퇴 뱃지(MSG-363 §D2)는 미획득자인 me 에게 안 보이므로 마스터 카운트에서도 뺀다.
+		Number masterCount = (Number) em.createNativeQuery(
+			"SELECT COUNT(*) FROM badges WHERE retired_at IS NULL").getSingleResult();
 		assertThat(result).hasSize(masterCount.intValue());
 	}
 

@@ -46,9 +46,11 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
 	private static final String NEAR_EVENT_PREFIX = "BADGE_NEAR:";
 	// 임박 판정 축 allowlist (MSG-314 D1) — 정수 개수 축만. REGION_PERCENT 만 막는 blocklist 면 SPECIAL 이
 	// 숫자 임박 쿼리에 흘러들고, enum 에 축이 추가될 때 기본이 "포함"이 된다 (Codex 교차 리뷰 1R P2).
+	// MISSION_COUNT 는 은퇴 축이라 빠졌고 미션 종류별 3축이 그 자리를 잇는다 (MSG-363 §D1).
 	private static final Set<BadgeConditionType> NEAR_MISS_TYPES = EnumSet.of(
 		BadgeConditionType.UPLOAD_COUNT, BadgeConditionType.TOTAL_GRIDS,
-		BadgeConditionType.STREAK_DAYS, BadgeConditionType.MISSION_COUNT);
+		BadgeConditionType.STREAK_DAYS, BadgeConditionType.EVENT_COUNT,
+		BadgeConditionType.COURSE_COUNT, BadgeConditionType.POPUP_COUNT);
 	// 일 경계 = KST 자정 (glossary 스트릭 규칙, NotificationConsumer.rateLimited D8 선례).
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
