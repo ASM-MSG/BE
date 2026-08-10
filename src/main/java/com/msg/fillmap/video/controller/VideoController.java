@@ -77,7 +77,8 @@ public class VideoController {
 			+ "구간을 동기로 계산해 돌려준다. 원본 길이에 따라 응답까지 수 초에서 수십 초 걸린다(30초 1080p 기준 "
 			+ "5초 내외). highlights 가 빈 배열이면 추천 없음이니 FE 는 추천 단계를 스킵한다. 실패 시 FE 는 직접 구간 "
 			+ "지정으로 폴백한다 — 3502(분석 서버 문제, 재시도 가능)·3426(원본 파일 불량, 재시도 무의미)·3425(3분 "
-			+ "초과). 결과는 저장되지 않는 임시 값이며, 같은 키로 이후 업로드 확정(POST /api/videos)이 가능하다."
+			+ "초과)·3413(400, 허용 크기 초과). 결과는 저장되지 않는 임시 값이며, 같은 키로 이후 업로드 확정"
+			+ "(POST /api/videos)이 가능하다."
 	)
 	@PostMapping("/highlight-preview")
 	public SuccessResponse<HighlightPreviewResponseDto> highlightPreview(

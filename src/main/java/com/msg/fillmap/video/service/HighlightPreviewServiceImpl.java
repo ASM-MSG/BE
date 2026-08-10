@@ -58,6 +58,10 @@ public class HighlightPreviewServiceImpl implements HighlightPreviewService {
 	// ÷ 내부망 실효 전송률 ≈85MB/s(AI leg 산정의 "2GiB 전송 여유"와 동일 가정) ≈ 24초 × 동시 허용 2건
 	// 경합 여유 ≈ 60초. 이로써 permit 점유 상한은 60 + probe 30 + AI 120 ≈ 210초로 유계가 된다.
 	private static final Duration DOWNLOAD_TIMEOUT = Duration.ofSeconds(60);
+	// headObject 전체 호출 시한 (PR #140 P3) — permit 게이트 앞이라 보호 밖인데 시한이 없으면 느린 S3 에서
+	// 스레드가 무기한 쌓인다. HEAD 는 본문 없는 메타데이터 응답이라 전송량 산정치(DOWNLOAD_TIMEOUT 60초)를
+	// 재사용하지 않고, SDK 재시도까지 덮는 짧은 전용 상한으로 무보호 구간의 대기를 최소화한다.
+	private static final Duration HEAD_TIMEOUT = Duration.ofSeconds(10);
 
 	private final Semaphore analysisPermits = new Semaphore(MAX_CONCURRENT_ANALYSES);
 
@@ -124,7 +128,11 @@ public class HighlightPreviewServiceImpl implements HighlightPreviewService {
 		HeadObjectResponse head;
 		try {
 			head = s3Client.headObject(
-				HeadObjectRequest.builder().bucket(awsProperties.s3().bucket()).key(s3Key).build());
+				HeadObjectRequest.builder()
+					.bucket(awsProperties.s3().bucket())
+					.key(s3Key)
+					.overrideConfiguration(o -> o.apiCallTimeout(HEAD_TIMEOUT))
+					.build());
 		} catch (NoSuchKeyException e) {
 			throw new ApiException(VideoErrorCode.UPLOAD_NOT_FOUND, e);
 		} catch (S3Exception e) {
@@ -133,6 +141,10 @@ public class HighlightPreviewServiceImpl implements HighlightPreviewService {
 				throw new ApiException(VideoErrorCode.UPLOAD_NOT_FOUND, e);
 			}
 			throw e;
+		} catch (SdkClientException e) {
+			// 시한 초과 포함 클라이언트측 실패 — download 와 같은 결로 3502 수렴 (PR #140 P3)
+			log.warn("선분석 크기 선검증 실패 — 3502 수렴", e);
+			throw new ApiException(VideoErrorCode.HIGHLIGHT_UPSTREAM_ERROR, e);
 		}
 		Long contentLength = head.contentLength();
 		if (contentLength != null && contentLength > awsProperties.s3().maxHighlightUploadBytes()) {

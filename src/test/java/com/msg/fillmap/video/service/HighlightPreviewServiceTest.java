@@ -136,6 +136,34 @@ class HighlightPreviewServiceTest {
 	}
 
 	@Test
+	void 선분석_headObject에도_요청_단위_전체_호출_시한이_걸린다() {
+		// headObject 는 permit 게이트 앞이라 보호 밖 — 시한이 없으면 느린 S3 에서 스레드가 무기한 쌓인다 (PR #140 P3).
+		// HEAD 는 메타데이터뿐이라 전송량 산정치(60초) 대신 전용 짧은 상한 — 값 근거는 구현 상수 주석
+		given(ffmpegRunner.probeDurationSec(any(Path.class), any(Duration.class))).willReturn(30.0);
+		given(aiClient.analyzeHighlights(any(Path.class))).willReturn(List.of());
+
+		highlightPreviewService.analyze(USER_ID, new HighlightPreviewRequestDto(MY_PENDING_KEY));
+
+		ArgumentCaptor<HeadObjectRequest> requests = ArgumentCaptor.forClass(HeadObjectRequest.class);
+		verify(s3Client).headObject(requests.capture());
+		assertThat(requests.getValue().overrideConfiguration()
+			.flatMap(AwsRequestOverrideConfiguration::apiCallTimeout))
+			.contains(Duration.ofSeconds(10));
+	}
+
+	@Test
+	void 크기_선검증_시한_초과도_업스트림_에러로_수렴한다() {
+		// getObject 시한 초과와 같은 결 — 사용자 파일 문제가 아니라 인프라 사정이므로 3502 수렴 (PR #140 P3)
+		given(s3Client.headObject(any(HeadObjectRequest.class)))
+			.willThrow(ApiCallTimeoutException.create(10000L));
+
+		assertThatThrownBy(() -> highlightPreviewService.analyze(
+			USER_ID, new HighlightPreviewRequestDto(MY_PENDING_KEY)))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.HIGHLIGHT_UPSTREAM_ERROR);
+	}
+
+	@Test
 	void 전용_상한을_넘는_원본은_다운로드_없이_즉시_거부된다() {
 		// read timeout 은 AI leg 만 묶는다 — 다운로드 전에 headObject 실측 크기로 끊어야 S3 leg 시한도 잡힌다 (P1-2)
 		given(s3Client.headObject(any(HeadObjectRequest.class)))
