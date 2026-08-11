@@ -34,7 +34,7 @@ jwt:
 logging:
   level:
     root: INFO
-    com.fillmap: DEBUG
+    com.msg.fillmap: DEBUG
     org.hibernate.SQL: DEBUG
     org.flywaydb: INFO
 

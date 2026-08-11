@@ -54,7 +54,7 @@ server:
 logging:
   level:
     root: INFO
-    com.fillmap: INFO
+    com.msg.fillmap: INFO
     org.hibernate.SQL: WARN
     org.flywaydb: INFO
 # zone 시딩 — 기동마다 seed/zones.json 멱등 UPSERT (MSG-259 D-8). 코드 기본값 false — 로컬·테스트 무영향
