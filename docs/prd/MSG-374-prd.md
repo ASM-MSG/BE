@@ -37,7 +37,7 @@
 | FR-7 | 집계 결과가 없는 뷰포트는 오류가 아니라 빈 목록이다 | Must |
 | FR-8 | 단위 값 검증, 뷰포트 좌표 검증, 단위별 뷰포트 폭 상한은 기존 개인 축 집계(MSG-356)와 같은 규칙과 같은 실패 응답을 따른다 | Must |
 | FR-9 | 한 주소가 기준에 따라 다른 모양을 내지 않는다. `/api/grids/aggregation`의 응답은 전역이든 내 격자든 묶음 목록과 현재 행정동을 함께 담는 한 형태이고, 값이 없는 경우(내 격자 기준, 구·시 단위)에는 현재 행정동만 빈 값이다 | Must |
-| FR-10 | 영상 수는 전역 기준에서만 값을 갖는다. 내 격자 기준과 친구 기준에서는 빈 값이다. 사이드 패널의 영상 수는 지도 홈(전역)의 요구이고 도감 화면은 요구한 적이 없어, 없는 요구를 위해 세는 대상을 새로 정의하지 않는다 | Must |
+| FR-10 | 영상 수는 전역 기준에서만 값을 갖는다. 같은 주소의 내 격자 기준에서는 빈 값이고, 친구 기준 응답에는 이 항목 자체가 없다. 사이드 패널의 영상 수는 지도 홈(전역)의 요구이고 도감 화면과 친구 도감은 요구한 적이 없어, 없는 요구를 위해 세는 대상을 새로 정의하지 않는다 | Must |
 
 ### 축과 주소 (2026-08-11 확정)
 
@@ -45,7 +45,9 @@
 
 지도 홈이 전역으로 확정되면서 기존 `GET /api/grids/aggregation`(MSG-356)의 수요처가 전역으로 옮겨갔고, 프론트가 이미 그 주소를 지도 홈에 연결해 두었다. 그래서 그 주소를 전역 기준으로 바꾸고, 도감 화면이 쓰는 내 격자 기준은 같은 주소의 파라미터로 요청한다. 파라미터를 안 주면 전역이라 프론트의 현재 호출은 주소도 파라미터도 그대로 둔 채 원하는 결과를 받는다.
 
-친구 기준 주소(`GET /api/friends/{userId}/grids/aggregation`)는 응답 형태를 바꾸지 않는다. 다만 그 조회의 API 설명이 "응답이 내 집계 조회와 완전히 같다"고 적고 있어, 내 집계 응답이 바뀌면 그 문장이 사실과 어긋난다. 설명을 묶음 항목 구조가 같다는 뜻으로 정정한다. 친구 기준의 동작과 계약 자체는 그대로다.
+친구 기준 주소(`GET /api/friends/{userId}/grids/aggregation`)는 응답이 필드 하나까지 지금 그대로다. 그러려면 응답 타입을 나눠야 한다. 친구 조회는 지금 쓰는 묶음 항목 타입을 계속 쓰고, 영상 수가 붙는 새 항목 타입은 `/api/grids/aggregation` 쪽에만 둔다. 한 타입에 영상 수를 더하면 그 타입을 재사용 중인 친구 응답의 스키마까지 바뀌어, 이 티켓과 무관한 화면의 계약을 건드리게 된다.
+
+친구 쪽에서 바뀌는 것은 문장 하나뿐이다. 그 조회의 API 설명이 "응답이 내 집계 조회와 완전히 같다"고 적고 있는데 내 집계 응답이 바뀌므로 사실과 어긋난다. 묶음 항목의 공통 부분이 같다는 뜻으로 정정한다. 동작과 응답 스키마는 그대로다.
 
 이 전환으로 도감 화면의 기존 호출은 전역 결과를 받게 되므로, 기준 파라미터를 붙이도록 프론트에 함께 알린다. 응답도 FR-9의 단일 형태로 바뀌어 목록을 꺼내는 자리가 한 단계 깊어진다.
 
@@ -86,13 +88,16 @@ classDiagram
         +현재행정동 currentRegion  %% 전역 기준 동 단위에만 값, 그 밖에는 빈 값
         +List~묶음항목~ items
     }
-    class 묶음항목 {
+    class 묶음항목_신규 {
         +String regionCode  %% 무귀속 묶음은 null
         +String name
         +double lat
         +double lng
         +int count  %% 격자 수
-        +Integer videoCount  %% 신규: 영상 수. 전역 기준에만 값, 내 격자·친구 기준은 빈 값
+        +Integer videoCount  %% 신규 항목. 전역 기준에만 값, 내 격자 기준은 빈 값
+    }
+    class 묶음항목_기존 {
+        %% RegionAggregateResponseDto — 친구 조회 전용으로 남는다. 필드 불변
     }
     class 현재행정동 {
         +String regionCode
@@ -111,7 +116,7 @@ classDiagram
 | `src/main/java/com/msg/fillmap/grid/controller/GridController.java` | 기존 `GET /api/grids/aggregation`에 기준 파라미터를 더해 전역을 기본값으로 삼는다. 응답은 FR-9의 단일 형태로 바뀐다(파라미터 이름과 값 표기는 스펙 확정) | A |
 | `src/main/java/com/msg/fillmap/grid/service/GridQueryService.java`, `impl/GridQueryServiceImpl.java` | 전역 기준 집계 메서드 추가. 기존 내 격자 기준 메서드는 그대로 두고 컨트롤러가 기준에 따라 고른다 | A |
 | `src/main/java/com/msg/fillmap/grid/repository/GridRepository.java` | 전역 기준 native 집계 쿼리 신설. MSG-356 쿼리의 대상 교체 변형으로, 점령 조인 대신 공개 게이트 영상 존재 조건과 영상 수 합산을 쓴다 | A |
-| `src/main/java/com/msg/fillmap/grid/dto/` (RegionAggregate 계열) | 영상 수 필드 추가와 묶음 목록, 현재 행정동을 함께 담는 응답 타입 신규 | A |
+| `src/main/java/com/msg/fillmap/grid/dto/` (RegionAggregate 계열) | 묶음 목록과 현재 행정동을 함께 담는 응답 타입 신규, 영상 수를 가진 묶음 항목 타입 신규. 기존 `RegionAggregateResponseDto`는 친구 조회가 계속 쓰므로 필드를 건드리지 않는다 | A |
 | `src/main/java/com/msg/fillmap/friend/controller/FriendController.java` | 친구 집계 조회의 API 설명에서 "응답이 내 집계 조회와 완전히 같다"는 문장을 묶음 항목 구조가 같다는 뜻으로 정정한다. 코드 동작 변경 없음 | B |
 | `src/main/java/com/msg/fillmap/region/` | 현재 행정동 판정은 기존 `RegionQueryService.resolveByPoint`(reverse-geocode 경로)를 재사용한다. 판정 로직 신규 없음, 호출 접점과 "동구 초량1동" 한 줄 조립만 생긴다 | A |
 | `src/test/java/...` | 위 변경의 테스트 신규 | A |
