@@ -116,11 +116,14 @@ dev에서 503이 나오면 본문 대신 앱 로그(`journalctl -u fillmap-dev`)
 
 ## 스택 재기동법
 
-fillmap-ai 서버의 레포 체크아웃 위치에서(시크릿은 위 "구성 요약"대로 `monitoring/prod/.env`에
-채워져 있어야 한다):
+fillmap-ai 서버의 `~/BE`에서 실행한다(시크릿은 위 "구성 요약"대로 `monitoring/prod/.env`에
+채워져 있어야 한다). `~/BE`는 git 체크아웃이 아니라 scp로 올린 레포 미러라, 설정을 바꿨으면
+로컬 레포에서 `scp -r monitoring/prod ubuntu@52.78.158.240:~/BE/monitoring/`으로 다시 올린 뒤
+아래 반영 방법을 따른다. docker는 ubuntu 유저 권한이 없어 sudo가 필요하다(compose 플러그인
+v5.4.0은 2026-08-11 설치됨).
 
 ```bash
-docker compose -f monitoring/prod/docker-compose.yml up -d
+cd ~/BE && sudo docker compose -f monitoring/prod/docker-compose.yml up -d
 ```
 
 설정 변경 반영은 바뀐 파일의 종류에 따라 다르다. 설정 파일들은 bind mount라 파일만 바뀌면
@@ -188,4 +191,4 @@ AppDown 알림이 계속 울린다. 조치는 silence다:
 | 날짜 | 시점 | available (MiB) | 기록 |
 |---|---|---|---|
 | 2026-08-11 | 배치 전 | 1070 | 스펙 실측값 |
-| (기록 예정) | 배치 직후 | | `free -m` 출력 붙여넣기 |
+| 2026-08-11 | 배치 직후 | 751 | 스택 3컨테이너 실사용 약 320MiB. 캡 합계 896MiB보다 한참 아래라 여유 충분 |
