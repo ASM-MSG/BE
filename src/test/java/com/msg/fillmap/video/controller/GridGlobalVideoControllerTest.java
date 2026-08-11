@@ -56,9 +56,9 @@ class GridGlobalVideoControllerTest {
 		given(videoService.getGridGlobalVideos(eq(GRID_ID), isNull(), eq(20))).willReturn(
 			new GridVideoPageResponseDto(List.of(
 				new GridGlobalVideoResponseDto(1042L, "https://bucket.s3/thumb.jpg?X-Amz-Signature=abc",
-					(short) 12, 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11)),
+					(short) 12, 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), "busan.vlog"),
 				new GridGlobalVideoResponseDto(1039L, "https://bucket.s3/thumb2.jpg?X-Amz-Signature=def",
-					(short) 8, 5L, LocalDateTime.of(2026, 7, 19, 21, 10, 0))),
+					(short) 8, 5L, LocalDateTime.of(2026, 7, 19, 21, 10, 0), "seoul.walk")),
 				true, "NToxNzg0NDU1ODAwMDAwMDAwOjEwMzk"));
 	}
 
@@ -77,14 +77,16 @@ class GridGlobalVideoControllerTest {
 			.andExpect(jsonPath("$.data.videos[0].durationSec").value(12))
 			.andExpect(jsonPath("$.data.videos[0].viewCount").value(37))
 			.andExpect(jsonPath("$.data.videos[0].recordedAt").value("2026-07-20T18:03:11"))
+			.andExpect(jsonPath("$.data.videos[0].nickname").value("busan.vlog"))
 			.andExpect(jsonPath("$.data.videos[1].videoId").value(1039))
+			.andExpect(jsonPath("$.data.videos[1].nickname").value("seoul.walk"))
 			.andExpect(jsonPath("$.data.hasNext").value(true))
 			.andExpect(jsonPath("$.data.nextCursor").value("NToxNzg0NDU1ODAwMDAwMDAwOjEwMzk"));
 	}
 
 	@Test
-	@DisplayName("목록 항목에 processingStatus·작성자·title 필드가 없다 (§D3 계약 배제)")
-	void 목록_항목에_processingStatus_작성자_title_필드가_없다() throws Exception {
+	@DisplayName("목록 항목의 작성자 축은 닉네임뿐이고 processingStatus·title 은 없다 (§D3 계약 배제)")
+	void 목록_항목의_작성자_축은_닉네임뿐이다() throws Exception {
 		givenPage();
 
 		mockMvc.perform(get(URL, GRID_ID)
@@ -92,8 +94,8 @@ class GridGlobalVideoControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.videos[0].videoId").value(1042))   // 항목 실존 확인 — 공허 통과 방지
 			.andExpect(jsonPath("$.data.videos[0].processingStatus").doesNotExist())   // 전역 목록은 항상 READY
-			.andExpect(jsonPath("$.data.videos[0].userId").doesNotExist())             // 작성자 프라이버시
-			.andExpect(jsonPath("$.data.videos[0].nickname").doesNotExist())
+			.andExpect(jsonPath("$.data.videos[0].nickname").value("busan.vlog"))      // 2026-08-04 확정(MSG-371)
+			.andExpect(jsonPath("$.data.videos[0].userId").doesNotExist())             // 작성자 id 는 여전히 비노출
 			.andExpect(jsonPath("$.data.videos[0].title").doesNotExist());             // MSG-240 후속 additive
 	}
 

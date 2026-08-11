@@ -9,7 +9,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,6 +72,7 @@ import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.exception.VideoErrorCode;
+import com.msg.fillmap.video.repository.AuthorNicknameProjection;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
@@ -470,8 +473,13 @@ public class VideoServiceImpl implements VideoService {
 	@Override
 	@Transactional(readOnly = true)
 	public GridCoverVideoResponseDto getGridCover(String gridId) {
+		// 닉네임(MSG-371)은 대표가 있을 때만 1회 조회한다 — 대표 없는 격자(data null)는 조회가 아예 안 돈다.
+		// 닉네임이 빈손이면 그 영상이 두 문장 사이(READ COMMITTED)에 탈퇴로 연쇄 삭제된 것이라 대표 없음으로
+		// 떨어뜨린다(flatMap) — 대표가 원래 없는 격자와 같은 응답이고, nickname 이 null 로 실리는 경로가 없다.
 		return videoRepository.findGlobalCover(gridId)
-			.map(video -> GridCoverVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl())))
+			.flatMap(video -> videoRepository.findAuthorNickname(video.getUserId())
+				.map(nickname -> GridCoverVideoResponseDto.of(
+					video, thumbnailUrlPresigner.presign(video.getThumbnailUrl()), nickname)))
 			.orElse(null);
 	}
 
@@ -487,15 +495,36 @@ public class VideoServiceImpl implements VideoService {
 		List<Video> rows = queryGlobalPage(gridId, cursor, pageSize + 1);
 		boolean hasNext = rows.size() > pageSize;
 		List<Video> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
+		Map<Long, String> nicknames = authorNicknames(pageRows);
+		// 배치 맵에 작성자가 없다 = 그 영상이 두 문장 사이(READ COMMITTED)에 탈퇴로 연쇄 삭제됐다 —
+		// 항목을 빼서 숨긴다(MSG-371). nickname 이 null 로 실리는 경로가 없어진다.
 		List<GridGlobalVideoResponseDto> videos = pageRows.stream()
-			.map(video -> GridGlobalVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl())))
+			.filter(video -> nicknames.containsKey(video.getUserId()))
+			.map(video -> GridGlobalVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl()),
+				nicknames.get(video.getUserId())))
 			.toList();
 		String nextCursor = null;
 		if (hasNext) {
+			// 커서는 걸러내기 전 pageRows 의 마지막 행 기준 그대로다 — 숨긴 항목이 페이지 끝이었을 때
+			// 커서가 그 자리에 멈춰 같은 페이지를 무한히 다시 읽는 걸 막는다 (커서 규칙 무변경).
 			Video last = pageRows.get(pageRows.size() - 1);
 			nextCursor = VideoCursor.encode(gridId, last.getViewCount(), last.getCreatedAt(), last.getId());
 		}
 		return new GridVideoPageResponseDto(videos, hasNext, nextCursor);
+	}
+
+	/**
+	 * 페이지 항목의 작성자 닉네임 배치 조회 (MSG-371). 트림이 끝난 pageRows 로만 부른다 — 잘려나간
+	 * lookahead 행의 작성자는 애초에 들어오지 않는다. 중복 제거한 id 로 IN 1회라 페이지 크기와 무관하게
+	 * 목록 조회의 DB 왕복이 2회(영상 + 닉네임)로 고정된다. 빈 페이지는 조회를 건너뛴다(IN 빈 목록 회피).
+	 */
+	private Map<Long, String> authorNicknames(List<Video> pageRows) {
+		Set<Long> userIds = pageRows.stream().map(Video::getUserId).collect(Collectors.toSet());
+		if (userIds.isEmpty()) {
+			return Map.of();
+		}
+		return videoRepository.findAuthorNicknames(userIds).stream()
+			.collect(Collectors.toMap(AuthorNicknameProjection::getUserId, AuthorNicknameProjection::getNickname));
 	}
 
 	private List<Video> queryGlobalPage(String gridId, String cursor, int limit) {
@@ -584,9 +613,14 @@ public class VideoServiceImpl implements VideoService {
 		// 산술로, 행정동은 격자 저장 라벨 조회로 얻는다(D-6). 접근이 거부된 요청은 위에서 이미 던져졌으므로
 		// 이름 계산·조회는 응답을 실제로 내려주는 경로에서만 돈다.
 		ZoneCellName zoneCellName = zoneName(video.getGridId());
+		// 7. 작성자 닉네임 (MSG-371) — 접근 제어를 다 통과한 뒤 1회. 거부된 요청에선 돌지 않는다.
+		//    소유자 본인 조회에도 실린다(본인 닉네임). 빈손이면 그 영상이 위 findById 이후(READ COMMITTED)
+		//    탈퇴로 연쇄 삭제된 것이라 1번 DELETED 분기와 같은 404 로 수렴한다 — 신규 에러코드 없음.
+		String nickname = videoRepository.findAuthorNickname(video.getUserId())
+			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
 		// viewCount 는 증가 전 스냅샷 — native UPDATE 는 로드된 엔티티 필드를 건드리지 않는다(§설계 M7).
 		return VideoPlaybackResponseDto.of(video, playbackUrl, thumbnailUrl, expiresInSec,
-			zoneCellName.zoneName(), zoneCellName.zoneCell(), findRegionName(video.getGridId()));
+			zoneCellName.zoneName(), zoneCellName.zoneCell(), findRegionName(video.getGridId()), nickname);
 	}
 
 	private void validateCoordinate(double lat, double lon) {
