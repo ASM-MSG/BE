@@ -169,7 +169,7 @@ class FriendControllerTest {
 	void 친구_프로필은_요약과_최근_수집_격자를_담는다() throws Exception {
 		given(friendService.getFriendProfile(USER_ID, 7L)).willReturn(new FriendProfileResponseDto(
 			"채우미", null, GridColor.PINK,
-			new CollectionSummaryResponseDto(15, 42L, 6),
+			new CollectionSummaryResponseDto(15, 42L, 6, 12, 21, 7),
 			List.of(new FriendCollectionGridResponseDto("19422_9582", 19422, 9582,
 				LocalDateTime.of(2026, 7, 20, 18, 3, 11), LocalDateTime.of(2026, 7, 21, 9, 12, 0),
 				3, "https://signed/thumb.jpg", "서울특별시 강남구 역삼1동", "서면", "I-9"))));
