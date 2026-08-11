@@ -50,6 +50,7 @@ class HighlightPreviewControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-MEDIA-11
 	@Test
 	@DisplayName("선분석 200 응답에 중첩 구간 배열이 그대로 직렬화된다")
 	void 선분석_200_응답에_중첩_구간_배열이_그대로_직렬화된다() throws Exception {
@@ -68,6 +69,7 @@ class HighlightPreviewControllerTest {
 			.andExpect(jsonPath("$.data.highlights[1][0]").value(10.0));
 	}
 
+	// 검증: FR-MEDIA-12
 	@Test
 	@DisplayName("추천이 없으면 null 이 아니라 빈 배열이 내려간다 — FR-4, FE 는 추천 단계 스킵")
 	void 추천이_없으면_빈_배열이_그대로_내려간다() throws Exception {

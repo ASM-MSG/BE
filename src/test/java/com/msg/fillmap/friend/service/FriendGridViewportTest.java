@@ -93,6 +93,7 @@ class FriendGridViewportTest {
 		baseX = base.gridX();
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("친구가 점령한 격자만 뷰포트로 조회된다 — 내 격자는 섞이지 않는다 (FR-1)")
 	void 친구의_점령_격자를_뷰포트로_조회한다() {
@@ -108,6 +109,7 @@ class FriendGridViewportTest {
 		assertThat(page.nextCursor()).isNull();
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("친구 격자 뷰포트 항목에도 같은 이름이 실린다")
 	void 친구_격자_뷰포트_항목에도_같은_이름이_실린다() {
@@ -125,6 +127,7 @@ class FriendGridViewportTest {
 		assertThat(page.items()).extracting(OccupiedGridView::zoneCell).containsExactly("F-1", "E-1");
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("친구 격자 조회에도 행정동 이름이 실린다 (MSG-349 FR-1)")
 	void 친구_격자_조회에도_행정동_이름이_실린다() {
@@ -140,6 +143,7 @@ class FriendGridViewportTest {
 		assertThat(page.items()).extracting(OccupiedGridView::regionName).containsExactly(REGION_NAME, null);
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("구역 밖 친구 격자는 두 필드가 모두 null 이다")
 	void 구역_밖_친구_격자는_두_필드가_모두_null이다() {
@@ -153,6 +157,7 @@ class FriendGridViewportTest {
 		assertThat(page.items().get(0).zoneCell()).isNull();
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("커서로 다음 페이지가 이어지고 마지막 페이지의 nextCursor 는 null 이다")
 	void 커서로_다음_페이지가_이어지고_마지막_페이지의_nextCursor는_null이다() {
@@ -171,6 +176,7 @@ class FriendGridViewportTest {
 		assertThat(page2.nextCursor()).isNull();
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("친구가 점령한 격자가 없는 뷰포트는 빈 목록이다 — 에러 아님 (FR-8)")
 	void 친구가_점령한_격자가_없는_뷰포트는_빈_목록이다() {
@@ -182,6 +188,7 @@ class FriendGridViewportTest {
 		assertThat(page.nextCursor()).isNull();
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("비친구 조회는 9424 다 (FR-2)")
 	void 비친구_조회는_9424다() {
@@ -193,6 +200,7 @@ class FriendGridViewportTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("본인 ID 조회는 9424 다 — 내 도감은 격자 API 몫 (FR-2)")
 	void 본인_ID_조회는_9424다() {
@@ -202,6 +210,7 @@ class FriendGridViewportTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("미존재 userId 조회는 비친구와 구분 불가한 9424 다 — 계정 존재 은닉 (FR-2)")
 	void 미존재_userId_조회는_9424다() {
@@ -211,6 +220,7 @@ class FriendGridViewportTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("대기 중 요청 상대 조회는 9424 다 (FR-2)")
 	void PENDING_상대_조회는_9424다() {
@@ -223,6 +233,7 @@ class FriendGridViewportTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-09
 	@Test
 	@DisplayName("친구 삭제 직후 조회는 9424 다 — 실시간 판정 (FR-7)")
 	void 친구_삭제_직후_조회는_9424다() {
@@ -236,6 +247,7 @@ class FriendGridViewportTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("뒤집힌 bbox 는 4401 이다 — 내 조회와 같은 규칙 (FR-10)")
 	void 뒤집힌_bbox는_4401이다() {
@@ -246,6 +258,7 @@ class FriendGridViewportTest {
 			.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.INVALID_VIEWPORT);
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("상한(0.5도) 초과 뷰포트는 4402 다 (FR-10)")
 	void 상한_초과_뷰포트는_4402다() {
@@ -256,6 +269,7 @@ class FriendGridViewportTest {
 			.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.VIEWPORT_TOO_LARGE);
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("무효 커서는 4403 이다 (FR-10)")
 	void 무효_커서는_4403이다() {
@@ -264,6 +278,7 @@ class FriendGridViewportTest {
 			.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.INVALID_CURSOR);
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("범위(1~5000) 밖 size 는 4404 다 (FR-10)")
 	void 범위_밖_size는_4404다() {
@@ -275,6 +290,7 @@ class FriendGridViewportTest {
 			.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.INVALID_PAGE_SIZE);
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("비친구는 무효 뷰포트여도 9424 가 먼저다 — 은닉 우선 (D3 순서)")
 	void 비친구는_무효_뷰포트여도_9424가_먼저다() {
@@ -320,6 +336,7 @@ class FriendGridViewportTest {
 		});
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("친구 집계도 실패는 9424 하나다 — 비친구·본인 ID·대기 중 상대·미존재 userId (MSG-356 FR-4)")
 	void 비친구의_친구_집계_요청은_9424_단일_실패다() {

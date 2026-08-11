@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import tools.jackson.databind.ObjectMapper;
 
+// 검증: FR-REGION-01
 class RegionGeoJsonReaderTest {
 
 	private final RegionGeoJsonReader reader = new RegionGeoJsonReader(new ObjectMapper());

@@ -42,6 +42,7 @@ import com.msg.fillmap.region.repository.RegionRepository;
  * 격리(공유 로컬 DB): missions 는 시드가 없어 @Transactional 롤백으로 충분. 각 테스트는 새 서비스 인스턴스를 만들어
  * 캐시를 비운 채 이 tx 에서 삽입한 미션(무기간 → 항상 활성)만 조회하고, 그 미션 id 로 DTO 를 스코프한다.
  */
+// 검증: FR-MISSION-01
 @SpringBootTest
 @Transactional
 @DisplayName("MissionQueryServiceImpl 유형별 shape 합성 (실 PostGIS)")

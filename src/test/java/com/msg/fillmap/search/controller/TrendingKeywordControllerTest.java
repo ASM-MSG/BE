@@ -47,6 +47,7 @@ class TrendingKeywordControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-SEARCH-07
 	@Test
 	@DisplayName("성공은 SuccessResponse 포맷으로 순위 리스트를 반환한다")
 	void 성공은_SuccessResponse_포맷으로_순위_리스트를_반환한다() throws Exception {
@@ -65,6 +66,7 @@ class TrendingKeywordControllerTest {
 			.andExpect(jsonPath("$.data[1].keyword").value("부산대"));
 	}
 
+	// 검증: FR-SEARCH-07, FR-SEARCH-08
 	@Test
 	@DisplayName("응답에 검색 횟수와 장소 정보가 포함되지 않는다 (FR-4·8)")
 	void 응답에_검색_횟수와_장소_정보가_포함되지_않는다() throws Exception {
@@ -79,6 +81,7 @@ class TrendingKeywordControllerTest {
 			.andExpect(jsonPath("$.data[0].keyword").exists());
 	}
 
+	// 검증: FR-SEARCH-09
 	@Test
 	@DisplayName("집계가 없으면 200 과 빈 배열이다 (FR-5)")
 	void 집계가_없으면_200과_빈_배열이다() throws Exception {

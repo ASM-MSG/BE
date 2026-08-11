@@ -46,6 +46,7 @@ class UserMissionRepositoryTest {
 		assertThat(userMissionRepository.insertIgnoreConflict(me, mission)).isEqualTo(1);
 	}
 
+	// 검증: FR-MISSION-04
 	@Test
 	@DisplayName("같은 미션 스탬프 중복 INSERT 는 0을 반환한다 — PK 충돌 무시(FR-14)")
 	void 같은_미션_스탬프_중복_INSERT는_0을_반환한다() {
@@ -56,6 +57,7 @@ class UserMissionRepositoryTest {
 		assertThat(userMissionRepository.insertIgnoreConflict(me, mission)).isZero();
 	}
 
+	// 검증: FR-BADGE-12
 	@Test
 	@DisplayName("countMyStampsByType 은 그 종류의 내 스탬프만 센다 — 타 사용자·타 종류 미포함(MSG-363 §D4)")
 	void countMyStampsByType은_그_종류의_내_스탬프만_센다() {

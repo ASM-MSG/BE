@@ -152,6 +152,7 @@ class GridRepositoryTest {
 			.getRegionName();
 	}
 
+	// 검증: FR-REGION-08, FR-REGION-12
 	@Test
 	@DisplayName("격자에 걸린 행정동 라벨을 같은 쿼리에서 함께 읽는다 (MSG-349)")
 	void 격자에_걸린_행정동_라벨을_같은_쿼리에서_함께_읽는다() {
@@ -162,6 +163,7 @@ class GridRepositoryTest {
 		assertThat(regionNameOf(pageA(10), g00)).isEqualTo(REGION_NAME);
 	}
 
+	// 검증: FR-REGION-08
 	@Test
 	@DisplayName("여러 격자의 행정동 이름을 한 번에 읽는다 — 라벨 없는 격자는 결과에서 빠진다 (MSG-349 핫구역용)")
 	void 여러_격자의_행정동_이름을_한_번에_읽는다() {
@@ -175,6 +177,7 @@ class GridRepositoryTest {
 		assertThat(rows.get(0).getRegionName()).isEqualTo(REGION_NAME);
 	}
 
+	// 검증: FR-REGION-10
 	@Test
 	@DisplayName("무귀속 격자는 regionName 이 null 이어도 항목에서 빠지지 않는다 (LEFT JOIN)")
 	void 무귀속_격자는_regionName이_null이어도_항목에서_빠지지_않는다() {
@@ -188,24 +191,28 @@ class GridRepositoryTest {
 		assertThat(regionNameOf(rows, g22)).isNull();
 	}
 
+	// 검증: FR-GRID-06
 	@Test
 	@DisplayName("점령한 격자를 단일 조회하면 videoCount 를 반환한다")
 	void 점령한_격자를_단일_조회하면_videoCount를_반환한다() {
 		assertThat(gridRepository.findVideoCount(me, g00)).contains(3);
 	}
 
+	// 검증: FR-GRID-06
 	@Test
 	@DisplayName("점령하지 않은 격자를 단일 조회하면 결과가 비어있다")
 	void 점령하지_않은_격자를_단일_조회하면_결과가_비어있다() {
 		assertThat(gridRepository.findVideoCount(me, g20)).isEmpty();
 	}
 
+	// 검증: FR-GRID-07
 	@Test
 	@DisplayName("정수범위스캔 A 는 뷰포트 안의 내 점령 격자만 반환한다")
 	void 정수범위스캔_A는_뷰포트_안의_내_점령_격자만_반환한다() {
 		assertThat(rangeScanA()).containsExactlyInAnyOrder(g00, g11, g22);
 	}
 
+	// 검증: FR-GRID-07
 	@Test
 	@DisplayName("GIST 공간쿼리 B 는 뷰포트 안의 내 점령 격자만 반환한다")
 	void GIST공간쿼리_B는_뷰포트_안의_내_점령_격자만_반환한다() {
@@ -218,6 +225,7 @@ class GridRepositoryTest {
 		assertThat(rangeScanA()).containsExactlyInAnyOrderElementsOf(gistB());
 	}
 
+	// 검증: FR-GRID-07
 	@Test
 	@DisplayName("뷰포트 범위 밖의 점령 격자는 반환하지 않는다")
 	void 뷰포트_범위_밖의_점령_격자는_반환하지_않는다() {
@@ -225,6 +233,7 @@ class GridRepositoryTest {
 		assertThat(gistB()).doesNotContain(gOut);
 	}
 
+	// 검증: FR-GRID-07
 	@Test
 	@DisplayName("다른 사용자의 점령 격자는 내 뷰포트 결과에 포함되지 않는다 (개인 도감 격리)")
 	void 다른_사용자의_점령_격자는_내_뷰포트_결과에_포함되지_않는다() {
@@ -232,6 +241,7 @@ class GridRepositoryTest {
 		assertThat(gistB()).doesNotContain(g02);
 	}
 
+	// 검증: FR-GRID-07
 	@Test
 	@DisplayName("경계 셀이 뷰포트 범위에 포함된다")
 	void 경계_셀이_뷰포트_범위에_포함된다() {
@@ -240,6 +250,7 @@ class GridRepositoryTest {
 		assertThat(gistB()).contains(g22);
 	}
 
+	// 검증: FR-GRID-07
 	@Test
 	@DisplayName("GIST 쿼리는 경도위도 순서로 envelope 를 만든다 (축 순서 회귀)")
 	void GIST쿼리는_경도위도_순서로_envelope를_만든다() {
@@ -248,6 +259,7 @@ class GridRepositoryTest {
 		assertThat(gistB()).isNotEmpty().containsExactlyInAnyOrder(g00, g11, g22);
 	}
 
+	// 검증: FR-GRID-08
 	@Test
 	@DisplayName("커서 없이 조회하면 정렬 첫 페이지를 size 만큼 반환한다 (MSG-90)")
 	void 커서없이_조회하면_정렬첫페이지를_size만큼_반환한다() {
@@ -255,6 +267,7 @@ class GridRepositoryTest {
 		assertThat(gridIds(pageA(2))).containsExactly(g00, g11);
 	}
 
+	// 검증: FR-GRID-08
 	@Test
 	@DisplayName("커서 이후 조회하면 그 커서보다 큰 격자만 grid_y, grid_x 순으로 반환한다 (MSG-90)")
 	void 커서이후_조회하면_그_커서보다_큰_격자만_grid_y_grid_x_순으로_반환한다() {
@@ -268,6 +281,7 @@ class GridRepositoryTest {
 		assertThat(result).doesNotContain(g00, g11);
 	}
 
+	// 검증: FR-GRID-08
 	@Test
 	@DisplayName("페이지를 끝까지 이어붙이면 비페이지 전체 결과와 동일 집합이다 (누락·중복 없음)")
 	void 페이지를_끝까지_이어붙이면_비페이지_전체결과와_동일_집합이다() {
@@ -283,6 +297,7 @@ class GridRepositoryTest {
 		assertThat(collected).containsExactlyInAnyOrderElementsOf(rangeScanA());
 	}
 
+	// 검증: FR-GRID-08
 	@Test
 	@DisplayName("결과는 항상 grid_y, grid_x 오름차순 정렬이다 (MSG-90)")
 	void 결과는_항상_grid_y_grid_x_오름차순_정렬이다() {
@@ -295,6 +310,7 @@ class GridRepositoryTest {
 		assertThat(gridIds(pageA(10))).containsExactly(g00, gLowX, g11, g20, g22);
 	}
 
+	// 검증: FR-GRID-07, FR-GRID-08
 	@Test
 	@DisplayName("뷰포트 밖 격자와 타인 점령 격자는 페이지에 포함되지 않는다 (개인 도감 격리 유지)")
 	void 뷰포트_밖_격자와_타인_점령_격자는_페이지에_포함되지_않는다() {

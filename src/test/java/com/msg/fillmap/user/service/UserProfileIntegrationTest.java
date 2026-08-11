@@ -56,6 +56,7 @@ class UserProfileIntegrationTest {
 		userId = userRepository.save(User.createLocalUser(email, "hash", "채우미")).getId();
 	}
 
+	// 검증: FR-USER-01
 	@Test
 	@DisplayName("내 프로필을 조회하면 이메일과 닉네임을 반환한다 (FR-1)")
 	void 내_프로필을_조회하면_이메일과_닉네임을_반환한다() {
@@ -65,6 +66,7 @@ class UserProfileIntegrationTest {
 		assertThat(profile.nickname()).isEqualTo("채우미");
 	}
 
+	// 검증: FR-USER-02
 	@Test
 	@DisplayName("닉네임을 변경하면 변경 후 프로필을 반환한다 (FR-2·D2)")
 	void 닉네임을_변경하면_변경_후_프로필을_반환한다() {
@@ -74,6 +76,7 @@ class UserProfileIntegrationTest {
 		assertThat(updated.email()).isEqualTo(email);
 	}
 
+	// 검증: FR-USER-02
 	@Test
 	@DisplayName("닉네임 변경 직후 조회에 변경 값이 반영된다 (FR-5)")
 	void 닉네임_변경_직후_조회에_변경_값이_반영된다() {
@@ -85,6 +88,7 @@ class UserProfileIntegrationTest {
 		assertThat(userService.getMyProfile(userId).nickname()).isEqualTo("바뀐이름");
 	}
 
+	// 검증: FR-USER-04
 	@Test
 	@DisplayName("이메일 없는 카카오 가입 사용자는 email null 로 조회된다 (MSG-310)")
 	void 이메일_없는_카카오_가입_사용자는_email_null_로_조회된다() {

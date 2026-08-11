@@ -95,6 +95,7 @@ class VideoServiceIntegrationTest {
 			.getSingleResult()).longValue();
 	}
 
+	// 검증: FR-VIDEO-05
 	@Test
 	@DisplayName("업로드하면 videos·user_grids·grids row 가 생성되고 첫 점령은 occupied=true 다")
 	void 업로드하면_row가_생성되고_첫점령이다() {
@@ -126,6 +127,7 @@ class VideoServiceIntegrationTest {
 		assertThat(countRows("SELECT video_count FROM user_grids WHERE grid_id = :g", gridId)).isEqualTo(2);
 	}
 
+	// 검증: FR-GRID-04
 	@Test
 	@DisplayName("서비스 범위 밖 좌표는 INVALID_COORDINATE 를 던진다")
 	void 범위밖_좌표는_거부된다() {
@@ -134,6 +136,7 @@ class VideoServiceIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_COORDINATE);
 	}
 
+	// 검증: FR-VIDEO-05, FR-GRID-04
 	@Test
 	@DisplayName("서비스 범위 경계값 좌표는 허용된다 — 닫힌 구간이라 위도 33.0·경도 124.0 이 통과한다")
 	void 경계값_좌표는_허용된다() {
@@ -154,6 +157,7 @@ class VideoServiceIntegrationTest {
 
 	// 업로드 시 공개범위 지정 (MSG-204). 미지정은 PUBLIC, 지정값 저장, 오류값은 S3 부수효과 없이 3420.
 
+	// 검증: FR-VIDEO-15
 	@Test
 	void 업로드에_visibility를_생략하면_PUBLIC으로_저장된다() {
 		long videoId = videoService.saveVideo(userId, request(성수_LAT, 성수_LON)).videoId();
@@ -161,6 +165,7 @@ class VideoServiceIntegrationTest {
 		assertThat(visibilityOf(videoId)).isEqualTo("PUBLIC");
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	void 업로드에_PRIVATE를_지정하면_PRIVATE로_저장된다() {
 		long videoId = videoService.saveVideo(userId, request(성수_LAT, 성수_LON, "PRIVATE")).videoId();
@@ -168,6 +173,7 @@ class VideoServiceIntegrationTest {
 		assertThat(visibilityOf(videoId)).isEqualTo("PRIVATE");
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	void 업로드에_PUBLIC을_지정하면_PUBLIC으로_저장된다() {
 		long videoId = videoService.saveVideo(userId, request(성수_LAT, 성수_LON, "PUBLIC")).videoId();
@@ -175,6 +181,7 @@ class VideoServiceIntegrationTest {
 		assertThat(visibilityOf(videoId)).isEqualTo("PUBLIC");
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	void 업로드_visibility는_소문자도_허용된다() {
 		// parseVisibility 의 toUpperCase 관용 — MSG-162 전환 API 와 동일
@@ -183,6 +190,7 @@ class VideoServiceIntegrationTest {
 		assertThat(visibilityOf(videoId)).isEqualTo("PRIVATE");
 	}
 
+	// 검증: FR-VIDEO-15, FR-VIDEO-17
 	@Test
 	@DisplayName("업로드에 FRIENDS 를 지정하면 FRIENDS 로 저장되고 점령도 그대로 반영된다 (MSG-285 FR-1·9)")
 	void 업로드에_FRIENDS를_지정하면_FRIENDS로_저장된다() {
@@ -196,6 +204,7 @@ class VideoServiceIntegrationTest {
 			GridEncoder.encode(성수_LAT, 성수_LON))).isEqualTo(1);
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	void 업로드에_허용_외_값이면_INVALID_VISIBILITY고_영상은_저장되지_않는다() {
 		assertThatThrownBy(() -> videoService.saveVideo(userId, request(성수_LAT, 성수_LON, "BOGUS")))

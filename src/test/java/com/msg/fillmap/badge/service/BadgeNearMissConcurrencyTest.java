@@ -38,6 +38,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  * 발생하므로 @Transactional 롤백을 못 쓴다 — @AfterEach 의 users 지정 삭제가 notifications 를
  * CASCADE 로 걷어낸다.
  */
+// 검증: FR-BADGE-10
 @SpringBootTest
 @DisplayName("뱃지 임박 경합 제어 — try 잠금을 못 잡은 시도는 스킵돼 하루 1건이 지켜진다 (실 PostGIS)")
 class BadgeNearMissConcurrencyTest {

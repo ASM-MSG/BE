@@ -115,6 +115,7 @@ class AuthControllerTest {
 	@DisplayName("POST /auth/signup")
 	class Signup {
 
+		// 검증: FR-AUTH-11
 		@Test
 		@DisplayName("성공: 정상 요청이면 200 과 SuccessResponse 형식의 응답 DTO 를 반환한다")
 		void signup_success() throws Exception {
@@ -152,6 +153,7 @@ class AuthControllerTest {
 			verify(authService, never()).signup(any());
 		}
 
+		// 검증: FR-AUTH-11
 		@Test
 		@DisplayName("실패: 비밀번호가 8자 미만이면 400 을 반환한다")
 		void signup_shortPassword() throws Exception {
@@ -167,6 +169,7 @@ class AuthControllerTest {
 			verify(authService, never()).signup(any());
 		}
 
+		// 검증: FR-AUTH-11
 		@Test
 		@DisplayName("실패: 닉네임이 비어있으면 400 을 반환한다")
 		void signup_blankNickname() throws Exception {
@@ -182,6 +185,7 @@ class AuthControllerTest {
 			verify(authService, never()).signup(any());
 		}
 
+		// 검증: FR-USER-04
 		@Test
 		@DisplayName("실패: 이메일이 이미 존재하면 409 CONFLICT 와 EMAIL_ALREADY_EXISTS 코드를 반환한다")
 		void signup_duplicateEmail() throws Exception {
@@ -204,6 +208,7 @@ class AuthControllerTest {
 	@DisplayName("POST /auth/login")
 	class Login {
 
+		// 검증: FR-AUTH-08
 		@Test
 		@DisplayName("성공(웹): 리프레시를 Set-Cookie 로 내리고 body.refreshToken 은 null 이며 X-Device-Id 를 반환한다")
 		void login_web_setsCookie() throws Exception {
@@ -221,6 +226,7 @@ class AuthControllerTest {
 				.andExpect(header().exists(DEVICE_ID_HEADER));
 		}
 
+		// 검증: FR-AUTH-08
 		@Test
 		@DisplayName("성공(앱): 리프레시를 body 로 내리고 쿠키는 없다")
 		void login_app_returnsBody() throws Exception {
@@ -289,6 +295,7 @@ class AuthControllerTest {
 	@DisplayName("POST /auth/oauth/{provider}")
 	class OauthLogin {
 
+		// 검증: FR-AUTH-01
 		@Test
 		@DisplayName("성공: kakao provider 로 정상 요청하면 200 과 accessToken 을 반환한다")
 		void oauthLogin_success() throws Exception {
@@ -319,6 +326,7 @@ class AuthControllerTest {
 			verify(oidcLoginService, never()).login(any(), any(), any());
 		}
 
+		// 검증: FR-AUTH-01
 		@Test
 		@DisplayName("실패: 지원하지 않는 provider 면 400 과 UNSUPPORTED_PROVIDER 코드를 반환하고 서비스는 호출되지 않는다")
 		void oauthLogin_unsupportedProvider() throws Exception {
@@ -365,6 +373,7 @@ class AuthControllerTest {
 			return new Cookie(NonceCookies.COOKIE_NAME, NONCE);
 		}
 
+		// 검증: FR-AUTH-02, FR-AUTH-03
 		@Test
 		@DisplayName("인가 진입점: 카카오 인가 URL 로 302 하면서 같은 응답에 nonce 쿠키를 심는다")
 		void 인가_진입점은_카카오_인가_URL로_302하며_nonce_쿠키를_심는다() throws Exception {
@@ -390,6 +399,7 @@ class AuthControllerTest {
 				.doesNotContain("state=");
 		}
 
+		// 검증: FR-AUTH-02
 		@Test
 		@DisplayName("인가 진입점: state 는 손대지 않고 인가 URL 에 그대로 전달한다")
 		void 인가_진입점은_state를_그대로_인가_URL에_전달한다() throws Exception {
@@ -418,6 +428,7 @@ class AuthControllerTest {
 			assertThat(NonceCookies.issue("test-nonce", true)).contains("SameSite=None", "Secure");
 		}
 
+		// 검증: FR-AUTH-02, FR-AUTH-08
 		@Test
 		@DisplayName("성공(웹): 교환한 ID Token 으로 로그인해 액세스 토큰과 리프레시 쿠키를 내린다")
 		void 유효한_인가_코드로_로그인하면_웹은_액세스_토큰과_리프레시_쿠키가_발급된다() throws Exception {
@@ -437,6 +448,7 @@ class AuthControllerTest {
 				.andExpect(header().exists(DEVICE_ID_HEADER));
 		}
 
+		// 검증: FR-AUTH-02, FR-AUTH-08
 		@Test
 		@DisplayName("성공(앱): 리프레시를 body 로 내리고 리프레시 쿠키는 없다 — 기존 소셜 로그인과 같은 전송 규칙")
 		void 앱_클라이언트는_리프레시_토큰이_body로_내려간다() throws Exception {
@@ -455,6 +467,7 @@ class AuthControllerTest {
 				.andExpect(cookie().doesNotExist(RefreshTokenCookies.COOKIE_NAME));
 		}
 
+		// 검증: FR-AUTH-08
 		@Test
 		@DisplayName("X-Device-Id 가 없으면 서버가 생성해 서비스로 넘기고 응답 헤더로 반환한다")
 		void 디바이스_ID_헤더가_없으면_서버가_생성해_응답_헤더로_반환한다() throws Exception {
@@ -489,6 +502,7 @@ class AuthControllerTest {
 				.andExpect(cookie().value(NonceCookies.COOKIE_NAME, ""));
 		}
 
+		// 검증: FR-AUTH-03
 		@Test
 		@DisplayName("실패: nonce 쿠키가 없으면 401(2423) — 카카오 왕복도 하지 않는다")
 		void 논스_쿠키가_없으면_카카오_왕복_없이_2423으로_거절한다() throws Exception {
@@ -531,6 +545,7 @@ class AuthControllerTest {
 			verify(oidcLoginService, never()).login(any(), any(), any());
 		}
 
+		// 검증: FR-AUTH-10
 		@Test
 		@DisplayName("실패: 교환이 거부되면 401 INVALID_AUTHORIZATION_CODE(2423) 로 응답하고 로그인은 하지 않는다")
 		void 교환_실패_예외는_2423_응답으로_변환된다() throws Exception {
@@ -568,6 +583,7 @@ class AuthControllerTest {
 	@DisplayName("POST /auth/reissue")
 	class Reissue {
 
+		// 검증: FR-AUTH-08
 		@Test
 		@DisplayName("쿠키에 리프레시가 있으면 쿠키에서 읽어 재발급하고, 웹은 새 리프레시를 Set-Cookie 로 내린다")
 		void reissue_readsFromCookie() throws Exception {
@@ -585,6 +601,7 @@ class AuthControllerTest {
 			verify(refreshTokenService).reissue("refresh-cookie");
 		}
 
+		// 검증: FR-AUTH-08
 		@Test
 		@DisplayName("쿠키가 없으면 body 에서 읽어 재발급하고, 앱은 새 리프레시를 body 로 내린다")
 		void reissue_readsFromBody() throws Exception {
@@ -614,6 +631,7 @@ class AuthControllerTest {
 			verify(refreshTokenService, never()).reissue(any());
 		}
 
+		// 검증: FR-AUTH-07
 		@Test
 		@DisplayName("실패: 재사용이 감지되면 401 REFRESH_TOKEN_REUSE_DETECTED(2433) 을 반환한다")
 		void reissue_reuseDetected() throws Exception {
@@ -643,6 +661,7 @@ class AuthControllerTest {
 	@DisplayName("POST /auth/logout")
 	class Logout {
 
+		// 검증: FR-AUTH-09
 		@Test
 		@DisplayName("성공: 액세스 토큰과 X-Device-Id 를 넘기고 리프레시 쿠키를 만료시키며 200 을 반환한다")
 		void logout_success() throws Exception {
@@ -666,6 +685,7 @@ class AuthControllerTest {
 			verify(authService).logout("jwt-token", null, null);
 		}
 
+		// 검증: FR-NOTI-01
 		@Test
 		@DisplayName("body 에 fcmToken 이 있으면 서비스로 전달돼 푸시 토큰도 정리된다 (MSG-178 logout 통합)")
 		void 로그아웃_body에_fcmToken이_있으면_푸시_토큰도_정리된다() throws Exception {

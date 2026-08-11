@@ -50,6 +50,7 @@ class VideoPlaybackControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-VIDEO-12
 	@Test
 	@DisplayName("단건 조회는 200과 재생메타를 반환한다")
 	void 단건_조회는_200과_재생메타를_반환한다() throws Exception {
@@ -57,7 +58,7 @@ class VideoPlaybackControllerTest {
 			VIDEO_ID, "https://bucket.s3/play.mp4?X-Amz-Signature=abc",
 			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
 			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
-			"서면", "I-9", "서울특별시 강남구 역삼1동", null));
+			"서면", "I-9", "서울특별시 강남구 역삼1동", null, "busan.vlog"));
 
 		mockMvc.perform(get(URL, VIDEO_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -71,9 +72,11 @@ class VideoPlaybackControllerTest {
 			.andExpect(jsonPath("$.data.expiresInSec").value(600))
 			.andExpect(jsonPath("$.data.zoneName").value("서면"))
 			.andExpect(jsonPath("$.data.zoneCell").value("I-9"))
-			.andExpect(jsonPath("$.data.regionName").value("서울특별시 강남구 역삼1동"));
+			.andExpect(jsonPath("$.data.regionName").value("서울특별시 강남구 역삼1동"))
+			.andExpect(jsonPath("$.data.nickname").value("busan.vlog"));
 	}
 
+	// 검증: FR-MEDIA-10
 	@Test
 	@DisplayName("단건 조회 응답에 highlights 배열이 실린다")
 	void 단건_조회_응답에_highlights_배열이_실린다() throws Exception {
@@ -83,7 +86,7 @@ class VideoPlaybackControllerTest {
 			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
 			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
 			"서면", "I-9", "서울특별시 강남구 역삼1동",
-			List.of(List.of(0.0, 4.25), List.of(12.0, 18.5), List.of(20.0, 27.5))));
+			List.of(List.of(0.0, 4.25), List.of(12.0, 18.5), List.of(20.0, 27.5)), "busan.vlog"));
 
 		mockMvc.perform(get(URL, VIDEO_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -123,6 +126,7 @@ class VideoPlaybackControllerTest {
 			.andExpect(status().isUnauthorized());
 	}
 
+	// 검증: FR-VIDEO-14
 	@Test
 	@DisplayName("HEAD 요청은 조회수 증가 없이 200을 반환한다")
 	void HEAD_요청은_조회수_증가_없이_200을_반환한다() throws Exception {

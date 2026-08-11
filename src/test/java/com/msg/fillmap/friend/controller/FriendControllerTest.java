@@ -66,6 +66,7 @@ class FriendControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-FRIEND-01
 	@Test
 	@DisplayName("내 친구 코드를 조회한다 — 200 · friendCode (FR-1)")
 	void 내_친구_코드를_조회한다() throws Exception {
@@ -77,6 +78,7 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data.friendCode").value("AB3DE7GH"));
 	}
 
+	// 검증: FR-FRIEND-02
 	@Test
 	@DisplayName("코드 미리보기는 닉네임을 반환한다 (FR-3)")
 	void 코드_미리보기는_닉네임을_반환한다() throws Exception {
@@ -89,6 +91,7 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data.nickname").value("채우미"));
 	}
 
+	// 검증: FR-FRIEND-02
 	@Test
 	@DisplayName("친구 요청은 응답 status 로 신규/자동수락을 구분한다 (FR-4·8)")
 	void 친구_요청은_응답_status로_신규와_자동수락을_구분한다() throws Exception {
@@ -129,6 +132,7 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data[0].requestedAt").value("2026-08-03T12:00:00"));
 	}
 
+	// 검증: FR-FRIEND-06, FR-USER-05
 	@Test
 	@DisplayName("친구 목록은 사용자 id·닉네임·프로필 이미지·도감 색상을 담는다 (MSG-186 FR-3)")
 	void 친구_목록은_친구_정보를_담는다() throws Exception {
@@ -145,6 +149,7 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data[0].gridColor").value("PINK"));
 	}
 
+	// 검증: FR-FRIEND-06
 	@Test
 	@DisplayName("sort 파라미터가 서비스로 전달된다 (FR-2)")
 	void sort_파라미터가_서비스로_전달된다() throws Exception {
@@ -166,6 +171,7 @@ class FriendControllerTest {
 			.andExpect(status().isUnauthorized());
 	}
 
+	// 검증: FR-FRIEND-07, FR-USER-05
 	@Test
 	@DisplayName("친구 프로필은 프로필·도감 요약·최근 수집 격자를 한 응답에 담는다 (MSG-186 FR-5·6)")
 	void 친구_프로필은_요약과_최근_수집_격자를_담는다() throws Exception {
@@ -200,6 +206,7 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data.recentGrids[0].coverVideoId").doesNotExist());
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("친구 격자 뷰포트 응답은 내 뷰포트 조회와 같은 형상이고 색상 필드가 없다 (MSG-187 FR-3)")
 	void 응답_형상이_내_뷰포트_조회와_동일하고_색상_필드가_없다() throws Exception {
@@ -231,6 +238,7 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data.nextCursor").value("NDE2NDNfMTEwNDYw"));
 	}
 
+	// 검증: FR-FRIEND-10
 	@Test
 	@DisplayName("뷰포트 파라미터가 빠지면 4401 이다 — 내 격자 조회와 같은 에러 (MSG-187 FR-10)")
 	void 뷰포트_파라미터_누락은_4401이다() throws Exception {
@@ -328,6 +336,7 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.developCode").value(4401));
 	}
 
+	// 검증: FR-FRIEND-11
 	@Test
 	@DisplayName("친구 격자 영상 목록은 영상 항목을 담는다 — principal 과 경로 userId 가 서비스로 전달된다 (MSG-187 FR-4)")
 	void 친구_격자_영상_목록은_영상_항목을_담는다() throws Exception {
@@ -352,6 +361,7 @@ class FriendControllerTest {
 			.andExpect(status().isUnauthorized());
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("요청을 수락한다 — 경로의 requesterId 와 principal 이 서비스로 전달된다 (FR-10·13)")
 	void 요청을_수락한다() throws Exception {
@@ -363,6 +373,7 @@ class FriendControllerTest {
 		verify(friendService).accept(USER_ID, 3L);
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("요청을 거절한다 (FR-11·13)")
 	void 요청을_거절한다() throws Exception {
@@ -373,6 +384,7 @@ class FriendControllerTest {
 		verify(friendService).reject(USER_ID, 3L);
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("친구를 삭제한다 (FR-12·13)")
 	void 친구를_삭제한다() throws Exception {

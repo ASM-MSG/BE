@@ -54,6 +54,7 @@ class ReportControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-MOD-01
 	@Test
 	@DisplayName("신고 접수는 200과 reportId·PENDING 을 반환한다 (FR-1)")
 	void 신고_접수는_200과_reportId와_PENDING을_반환한다() throws Exception {
@@ -70,6 +71,7 @@ class ReportControllerTest {
 			.andExpect(jsonPath("$.data.status").value("PENDING"));
 	}
 
+	// 검증: FR-MOD-04
 	@Test
 	@DisplayName("존재하지 않는 영상 신고는 404 · developCode 3404 다 — 재생 경로와 같은 존재 은닉 (FR-3)")
 	void 존재하지_않는_영상_신고는_404와_3404를_반환한다() throws Exception {
@@ -85,6 +87,7 @@ class ReportControllerTest {
 			.andExpect(jsonPath("$.data").doesNotExist());
 	}
 
+	// 검증: FR-MOD-03
 	@Test
 	@DisplayName("같은 영상 재신고는 409 · developCode 11409 다 (FR-2)")
 	void 같은_영상_재신고는_409와_11409를_반환한다() throws Exception {

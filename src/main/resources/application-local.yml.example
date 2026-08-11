@@ -24,7 +24,7 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
     org.flywaydb: INFO
-    com.fillmap: DEBUG
+    com.msg.fillmap: DEBUG
 
 jwt:
   # 둘 다 HMAC 서명 키다. 서로 다른 값을 쓴다 — 같으면 액세스 토큰을 리프레시 토큰으로 통과시킬 수 있다.

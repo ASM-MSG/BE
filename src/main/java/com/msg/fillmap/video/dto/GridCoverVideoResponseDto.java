@@ -10,10 +10,11 @@ import com.msg.fillmap.video.entity.Video;
  * 격자 전역 대표 영상 1건 (MSG-87). 그 격자를 전역에서 대표하는(조회수 → 최신) 공개·READY 영상 하나다.
  * MSG-127 의 "내 영상 리스트" 항목(GridVideoResponseDto)과 이름·의미가 충돌하지 않도록 별도 DTO 로 둔다.
  * 대표는 필터가 READY 를 강제하므로 thumbnailUrl 은 항상 발급되고 processingStatus 분기는 없다.
- * 작성자 식별 정보(닉네임·색)는 프라이버시상 담지 않는다(glossary Phase 2+).
+ * 작성자는 닉네임만 담는다 — 전역 카드에 작성자를 표시하기로 2026-08-04 확정했다(MSG-371).
+ * 도감 색상(users.grid_color)은 여전히 담지 않는다.
  */
 @Schema(description = "격자 전역 대표 영상",
-	requiredProperties = {"videoId", "thumbnailUrl", "durationSec", "viewCount", "recordedAt"})
+	requiredProperties = {"videoId", "thumbnailUrl", "durationSec", "viewCount", "recordedAt", "nickname"})
 public record GridCoverVideoResponseDto(
 	@Schema(description = "대표 영상 ID. 개별 재생 진입 키", example = "1042")
 	Long videoId,
@@ -28,16 +29,23 @@ public record GridCoverVideoResponseDto(
 	Long viewCount,
 
 	@Schema(description = "촬영 시각 (표시용). 정렬 tie-break 키는 createdAt 이다", example = "2026-07-20T18:03:11")
-	LocalDateTime recordedAt
+	LocalDateTime recordedAt,
+
+	@Schema(description = "작성자 닉네임 원문. @ 등 화면 표기는 FE 가 붙인다", example = "busan.vlog")
+	String nickname
 ) {
 
-	/** 썸네일 presigned GET URL 은 서비스가 발급해 넘긴다 (엔티티엔 S3 key 만 있어서다). */
-	public static GridCoverVideoResponseDto of(Video video, String thumbnailUrl) {
+	/**
+	 * 썸네일 presigned GET URL 은 서비스가 발급해 넘긴다 (엔티티엔 S3 key 만 있어서다).
+	 * 닉네임도 같은 결이다 — 엔티티엔 userId 만 있어 서비스가 조회해 넘긴다(MSG-371).
+	 */
+	public static GridCoverVideoResponseDto of(Video video, String thumbnailUrl, String nickname) {
 		return new GridCoverVideoResponseDto(
 			video.getId(),
 			thumbnailUrl,
 			video.getDurationSec(),
 			video.getViewCount(),
-			video.getRecordedAt());
+			video.getRecordedAt(),
+			nickname);
 	}
 }

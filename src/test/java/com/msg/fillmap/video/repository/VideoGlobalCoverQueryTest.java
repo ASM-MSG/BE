@@ -125,6 +125,7 @@ class VideoGlobalCoverQueryTest {
 		assertThat(cover(성수_GRID)).map(Video::getId).contains(newest);
 	}
 
+	// 검증: FR-VIDEO-17
 	@Test
 	@DisplayName("비공개 PRIVATE 영상은 대표가 되지 않는다")
 	void 비공개_PRIVATE_영상은_대표가_되지_않는다() {

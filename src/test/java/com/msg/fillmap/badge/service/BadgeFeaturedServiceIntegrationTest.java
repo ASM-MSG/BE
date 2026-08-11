@@ -28,6 +28,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  * 서비스가 자기 트랜잭션으로 돌게 한 뒤, @AfterEach 에서 대상 지정 삭제로 걷어낸다
  * (users 삭제가 user_badges 를 cascade — badges 마스터 불가침, VideoRegionStatsAtomicityTest 선례).
  */
+// 검증: FR-BADGE-09
 @SpringBootTest
 @DisplayName("BadgeFeaturedService 대표 뱃지 교체 (실 PostGIS)")
 class BadgeFeaturedServiceIntegrationTest {

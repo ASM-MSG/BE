@@ -143,6 +143,7 @@ class AiBlurPollerTest {
 		verify(statusWriter).recordAiJob(7L, "job-1", video.getBlurringStartedAt());
 	}
 
+	// 검증: FR-MEDIA-04
 	@Test
 	void DONE이면_블러본을_S3에_올리고_blurred_key와_highlights를_채운_뒤_READY로_전이한다() {
 		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
@@ -160,6 +161,7 @@ class AiBlurPollerTest {
 		verify(s3Client, never()).deleteObject(any(DeleteObjectRequest.class));   // 적용됐으니 정리 안 함
 	}
 
+	// 검증: FR-MEDIA-04
 	@Test
 	void 완료되면_블러본에서_썸네일을_재추출해_같은_키에_올린다() {
 		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
@@ -192,6 +194,7 @@ class AiBlurPollerTest {
 			.containsExactlyInAnyOrder("videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg");
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void status가_해석불가면_타임아웃_경로로_수렴한다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40));   // 상한 초과
@@ -204,6 +207,7 @@ class AiBlurPollerTest {
 		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), null);
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void DONE인데_다운로드나_추출이_실패하면_BLURRING을_유지하고_READY로_전이하지_않는다() {
 		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
@@ -218,6 +222,7 @@ class AiBlurPollerTest {
 		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 타임아웃 전이라 FAILED 도 아님
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void DONE_소비가_계속_실패하고_타임아웃을_넘으면_FAILED로_수렴한다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40));   // 시도 시작 40분 전(상한 초과)
@@ -232,6 +237,7 @@ class AiBlurPollerTest {
 		verify(statusWriter, never()).markBlurReady(anyLong(), anyString(), anyString(), anyString(), any());
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void poll_응답_파싱이_실패하고_타임아웃을_넘으면_FAILED로_수렴한다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40));   // 상한 초과
@@ -245,6 +251,7 @@ class AiBlurPollerTest {
 		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), null);
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void DONE인데_영상이_계속_미가용이고_타임아웃을_넘으면_FAILED로_수렴한다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40));   // 상한 초과
@@ -274,6 +281,7 @@ class AiBlurPollerTest {
 			.containsExactlyInAnyOrder("videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg");
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void 교체된_옛_영상의_재시도는_행_생성시각이_아니라_시도_시작시각으로_타임아웃을_잰다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(31));   // 행 생성은 31분 전
@@ -287,6 +295,7 @@ class AiBlurPollerTest {
 		verify(aiClient).poll("job-1");
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void AI가_QUEUED로_응답하면_타임아웃_상한을_넘어도_FAILED하지_않는다() {
 		givenBlurring(blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40)));   // 시도 시작 40분 전(상한 초과)
@@ -298,6 +307,7 @@ class AiBlurPollerTest {
 		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 살아있어 타임아웃 검사 skip
 	}
 
+	// 검증: FR-MEDIA-02
 	@Test
 	void AI가_명시_FAILED면_즉시_markBlurFailed로_전이한다() {
 		Video video = blurring(7L, "job-fail", LocalDateTime.now());
@@ -311,6 +321,7 @@ class AiBlurPollerTest {
 		verify(statusWriter, never()).markBlurReady(anyLong(), anyString(), anyString(), anyString(), any());
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void 잡이_404면_markBlurFailed_대신_clearAiJob으로_미제출_복귀한다() {
 		Video video = blurring(7L, "job-lost", LocalDateTime.now());
@@ -325,6 +336,7 @@ class AiBlurPollerTest {
 		verify(aiClient, never()).submit(any());
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void 미제출_BLURRING의_경과가_타임아웃_상한을_넘으면_markBlurFailed로_전이한다() {
 		Video video = blurring(7L, null, LocalDateTime.now().minusMinutes(40));
@@ -337,6 +349,7 @@ class AiBlurPollerTest {
 		verify(aiClient, never()).poll(anyString());
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void 제출된_잡의_poll이_연결실패하고_타임아웃_상한을_넘으면_markBlurFailed로_전이한다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40));
@@ -348,6 +361,7 @@ class AiBlurPollerTest {
 		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), null);
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void AI_연결_실패면_BLURRING을_유지하고_다음_주기에_재시도한다() {
 		givenBlurring(blurring(7L, null, LocalDateTime.now()));
@@ -362,6 +376,7 @@ class AiBlurPollerTest {
 
 	// ── 프리체크 탈락 즉시 실패 (MSG-286) ──
 
+	// 검증: FR-MEDIA-07
 	@Test
 	void 프리체크_탈락이면_타임아웃_없이_즉시_사유와_함께_FAILED로_전이한다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now());   // 방금 시작 — 타임아웃 한참 전
@@ -378,6 +393,7 @@ class AiBlurPollerTest {
 		verify(statusWriter, never()).markBlurReady(anyLong(), anyString(), anyString(), anyString(), any());
 	}
 
+	// 검증: FR-MEDIA-07
 	@Test
 	void 프리체크_reason이_null이어도_실패_처리는_동작한다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now());
@@ -391,6 +407,7 @@ class AiBlurPollerTest {
 		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), "precheck_failed");
 	}
 
+	// 검증: FR-MEDIA-07
 	@Test
 	void 프리체크_미지_코드는_원문_그대로_기록한다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now());
@@ -404,6 +421,7 @@ class AiBlurPollerTest {
 		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), "weird_new_code");
 	}
 
+	// 검증: FR-MEDIA-07
 	@Test
 	void 프리체크_사유_코드가_64자를_넘으면_64자로_절단해_기록한다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now());
@@ -418,6 +436,7 @@ class AiBlurPollerTest {
 		verify(statusWriter).markBlurFailed(7L, "job-1", video.getBlurringStartedAt(), "x".repeat(64));
 	}
 
+	// 검증: FR-MEDIA-07
 	@Test
 	void 프리체크_통과면_기존_DONE_경로로_블러본을_소비한다() {
 		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
@@ -432,6 +451,7 @@ class AiBlurPollerTest {
 		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 통과는 실패가 아니다 (FR-2)
 	}
 
+	// 검증: FR-MEDIA-07
 	@Test
 	void precheck가_없으면_기존_타임아웃_경로가_유지된다() {
 		Video video = blurring(7L, "job-1", LocalDateTime.now());   // 타임아웃 한참 전
@@ -447,6 +467,7 @@ class AiBlurPollerTest {
 		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void 잡_유실_404_후_재제출되고_DONE이면_READY로_수렴한다() {
 		// AI 컨테이너 교체 시나리오 (MSG-283 기준 1·4). 폴러는 매 주기 fresh 조회하므로 주기별 givenBlurring
@@ -477,6 +498,7 @@ class AiBlurPollerTest {
 		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 세 주기 어디서도 FAILED 없음
 	}
 
+	// 검증: FR-MEDIA-06
 	@Test
 	void 재시작_후에도_BLURRING_영상이_폴러_조회에_잡힌다() {
 		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));

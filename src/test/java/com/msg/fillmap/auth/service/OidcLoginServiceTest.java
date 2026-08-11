@@ -63,6 +63,7 @@ class OidcLoginServiceTest {
 
 		private final OidcUserInfo info = new OidcUserInfo("kakao-oid-1", "test@kakao.com", "카카오유저");
 
+		// 검증: FR-AUTH-01, FR-AUTH-05
 		@Test
 		@DisplayName("성공: 기존에 연동된 유저면 재가입 없이 액세스와 리프레시를 발급한다 (MSG-135)")
 		void 소셜_로그인도_리프레시를_발급한다() {
@@ -80,6 +81,7 @@ class OidcLoginServiceTest {
 			verify(userRepository, never()).insertOAuthUserIgnoreConflict(any(), any(), any(), any(), any());
 		}
 
+		// 검증: FR-AUTH-01
 		@Test
 		@DisplayName("성공: 처음 로그인하는 유저면 자동 가입 후 토큰을 발급한다")
 		void login_newUser() {
@@ -103,6 +105,7 @@ class OidcLoginServiceTest {
 			assertThat(response.refreshToken()).isEqualTo("refresh-token");
 		}
 
+		// 검증: FR-USER-04
 		@Test
 		@DisplayName("성공: email 클레임이 없으면(null) 중복 검사 없이 email null 로 가입된다 (MSG-310)")
 		void login_newUser_withoutEmail() {
@@ -125,6 +128,7 @@ class OidcLoginServiceTest {
 			assertThat(response.accessToken()).isEqualTo("jwt-token");
 		}
 
+		// 검증: FR-AUTH-01
 		@Test
 		@DisplayName("성공: 동시 첫 로그인 경합에서 삽입이 무효돼도(0행) 승자 행으로 토큰을 발급한다 (Codex)")
 		void login_concurrentFirstLogin_recoversWinner() {
@@ -144,6 +148,7 @@ class OidcLoginServiceTest {
 			assertThat(response.accessToken()).isEqualTo("jwt-token");
 		}
 
+		// 검증: FR-USER-04
 		@Test
 		@DisplayName("실패: 삽입이 email 충돌로 무효되고 oid 재조회도 비면 EMAIL_ALREADY_EXISTS 다 (Codex)")
 		void login_concurrentEmailConflict() {
@@ -164,6 +169,7 @@ class OidcLoginServiceTest {
 			verify(refreshTokenService, never()).issue(any(), any());
 		}
 
+		// 검증: FR-USER-04
 		@Test
 		@DisplayName("실패: 이미 다른 방식으로 가입된 이메일이면 EMAIL_ALREADY_EXISTS ApiException 을 던지고 삽입을 호출하지 않는다")
 		void login_emailConflict() {
@@ -182,6 +188,7 @@ class OidcLoginServiceTest {
 			verify(refreshTokenService, never()).issue(any(), any());
 		}
 
+		// 검증: FR-AUTH-01
 		@Test
 		@DisplayName("실패: 지원하지 않는 provider 면 UNSUPPORTED_PROVIDER ApiException 을 던지고 verify 를 호출하지 않는다")
 		void login_unsupportedProvider() {

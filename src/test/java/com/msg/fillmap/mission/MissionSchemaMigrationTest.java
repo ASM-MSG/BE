@@ -99,6 +99,7 @@ class MissionSchemaMigrationTest {
 	@DisplayName("missions 제약")
 	class MissionConstraints {
 
+		// 검증: FR-MISSION-01
 		@Test
 		@DisplayName("type이_6종_외_값이면_chk_missions_type_위반으로_INSERT가_실패한다")
 		void type이_6종_외_값이면_chk_missions_type_위반으로_INSERT가_실패한다() {
@@ -106,6 +107,7 @@ class MissionSchemaMigrationTest {
 				.hasStackTraceContaining("chk_missions_type");
 		}
 
+		// 검증: FR-MISSION-01
 		@Test
 		@DisplayName("코스_6종_전부는_INSERT된다")
 		void 코스_6종_전부는_INSERT된다() {
@@ -115,6 +117,7 @@ class MissionSchemaMigrationTest {
 			}
 		}
 
+		// 검증: FR-MISSION-09
 		@Test
 		@DisplayName("코스는_start_at_end_at이_NULL이어도_INSERT된다")
 		void 코스는_start_at_end_at이_NULL이어도_INSERT된다() {
@@ -128,6 +131,7 @@ class MissionSchemaMigrationTest {
 			assertThat(period[1]).isNull();
 		}
 
+		// 검증: FR-MISSION-09
 		@Test
 		@DisplayName("코스가_아닌_미션에_path를_넣으면_chk_missions_path_위반이다")
 		void 코스가_아닌_미션에_path를_넣으면_chk_missions_path_위반이다() {
@@ -138,6 +142,7 @@ class MissionSchemaMigrationTest {
 				.hasStackTraceContaining("chk_missions_path");
 		}
 
+		// 검증: FR-MISSION-09
 		@Test
 		@DisplayName("코스에_GeoJSON_LineString_path를_JSONB로_저장하고_조회할_수_있다")
 		void 코스에_GeoJSON_LineString_path를_JSONB로_저장하고_조회할_수_있다() {
@@ -231,6 +236,7 @@ class MissionSchemaMigrationTest {
 	@DisplayName("user_missions 제약 (§D7 스탬프)")
 	class UserMissionConstraints {
 
+		// 검증: FR-MISSION-04
 		@Test
 		@DisplayName("같은_user_id와_mission_id_스탬프는_PK로_중복이_거부된다")
 		void 같은_user_id와_mission_id_스탬프는_PK로_중복이_거부된다() {
@@ -242,6 +248,7 @@ class MissionSchemaMigrationTest {
 				.hasStackTraceContaining("duplicate key value");
 		}
 
+		// 검증: FR-MISSION-04
 		@Test
 		@DisplayName("스탬프가_있는_mission은_삭제되지_않는다")
 		void 스탬프가_있는_mission은_삭제되지_않는다() {

@@ -46,6 +46,7 @@ class VideoVisibilityControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	@DisplayName("visibility 전환은 200과 전환된 상태를 반환한다")
 	void visibility_전환은_200과_전환된_상태를_반환한다() throws Exception {
@@ -62,6 +63,7 @@ class VideoVisibilityControllerTest {
 			.andExpect(jsonPath("$.data.visibility").value("PUBLIC"));
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	@DisplayName("잘못된 visibility 값은 500이 아니라 400이다 — 역직렬화 500 회귀 방지")
 	void 잘못된_visibility_값은_500이_아니라_400이다() throws Exception {

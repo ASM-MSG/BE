@@ -23,6 +23,7 @@ import com.msg.fillmap.mission.entity.Mission;
  * 격리(공유 로컬 DB): missions 는 시드가 없어(V6 스키마만) @Transactional 롤백으로 충분하다. 단언은 이 tx 에서
  * 삽입한 미션 id 기준으로 스코프한다.
  */
+// 검증: FR-MISSION-02
 @SpringBootTest
 @Transactional
 @DisplayName("MissionRepository 활성 미션 판정 (findActive, 실 PostGIS)")

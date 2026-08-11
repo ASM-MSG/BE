@@ -24,6 +24,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  * 롤백한다(UserGridRepositoryTest 패턴). 픽스처는 KST 벽시계로 쓰고 storedAt 이 저장 존 값으로 환산해
  * 넣는다 — JVM 존이 KST 가 아닌 환경에서도 같은 KST 날짜로 접혀야 한다.
  */
+// 검증: FR-STREAK-08
 @SpringBootTest
 @Transactional
 @DisplayName("날짜별 업로드 기록 조회 (실 DB)")

@@ -69,6 +69,7 @@ class KakaoAuthCodeExchangerTest {
 			+ ".fake-signature";
 	}
 
+	// 검증: FR-AUTH-02, FR-AUTH-04
 	@Test
 	void 교환_요청은_폼_인코딩으로_grant_type_client_id_redirect_uri_code를_보낸다() {
 		// nonce 는 폼에 없다 — 카카오로 보내는 값이 아니라 돌아온 ID Token 과 맞춰 볼 값이다(보안 절)
@@ -89,6 +90,7 @@ class KakaoAuthCodeExchangerTest {
 		server.verify();
 	}
 
+	// 검증: FR-AUTH-02
 	@Test
 	void 성공_응답의_id_token을_반환한다() {
 		// access_token 등 나머지 필드는 소비하지 않는다 — 사용자 정보는 ID Token 클레임으로 충분하다
@@ -101,6 +103,7 @@ class KakaoAuthCodeExchangerTest {
 		assertThat(exchanger.exchange(CODE, REDIRECT_URI, NONCE)).isEqualTo(ID_TOKEN);
 	}
 
+	// 검증: FR-AUTH-03
 	@Test
 	void id_token의_nonce_클레임이_요청_nonce와_다르면_유효하지_않은_인가_코드_예외를_던진다() {
 		// 공격자가 주입한 인가 코드로 만들어진 토큰 — FE 의 state 대조가 뚫려도 서버가 여기서 잡는다(FR-8)
@@ -112,6 +115,7 @@ class KakaoAuthCodeExchangerTest {
 		assertFails(AuthErrorCode.INVALID_AUTHORIZATION_CODE);
 	}
 
+	// 검증: FR-AUTH-03
 	@Test
 	void id_token에_nonce_클레임이_없으면_유효하지_않은_인가_코드_예외를_던진다() {
 		// 클레임 부재도 불일치와 같은 401 — 대조를 못 했는데 통과시키면 방어가 없는 것과 같다
@@ -122,6 +126,7 @@ class KakaoAuthCodeExchangerTest {
 		assertFails(AuthErrorCode.INVALID_AUTHORIZATION_CODE);
 	}
 
+	// 검증: FR-AUTH-10
 	@Test
 	void 카카오가_invalid_grant를_주면_유효하지_않은_인가_코드_예외를_던진다() {
 		// 만료·재사용·redirect URI 불일치가 전부 여기로 온다. KOE 코드는 로그 전용이라 응답 메시지엔 새지 않는다
@@ -136,6 +141,7 @@ class KakaoAuthCodeExchangerTest {
 		assertFails(AuthErrorCode.INVALID_AUTHORIZATION_CODE);
 	}
 
+	// 검증: FR-AUTH-10
 	@Test
 	void invalid_grant가_아닌_4xx는_제공자_오류_예외를_던진다() {
 		// 레이트 리밋(KOE237)·앱 키 오류는 사용자가 다시 로그인해도 안 풀리는 운영 장애다 — 2423 으로 뭉개면
@@ -151,6 +157,7 @@ class KakaoAuthCodeExchangerTest {
 		assertFails(AuthErrorCode.OAUTH_PROVIDER_ERROR);
 	}
 
+	// 검증: FR-AUTH-10
 	@Test
 	void 응답에_id_token이_없으면_유효하지_않은_인가_코드_예외를_던진다() {
 		// 인가 요청에 scope=openid 가 빠지면 2xx 인데 id_token 이 없다 — 무효 코드와 같은 401 로 수렴시킨다(FR-6)
@@ -161,6 +168,7 @@ class KakaoAuthCodeExchangerTest {
 		assertFails(AuthErrorCode.INVALID_AUTHORIZATION_CODE);
 	}
 
+	// 검증: FR-AUTH-10
 	@Test
 	void 카카오가_5xx를_주면_제공자_오류_예외를_던진다() {
 		server.expect(requestTo(TOKEN_URL))
@@ -169,6 +177,7 @@ class KakaoAuthCodeExchangerTest {
 		assertFails(AuthErrorCode.OAUTH_PROVIDER_ERROR);
 	}
 
+	// 검증: FR-AUTH-10
 	@Test
 	void IO_예외가_나면_제공자_오류_예외를_던진다() {
 		// 연결 실패·읽기 타임아웃 — 사용자 잘못이 아니므로 401 로 새지 않고 502 로 수렴한다

@@ -79,6 +79,7 @@ class RegionSeederTest {
 			.getSingleResult();
 	}
 
+	// 검증: FR-REGION-01
 	@Test
 	@DisplayName("시더를 두 번 실행해도 regions COUNT 가 동일하다 (멱등)")
 	void 시더를_두번_실행해도_regions_COUNT가_동일하다() throws IOException {
@@ -95,6 +96,7 @@ class RegionSeederTest {
 		assertThat(afterSecond).isEqualTo(2L);
 	}
 
+	// 검증: FR-REGION-01
 	@Test
 	@DisplayName("시더 재실행 시 변경된 속성이 UPSERT 로 반영된다")
 	void 시더_재실행시_변경된_속성이_UPSERT로_반영된다() throws IOException {

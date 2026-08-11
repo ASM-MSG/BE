@@ -100,6 +100,7 @@ class VideoReplaceIntegrationTest {
 			.getSingleResult();
 	}
 
+	// 검증: FR-VIDEO-10
 	@Test
 	@DisplayName("교체하면 파일 참조가 갱신되고 재인코딩 대기 상태로 돌아간다")
 	void 교체하면_파일이_갈리고_UPLOADED_로_리셋된다() {
@@ -126,6 +127,7 @@ class VideoReplaceIntegrationTest {
 		assertThat(((Number) row[4]).shortValue()).as("길이 갱신").isEqualTo((short) 7);
 	}
 
+	// 검증: FR-VIDEO-10
 	@Test
 	@DisplayName("교체하면 recorded_at 이 요청의 새 촬영 시각으로 갱신된다")
 	void 교체하면_recordedAt이_요청_값으로_갱신된다() {
@@ -141,6 +143,7 @@ class VideoReplaceIntegrationTest {
 			.as("옛 촬영 시각이 아니라 교체 요청의 새 촬영 시각").isEqualTo(새시각);
 	}
 
+	// 검증: FR-VIDEO-10, FR-COLLECT-03
 	@Test
 	@DisplayName("교체해도 도감은 전혀 변하지 않는다 — 이 티켓의 핵심")
 	void 교체해도_도감은_불변이다() {
@@ -156,6 +159,7 @@ class VideoReplaceIntegrationTest {
 		assertThat(after[1]).as("cover_video_id 불변 — 같은 row라 id가 안 바뀐다").isEqualTo(before[1]);
 	}
 
+	// 검증: FR-VIDEO-10
 	@Test
 	void 좌표를_안_보내면_기존_격자를_유지하고_통과한다() {
 		long videoId = upload();
@@ -164,6 +168,7 @@ class VideoReplaceIntegrationTest {
 			.doesNotThrowAnyException();
 	}
 
+	// 검증: FR-VIDEO-10
 	@Test
 	void 같은_격자_좌표면_통과한다() {
 		long videoId = upload();
@@ -172,6 +177,7 @@ class VideoReplaceIntegrationTest {
 			userId, videoId, replaceRequest(newKey(), 잠실_LAT, 잠실_LON))).doesNotThrowAnyException();
 	}
 
+	// 검증: FR-VIDEO-10
 	@Test
 	void 다른_격자_좌표는_GRID_MISMATCH_다() {
 		long videoId = upload();
@@ -192,6 +198,7 @@ class VideoReplaceIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_COORDINATE);
 	}
 
+	// 검증: FR-VIDEO-08
 	@Test
 	@DisplayName("교체로도 가짜 s3Key를 밀어넣을 수 없다 — MSG-132 검증이 이 경로에도 걸린다")
 	void 가짜_s3Key로는_교체할_수_없다() {
@@ -202,6 +209,7 @@ class VideoReplaceIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_S3_KEY);
 	}
 
+	// 검증: FR-VIDEO-10
 	@Test
 	void 타인의_영상은_교체할_수_없다() {
 		long videoId = upload();

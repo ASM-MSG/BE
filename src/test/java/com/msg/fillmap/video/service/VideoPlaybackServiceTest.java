@@ -89,6 +89,10 @@ class VideoPlaybackServiceTest {
 			mock(RegionStatsCommandService.class), thumbnailUrlPresigner, mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
 			friendshipQueryService, () -> new ZoneNameResolver(List.of(SEOMYEON)));
+
+		// 기본값 = 작성자가 살아 있다. 닉네임이 빈손이면 404 로 수렴하므로(MSG-371), 닉네임을 안 보는
+		// 테스트도 이 기본 스텁이 있어야 응답까지 간다. 탈퇴 경합을 보는 테스트는 given 으로 덮어쓴다.
+		given(videoRepository.findAuthorNickname(anyLong())).willReturn(Optional.of("busan.vlog"));
 	}
 
 	/** 모든 상태 축을 명시 지정하는 코어 빌더 — 엔티티에 세터가 없어 리플렉션으로 벌린다. */
@@ -121,6 +125,7 @@ class VideoPlaybackServiceTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
+	// 검증: FR-VIDEO-13
 	@Test
 	@DisplayName("삭제된 영상은 소유자가 조회해도 VIDEO_NOT_FOUND 다")
 	void 삭제된_영상은_소유자가_조회해도_VIDEO_NOT_FOUND다() {
@@ -132,6 +137,7 @@ class VideoPlaybackServiceTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
+	// 검증: FR-VIDEO-13
 	@Test
 	@DisplayName("블라인드된 영상을 타인이 조회하면 VIDEO_NOT_FOUND 다")
 	void 블라인드된_영상을_타인이_조회하면_VIDEO_NOT_FOUND다() {
@@ -143,6 +149,7 @@ class VideoPlaybackServiceTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
+	// 검증: FR-VIDEO-13
 	@Test
 	@DisplayName("블라인드된 영상을 소유자가 조회하면 playbackUrl 은 null 이고 status 는 BLINDED 다")
 	void 블라인드된_영상을_소유자가_조회하면_playbackUrl은_null이고_status는_BLINDED다() {
@@ -157,6 +164,7 @@ class VideoPlaybackServiceTest {
 		verify(videoRepository, never()).incrementViewCount(anyLong());
 	}
 
+	// 검증: FR-VIDEO-13
 	@Test
 	@DisplayName("비공개 영상을 타인이 조회하면 VIDEO_FORBIDDEN 이다")
 	void 비공개_영상을_타인이_조회하면_VIDEO_FORBIDDEN이다() {
@@ -168,6 +176,7 @@ class VideoPlaybackServiceTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_FORBIDDEN);
 	}
 
+	// 검증: FR-VIDEO-12
 	@Test
 	@DisplayName("비공개 READY 영상을 소유자가 조회하면 재생URL이 발급된다")
 	void 비공개_READY_영상을_소유자가_조회하면_재생URL이_발급된다() {
@@ -181,6 +190,7 @@ class VideoPlaybackServiceTest {
 		verify(videoRepository, never()).incrementViewCount(anyLong());
 	}
 
+	// 검증: FR-VIDEO-12
 	@Test
 	@DisplayName("공개 READY 영상을 타인이 조회하면 재생URL이 발급된다")
 	void 공개_READY_영상을_타인이_조회하면_재생URL이_발급된다() {
@@ -193,6 +203,7 @@ class VideoPlaybackServiceTest {
 		assertThat(result.thumbnailUrl()).contains(THUMB_KEY);
 	}
 
+	// 검증: FR-VIDEO-13, FR-MEDIA-02
 	@Test
 	@DisplayName("공개 영상이 인코딩중이면 playbackUrl 은 null 이고 processingStatus 를 반환한다")
 	void 공개_영상이_인코딩중이면_playbackUrl은_null이고_processingStatus를_반환한다() {
@@ -206,6 +217,7 @@ class VideoPlaybackServiceTest {
 		assertThat(result.processingStatus()).isEqualTo("ENCODING");
 	}
 
+	// 검증: FR-VIDEO-12, FR-MEDIA-04
 	@Test
 	@DisplayName("블러본이 있으면 encoded 가 아니라 블러본 key 로 presign 한다")
 	void 블러본이_있으면_encoded가_아니라_블러본_key로_presign한다() {
@@ -217,6 +229,7 @@ class VideoPlaybackServiceTest {
 		assertThat(result.playbackUrl()).contains(BLURRED_KEY).doesNotContain(ENCODED_KEY);
 	}
 
+	// 검증: FR-VIDEO-12
 	@Test
 	@DisplayName("블러본이 없으면 encoded key 로 presign 한다")
 	void 블러본이_없으면_encoded_key로_presign한다() {
@@ -228,6 +241,7 @@ class VideoPlaybackServiceTest {
 		assertThat(result.playbackUrl()).contains(ENCODED_KEY);
 	}
 
+	// 검증: FR-VIDEO-14
 	@Test
 	@DisplayName("타인이 공개 READY 영상을 재생하면 view_count 가 증가한다")
 	void 타인이_공개_READY_영상을_재생하면_view_count가_증가한다() {
@@ -241,6 +255,7 @@ class VideoPlaybackServiceTest {
 		assertThat(result.viewCount()).isEqualTo(37L);
 	}
 
+	// 검증: FR-VIDEO-14
 	@Test
 	@DisplayName("소유자 본인이 재생해도 view_count 는 증가하지 않는다")
 	void 소유자_본인이_재생해도_view_count는_증가하지_않는다() {
@@ -252,6 +267,7 @@ class VideoPlaybackServiceTest {
 		verify(videoRepository, never()).incrementViewCount(anyLong());
 	}
 
+	// 검증: FR-VIDEO-14
 	@Test
 	@DisplayName("재생URL을 발급하지 못한 조회는 view_count 가 증가하지 않는다")
 	void 재생URL을_발급하지_못한_조회는_view_count가_증가하지_않는다() {
@@ -278,6 +294,7 @@ class VideoPlaybackServiceTest {
 		verify(videoRepository, never()).incrementViewCount(anyLong());
 	}
 
+	// 검증: FR-VIDEO-12
 	@Test
 	@DisplayName("expiresInSec 는 playbackUrl 발급시 presign TTL 과 같고 null 이면 null 이다")
 	void expiresInSec는_playbackUrl_발급시_presign_TTL과_같고_null이면_null이다() {
@@ -296,6 +313,7 @@ class VideoPlaybackServiceTest {
 
 	// --- 친구만 공개(FRIENDS) 판정 (MSG-285) — 친구 여부는 mock, 대칭·PENDING·삭제 반영은 FriendIntegrationTest 몫.
 
+	// 검증: FR-VIDEO-16
 	@Test
 	@DisplayName("소유자는 FRIENDS 영상을 재생할 수 있고 친구 조회조차 하지 않는다 (FR-3)")
 	void 소유자는_FRIENDS_영상을_재생할_수_있다() {
@@ -309,6 +327,7 @@ class VideoPlaybackServiceTest {
 		verifyNoInteractions(friendshipQueryService);   // 소유자 경로는 친구 쿼리 0회 (성능 비기능)
 	}
 
+	// 검증: FR-VIDEO-16, FR-VIDEO-14
 	@Test
 	@DisplayName("ACCEPTED 친구는 FRIENDS 영상을 재생할 수 있고 view_count 도 오른다 (FR-4·§D5)")
 	void ACCEPTED_친구는_FRIENDS_영상을_재생할_수_있다() {
@@ -324,6 +343,7 @@ class VideoPlaybackServiceTest {
 		verify(friendshipQueryService).isFriend(OWNER_ID, OTHER_ID);
 	}
 
+	// 검증: FR-VIDEO-16
 	@Test
 	@DisplayName("비친구의 FRIENDS 재생은 PRIVATE 와 동일한 403 이고 재생 URL 이 발급되지 않는다 (FR-5 핵심 회귀)")
 	void 비친구의_FRIENDS_재생은_PRIVATE와_동일한_403이고_재생_URL이_발급되지_않는다() {
@@ -340,6 +360,7 @@ class VideoPlaybackServiceTest {
 		verify(videoRepository, never()).incrementViewCount(anyLong());
 	}
 
+	// 검증: FR-VIDEO-16
 	@Test
 	@DisplayName("PRIVATE 비소유자 403 은 FRIENDS 도입 후에도 그대로다 (회귀 방어)")
 	void PRIVATE_비소유자_403은_그대로다() {
@@ -364,6 +385,7 @@ class VideoPlaybackServiceTest {
 		verifyNoInteractions(friendshipQueryService);
 	}
 
+	// 검증: FR-VIDEO-13, FR-VIDEO-16
 	@Test
 	@DisplayName("블라인드된 FRIENDS 영상은 친구여도 타인에겐 404 다 (판정 순서 유지)")
 	void 블라인드된_FRIENDS_영상은_친구여도_타인에겐_404다() {
@@ -395,6 +417,7 @@ class VideoPlaybackServiceTest {
 
 	// --- AI 추천 하이라이트 노출 (MSG-350) — 저장 값(null·[]·배열 혼재)을 응답 계약(null 통일)으로 정규화.
 
+	// 검증: FR-MEDIA-10
 	@Test
 	@DisplayName("하이라이트가 저장된 영상은 구간 배열을 그대로 반환한다")
 	void 하이라이트가_저장된_영상은_구간_배열을_그대로_반환한다() {
@@ -409,6 +432,7 @@ class VideoPlaybackServiceTest {
 		assertThat(result.highlights()).containsExactly(List.of(0.0, 4.25), List.of(12.0, 18.5));
 	}
 
+	// 검증: FR-MEDIA-10
 	@Test
 	@DisplayName("하이라이트가 null 인 영상은 응답도 null 이다")
 	void 하이라이트가_null인_영상은_응답도_null이다() {
@@ -421,6 +445,7 @@ class VideoPlaybackServiceTest {
 		assertThat(result.highlights()).isNull();
 	}
 
+	// 검증: FR-MEDIA-10
 	@Test
 	@DisplayName("하이라이트가 빈 배열이면 응답은 null 로 정규화된다")
 	void 하이라이트가_빈_배열이면_응답은_null로_정규화된다() {
@@ -433,6 +458,58 @@ class VideoPlaybackServiceTest {
 		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
 
 		assertThat(result.highlights()).isNull();
+	}
+
+	// --- 작성자 닉네임 (MSG-371). 접근 제어를 통과한 응답에만 실린다.
+
+	@Test
+	@DisplayName("재생 응답에 작성자 닉네임이 담긴다")
+	void 재생_응답에_작성자_닉네임이_담긴다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(videoRepository.findAuthorNickname(OWNER_ID)).willReturn(Optional.of("busan.vlog"));
+
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
+
+		assertThat(result.nickname()).isEqualTo("busan.vlog");
+	}
+
+	@Test
+	@DisplayName("소유자 본인 조회에도 닉네임이 담긴다")
+	void 소유자_본인_조회에도_닉네임이_담긴다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PRIVATE, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(videoRepository.findAuthorNickname(OWNER_ID)).willReturn(Optional.of("busan.vlog"));
+
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
+
+		assertThat(result.nickname()).isEqualTo("busan.vlog");   // 본인 닉네임
+	}
+
+	@Test
+	@DisplayName("접근이 거부된 조회는 닉네임 조회가 돌지 않는다")
+	void 접근이_거부된_조회는_닉네임_조회가_돌지_않는다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PRIVATE, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
+			.isInstanceOf(ApiException.class);
+
+		verify(videoRepository, never()).findAuthorNickname(anyLong());
+	}
+
+	@Test
+	@DisplayName("작성자 닉네임이 빈손이면 삭제 영상과 같은 VIDEO_NOT_FOUND 다")
+	void 작성자_닉네임이_빈손이면_VIDEO_NOT_FOUND다() {
+		// 영상 조회와 닉네임 조회 사이(READ COMMITTED, ms 창)에 탈퇴 커밋이 끼는 이론상 케이스.
+		// 빈손 = 그 영상이 방금 CASCADE 로 사라졌다는 뜻이라 DELETED 분기와 같은 404 로 수렴한다.
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(videoRepository.findAuthorNickname(OWNER_ID)).willReturn(Optional.empty());
+
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
 	@Test

@@ -34,6 +34,7 @@ import com.msg.fillmap.usergrid.repository.UserGridRepository;
  * record 는 자체 트랜잭션 커밋이라 @Transactional 격리를 못 쓴다 — 합성 유저 삭제(videos·user_grids·
  * notifications CASCADE)로 걷어낸다.
  */
+// 검증: FR-NOTI-11
 @SpringBootTest
 @DisplayName("WeeklySummaryScheduler — 주간 집계 창·요약 문구·WEEKLY 기록 (실 PostGIS)")
 class WeeklySummarySchedulerTest {

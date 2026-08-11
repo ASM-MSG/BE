@@ -51,6 +51,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  * 3424 로 거부한다 — 미션 판정(findCompleted)이 이 값을 기간과 비교하므로 트리비얼 위조를 입력
  * 경계에서 막는다. 비교 기준은 UTC 고정 클럭 — KST 기본존이면 9시간 스큐로 판정이 갈린다(MSG-222).
  */
+// 검증: FR-VIDEO-07
 @DisplayName("recordedAt 미래 시각 검증 — 업로드·교체")
 class VideoRecordedAtValidationTest {
 

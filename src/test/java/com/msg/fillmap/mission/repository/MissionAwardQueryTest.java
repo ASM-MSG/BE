@@ -60,6 +60,7 @@ class MissionAwardQueryTest {
 		baseX = base.gridX();
 	}
 
+	// 검증: FR-MISSION-03
 	@Test
 	@DisplayName("미션 대상이 아닌 격자는 후보가 없다 — 조기 종료 전제(FR-18)")
 	void 미션_대상이_아닌_격자는_후보가_없다() {
@@ -70,6 +71,7 @@ class MissionAwardQueryTest {
 		assertThat(candidates(GridFixtures.gridId(baseY + 7000, baseX))).isEmpty();
 	}
 
+	// 검증: FR-MISSION-03
 	@Test
 	@DisplayName("기간이 끝난 미션은 후보에서 제외된다")
 	void 기간이_끝난_미션은_후보에서_제외된다() {
@@ -80,6 +82,7 @@ class MissionAwardQueryTest {
 		assertThat(candidates(gridId)).doesNotContain(expired);
 	}
 
+	// 검증: FR-MISSION-03
 	@Test
 	@DisplayName("시작 전 미션은 후보에서 제외된다")
 	void 시작_전_미션은_후보에서_제외된다() {
@@ -90,6 +93,7 @@ class MissionAwardQueryTest {
 		assertThat(candidates(gridId)).doesNotContain(future);
 	}
 
+	// 검증: FR-MISSION-04
 	@Test
 	@DisplayName("이미 스탬프를 받은 미션은 후보에서 제외된다 — 중복 판정 차단")
 	void 이미_스탬프를_받은_미션은_후보에서_제외된다() {
@@ -103,6 +107,7 @@ class MissionAwardQueryTest {
 		assertThat(candidates(gridId)).doesNotContain(mission);
 	}
 
+	// 검증: FR-MISSION-03
 	@Test
 	@DisplayName("기간 내 서로 다른 격자 target_count 곳이면 충족된다 (FR-13)")
 	void 기간_내_서로_다른_격자_target_count곳이면_충족된다() {
@@ -122,6 +127,7 @@ class MissionAwardQueryTest {
 		assertThat(completed.get(0).getTitle()).isNotBlank();
 	}
 
+	// 검증: FR-MISSION-03
 	@Test
 	@DisplayName("같은 격자 재방문은 distinct 라 진행이 늘지 않는다 — target_count 는 서로 다른 격자 수(FR-13)")
 	void 같은_격자_재방문은_distinct라_진행이_늘지_않는다() {
@@ -135,6 +141,7 @@ class MissionAwardQueryTest {
 		assertThat(missionRepository.findCompleted(userId, List.of(mission))).isEmpty();
 	}
 
+	// 검증: FR-MISSION-03
 	@Test
 	@DisplayName("기간 밖 recorded_at 영상은 판정에서 제외된다 — 작년 촬영 오발급 차단(FR-12)")
 	void 기간_밖_recorded_at_영상은_판정에서_제외된다() {
@@ -146,6 +153,7 @@ class MissionAwardQueryTest {
 		assertThat(missionRepository.findCompleted(userId, List.of(mission))).isEmpty();
 	}
 
+	// 검증: FR-MISSION-03
 	@Test
 	@DisplayName("무기간 미션은 과거 영상도 인정한다 — 코스, start/end NULL(FR-12)")
 	void 무기간_미션은_과거_영상도_인정한다() {
@@ -159,6 +167,7 @@ class MissionAwardQueryTest {
 			.containsExactly(mission);
 	}
 
+	// 검증: FR-MISSION-03
 	@Test
 	@DisplayName("삭제된 영상은 판정 근거에서 제외된다 (D2)")
 	void 삭제된_영상은_판정_근거에서_제외된다() {
@@ -170,6 +179,7 @@ class MissionAwardQueryTest {
 		assertThat(missionRepository.findCompleted(userId, List.of(mission))).isEmpty();
 	}
 
+	// 검증: FR-MISSION-03
 	@Test
 	@DisplayName("KST 자정 경계 영상이 UTC 저장 기간으로 옳게 판정된다 (D3)")
 	void KST_자정_경계_영상이_UTC_저장_기간으로_옳게_판정된다() {

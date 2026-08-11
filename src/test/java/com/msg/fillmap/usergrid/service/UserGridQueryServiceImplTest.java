@@ -68,6 +68,7 @@ class UserGridQueryServiceImplTest {
 	@DisplayName("getCollectionSummary")
 	class GetCollectionSummary {
 
+		// 검증: FR-COLLECT-07, FR-STREAK-08
 		@Test
 		@DisplayName("요약은 점령격자수 영상총합 방문행정동수를 담은 뷰를 반환한다")
 		void 요약은_점령격자수_영상총합_방문행정동수를_담은_뷰를_반환한다() {
@@ -84,6 +85,7 @@ class UserGridQueryServiceImplTest {
 			assertThat(view.badgeCount()).isEqualTo(7);
 		}
 
+		// 검증: FR-COLLECT-07, FR-STREAK-08
 		@Test
 		@DisplayName("점령이 없으면 여섯 집계가 모두 0인 뷰를 반환한다")
 		void 점령이_없으면_여섯_집계가_모두_0인_뷰를_반환한다() {
@@ -100,6 +102,7 @@ class UserGridQueryServiceImplTest {
 	@DisplayName("getUploadHistory")
 	class GetUploadHistory {
 
+		// 검증: FR-STREAK-08
 		@Test
 		@DisplayName("저장 존은 JVM 기본 존으로 바인딩하고 프로젝션의 날짜와 건수를 그대로 담는다")
 		void 저장_존은_JVM_기본_존으로_바인딩하고_프로젝션의_날짜와_건수를_그대로_담는다() {
@@ -122,6 +125,7 @@ class UserGridQueryServiceImplTest {
 			givenSeomyeonZone();
 		}
 
+		// 검증: FR-COLLECT-08
 		@Test
 		@DisplayName("gridY gridX는 gridId를 디코드한 값이다")
 		void gridY_gridX는_gridId를_디코드한_값이다() {
@@ -137,6 +141,7 @@ class UserGridQueryServiceImplTest {
 			assertThat(view.gridX()).isEqualTo((int) decoded.gridX());
 		}
 
+		// 검증: FR-COLLECT-08
 		@Test
 		@DisplayName("coverThumbnailUrl은 썸네일key가 있으면 presigned GET URL이다")
 		void coverThumbnailUrl은_썸네일key가_있으면_presigned_GET_URL이다() {
@@ -152,6 +157,7 @@ class UserGridQueryServiceImplTest {
 			assertThat(view.coverThumbnailUrl()).isEqualTo(signed);
 		}
 
+		// 검증: FR-COLLECT-08
 		@Test
 		@DisplayName("coverThumbnailUrl은 cover가 null이면 null이다")
 		void coverThumbnailUrl은_cover가_null이면_null이다() {
@@ -174,6 +180,7 @@ class UserGridQueryServiceImplTest {
 			givenSeomyeonZone();
 		}
 
+		// 검증: FR-COLLECT-10
 		@Test
 		@DisplayName("thumbnailKey가 있으면 presigned GET URL로 바꾸고 gridId를 그대로 통과시킨다")
 		void thumbnailKey가_있으면_presigned_GET_URL로_바꾸고_gridId를_그대로_통과시킨다() {
@@ -191,6 +198,7 @@ class UserGridQueryServiceImplTest {
 			assertThat(view.durationSec()).isEqualTo(12);
 		}
 
+		// 검증: FR-COLLECT-10
 		@Test
 		@DisplayName("thumbnailKey가 null이면 thumbnailUrl이 null이다")
 		void thumbnailKey가_null이면_thumbnailUrl이_null이다() {

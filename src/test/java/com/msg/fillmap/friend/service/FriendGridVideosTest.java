@@ -89,6 +89,7 @@ class FriendGridVideosTest {
 		gridId = grid(0, 0);
 	}
 
+	// 검증: FR-FRIEND-11
 	@Test
 	@DisplayName("PUBLIC 과 FRIENDS 영상만 최신순으로 반환한다 (FR-4·D5)")
 	void PUBLIC과_FRIENDS_영상만_최신순으로_반환한다() {
@@ -104,6 +105,7 @@ class FriendGridVideosTest {
 		assertThat(videos.get(0).createdAt()).isEqualTo(BASE);
 	}
 
+	// 검증: FR-FRIEND-11
 	@Test
 	@DisplayName("PRIVATE 영상만 있는 격자는 빈 배열이다 (FR-4)")
 	void PRIVATE_영상은_포함되지_않는다() {
@@ -112,6 +114,7 @@ class FriendGridVideosTest {
 		assertThat(videos(gridId)).isEmpty();
 	}
 
+	// 검증: FR-FRIEND-11
 	@Test
 	@DisplayName("삭제·블라인드·인코딩 미완 영상은 포함되지 않는다 (FR-9)")
 	void 삭제_블라인드_인코딩_미완_영상은_포함되지_않는다() {
@@ -122,6 +125,7 @@ class FriendGridVideosTest {
 		assertThat(videos(gridId)).isEmpty();
 	}
 
+	// 검증: FR-FRIEND-11
 	@Test
 	@DisplayName("목록에 보인 FRIENDS 영상은 재생도 허용된다 (FR-5)")
 	void 목록에_보인_FRIENDS_영상은_재생도_허용된다() {
@@ -134,6 +138,7 @@ class FriendGridVideosTest {
 		assertThat(playback.playbackUrl()).isEqualTo("https://signed/videos/encoded/m187-playable.mp4");
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("비친구 조회는 9424 다 (FR-2)")
 	void 비친구_조회는_9424다() {
@@ -145,6 +150,7 @@ class FriendGridVideosTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-09
 	@Test
 	@DisplayName("친구 삭제 직후 조회는 9424 다 — 실시간 판정 (FR-7)")
 	void 친구_삭제_직후_조회는_9424다() {
@@ -158,6 +164,7 @@ class FriendGridVideosTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-11
 	@Test
 	@DisplayName("친구가 점령하지 않은 격자는 빈 배열이다 (D7)")
 	void 친구가_점령하지_않은_격자는_빈_배열이다() {

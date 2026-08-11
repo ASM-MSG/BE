@@ -128,6 +128,7 @@ class NotificationConsumerTest {
 			em.createNativeQuery("DELETE FROM users WHERE id = :me").setParameter("me", me).executeUpdate());
 	}
 
+	// 검증: FR-NOTI-02
 	@Test
 	@DisplayName("PUBLISHED 행을 발송하고 SENT 와 sent_at 을 기록한다")
 	void PUBLISHED_행을_발송하고_SENT와_sent_at을_기록한다() throws Exception {
@@ -141,6 +142,7 @@ class NotificationConsumerTest {
 		then(notificationSender).should().send(eq(List.of(token)), eq("발송제목"), eq("본문"));
 	}
 
+	// 검증: FR-NOTI-03
 	@Test
 	@DisplayName("이미 SENT 인 행 재소비는 발송하지 않는다 — FR-6 2차 방어 (파티션 1 순서 보장으로 검증)")
 	void 이미_SENT인_행_재소비는_발송하지_않는다() throws Exception {
@@ -158,6 +160,7 @@ class NotificationConsumerTest {
 		then(notificationSender).should(never()).send(anyList(), eq("A제목"), anyString());
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("설정 off 사용자는 SKIPPED PREF_OFF 로 기록된다 — FR-8 접점 (목 preference)")
 	void 설정_off_사용자는_SKIPPED_PREF_OFF로_기록된다() throws Exception {
@@ -171,6 +174,7 @@ class NotificationConsumerTest {
 		then(notificationSender).shouldHaveNoInteractions();
 	}
 
+	// 검증: FR-NOTI-07
 	@Test
 	@DisplayName("HOTZONE 일 상한 초과는 SKIPPED RATE_LIMITED 다 — 같은 날 SENT 1건 선재 (FR-12)")
 	void HOTZONE_일_상한_초과는_SKIPPED_RATE_LIMITED다() throws Exception {
@@ -184,6 +188,7 @@ class NotificationConsumerTest {
 		assertThat(lastErrorOf(id)).isEqualTo("RATE_LIMITED");
 	}
 
+	// 검증: FR-NOTI-07
 	@Test
 	@DisplayName("날이 바뀌면 HOTZONE 이 다시 발송된다 — KST 자정 경계 (sent_at 조작)")
 	void 날이_바뀌면_HOTZONE이_다시_발송된다() throws Exception {
@@ -199,6 +204,7 @@ class NotificationConsumerTest {
 		awaitStatus(id, "SENT");
 	}
 
+	// 검증: FR-NOTI-07
 	@Test
 	@DisplayName("BADGE 는 상한 없이 연속 발송된다 — FR-12, 설정 키 자체가 없다")
 	void BADGE는_상한_없이_연속_발송된다() throws Exception {
@@ -213,6 +219,7 @@ class NotificationConsumerTest {
 		awaitStatus(second, "SENT");
 	}
 
+	// 검증: FR-NOTI-07
 	@Test
 	@DisplayName("VIDEO 는 전송률 제한 없이 발송된다 — MSG-313 FR-9, 설정 키 자체가 없다")
 	void VIDEO는_전송률_제한_없이_발송된다() throws Exception {
@@ -227,6 +234,7 @@ class NotificationConsumerTest {
 		awaitStatus(second, "SENT");
 	}
 
+	// 검증: FR-NOTI-07
 	@Test
 	@DisplayName("WEEKLY 는 전송률 제한 없이 발송된다 — MSG-315 D6, 이벤트 키가 주 단위라 상한이 불필요")
 	void WEEKLY는_전송률_제한_없이_발송된다() throws Exception {
@@ -253,6 +261,7 @@ class NotificationConsumerTest {
 		then(notificationSender).shouldHaveNoInteractions();
 	}
 
+	// 검증: FR-NOTI-05
 	@Test
 	@DisplayName("UNREGISTERED 토큰은 push_tokens 에서 삭제된다 — FR-5, 소유 검증 없는 시스템 삭제 경로")
 	void UNREGISTERED_토큰은_push_tokens에서_삭제된다() throws Exception {
@@ -285,6 +294,7 @@ class NotificationConsumerTest {
 		assertThat(tokenCount(second)).isEqualTo(1);
 	}
 
+	// 검증: FR-NOTI-04
 	@Test
 	@DisplayName("전부 실패가 상한을 넘으면 DEAD 로 격리되고 last_error 가 남는다 — FR-4")
 	void 전부_실패가_상한을_넘으면_DEAD로_격리되고_last_error가_남는다() throws Exception {
@@ -300,6 +310,7 @@ class NotificationConsumerTest {
 		assertThat(retryCountOf(id)).isEqualTo(4);   // 초회 + 재시도 3회 (테스트 핸들러 상한)
 	}
 
+	// 검증: FR-NOTI-04
 	@Test
 	@DisplayName("말폼드 레코드는 재시도 없이 폐기되고 후속 정상 레코드 처리가 계속된다 — NumberFormatException 비재시도 분류")
 	void 말폼드_레코드는_재시도_없이_폐기되고_후속_정상_레코드_처리가_계속된다() throws Exception {
@@ -313,6 +324,7 @@ class NotificationConsumerTest {
 		awaitStatus(id, "SENT");
 	}
 
+	// 검증: FR-NOTI-04
 	@Test
 	@DisplayName("재시도 횟수가 retry_count 에 남는다 — 몇 번 만에 성공했는지 (D4)")
 	void 재시도_횟수가_retry_count에_남는다() throws Exception {

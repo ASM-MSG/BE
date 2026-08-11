@@ -38,6 +38,7 @@ class MissionQueryServiceClockTest {
 	@Mock
 	private MissionGridRepository missionGridRepository;
 
+	// 검증: FR-MISSION-02
 	@Test
 	@DisplayName("기본 클럭은 JVM 기본존과 무관하게 UTC 벽시계로 활성 판정한다")
 	void 기본_클럭은_JVM_기본존과_무관하게_UTC_벽시계로_활성_판정한다() {

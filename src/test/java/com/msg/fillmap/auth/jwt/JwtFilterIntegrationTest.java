@@ -125,6 +125,7 @@ class JwtFilterIntegrationTest {
 				.andExpect(jsonPath("$.developCode").value(2431));
 		}
 
+		// 검증: FR-AUTH-09
 		@Test
 		@DisplayName("로그아웃된 토큰이면 401 INVALID_TOKEN (2401) 로 응답한다")
 		void invalidatedToken() throws Exception {

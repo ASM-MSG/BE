@@ -83,6 +83,7 @@ class CourseSeedContractTest {
 	@TempDir
 	private Path tempDir;
 
+	// 검증: FR-MISSION-01, FR-MISSION-09
 	@Test
 	@DisplayName("시드된 코스가 PATH shape로 path 원문과 스팟마커를 seq순으로 반환한다 — MSG-222 조회 계약")
 	void 시드된_코스가_PATH_shape로_path_원문과_스팟마커를_seq순으로_반환한다() throws IOException {
@@ -106,6 +107,7 @@ class CourseSeedContractTest {
 			.containsExactly(gid(BASE_Y), gid(BASE_Y + 1), gid(BASE_Y + 2), gid(BASE_Y + 3), gid(BASE_Y + 4));
 	}
 
+	// 검증: FR-MISSION-03, FR-MISSION-09
 	@Test
 	@DisplayName("무기간 코스는 과거 recorded_at 영상도 판정에 인정된다 — MSG-223 엔진 무수정")
 	void 무기간_코스는_과거_recorded_at_영상도_판정에_인정된다() throws IOException {

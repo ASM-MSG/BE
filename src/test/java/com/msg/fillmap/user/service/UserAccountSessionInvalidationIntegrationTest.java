@@ -85,6 +85,7 @@ class UserAccountSessionInvalidationIntegrationTest {
 		refreshTokenStore.deleteAll(userId);
 	}
 
+	// 검증: FR-USER-09
 	@Test
 	void 삭제_후_전_디바이스_refresh_세션이_소멸한다() {
 		refreshTokenService.issue(userId, "device-a");
@@ -96,6 +97,7 @@ class UserAccountSessionInvalidationIntegrationTest {
 		assertThat(refreshTokenStore.findJti(userId, "device-b")).isNull();
 	}
 
+	// 검증: FR-USER-09
 	@Test
 	void 삭제에_쓴_액세스_토큰은_블랙리스트되어_후속_호출이_401이다() throws Exception {
 		// 컨트롤러 경유 전체 경로 — 삭제는 200 + refresh 쿠키 만료.
@@ -111,6 +113,7 @@ class UserAccountSessionInvalidationIntegrationTest {
 			.andExpect(jsonPath("$.developCode").value(2401));
 	}
 
+	// 검증: FR-USER-09
 	@Test
 	void 삭제_후_reissue는_INVALID_REFRESH_TOKEN으로_거부된다() {
 		// §D5 앵커: reissue 의 findById 게이트가 삭제된 유저의 재발급을 차단한다 — 이 게이트가

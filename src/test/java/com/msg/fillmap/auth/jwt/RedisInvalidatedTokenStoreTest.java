@@ -40,6 +40,7 @@ class RedisInvalidatedTokenStoreTest {
 		return "test-access-token-" + UUID.randomUUID();
 	}
 
+	// 검증: FR-AUTH-09
 	@Test
 	void 블랙리스트에_올린_액세스_토큰은_isInvalidated가_true다() {
 		String token = newToken();
@@ -54,6 +55,7 @@ class RedisInvalidatedTokenStoreTest {
 		assertThat(store.isInvalidated(newToken())).isFalse();
 	}
 
+	// 검증: FR-AUTH-09
 	@Test
 	void 잔여만료가_지난_토큰은_자동_만료되어_false다() throws InterruptedException {
 		String token = newToken();

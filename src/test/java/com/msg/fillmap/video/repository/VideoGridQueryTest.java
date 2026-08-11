@@ -88,6 +88,7 @@ class VideoGridQueryTest {
 		return videoRepository.findByUserIdAndGridIdAndStatusOrderByCreatedAtDesc(userId, gridId, VideoStatus.ACTIVE);
 	}
 
+	// 검증: FR-COLLECT-11
 	@Test
 	@DisplayName("내가 그 격자에 올린 영상만 createdAt 내림차순으로 반환한다")
 	void 내가_그_격자에_올린_영상만_createdAt_내림차순으로_반환한다() {

@@ -68,6 +68,7 @@ import com.msg.fillmap.video.support.GeoSupport;
  * <p>격리: 서해 공해상 합성 격자(40247 대역 — m243 의 40243 대역과 분리). 두 워커가 각자 커밋하므로
  * @Transactional 롤백을 못 쓴다 — @AfterEach 에서 자기 행만 FK 역순 대상 지정 삭제.
  */
+// 검증: FR-VIDEO-09
 @SpringBootTest
 @DisplayName("같은 pending 키 동시 교체 — 클레임 선행 직렬화 (실 PostGIS)")
 class VideoReplaceConcurrencyTest {

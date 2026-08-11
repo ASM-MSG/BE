@@ -16,7 +16,7 @@ import com.msg.fillmap.video.entity.Video;
 @Schema(description = "단건 영상 재생 조회 응답",
 	requiredProperties = {"videoId", "gridId", "durationSec", "processingStatus", "visibility", "status",
 		"viewCount", "recordedAt", "playbackUrl", "thumbnailUrl", "expiresInSec",
-		"zoneName", "zoneCell", "regionName", "highlights"})
+		"zoneName", "zoneCell", "regionName", "highlights", "nickname"})
 public record VideoPlaybackResponseDto(
 	@Schema(description = "영상(방문 이벤트) ID", example = "1042")
 	Long videoId,
@@ -66,16 +66,20 @@ public record VideoPlaybackResponseDto(
 	@Schema(description = "AI 추천 하이라이트 구간 [[시작초, 끝초], ...]. 최대 3구간, 초는 소수점 둘째 자리. "
 		+ "배열 순서가 추천 우선순위(첫 요소가 최우선 추천). 없으면 null (READY 이전·FAILED·0구간 포함, "
 		+ "빈 배열은 내려가지 않는다) 예시: [[0.0, 4.25], [12.0, 18.5], [20.0, 27.5]]", nullable = true)
-	List<List<Double>> highlights
+	List<List<Double>> highlights,
+
+	@Schema(description = "작성자 닉네임 원문. @ 등 화면 표기는 FE 가 붙인다", example = "busan.vlog")
+	String nickname
 ) {
 
 	/**
 	 * 재생/썸네일 presigned GET URL 과 TTL 은 서비스가 발급해 넘긴다 (엔티티엔 S3 key 만 있어서다).
 	 * 격자 표시명 3필드(MSG-341)도 같은 결이다 — 구역 이름은 요청당 1회 받은 리졸버(D-1)로, 행정동 이름은
 	 * 격자 저장 라벨 조회(D-6)로 서비스가 구해 넘긴다. 엔티티엔 gridId 만 있어 DTO 혼자서는 못 만든다.
+	 * 작성자 닉네임(MSG-371)도 마찬가지다 — 엔티티엔 userId 만 있어 서비스가 조회해 넘긴다.
 	 */
 	public static VideoPlaybackResponseDto of(Video video, String playbackUrl, String thumbnailUrl, Long expiresInSec,
-		String zoneName, String zoneCell, String regionName) {
+		String zoneName, String zoneCell, String regionName, String nickname) {
 		List<List<Double>> highlights = video.getHighlights();
 		// 저장 혼재(null 또는 [])를 응답 null 하나로 정규화 (MSG-350 FR-2)
 		if (highlights != null && highlights.isEmpty()) {
@@ -96,6 +100,7 @@ public record VideoPlaybackResponseDto(
 			zoneName,
 			zoneCell,
 			regionName,
-			highlights);
+			highlights,
+			nickname);
 	}
 }

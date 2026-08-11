@@ -72,6 +72,7 @@ class RegionStatsQueryServiceTest {
 			.executeUpdate();
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("parentCode 가 없으면 사용자의 모든 수집 행정동을 반환한다")
 	void parentCode가_없으면_사용자의_모든_수집_행정동을_반환한다() {
@@ -96,6 +97,7 @@ class RegionStatsQueryServiceTest {
 			.isEqualTo(RegionErrorCode.REGION_NOT_FOUND);
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("유효한 parentCode 인데 수집이 없으면 빈 리스트를 반환한다")
 	void 유효한_parentCode인데_수집이_없으면_빈_리스트를_반환한다() {
@@ -108,6 +110,7 @@ class RegionStatsQueryServiceTest {
 		assertThat(stats).isEmpty();
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("collectedOnly 기본값은 true 라 0행이 빠진다")
 	void collectedOnly_기본값은_true라_0행이_빠진다() {

@@ -127,6 +127,7 @@ class HotZoneServiceImplTest {
 		redisTemplate.opsForZSet().add("hotzone:" + bucket, gridId, score);
 	}
 
+	// 검증: FR-HOTZONE-06, FR-HOTZONE-07
 	@Test
 	void 임계_이상_상위_격자가_핫스코어_내림차순으로_반환된다() {
 		record(CURRENT_BUCKET, IN_GRID_A, 3);
@@ -138,6 +139,7 @@ class HotZoneServiceImplTest {
 		assertThat(hotZones).extracting(HotZoneView::score).containsExactly(5L, 3L);
 	}
 
+	// 검증: FR-ZONE-05
 	@Test
 	void 핫구역_항목에_구역_이름이_붙는다() {
 		record(CURRENT_BUCKET, IN_GRID_A, 5);
@@ -150,6 +152,7 @@ class HotZoneServiceImplTest {
 		assertThat(hotZones).extracting(HotZoneView::zoneCell).containsExactly("A-1", null);
 	}
 
+	// 검증: FR-REGION-08
 	@Test
 	void 핫구역_항목마다_행정동_이름이_실린다() {
 		record(CURRENT_BUCKET, IN_GRID_A, 5);
@@ -170,6 +173,7 @@ class HotZoneServiceImplTest {
 		verify(gridRepository, times(1)).findRegionNames(anyCollection());
 	}
 
+	// 검증: FR-HOTZONE-06
 	@Test
 	void 필터_통과_핫구역이_없으면_행정동_조회를_생략한다() {
 		record(CURRENT_BUCKET, IN_GRID_A, 1);   // 최소 임계(3) 미만이라 통과 항목 0건
@@ -180,6 +184,7 @@ class HotZoneServiceImplTest {
 		verify(gridRepository, never()).findRegionNames(anyCollection());
 	}
 
+	// 검증: FR-REGION-10
 	@Test
 	void 무귀속_핫구역_격자는_regionName이_null이다() {
 		record(CURRENT_BUCKET, IN_GRID_A, 5);
@@ -191,6 +196,7 @@ class HotZoneServiceImplTest {
 		assertThat(hotZones).extracting(HotZoneView::regionName).containsExactly(REGION_NAME, null);
 	}
 
+	// 검증: FR-HOTZONE-06
 	@Test
 	void 상위_K_안이라도_임계_미만_격자는_제외된다() {
 		record(CURRENT_BUCKET, IN_GRID_A, 5);
@@ -201,6 +207,7 @@ class HotZoneServiceImplTest {
 		assertThat(hotZones).extracting(HotZoneView::gridId).containsExactly(IN_GRID_A);
 	}
 
+	// 검증: FR-HOTZONE-06
 	@Test
 	void 업로드_1건_격자는_핫구역이_아니다() {
 		record(CURRENT_BUCKET, IN_GRID_A, 1);
@@ -208,6 +215,7 @@ class HotZoneServiceImplTest {
 		assertThat(service.getHotZones(BOUNDS)).isEmpty();
 	}
 
+	// 검증: FR-HOTZONE-07
 	@Test
 	void 뷰포트_밖_핫구역은_제외된다() {
 		record(CURRENT_BUCKET, OUT_GRID, 5);
@@ -218,11 +226,13 @@ class HotZoneServiceImplTest {
 		assertThat(hotZones).extracting(HotZoneView::gridId).containsExactly(IN_GRID_A);
 	}
 
+	// 검증: FR-HOTZONE-08
 	@Test
 	void 핫구역이_하나도_없으면_빈_목록을_반환한다() {
 		assertThat(service.getHotZones(BOUNDS)).isEmpty();
 	}
 
+	// 검증: FR-HOTZONE-04
 	@Test
 	void 룩백_8버킷_밖의_신호는_판정에서_제외된다() {
 		record(CURRENT_BUCKET - 8, IN_GRID_A, 5);   // 9번째 과거 버킷 — 룩백은 현재 포함 8개(-7..0)
@@ -230,6 +240,7 @@ class HotZoneServiceImplTest {
 		assertThat(service.getHotZones(BOUNDS)).isEmpty();
 	}
 
+	// 검증: FR-HOTZONE-09
 	@Test
 	void 뒤집힌_뷰포트는_INVALID_VIEWPORT_에러다() {
 		ViewportBounds flipped = new ViewportBounds(37.55, 127.00, 37.50, 127.05);
@@ -239,6 +250,7 @@ class HotZoneServiceImplTest {
 			.hasFieldOrPropertyWithValue("errorCode", HotZoneErrorCode.INVALID_VIEWPORT);
 	}
 
+	// 검증: FR-HOTZONE-09
 	@Test
 	void NaN_좌표_뷰포트는_INVALID_VIEWPORT_에러다() {
 		ViewportBounds nanBounds = new ViewportBounds(Double.NaN, 127.00, 37.55, 127.05);
@@ -248,6 +260,7 @@ class HotZoneServiceImplTest {
 			.hasFieldOrPropertyWithValue("errorCode", HotZoneErrorCode.INVALID_VIEWPORT);
 	}
 
+	// 검증: FR-HOTZONE-09
 	@Test
 	void 무한대_좌표_뷰포트는_INVALID_VIEWPORT_에러다() {
 		ViewportBounds infiniteBounds = new ViewportBounds(37.50, 127.00, Double.POSITIVE_INFINITY, 127.05);
@@ -257,6 +270,7 @@ class HotZoneServiceImplTest {
 			.hasFieldOrPropertyWithValue("errorCode", HotZoneErrorCode.INVALID_VIEWPORT);
 	}
 
+	// 검증: FR-HOTZONE-09
 	@Test
 	void WGS84_범위_밖_유한_좌표_뷰포트는_INVALID_VIEWPORT_에러다() {
 		// 1e308 은 유한이라 isFinite 를 통과하지만 Proj4J 경도 정규화가 사실상 끝나지 않는다 (Codex 지적)
@@ -288,6 +302,7 @@ class HotZoneServiceImplTest {
 		assertThat(hotZones).extracting(HotZoneView::gridId).containsExactly(IN_GRID_A);
 	}
 
+	// 검증: FR-HOTZONE-04
 	@Test
 	void 여러_버킷에_걸친_신호는_균등_합산된다() {
 		record(CURRENT_BUCKET - 1, IN_GRID_A, 2);

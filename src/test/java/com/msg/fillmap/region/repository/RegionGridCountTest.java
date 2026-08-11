@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.region.repository.RegionRepository;
 
+// 검증: FR-REGION-01
 @SpringBootTest
 @Transactional
 @DisplayName("total_grid_count 산출 (면적 근사, D1) — ROUND(ST_Area/cellAreaM2)")

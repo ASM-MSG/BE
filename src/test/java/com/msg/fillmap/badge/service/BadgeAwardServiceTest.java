@@ -49,6 +49,7 @@ class BadgeAwardServiceTest {
 	@InjectMocks
 	private BadgeAwardServiceImpl badgeAwardService;
 
+	// 검증: FR-BADGE-03
 	@Test
 	@DisplayName("경합에서 진 후보(INSERT 영향 행 0)는 응답에 실리지 않는다")
 	void 경합에서_진_후보는_응답에_실리지_않는다() {
@@ -72,6 +73,7 @@ class BadgeAwardServiceTest {
 		assertThat(badgeAwardService.award(USER_ID, BadgeConditionType.UPLOAD_COUNT, BigDecimal.ONE)).isEmpty();
 	}
 
+	// 검증: FR-BADGE-02
 	@Test
 	@DisplayName("awardUploadBadges 는 생애 업로드 수를 세어 업로드 축만 판정한다")
 	void awardUploadBadges는_생애_업로드_수를_세어_업로드_축만_판정한다() {
@@ -85,6 +87,7 @@ class BadgeAwardServiceTest {
 		assertThat(earned).extracting(EarnedBadgeResponseDto::code).containsExactly("RECORDER_10");
 	}
 
+	// 검증: FR-BADGE-02
 	@Test
 	@DisplayName("awardCollectionBadges 는 총 격자 수와 수집률 두 축을 합산 반환한다")
 	void awardCollectionBadges는_총_격자_수와_수집률_두_축을_합산_반환한다() {
@@ -103,6 +106,7 @@ class BadgeAwardServiceTest {
 			.containsExactly("EXPLORER_1", "REGION_MASTER_10");
 	}
 
+	// 검증: FR-BADGE-02
 	@Test
 	@DisplayName("awardCollectionBadges 는 저장된 수집률이 없으면(무라벨 격자) 수집률 축을 건너뛴다")
 	void awardCollectionBadges는_저장된_수집률이_없으면_수집률_축을_건너뛴다() {

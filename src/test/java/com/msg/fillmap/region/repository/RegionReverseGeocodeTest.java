@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
  * RegionRepository 역지오코딩 native 조회 (실 PostGIS · GEOGRAPHY ST_Covers). 공유 로컬 DB 오염 방지를 위해
  * 실존하지 않는 999 대역 region_code 와 서해 공해상(육상 행정동과 겹치지 않는) 소형 합성 폴리곤만 쓰고 @Transactional 롤백.
  */
+// 검증: FR-REGION-02
 @SpringBootTest
 @Transactional
 @DisplayName("RegionRepository 역지오코딩 (ST_Covers · 합성 폴리곤 · 롤백 격리)")

@@ -155,6 +155,7 @@ class VideoS3CleanupTest {
 		then(s3Client).should(never()).deleteObjects(any(DeleteObjectsRequest.class));
 	}
 
+	// 검증: FR-VIDEO-11
 	@Test
 	@DisplayName("삭제하면 원본·인코딩본·썸네일을 실제로 지운다 — MSG-72 D2 정정")
 	void 삭제하면_S3_에서도_지운다() {
@@ -169,6 +170,7 @@ class VideoS3CleanupTest {
 			OLD_ORIGINAL, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
 	}
 
+	// 검증: FR-VIDEO-11
 	@Test
 	@DisplayName("삭제하면 블러본도 지운다 (MSG-145)")
 	void 삭제하면_블러본도_지운다() {
@@ -182,6 +184,7 @@ class VideoS3CleanupTest {
 		assertThat(deletedKeys()).contains("videos/blurred/1/7.mp4");
 	}
 
+	// 검증: FR-VIDEO-11
 	@Test
 	@DisplayName("인코딩 전 영상을 지우면 원본만 지운다 — null 키를 넣으면 S3 가 400 을 낸다")
 	void 인코딩_전_삭제는_원본만_지운다() {

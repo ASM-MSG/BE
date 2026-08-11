@@ -77,6 +77,7 @@ class FfmpegRunnerTest {
 		assertThat(duration).isCloseTo(5.0, org.assertj.core.data.Offset.offset(0.2));
 	}
 
+	// 검증: FR-MEDIA-01
 	@Test
 	void encode720p_는_1080p를_1280x720_h264로_변환한다(@TempDir Path dir) throws Exception {
 		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
@@ -88,6 +89,7 @@ class FfmpegRunnerTest {
 		assertThat(probe(out, "stream=width,height,codec_name")).isEqualTo("h264,1280,720");
 	}
 
+	// 검증: FR-MEDIA-01
 	@Test
 	void extractThumbnail_은_jpg_한_장을_만든다(@TempDir Path dir) throws Exception {
 		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
@@ -99,6 +101,7 @@ class FfmpegRunnerTest {
 		assertThat(probe(thumb, "stream=codec_name")).isEqualTo("mjpeg");
 	}
 
+	// 검증: FR-MEDIA-01
 	@Test
 	void 짧은_영상도_썸네일이_나온다(@TempDir Path dir) throws Exception {
 		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");

@@ -118,6 +118,7 @@ class UserAccountDeletionIntegrationTest {
 		return countByUser("users", "id", ownerId);
 	}
 
+	// 검증: FR-USER-06
 	@Test
 	void 본인_계정_삭제는_성공하고_users_행이_사라진다() {
 		userService.deleteAccount(userId, UNUSED_TOKEN);
@@ -125,6 +126,7 @@ class UserAccountDeletionIntegrationTest {
 		assertThat(usersRowCount(userId)).isZero();
 	}
 
+	// 검증: FR-USER-07, FR-FRIEND-05
 	@Test
 	void 삭제_시_영상_도감_수집률_푸시토큰_친구_스트릭_뱃지_좋아요_미션이_전부_연쇄_삭제된다() {
 		long friendId = createUser();
@@ -168,6 +170,7 @@ class UserAccountDeletionIntegrationTest {
 		assertThat(countByUser("user_missions", "user_id", userId)).as("미션").isZero();
 	}
 
+	// 검증: FR-USER-10
 	@Test
 	void 삭제된_이메일로_재가입하면_새_계정이_만들어진다() {
 		String email = "rejoin-" + UUID.randomUUID() + "@example.com";
@@ -180,6 +183,7 @@ class UserAccountDeletionIntegrationTest {
 		assertThat(secondId).isNotEqualTo(firstId);
 	}
 
+	// 검증: FR-USER-11
 	@Test
 	void 신고_이력이_있는_유저_삭제_시_그의_신고는_삭제되고_검토자_기록은_NULL이_된다() {
 		long otherId = createUser();
@@ -195,6 +199,7 @@ class UserAccountDeletionIntegrationTest {
 		assertThat(reviewedBy).as("검토자 기록은 SET NULL — 신고 자체는 보존 (V15)").isNull();
 	}
 
+	// 검증: FR-USER-11
 	@Test
 	void 타_사용자의_영상_도감_뱃지와_grids_행은_삭제에_영향받지_않는다() {
 		long otherId = createUser();
@@ -221,6 +226,7 @@ class UserAccountDeletionIntegrationTest {
 			.hasValueSatisfying(cover -> assertThat(cover.getId()).isEqualTo(otherVideoId));
 	}
 
+	// 검증: FR-USER-06
 	@Test
 	void 이미_삭제된_유저의_재호출은_1404를_반환한다() {
 		userService.deleteAccount(userId, UNUSED_TOKEN);

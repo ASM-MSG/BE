@@ -89,6 +89,7 @@ class VideoGridQueryServiceTest {
 		return video;
 	}
 
+	// 검증: FR-COLLECT-11
 	@Test
 	@DisplayName("READY 영상은 썸네일 presigned GET URL 을 발급해 내려준다")
 	void READY_영상은_썸네일_presigned_GET_URL을_발급해_내려준다() {
@@ -104,6 +105,7 @@ class VideoGridQueryServiceTest {
 		assertThat(result.get(0).processingStatus()).isEqualTo("READY");
 	}
 
+	// 검증: FR-MEDIA-02
 	@Test
 	@DisplayName("인코딩중 영상은 thumbnailUrl 이 null 이고 processingStatus 가 ENCODING 이다")
 	void 인코딩중_영상은_thumbnailUrl이_null이고_processingStatus가_ENCODING이다() {

@@ -52,6 +52,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  * 워커는 SET LOCAL lock_timeout 으로 DB 대기를 스스로 끊고, join 실패 시 executor 를 shutdownNow·종료 대기한
  * 뒤에만 teardown 이 돌게 해(try/finally) 살아있는 워커 트랜잭션이 정리와 경합하지 않게 한다.
  */
+// 검증: FR-REGION-05
 @SpringBootTest
 @DisplayName("region_stats recompute 동시성 — per-user 락이 첫 점령 2건을 직렬화한다 (실 PostGIS)")
 class RegionStatsConcurrencyTest {

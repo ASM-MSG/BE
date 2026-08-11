@@ -65,6 +65,7 @@ class VideoStatusWriterTest {
 		return video;
 	}
 
+	// 검증: FR-MEDIA-02
 	@Test
 	void 현재_잡이면_블러본을_적용하고_READY로_전이한다() {
 		Video video = blurring("job-1");
@@ -119,6 +120,7 @@ class VideoStatusWriterTest {
 
 	// ── 프리체크 탈락 사유 기록 (MSG-286) ──
 
+	// 검증: FR-MEDIA-07
 	@Test
 	void 사유와_함께_실패하면_FAILED와_사유_코드가_기록된다() {
 		Video video = blurring("job-1");
@@ -130,6 +132,7 @@ class VideoStatusWriterTest {
 		assertThat(video.getFailReason()).isEqualTo("too_dark");
 	}
 
+	// 검증: FR-MEDIA-07
 	@Test
 	void 사유_없이_실패하면_failReason은_null이다() {
 		Video video = blurring("job-1");

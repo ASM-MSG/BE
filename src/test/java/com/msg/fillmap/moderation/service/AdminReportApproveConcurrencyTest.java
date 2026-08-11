@@ -127,6 +127,7 @@ class AdminReportApproveConcurrencyTest {
 		});
 	}
 
+	// 검증: FR-MOD-12
 	@Test
 	@DisplayName("같은 신고의 동시 승인은 한 건만 성공하고 늦은 쪽은 409 를 받는다")
 	void 같은_신고의_동시_승인은_한_건만_성공한다() throws Exception {

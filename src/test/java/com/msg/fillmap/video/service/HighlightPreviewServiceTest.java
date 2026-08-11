@@ -73,6 +73,7 @@ class HighlightPreviewServiceTest {
 		highlightPreviewService = new HighlightPreviewServiceImpl(aiClientProvider, s3Client, properties, ffmpegRunner);
 	}
 
+	// 검증: FR-MEDIA-11
 	@Test
 	void 선분석은_AI가_반환한_구간_배열을_그대로_반환한다() {
 		given(ffmpegRunner.probeDurationSec(any(Path.class), any(Duration.class))).willReturn(30.0);
@@ -163,6 +164,7 @@ class HighlightPreviewServiceTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.HIGHLIGHT_UPSTREAM_ERROR);
 	}
 
+	// 검증: FR-MEDIA-14
 	@Test
 	void 전용_상한을_넘는_원본은_다운로드_없이_즉시_거부된다() {
 		// read timeout 은 AI leg 만 묶는다 — 다운로드 전에 headObject 실측 크기로 끊어야 S3 leg 시한도 잡힌다 (P1-2)
@@ -177,6 +179,7 @@ class HighlightPreviewServiceTest {
 		verify(s3Client, never()).getObject(any(GetObjectRequest.class), any(Path.class));
 	}
 
+	// 검증: FR-MEDIA-13
 	@Test
 	void 실측_3분_초과_원본은_거부된다() {
 		given(ffmpegRunner.probeDurationSec(any(Path.class), any(Duration.class))).willReturn(180.01);
@@ -189,6 +192,7 @@ class HighlightPreviewServiceTest {
 		verify(aiClient, never()).analyzeHighlights(any(Path.class));
 	}
 
+	// 검증: FR-MEDIA-13
 	@Test
 	void 실측_3분_정각_원본은_허용된다() {
 		// 경계 — FE 1차 차단과 같은 기준(3분 초과 거부, 정각 허용, D-3)
@@ -202,6 +206,7 @@ class HighlightPreviewServiceTest {
 		verify(aiClient).analyzeHighlights(any(Path.class));
 	}
 
+	// 검증: FR-MEDIA-12
 	@Test
 	void AI가_빈_배열을_반환하면_빈_배열이_내려간다() {
 		// 5초 미만 원본 — AI 가 조건 채우는 구간 없음으로 [] 반환 (FR-4, FE 는 추천 단계 스킵)
@@ -293,6 +298,7 @@ class HighlightPreviewServiceTest {
 		verify(ffmpegRunner).probeDurationSec(any(Path.class), eq(Duration.ofSeconds(30)));
 	}
 
+	// 검증: FR-MEDIA-15
 	@Test
 	void 동시_선분석이_허용치를_넘으면_즉시_거부된다() throws Exception {
 		// 요청당 임시 원본 최대 2GiB, BE dev 디스크 20GB — 허용치(2) 초과는 대기 없이 3429 즉시 거부해
@@ -333,6 +339,7 @@ class HighlightPreviewServiceTest {
 		}
 	}
 
+	// 검증: FR-MEDIA-15
 	@Test
 	void 실패한_선분석도_permit을_반환한다() {
 		// permit 누수면 허용치(2) 초과인 3번째부터 3429 — 전부 3425 여야 실패 경로 finally 해제가 증명된다

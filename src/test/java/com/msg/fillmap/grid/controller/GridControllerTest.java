@@ -56,6 +56,7 @@ class GridControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-GRID-06, FR-ZONE-05, FR-REGION-08
 	@Test
 	@DisplayName("단일 격자 조회 API 는 200 과 점령여부와 videoCount 를 반환한다")
 	void 단일_격자_조회_API는_200과_점령여부와_videoCount를_반환한다() throws Exception {
@@ -74,6 +75,7 @@ class GridControllerTest {
 			.andExpect(jsonPath("$.data.regionName").value(REGION_NAME));
 	}
 
+	// 검증: FR-GRID-09
 	@Test
 	@DisplayName("뷰포트 조회 API 는 필수 좌표가 없으면 400 이다")
 	void 뷰포트_조회_API는_필수_좌표가_없으면_400이다() throws Exception {
@@ -85,6 +87,7 @@ class GridControllerTest {
 			.andExpect(jsonPath("$.developCode").value(4401));
 	}
 
+	// 검증: FR-GRID-08, FR-ZONE-05, FR-REGION-08
 	@Test
 	@DisplayName("뷰포트 페이지 조회는 200 과 grids 배열과 nextCursor 를 반환한다")
 	void 뷰포트_페이지_조회는_200과_grids배열과_nextCursor를_반환한다() throws Exception {
@@ -105,6 +108,7 @@ class GridControllerTest {
 			.andExpect(jsonPath("$.data.nextCursor").value("NDE2NDNfMTEwNDYw"));
 	}
 
+	// 검증: FR-GRID-08
 	@Test
 	@DisplayName("마지막 페이지 응답의 nextCursor 는 null 이다")
 	void 마지막페이지_응답의_nextCursor는_null이다() throws Exception {
@@ -117,6 +121,7 @@ class GridControllerTest {
 			.andExpect(jsonPath("$.data.nextCursor").value(nullValue()));
 	}
 
+	// 검증: FR-GRID-09
 	@Test
 	@DisplayName("잘못된 커서는 400 과 4403 을 반환한다")
 	void 잘못된_커서는_400과_4403을_반환한다() throws Exception {
@@ -128,6 +133,7 @@ class GridControllerTest {
 			.andExpect(jsonPath("$.developCode").value(4403));
 	}
 
+	// 검증: FR-GRID-09
 	@Test
 	@DisplayName("size 가 상한을 초과하면 400 과 4404 를 반환한다")
 	void size가_상한을_초과하면_400과_4404를_반환한다() throws Exception {

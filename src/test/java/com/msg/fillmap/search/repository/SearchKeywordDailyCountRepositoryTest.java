@@ -47,6 +47,7 @@ class SearchKeywordDailyCountRepositoryTest {
 			.getSingleResult()).intValue();
 	}
 
+	// 검증: FR-SEARCH-05
 	@Test
 	void 같은_날_같은_검색어는_행이_늘지_않고_카운트가_증가한다() {
 		String keyword = keyword();
@@ -58,6 +59,7 @@ class SearchKeywordDailyCountRepositoryTest {
 		assertThat(searchCount(DATE, keyword)).isEqualTo(3);
 	}
 
+	// 검증: FR-SEARCH-12
 	@Test
 	void 같은_검색어라도_날짜가_다르면_행이_분리된다() {
 		String keyword = keyword();
@@ -69,6 +71,7 @@ class SearchKeywordDailyCountRepositoryTest {
 		assertThat(searchCount(YESTERDAY, keyword)).isEqualTo(1);
 	}
 
+	// 검증: FR-SEARCH-11
 	@Test
 	void 집계_저장소에는_정규화_검색어와_날짜와_횟수만_남는다() {
 		// FR-7 — 사용자 식별자·카카오 응답 필드(장소명·주소·좌표)가 컬럼으로도 존재하지 않는다
