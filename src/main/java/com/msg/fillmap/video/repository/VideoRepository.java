@@ -1,6 +1,7 @@
 package com.msg.fillmap.video.repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -121,6 +122,24 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		@Param("cursorId") long cursorId,
 		@Param("limit") int limit
 	);
+
+	/**
+	 * 전역 노출 응답의 작성자 닉네임 (MSG-371). 단건 경로(대표·재생)용 — 영상을 고른 뒤 같은 트랜잭션에서
+	 * 1회 더 읽는다. 위 native 조회 3종에 users 조인을 넣지 않는 이유가 여기 있다: 조인은 엔티티 반환을
+	 * 프로젝션으로 바꿔 커서·presign·DTO 팩토리까지 연쇄 재작성을 부르고, idx_videos_grid_popular 부분
+	 * 인덱스와의 바이트 단위 일치도 흔들린다. 매 요청 users 를 읽는 구조라 닉네임 변경이 다음 조회에
+	 * 그대로 반영된다(비정규화 사본 없음). 쿼리를 user 가 아닌 video 쪽에 두는 것은 "쿼리 소속은 용도
+	 * 기준" 관례다(UserRepository.findAllS3KeysByUserId 선례). 탈퇴 CASCADE 로 정상 경로엔 empty 가 없다.
+	 */
+	@Query("SELECT u.nickname FROM User u WHERE u.id = :userId")
+	Optional<String> findAuthorNickname(@Param("userId") Long userId);
+
+	/**
+	 * 전역 목록 페이지의 작성자 닉네임 배치 (MSG-371). 중복 제거한 작성자 id 로 IN 1회 — 항목 수와 무관하게
+	 * 왕복이 상수라 페이지가 커져도 조회가 늘지 않는다(N+1 금지). 호출자가 빈 컬렉션을 넘기지 않는다.
+	 */
+	@Query("SELECT u.id AS userId, u.nickname AS nickname FROM User u WHERE u.id IN :userIds")
+	List<AuthorNicknameProjection> findAuthorNicknames(@Param("userIds") Collection<Long> userIds);
 
 	/**
 	 * 격자 lazy insert (전역 격자 등록). 이미 있으면 no-op — 멱등.
