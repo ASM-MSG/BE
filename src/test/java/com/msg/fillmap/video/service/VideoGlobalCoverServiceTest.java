@@ -1,8 +1,12 @@
 package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 import java.lang.reflect.RecordComponent;
 import java.time.LocalDateTime;
@@ -45,6 +49,7 @@ class VideoGlobalCoverServiceTest {
 
 	private static final String GRID_ID = "19422_9582";
 	private static final String THUMB_KEY = "videos/thumb/1042.jpg";
+	private static final Long AUTHOR_ID = 1L;
 
 	private VideoRepository videoRepository;
 	private VideoService videoService;
@@ -68,7 +73,7 @@ class VideoGlobalCoverServiceTest {
 	}
 
 	private Video readyVideo(long id, String thumbKey, LocalDateTime recordedAt, long viewCount) {
-		Video video = Video.create(1L, GRID_ID, "videos/original/x.mp4", null, (short) 12, recordedAt,
+		Video video = Video.create(AUTHOR_ID, GRID_ID, "videos/original/x.mp4", null, (short) 12, recordedAt,
 			Visibility.PRIVATE);
 		video.markReady("videos/encoded/" + id + ".mp4", thumbKey);
 		ReflectionTestUtils.setField(video, "id", id);
@@ -132,17 +137,38 @@ class VideoGlobalCoverServiceTest {
 	}
 
 	@Test
-	@DisplayName("대표 응답에 작성자 정보가 포함되지 않는다")
-	void 대표_응답에_작성자_정보가_포함되지_않는다() {
-		// 프라이버시: 전역 대표는 타인 영상일 수 있어 작성자 식별 정보를 담지 않는다(스펙 §API).
+	@DisplayName("대표 응답의 작성자 축은 닉네임 하나다 (도감 색상·userId 비노출)")
+	void 대표_응답의_작성자_축은_닉네임_하나다() {
+		// 2026-08-04 확정으로 닉네임은 표시 대상이 됐다(MSG-371). 도감 색상·작성자 id 는 여전히 안 담는다.
 		List<String> fields = Arrays.stream(GridCoverVideoResponseDto.class.getRecordComponents())
 			.map(RecordComponent::getName)
 			.toList();
 
 		assertThat(fields)
-			.containsExactly("videoId", "thumbnailUrl", "durationSec", "viewCount", "recordedAt")
-			.noneMatch(name -> name.toLowerCase().contains("author")
-				|| name.toLowerCase().contains("nickname")
-				|| name.toLowerCase().contains("user"));
+			.containsExactly("videoId", "thumbnailUrl", "durationSec", "viewCount", "recordedAt", "nickname")
+			.noneMatch(name -> name.toLowerCase().contains("user") || name.toLowerCase().contains("color"));
+	}
+
+	@Test
+	@DisplayName("전역 대표 영상 응답에 작성자 닉네임이 담긴다")
+	void 전역_대표_영상_응답에_작성자_닉네임이_담긴다() {
+		given(videoRepository.findGlobalCover(GRID_ID))
+			.willReturn(Optional.of(readyVideo(1042L, THUMB_KEY, LocalDateTime.now(), 37L)));
+		given(videoRepository.findAuthorNickname(AUTHOR_ID)).willReturn(Optional.of("busan.vlog"));
+
+		GridCoverVideoResponseDto result = videoService.getGridCover(GRID_ID);
+
+		assertThat(result.nickname()).isEqualTo("busan.vlog");
+		// 대표 1건이라 닉네임 조회도 딱 1회 — 대표를 고른 작성자로만 부른다.
+		then(videoRepository).should(times(1)).findAuthorNickname(AUTHOR_ID);
+	}
+
+	@Test
+	@DisplayName("대표가 없는 격자는 기존처럼 null 이고 닉네임 조회가 돌지 않는다")
+	void 대표가_없는_격자는_기존처럼_null이고_닉네임_조회가_돌지_않는다() {
+		given(videoRepository.findGlobalCover(GRID_ID)).willReturn(Optional.empty());
+
+		assertThat(videoService.getGridCover(GRID_ID)).isNull();
+		then(videoRepository).should(never()).findAuthorNickname(any());
 	}
 }

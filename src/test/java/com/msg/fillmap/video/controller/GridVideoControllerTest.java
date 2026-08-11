@@ -93,7 +93,7 @@ class GridVideoControllerTest {
 	void 격자_대표영상_조회는_200과_영상을_반환한다() throws Exception {
 		given(videoService.getGridCover(eq(GRID_ID))).willReturn(
 			new GridCoverVideoResponseDto(1042L, "https://bucket.s3/thumb.jpg?X-Amz-Signature=abc",
-				(short) 12, 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11)));
+				(short) 12, 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), "busan.vlog"));
 
 		mockMvc.perform(get(COVER_URL, GRID_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -104,6 +104,7 @@ class GridVideoControllerTest {
 			.andExpect(jsonPath("$.data.durationSec").value(12))
 			.andExpect(jsonPath("$.data.viewCount").value(37))
 			.andExpect(jsonPath("$.data.recordedAt").value("2026-07-20T18:03:11"))
+			.andExpect(jsonPath("$.data.nickname").value("busan.vlog"))
 			.andExpect(jsonPath("$.data.processingStatus").doesNotExist());
 	}
 

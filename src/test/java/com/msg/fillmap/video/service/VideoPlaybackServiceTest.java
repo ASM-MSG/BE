@@ -435,6 +435,44 @@ class VideoPlaybackServiceTest {
 		assertThat(result.highlights()).isNull();
 	}
 
+	// --- 작성자 닉네임 (MSG-371). 접근 제어를 통과한 응답에만 실린다.
+
+	@Test
+	@DisplayName("재생 응답에 작성자 닉네임이 담긴다")
+	void 재생_응답에_작성자_닉네임이_담긴다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(videoRepository.findAuthorNickname(OWNER_ID)).willReturn(Optional.of("busan.vlog"));
+
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OTHER_ID, VIDEO_ID);
+
+		assertThat(result.nickname()).isEqualTo("busan.vlog");
+	}
+
+	@Test
+	@DisplayName("소유자 본인 조회에도 닉네임이 담긴다")
+	void 소유자_본인_조회에도_닉네임이_담긴다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PRIVATE, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(videoRepository.findAuthorNickname(OWNER_ID)).willReturn(Optional.of("busan.vlog"));
+
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(OWNER_ID, VIDEO_ID);
+
+		assertThat(result.nickname()).isEqualTo("busan.vlog");   // 본인 닉네임
+	}
+
+	@Test
+	@DisplayName("접근이 거부된 조회는 닉네임 조회가 돌지 않는다")
+	void 접근이_거부된_조회는_닉네임_조회가_돌지_않는다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PRIVATE, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
+			.isInstanceOf(ApiException.class);
+
+		verify(videoRepository, never()).findAuthorNickname(anyLong());
+	}
+
 	@Test
 	@DisplayName("무귀속 격자의 재생 응답은 regionName 이 null 이다")
 	void 무귀속_격자의_재생_응답은_regionName이_null이다() {

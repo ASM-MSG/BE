@@ -57,7 +57,7 @@ class VideoPlaybackControllerTest {
 			VIDEO_ID, "https://bucket.s3/play.mp4?X-Amz-Signature=abc",
 			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
 			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
-			"서면", "I-9", "서울특별시 강남구 역삼1동", null));
+			"서면", "I-9", "서울특별시 강남구 역삼1동", null, "busan.vlog"));
 
 		mockMvc.perform(get(URL, VIDEO_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -71,7 +71,8 @@ class VideoPlaybackControllerTest {
 			.andExpect(jsonPath("$.data.expiresInSec").value(600))
 			.andExpect(jsonPath("$.data.zoneName").value("서면"))
 			.andExpect(jsonPath("$.data.zoneCell").value("I-9"))
-			.andExpect(jsonPath("$.data.regionName").value("서울특별시 강남구 역삼1동"));
+			.andExpect(jsonPath("$.data.regionName").value("서울특별시 강남구 역삼1동"))
+			.andExpect(jsonPath("$.data.nickname").value("busan.vlog"));
 	}
 
 	@Test
@@ -83,7 +84,7 @@ class VideoPlaybackControllerTest {
 			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
 			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
 			"서면", "I-9", "서울특별시 강남구 역삼1동",
-			List.of(List.of(0.0, 4.25), List.of(12.0, 18.5), List.of(20.0, 27.5))));
+			List.of(List.of(0.0, 4.25), List.of(12.0, 18.5), List.of(20.0, 27.5)), "busan.vlog"));
 
 		mockMvc.perform(get(URL, VIDEO_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
