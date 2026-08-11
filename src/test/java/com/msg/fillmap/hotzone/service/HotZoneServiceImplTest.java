@@ -258,6 +258,16 @@ class HotZoneServiceImplTest {
 	}
 
 	@Test
+	void WGS84_범위_밖_유한_좌표_뷰포트는_INVALID_VIEWPORT_에러다() {
+		// 1e308 은 유한이라 isFinite 를 통과하지만 Proj4J 경도 정규화가 사실상 끝나지 않는다 (Codex 지적)
+		ViewportBounds outOfRange = new ViewportBounds(37.50, 1.0e308, 37.55, 1.0e308);
+
+		assertThatThrownBy(() -> service.getHotZones(outOfRange))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", HotZoneErrorCode.INVALID_VIEWPORT);
+	}
+
+	@Test
 	void 합산_캐시에_30초_TTL이_설정된다() {
 		record(CURRENT_BUCKET, IN_GRID_A, 5);
 

@@ -148,6 +148,12 @@ public class GridQueryServiceImpl implements GridQueryService {
 	}
 
 	private void validateBounds(ViewportBounds bounds) {
+		// NaN 은 모든 비교가 false 라 아래 검사를 전부 통과하고, 1e308 급 유한값은 Proj4J 경도 정규화
+		// (반복 감산)가 double 정밀도에서 값을 못 줄여 사실상 무한 루프다 — 요청 스레드가 안 돌아온다
+		// (Codex 지적). WGS84 범위 밖은 투영에 닿기 전에 거른다.
+		if (!isWgs84(bounds.swLat(), bounds.swLng()) || !isWgs84(bounds.neLat(), bounds.neLng())) {
+			throw new ApiException(GridErrorCode.INVALID_VIEWPORT);
+		}
 		if (bounds.swLat() > bounds.neLat() || bounds.swLng() > bounds.neLng()) {
 			throw new ApiException(GridErrorCode.INVALID_VIEWPORT);
 		}
@@ -156,5 +162,10 @@ public class GridQueryServiceImpl implements GridQueryService {
 		if (latSpan > MAX_VIEWPORT_SPAN_DEG || lngSpan > MAX_VIEWPORT_SPAN_DEG) {
 			throw new ApiException(GridErrorCode.VIEWPORT_TOO_LARGE);
 		}
+	}
+
+	private static boolean isWgs84(double lat, double lng) {
+		return Double.isFinite(lat) && Double.isFinite(lng)
+			&& lat >= -90.0 && lat <= 90.0 && lng >= -180.0 && lng <= 180.0;
 	}
 }
