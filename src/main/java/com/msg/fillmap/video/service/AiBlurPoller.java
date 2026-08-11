@@ -103,9 +103,11 @@ public class AiBlurPoller {
 	private void submit(Video video) {
 		byte[] encoded = download(video.getEncodedUrl());
 		String jobId = aiClient.submit(encoded);
+		// submitted 는 원격 제출 사실의 계측이라 recordAiJob(DB) 앞에서 증가시킨다 (MSG-343 Codex 리뷰) —
+		// DB 일시 실패로 잡ID 기록이 밀려도 원격 잡은 이미 생겼고, 뒤에 두면 재제출로 과소 계상된다.
+		videoProcessingMetrics.countAiJob(VideoProcessingMetrics.AI_SUBMITTED);
 		// ponytail: 크래시 창에서 중복 제출 1건 가능 — AI API에 멱등 키 생기면 적용
 		statusWriter.recordAiJob(video.getId(), jobId, video.getBlurringStartedAt());
-		videoProcessingMetrics.countAiJob(VideoProcessingMetrics.AI_SUBMITTED);
 		log.info("AI 제출 완료: videoId={} jobId={}", video.getId(), jobId);
 	}
 

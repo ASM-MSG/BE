@@ -520,6 +520,20 @@ class AiBlurPollerTest {
 	}
 
 	@Test
+	void 잡ID_기록이_실패해도_submitted는_이미_증가해_있다() {
+		// submitted 는 원격 제출 사실의 계측 — recordAiJob(DB) 일시 실패로 빠지면 재제출 시 과소 계상된다.
+		givenBlurring(blurring(7L, null, LocalDateTime.now()));
+		givenS3Download("encoded".getBytes());
+		given(aiClient.submit(any())).willReturn("job-1");
+		willThrow(new RuntimeException("DB 일시 실패"))
+			.given(statusWriter).recordAiJob(anyLong(), anyString(), any());
+
+		assertThatCode(() -> poller.reconcile()).doesNotThrowAnyException();   // 잡별 catch 가 삼킨다
+
+		assertThat(aiCount("submitted")).isEqualTo(1.0);
+	}
+
+	@Test
 	void DONE_적용은_done을_증가시킨다() {
 		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
 		givenDone("job-1", List.of());
