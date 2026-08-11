@@ -97,7 +97,7 @@ classDiagram
         +Integer videoCount  %% 신규 항목. 전역 기준에만 값, 내 격자 기준은 빈 값
     }
     class 묶음항목_기존 {
-        %% RegionAggregateResponseDto — 친구 조회 전용으로 남는다. 필드 불변
+        %% RegionAggregateResponseDto. 친구 조회 전용으로 남고 필드는 불변
     }
     class 현재행정동 {
         +String regionCode
