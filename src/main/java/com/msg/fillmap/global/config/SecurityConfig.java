@@ -72,7 +72,10 @@ public class SecurityConfig {
 				.requestMatchers("/api/auth/reissue").permitAll()
 				// [로컬/dev 전용] 소셜 로그인 모의 (MSG-135) — prod 프로파일엔 컨트롤러 자체가 없음
 				.requestMatchers("/api/auth/dev/**").permitAll()
-				// 관측(MSG-128) — 부하테스트 시 원격 Prometheus scrape. prod는 IP 제한 권장.
+				// 관측(MSG-128·MSG-344) — Prometheus scrape 용 permitAll 은 유지한다. 앱 레벨
+				// IP 검사는 기각(X-Forwarded-For 위조 가능) — prod 는 관리 포트 분리
+				// (application-prod.yml 의 management.server.port) + 보안그룹이 접근을 막고,
+				// 공개 포트에서 /actuator/** 는 404 다. 로컬·dev 는 지금 그대로 굴러간다.
 				.requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
 				// API 문서(MSG-131) — Swagger UI · OpenAPI 스펙. prod 노출 정책은 별도 검토.
 				.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
