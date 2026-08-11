@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: fillmap-prod
+    type: file
+    disableDeletion: true      # 상시 대시보드 — UI 실수 삭제 방지, 정본은 레포 파일
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
