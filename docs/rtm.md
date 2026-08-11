@@ -2,7 +2,7 @@
 
 `scripts/generate-rtm.sh` 가 생성한다. 손으로 고치지 말 것. 원천은 테스트의 `// 검증: FR-...` 주석과 `docs/srs.md` 다.
 
-요약: FR 214건 중 테스트 연결 190건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 17건, 성격상 테스트 비대상 7건 별도)
+요약: FR 216건 중 테스트 연결 192건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 17건, 성격상 테스트 비대상 7건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -220,6 +220,8 @@
 | FR-USER-09 | 구현됨 | RefreshTokenServiceTest, UserAccountS3CleanupTest, UserAccountSessionInvalidationIntegrationTest |
 | FR-USER-10 | 구현됨 | UserAccountDeletionIntegrationTest |
 | FR-USER-11 | 구현됨 | UserAccountDeletionIntegrationTest, UserRepositoryDeletionTest |
+| FR-USER-12 | 진행 중 | UserAccountS3CleanupTest, UserProfileControllerTest, UserProfileImageIntegrationTest, UserProfileImagePresignTest, UserProfileImageS3Test |
+| FR-USER-13 | 진행 중 | UserProfileControllerTest, UserProfileImageIntegrationTest |
 
 ## 검증 공백: 구현됐는데 대응 테스트가 없다 (조치 대상)
 
