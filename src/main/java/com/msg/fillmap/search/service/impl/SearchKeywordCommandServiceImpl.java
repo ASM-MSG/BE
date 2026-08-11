@@ -86,7 +86,9 @@ public class SearchKeywordCommandServiceImpl implements SearchKeywordCommandServ
 			executor.execute(() -> aggregate(date, userId, keyword));
 		} catch (Exception e) {
 			// 큐 포화(RejectedExecutionException) 포함 — 폐기하고 warn 만 남긴다 (FR-6)
-			log.warn("검색어 집계 접수 실패 — 신호 1건 유실 허용: userId={}", userId, e);
+			// 예외 메시지·스택엔 입력값이 에코될 수 있어 싣지 않는다 — 원인 구분은 클래스명으로 (MSG-342 D-2)
+			log.warn("검색어 집계 접수 실패 — 신호 1건 유실 허용: userId={}, causeType={}", userId,
+				e.getClass().getSimpleName());
 		}
 	}
 
@@ -101,7 +103,10 @@ public class SearchKeywordCommandServiceImpl implements SearchKeywordCommandServ
 			searchKeywordDailyCountRepository.upsertIncrement(date, keyword);
 		} catch (Exception e) {
 			// Redis 실패면 카운트도 진행하지 않는다 — dedupe 없이 세면 도배 방어가 뚫린다 (§D4)
-			log.warn("검색어 집계 실패 — 신호 1건 유실 허용: keyword={}", keyword, e);
+			// 예외 메시지에 바인딩 값(검색어)이 에코될 수 있다(Postgres UNIQUE DETAIL 등) — 스택·메시지 없이
+			// userId 와 클래스명만 남긴다 (MSG-342 D-2). 집계는 부수 경로라 원인 구분은 이걸로 충분하다.
+			log.warn("검색어 집계 실패 — 신호 1건 유실 허용: userId={}, causeType={}", userId,
+				e.getClass().getSimpleName());
 		}
 	}
 

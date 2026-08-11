@@ -38,6 +38,7 @@
 - MSG-167: `GlobalExceptionHandler`에 `MissingServletRequestParameterException → 400 BAD_REQUEST` 전역 매핑 (필수 파라미터 누락이 catch-all에 삼켜져 500이던 결함 정정)
 - MSG-244: `config/ProdRedisPasswordValidator`(prod 프로파일 전용 기동 검증 — 바인더가 미해석 `${REDIS_PASSWORD}`를 리터럴로 통과시키는 결함 보완, 공백/미해석 리터럴 완전 일치 시 기동 실패) + prod Redis 포트 6380·헬스체크 호스트 보간 정합(application-prod.yml·docker-compose.server.yml)
 - MSG-260: `config/ProdRequiredEnvValidator`(prod 필수 env 8종 일괄 기동 검증 — 공백/미해석 리터럴 완전 일치 시 누락 변수명 전부 나열하며 기동 실패, `ProdRedisPasswordValidator`는 흡수·삭제)
+- MSG-342: catch-all `handleException`이 ERROR 로그 1줄(HTTP 방법·URI·developCode·전체 스택)을 남김 — 쿼리 문자열·본문·헤더는 배제. 검색 실패 warn 2곳(카카오·집계)은 검색어가 예외 메시지·응답 본문·URL로 되돌아오는 경로까지 막아 클래스명·상태 코드·userId만 남김. yml 로그 레벨 경로 오타(`com.fillmap`) 3곳 정정 — dev·local에서 앱 DEBUG 로그가 실제로 나오기 시작
 
 ### `auth` (Owner B · 구현 공동) — ✅ 완성
 - 기본 골격: `controller`(+`/reissue`), `service`(AuthService·OidcLoginService·RefreshTokenService), `dto`(+Reissue*), `jwt`(TokenProvider·필터·JwtProperties·RefreshTokenProvider/Store·RedisInvalidatedTokenStore), `oidc`(Kakao OIDC), `support/RefreshTokenCookies`, `exception/AuthErrorCode`

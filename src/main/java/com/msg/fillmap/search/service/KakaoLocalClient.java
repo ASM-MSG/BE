@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,13 +44,13 @@ public class KakaoLocalClient {
 				.body(JsonNode.class);
 		} catch (RestClientException e) {
 			// 카카오 5xx·4xx(키/쿼터)·connect/read 타임아웃·비JSON 본문 디코딩 실패 — 전부 여기로 온다(§D3)
-			throw upstreamFailure(query, e);
+			throw upstreamFailure(e);
 		}
 		try {
 			return parse(response);
 		} catch (RuntimeException e) {
 			// 좌표 문자열 파싱 실패 등 응답 구조 이상 — 부분 성공 없이 전건 실패로 단순화(§D3)
-			throw upstreamFailure(query, e);
+			throw upstreamFailure(e);
 		}
 	}
 
@@ -73,8 +74,14 @@ public class KakaoLocalClient {
 	}
 
 	/** 업스트림 실패 단일 수렴(5502) — 원인 구분(키/쿼터/타임아웃/파싱)은 운영 진단용 warn 로그로만 남긴다(§D3). */
-	private ApiException upstreamFailure(String query, Exception cause) {
-		log.warn("카카오 로컬 검색 실패 — 5502 로 수렴: query={}, cause={}", query, cause.toString());
+	private ApiException upstreamFailure(Exception cause) {
+		// 예외 메시지에는 요청 URL(?query=)·응답 본문이 실려 검색어가 되돌아올 수 있다 — 클래스명과 상태 코드만
+		// 남긴다 (MSG-342 D-2). 원인 구분(키/쿼터=401/403·타임아웃·파싱)은 이 둘로 충분하다.
+		String status = cause instanceof RestClientResponseException responseException
+			? String.valueOf(responseException.getStatusCode().value())
+			: "-";
+		log.warn("카카오 로컬 검색 실패 — 5502 로 수렴: cause={}, status={}",
+			cause.getClass().getSimpleName(), status);
 		return new ApiException(SearchErrorCode.SEARCH_UPSTREAM_ERROR, cause);
 	}
 
