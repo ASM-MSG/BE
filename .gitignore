@@ -46,3 +46,6 @@ out/
 
 ### 파이썬 캐시 (load-test 분석 스크립트) ###
 __pycache__/
+
+### 관측 스택 시크릿 (MSG-344) — Slack webhook·Grafana 비밀번호. .env.example 복사 후 서버에서만 채운다 ###
+/monitoring/prod/.env

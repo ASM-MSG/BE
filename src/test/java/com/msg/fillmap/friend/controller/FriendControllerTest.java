@@ -250,6 +250,7 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.developCode").value(4401));
 	}
 
+	// 검증: FR-GRID-13
 	@Test
 	@DisplayName("친구 집계 응답은 내 집계 조회와 같은 형상이다 — principal·경로 userId·단위가 서비스로 전달된다 (MSG-356 FR-4)")
 	void 친구_집계_응답은_내_집계_조회와_같은_형상이다() throws Exception {

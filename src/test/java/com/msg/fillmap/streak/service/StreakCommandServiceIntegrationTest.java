@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
@@ -140,6 +141,77 @@ class StreakCommandServiceIntegrationTest {
 	}
 
 	@Nested
+	@DisplayName("KST 자정 경계 판정 (FR-STREAK-02)")
+	class KST_자정_경계_판정 {
+
+		// 검증: FR-STREAK-02
+		@Test
+		@DisplayName("KST 자정 직전(어제) 업로드와 직후(오늘) 업로드는 다른 날로 판정되어 스트릭이 이어진다")
+		void 자정_직전_업로드와_직후_업로드는_다른_날로_판정되어_스트릭이_이어진다() {
+			// statement_timestamp() 는 주입 불가 — 자정 직전 업로드는 last_recorded_date = KST 어제 시드로
+			// 등가 재현하고, 직후 업로드는 실제 UPSERT 를 오늘(KST) 실행한다 (§클래스 주석).
+			seedStreak(3, 3, 1);
+
+			streakCommandService.recordUpload(userId);
+
+			Object[] row = streakRow();
+			assertThat(((Number) row[0]).intValue()).isEqualTo(4);
+			assertThat(row[2]).isEqualTo(LocalDate.now(KST));
+		}
+
+		// 검증: FR-STREAK-02
+		@Test
+		@DisplayName("같은 KST 날짜의 업로드는 같은 날로 판정된다 — 기준일이 UTC 날짜면 새벽(UTC 15~24시)에 리셋으로 어긋난다")
+		void 같은_KST_날짜의_업로드는_같은_날로_판정되어_카운트가_유지된다() {
+			seedStreak(3, 3, 0);   // last = 앱이 계산한 KST 오늘 — DB 판정일과 일치해야 no-op 분기
+
+			streakCommandService.recordUpload(userId);
+
+			assertThat(((Number) streakRow()[0]).intValue()).isEqualTo(3);
+		}
+
+		// 검증: FR-STREAK-02
+		@Test
+		@DisplayName("UTC 로는 같은 날(14:59 vs 15:01)이라도 KST 자정을 넘으면 다른 날로 판정된다 — UPSERT 전문 실행")
+		void UTC_같은_날이라도_KST_자정을_넘으면_다른_날로_판정된다() {
+			// 리플렉션으로 가져온 현행 UPSERT 전문의 statement_timestamp() 를 고정 시각으로 치환해 실행 —
+			// 본문 여섯 사용처 중 어느 하나가 인라인 UTC 식으로 퇴행해도 테스트는 항상 현행 SQL 을 돌리므로
+			// 결정적으로 red 가 된다 (Codex 2라운드 — 판정식 복사·상수 공유 방식의 탐지 구멍 수정).
+			String sql = upsertSql();
+			assertThat(sql).contains("statement_timestamp()");   // now() 등으로 바뀌어 치환이 no-op 되는 퇴행 검출
+
+			seedStreakOn(LocalDate.of(2026, 8, 10), 3, 3);
+			runUpsertAt(sql, "2026-08-10 14:59:00+00");          // KST 2026-08-10 23:59 — 자정 직전
+			Object[] beforeMidnight = streakRow();
+
+			seedStreakOn(LocalDate.of(2026, 8, 10), 3, 3);
+			runUpsertAt(sql, "2026-08-10 15:01:00+00");          // KST 2026-08-11 00:01 — 자정 직후
+			Object[] afterMidnight = streakRow();
+
+			assertThat(((Number) beforeMidnight[0]).intValue()).isEqualTo(3);      // 같은 날 판정: no-op
+			assertThat(beforeMidnight[2]).isEqualTo(LocalDate.of(2026, 8, 10));
+			assertThat(((Number) afterMidnight[0]).intValue()).isEqualTo(4);       // 어제 판정: 연속 +1
+			// max_count CASE 의 KST 식만 퇴행해 "같은 날" 분기로 빠지면 max 가 3에 머문다 (Codex 4라운드)
+			assertThat(((Number) afterMidnight[1]).intValue()).isEqualTo(4);
+			assertThat(afterMidnight[2]).isEqualTo(LocalDate.of(2026, 8, 11));
+		}
+
+		// 검증: FR-STREAK-02
+		@Test
+		@DisplayName("행 없는 첫 업로드도 KST 날짜로 기록된다 — INSERT 경로의 날짜 식 검증")
+		void 행_없는_첫_업로드도_KST_날짜로_기록된다() {
+			// 시드 없이 고정 시각 실행 — ON CONFLICT 가 아닌 INSERT VALUES 경로를 태워, VALUES 쪽
+			// 날짜 식만 UTC 로 퇴행하는 사각을 닫는다 (Codex 4라운드 — UTC 날짜면 8/10 기록이라 red).
+			runUpsertAt(upsertSql(), "2026-08-10 15:01:00+00");          // KST 2026-08-11 00:01
+
+			Object[] row = streakRow();
+			assertThat(((Number) row[0]).intValue()).isEqualTo(1);
+			assertThat(((Number) row[1]).intValue()).isEqualTo(1);
+			assertThat(row[2]).isEqualTo(LocalDate.of(2026, 8, 11));
+		}
+	}
+
+	@Nested
 	@DisplayName("꾸준함 뱃지 배선 (§D7)")
 	class 뱃지_배선 {
 
@@ -220,6 +292,11 @@ class StreakCommandServiceIntegrationTest {
 	 * daysAgo 만큼 물려 넣는다 (KST 오늘 - daysAgo).
 	 */
 	private void seedStreak(int currentCount, int maxCount, int daysAgo) {
+		seedStreakOn(LocalDate.now(KST).minusDays(daysAgo), currentCount, maxCount);
+	}
+
+	/** 절대 날짜 시딩 — KST 경계 테스트는 고정 시각(2026-08-10 기준)과 짝이 되는 절대 날짜가 필요하다. */
+	private void seedStreakOn(LocalDate lastDate, int currentCount, int maxCount) {
 		em.createNativeQuery("""
 				INSERT INTO streaks (user_id, current_count, max_count, last_recorded_date)
 				VALUES (:userId, :current, :max, CAST(:lastDate AS date))
@@ -229,7 +306,23 @@ class StreakCommandServiceIntegrationTest {
 			.setParameter("userId", userId)
 			.setParameter("current", currentCount)
 			.setParameter("max", maxCount)
-			.setParameter("lastDate", LocalDate.now(KST).minusDays(daysAgo).toString())
+			.setParameter("lastDate", lastDate.toString())
+			.executeUpdate();
+	}
+
+	/** 현행 UPSERT 전문 (리플렉션) — 프로덕션 SQL 이 어떻게 바뀌든 경계 테스트는 항상 실제 문장을 실행한다. */
+	private String upsertSql() {
+		try {
+			return StreakRepository.class.getMethod("upsertOnUpload", long.class).getAnnotation(Query.class).value();
+		} catch (NoSuchMethodException e) {
+			throw new IllegalStateException("upsertOnUpload 시그니처 변경 — 경계 테스트 갱신 필요", e);
+		}
+	}
+
+	/** UPSERT 전문을 고정 UTC 시각으로 실행 — statement_timestamp() 전부를 리터럴로 치환. */
+	private void runUpsertAt(String sql, String utcInstant) {
+		em.createNativeQuery(sql.replace("statement_timestamp()", "TIMESTAMPTZ '" + utcInstant + "'"))
+			.setParameter("userId", userId)
 			.executeUpdate();
 	}
 

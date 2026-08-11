@@ -36,4 +36,18 @@ class UserEmaillessPersistenceTest {
 		assertThat(saved.getId()).isNotNull();
 		assertThat(saved.getEmail()).isNull();
 	}
+
+	// 검증: FR-USER-03
+	@Test
+	@DisplayName("같은 닉네임의 유저 2명이 모두 저장된다 — 유니크 강제는 카카오 자동 닉네임 중복 가입을 깨뜨린다")
+	void 같은_닉네임의_유저_2명이_모두_저장된다() {
+		User first = userRepository.saveAndFlush(
+			User.createOAuthUser(AuthProvider.KAKAO, "nick-" + UUID.randomUUID(), null, "중복닉네임"));
+		User second = userRepository.saveAndFlush(
+			User.createOAuthUser(AuthProvider.KAKAO, "nick-" + UUID.randomUUID(), null, "중복닉네임"));
+
+		assertThat(first.getId()).isNotNull();
+		assertThat(second.getId()).isNotNull();
+		assertThat(second.getNickname()).isEqualTo(first.getNickname());
+	}
 }

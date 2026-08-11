@@ -51,6 +51,20 @@ aws:
 server:
   port: ${SERVER_PORT:8080}
 
+# 관측(MSG-344) — Actuator 를 관리 포트로 분리한다. 공개 포트에서 /actuator/** 는 404 가 되고,
+# 8081 은 보안그룹에서 수집 서버(fillmap-ai, sg-05e4d5c7ddfa6c438)만 인바운드 허용한다.
+# 앱 레벨 IP 검사(X-Forwarded-For)는 위조 가능해 기각 — 접근 제한은 포트 분리 + 보안그룹이 담당.
+management:
+  server:
+    # 8081 고정 (env 오버라이드 없음) — CD 헬스체크(cd-prod.yml)와 Prometheus 타깃(monitoring/prod)이
+    # 8081 을 하드코딩하므로 여기만 움직이면 어긋난다. 바꿀 일이 생기면 세 곳을 같이 바꾼다.
+    port: 8081
+  endpoint:
+    health:
+      # 기본(never)이면 DOWN 시 어느 구성요소(DB·Redis)가 병들었는지 본문에 안 실려 runbook 의
+      # 장애 구분 절차가 성립하지 않는다. 관리 포트는 보안그룹으로 수집 서버만 접근하므로 노출 허용.
+      show-details: always
+
 logging:
   level:
     root: INFO

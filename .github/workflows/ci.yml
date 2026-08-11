@@ -69,6 +69,19 @@ jobs:
           fi
           echo "V 파일에 신규 추가(A) 외 변경 없음"
 
+      # rtm.md 는 generate-rtm.sh 가 SRS FR 표·테스트 검증 마커에서 생성한다. 원천을 고치고 재생성을
+      # 잊으면 커밋본이 조용히 낡는다 — 재생성이 강제될 때만 "낡지 않는다"는 약속이 성립한다. (MSG-375)
+      - name: RTM 신선도 검사
+        run: |
+          bash scripts/generate-rtm.sh
+          # PR이 rtm.md를 삭제·리네임했으면 재생성본이 untracked라 git diff에 안 잡힌다.
+          # intent-to-add로 등록해 그 경우도 diff(=실패)로 드러나게 한다.
+          git add -N docs/rtm.md
+          if ! git diff --exit-code docs/rtm.md; then
+            echo "::error::docs/rtm.md 가 낡았습니다 — scripts/generate-rtm.sh 를 실행해 재생성본을 함께 커밋하세요."
+            exit 1
+          fi
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
