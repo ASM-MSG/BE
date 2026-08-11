@@ -129,7 +129,7 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data[0].requesterId").value(3))
 			.andExpect(jsonPath("$.data[0].nickname").value("채우미"))
 			.andExpect(jsonPath("$.data[0].profileImageUrl").value(Matchers.nullValue()))
-			.andExpect(jsonPath("$.data[0].requestedAt").value("2026-08-03T12:00:00"));
+			.andExpect(jsonPath("$.data[0].requestedAt").value("2026-08-03T12:00:00Z"));
 	}
 
 	// 검증: FR-FRIEND-06, FR-USER-05
@@ -195,8 +195,8 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data.recentGrids[0].gridId").value("19422_9582"))
 			.andExpect(jsonPath("$.data.recentGrids[0].gridY").value(19422))
 			.andExpect(jsonPath("$.data.recentGrids[0].gridX").value(9582))
-			.andExpect(jsonPath("$.data.recentGrids[0].firstCollectedAt").value("2026-07-20T18:03:11"))
-			.andExpect(jsonPath("$.data.recentGrids[0].lastUploadedAt").value("2026-07-21T09:12:00"))
+			.andExpect(jsonPath("$.data.recentGrids[0].firstCollectedAt").value("2026-07-20T18:03:11Z"))
+			.andExpect(jsonPath("$.data.recentGrids[0].lastUploadedAt").value("2026-07-21T09:12:00Z"))
 			.andExpect(jsonPath("$.data.recentGrids[0].videoCount").value(3))
 			.andExpect(jsonPath("$.data.recentGrids[0].thumbnailUrl").value("https://signed/thumb.jpg"))
 			.andExpect(jsonPath("$.data.recentGrids[0].regionName").value("서울특별시 강남구 역삼1동"))
@@ -351,7 +351,7 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data[0].videoId").value(1042))
 			.andExpect(jsonPath("$.data[0].thumbnailUrl").value("https://signed/thumb.jpg"))
 			.andExpect(jsonPath("$.data[0].durationSec").value(12))
-			.andExpect(jsonPath("$.data[0].createdAt").value("2026-07-20T18:03:11"));
+			.andExpect(jsonPath("$.data[0].createdAt").value("2026-07-20T18:03:11Z"));
 	}
 
 	@Test
