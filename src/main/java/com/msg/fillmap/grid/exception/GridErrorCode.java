@@ -21,6 +21,7 @@ public enum GridErrorCode implements ErrorCodeIfs {
 	VIEWPORT_TOO_LARGE(4402, HttpStatus.BAD_REQUEST, "조회 범위가 너무 넓습니다"),
 	INVALID_CURSOR(4403, HttpStatus.BAD_REQUEST, "유효하지 않은 커서입니다"),
 	INVALID_PAGE_SIZE(4404, HttpStatus.BAD_REQUEST, "페이지 크기가 허용 범위를 벗어났습니다"),
+	INVALID_AGGREGATION_UNIT(4405, HttpStatus.BAD_REQUEST, "지원하지 않는 집계 단위입니다"),
 	;
 
 	private final Integer errorCode;

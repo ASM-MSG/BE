@@ -1,6 +1,7 @@
 package com.msg.fillmap.friend.controller;
 
 import java.util.List;
+import java.util.Locale;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -31,16 +32,20 @@ import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.service.FriendService;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.dto.OccupiedGridPageResponseDto;
+import com.msg.fillmap.grid.dto.RegionAggregateResponseDto;
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
+import com.msg.fillmap.grid.service.RegionAggregateView;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 
 @Tag(
 	name = "친구 (Friend)",
 	description = "고정 친구 코드 기반 친구 관계 API — 코드·요청·수락·거절·삭제 (MSG-185), "
-		+ "친구 목록·친구 프로필 조회 (MSG-186), 친구 도감 레이어(격자 뷰포트·격자 영상 목록, MSG-187). 인증 필수."
+		+ "친구 목록·친구 프로필 조회 (MSG-186), 친구 도감 레이어(격자 뷰포트·격자 영상 목록, MSG-187, "
+		+ "축소 시야의 행정 단위 집계는 MSG-356). 인증 필수."
 )
 @RestController
 @RequestMapping("/api/friends")
@@ -144,6 +149,40 @@ public class FriendController {
 	}
 
 	@Operation(
+		summary = "친구 격자 행정 단위 집계 조회 (줌아웃)",
+		description = "지도를 축소한 시야에서 그 친구가 점령한 격자를 행정 단위로 묶어 센 목록을 페이지 없이 한 번에 "
+			+ "반환한다. 파라미터·응답·에러가 내 집계 조회(GET /api/grids/aggregation)와 완전히 같다 — 단위 전환 "
+			+ "시점은 서버가 정하지 않고 클라이언트가 화면 축척에 맞춰 unit 만 바꿔 부른다.\n\n"
+			+ "항목마다 마커 식별 키(regionCode), 표시 이름, 대표 좌표, 격자 수가 온다. 행정동이 판정되지 않은 "
+			+ "격자(해상 등)는 제외가 아니라 regionCode·name 이 null 인 항목 하나로 묶여 오고, 그 친구가 점령한 "
+			+ "격자가 없으면 빈 배열이다.\n\n"
+			+ "bbox span 상한은 단위별로 다르다(DONG 1도, SIGUNGU 4도, SIDO 10도 — 위도·경도 각 변에 따로 적용). "
+			+ "초과 시 400 + developCode 4402, bbox 가 뒤집히거나 파라미터가 빠지면 4401, unit 이 없거나 미지원 "
+			+ "값이면 4405 다. 친구가 아닌 사용자·본인·존재하지 않는 사용자 조회는 모두 같은 404 다."
+	)
+	@GetMapping("/{userId}/grids/aggregation")
+	public SuccessResponse<List<RegionAggregateResponseDto>> getFriendGridAggregates(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@PathVariable Long userId,
+		@Parameter(description = "남서 모서리 위도", required = true, example = "35.10")
+		@RequestParam(required = false) Double swLat,
+		@Parameter(description = "남서 모서리 경도", required = true, example = "128.90")
+		@RequestParam(required = false) Double swLng,
+		@Parameter(description = "북동 모서리 위도", required = true, example = "35.30")
+		@RequestParam(required = false) Double neLat,
+		@Parameter(description = "북동 모서리 경도", required = true, example = "129.20")
+		@RequestParam(required = false) Double neLng,
+		@Parameter(description = "집계 단위 — DONG(동), SIGUNGU(시군구), SIDO(시도). 대소문자 무관",
+			required = true, example = "DONG")
+		@RequestParam(required = false) String unit
+	) {
+		ViewportBounds bounds = toBounds(swLat, swLng, neLat, neLng);
+		List<RegionAggregateView> items =
+			friendService.getFriendGridAggregates(principal.userId(), userId, bounds, toUnit(unit));
+		return SuccessResponse.of(items.stream().map(RegionAggregateResponseDto::from).toList());
+	}
+
+	@Operation(
 		summary = "친구 격자 영상 목록 조회",
 		description = "그 친구가 해당 격자에 올린 영상을 최근 업로드 순으로 반환한다. 친구에게 공개된 영상"
 			+ "(전체 공개·친구만 보기)만 담기고 비공개 영상은 포함되지 않으며, 삭제·인코딩 미완 영상도 제외된다 "
@@ -221,5 +260,17 @@ public class FriendController {
 			throw new ApiException(GridErrorCode.INVALID_VIEWPORT);
 		}
 		return new ViewportBounds(swLat, swLng, neLat, neLng);
+	}
+
+	/** unit 누락·미지원 값은 4405 — GridController.toUnit 동형 사본이다 (toBounds 와 같은 이유·같은 규칙). */
+	private RegionUnit toUnit(String unit) {
+		if (unit == null) {
+			throw new ApiException(GridErrorCode.INVALID_AGGREGATION_UNIT);
+		}
+		try {
+			return RegionUnit.valueOf(unit.toUpperCase(Locale.ROOT));
+		} catch (IllegalArgumentException e) {
+			throw new ApiException(GridErrorCode.INVALID_AGGREGATION_UNIT, e);
+		}
 	}
 }

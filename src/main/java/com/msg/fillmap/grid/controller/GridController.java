@@ -1,5 +1,8 @@
 package com.msg.fillmap.grid.controller;
 
+import java.util.List;
+import java.util.Locale;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,11 +20,14 @@ import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.dto.GridCellResponseDto;
 import com.msg.fillmap.grid.dto.OccupiedGridPageResponseDto;
+import com.msg.fillmap.grid.dto.RegionAggregateResponseDto;
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
 import com.msg.fillmap.grid.service.GridCellView;
 import com.msg.fillmap.grid.service.GridQueryService;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
+import com.msg.fillmap.grid.service.RegionAggregateView;
 import com.msg.fillmap.response.SuccessResponse;
 
 /**
@@ -98,10 +104,60 @@ public class GridController {
 		return SuccessResponse.of(OccupiedGridPageResponseDto.from(page));
 	}
 
+	@Operation(
+		summary = "뷰포트 내 색칠 격자 행정 단위 집계 조회 (줌아웃)",
+		description = "지도를 축소한 시야에서 개별 격자 대신, bbox 안에서 내가 점령한 격자를 행정 단위로 묶어 센 "
+			+ "목록을 페이지 없이 한 번에 반환한다. 단위 전환 시점은 서버가 정하지 않는다 — 화면 축척에 맞춰 "
+			+ "클라이언트가 unit 만 바꿔 부른다.\n\n"
+			+ "항목마다 마커 식별 키(regionCode), 표시 이름, 대표 좌표, 격자 수가 온다. 대표 좌표는 그 묶음에 "
+			+ "속한 점령 격자 중심의 평균이라 마커가 실제 데이터 위에 선다. 어느 단위로 묶어도, 항목을 더 묶어 "
+			+ "합산해도 같은 bbox 개별 격자 조회의 총 개수와 일치한다.\n\n"
+			+ "행정동이 판정되지 않은 격자(해상 등)는 제외가 아니라 regionCode·name 이 null 인 항목 하나로 "
+			+ "묶여 온다. 점령 격자가 없으면 빈 배열이다.\n\n"
+			+ "bbox span 상한은 단위별로 다르다(DONG 1도, SIGUNGU 4도, SIDO 10도 — 위도·경도 각 변에 따로 적용). "
+			+ "초과 시 400 + developCode 4402, 좌표가 WGS84 범위를 벗어나거나 bbox 가 뒤집히면 4401, "
+			+ "unit 이 없거나 미지원 값이면 4405 다."
+	)
+	@GetMapping("/aggregation")
+	public SuccessResponse<List<RegionAggregateResponseDto>> getOccupiedAggregatesInViewport(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "남서 모서리 위도", required = true, example = "35.10")
+		@RequestParam(required = false) Double swLat,
+		@Parameter(description = "남서 모서리 경도", required = true, example = "128.90")
+		@RequestParam(required = false) Double swLng,
+		@Parameter(description = "북동 모서리 위도", required = true, example = "35.30")
+		@RequestParam(required = false) Double neLat,
+		@Parameter(description = "북동 모서리 경도", required = true, example = "129.20")
+		@RequestParam(required = false) Double neLng,
+		@Parameter(description = "집계 단위 — DONG(동), SIGUNGU(시군구), SIDO(시도). 대소문자 무관",
+			required = true, example = "DONG")
+		@RequestParam(required = false) String unit
+	) {
+		ViewportBounds bounds = toBounds(swLat, swLng, neLat, neLng);
+		List<RegionAggregateView> items =
+			gridQueryService.getOccupiedAggregatesInViewport(principal.userId(), bounds, toUnit(unit));
+		return SuccessResponse.of(items.stream().map(RegionAggregateResponseDto::from).toList());
+	}
+
 	private ViewportBounds toBounds(Double swLat, Double swLng, Double neLat, Double neLng) {
 		if (swLat == null || swLng == null || neLat == null || neLng == null) {
 			throw new ApiException(GridErrorCode.INVALID_VIEWPORT);
 		}
 		return new ViewportBounds(swLat, swLng, neLat, neLng);
+	}
+
+	/**
+	 * bbox 파라미터와 같은 이유로 required = false 로 받아 여기서 검증한다 — Spring 의 필수 파라미터 예외는
+	 * 전역 핸들러에서 500 으로 새기 때문이다 (toBounds 와 같은 패턴).
+	 */
+	private RegionUnit toUnit(String unit) {
+		if (unit == null) {
+			throw new ApiException(GridErrorCode.INVALID_AGGREGATION_UNIT);
+		}
+		try {
+			return RegionUnit.valueOf(unit.toUpperCase(Locale.ROOT));
+		} catch (IllegalArgumentException e) {
+			throw new ApiException(GridErrorCode.INVALID_AGGREGATION_UNIT, e);
+		}
 	}
 }

@@ -8,8 +8,10 @@ import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
 import com.msg.fillmap.friend.dto.FriendProfileResponseDto;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
+import com.msg.fillmap.grid.service.RegionAggregateView;
 import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 
 public interface FriendService {
@@ -52,6 +54,15 @@ public interface FriendService {
 	 * 친구가 그 뷰포트에 점령한 격자가 없으면 빈 페이지다(예외 아님).
 	 */
 	OccupiedGridPage getFriendGrids(Long userId, Long targetUserId, ViewportBounds bounds, String cursor, int size);
+
+	/**
+	 * 친구 격자 집계 조회 (MSG-356 FR-4) — 축소한 시야에서 친구의 점령 격자를 행정 단위로 묶어 센 목록이다.
+	 * 열람 조건도 실패도 뷰포트 조회와 같은 9424 하나이고(비친구·본인 ID·대기 중 상대·미존재 userId),
+	 * 판정을 통과한 뒤에는 내 집계 조회와 같은 계약에 그대로 위임하므로 뷰포트·단위 검증 규칙과 에러가 동일하다.
+	 * 친구가 그 뷰포트에 점령한 격자가 없으면 빈 목록이다(예외 아님).
+	 */
+	List<RegionAggregateView> getFriendGridAggregates(Long userId, Long targetUserId, ViewportBounds bounds,
+		RegionUnit unit);
 
 	/**
 	 * 친구 격자 영상 목록 (MSG-187 FR-4·5·9). 그 친구가 그 격자에 올린 영상 중 친구에게 허용된

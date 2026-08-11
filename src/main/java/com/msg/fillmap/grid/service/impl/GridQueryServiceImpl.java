@@ -14,6 +14,7 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridEncoder.GridRange;
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
 import com.msg.fillmap.grid.repository.GridRepository;
@@ -22,6 +23,7 @@ import com.msg.fillmap.grid.service.GridCellView;
 import com.msg.fillmap.grid.service.GridQueryService;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.grid.service.OccupiedGridView;
+import com.msg.fillmap.grid.service.RegionAggregateView;
 import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.region.service.RegionView;
 import com.msg.fillmap.zone.service.ZoneCellName;
@@ -39,6 +41,12 @@ public class GridQueryServiceImpl implements GridQueryService {
 
 	// 페이지 size 상한 (MSG-90 Q2). 기본값 1000 은 컨트롤러 defaultValue 소관.
 	private static final int MAX_PAGE_SIZE = 5000;
+
+	// WGS84 좌표 유효 범위 — 서비스 범위(KoreaCoordinates)가 아니라 좌표계 자체의 정의역이다.
+	private static final double MIN_LATITUDE_DEG = -90.0;
+	private static final double MAX_LATITUDE_DEG = 90.0;
+	private static final double MIN_LONGITUDE_DEG = -180.0;
+	private static final double MAX_LONGITUDE_DEG = 180.0;
 
 	private final GridRepository gridRepository;
 	private final ZoneNameQueryService zoneNameQueryService;
@@ -99,6 +107,21 @@ public class GridQueryServiceImpl implements GridQueryService {
 		return new OccupiedGridPage(toViews(pageRows), nextCursor);
 	}
 
+	@Override
+	public List<RegionAggregateView> getOccupiedAggregatesInViewport(
+		long userId, ViewportBounds bounds, RegionUnit unit) {
+		validateBounds(bounds, unit.getMaxSpanDeg());
+		// 개별 조회(queryByRange)와 같은 환산·같은 술어를 써야 총합이 어긋나지 않는다 (MSG-356 FR-3).
+		GridRange range = GridEncoder.viewportRange(bounds);
+		return gridRepository.aggregateOccupiedInRange(
+				userId, range.minGridY(), range.maxGridY(), range.minGridX(), range.maxGridX(),
+				unit.getCodePrefixLength(), unit.getNameTokenIndex())
+			.stream()
+			.map(p -> new RegionAggregateView(
+				p.getRegionCode(), p.getName(), p.getLat(), p.getLng(), p.getCount().intValue()))
+			.toList();
+	}
+
 	private List<OccupiedGridProjection> queryPage(long userId, ViewportBounds bounds, String cursor, int limit) {
 		GridRange range = GridEncoder.viewportRange(bounds);
 		if (cursor == null) {
@@ -148,10 +171,18 @@ public class GridQueryServiceImpl implements GridQueryService {
 	}
 
 	private void validateBounds(ViewportBounds bounds) {
-		// NaN 은 모든 비교가 false 라 아래 검사를 전부 통과하고, 1e308 급 유한값은 Proj4J 경도 정규화
-		// (반복 감산)가 double 정밀도에서 값을 못 줄여 사실상 무한 루프다 — 요청 스레드가 안 돌아온다
-		// (Codex 지적). WGS84 범위 밖은 투영에 닿기 전에 거른다.
-		if (!isWgs84(bounds.swLat(), bounds.swLng()) || !isWgs84(bounds.neLat(), bounds.neLng())) {
+		validateBounds(bounds, MAX_VIEWPORT_SPAN_DEG);
+	}
+
+	/**
+	 * 뷰포트 공통 검증 — 개별 조회(0.5°)와 집계 조회(단위별 상한)가 같은 술어를 쓴다.
+	 * 좌표 자체 검증이 맨 앞이다: NaN 은 어떤 비교도 false 라 뒤집힘·상한 검사를 그대로 통과하고(fail-open),
+	 * 무한대는 격자 인덱스 환산에서 전 범위 스캔이 되며, 위도 100 처럼 유한해도 좌표계에 없는 값은
+	 * 조용한 빈 결과가 아니라 명시 거절이어야 한다 (MSG-356 Codex 리뷰 반영). 1e308 급 유한값이
+	 * Proj4J 경도 정규화(반복 감산)를 사실상 무한 루프로 만드는 문제도 같은 검사가 막는다 (MSG-347 fix 합류).
+	 */
+	private void validateBounds(ViewportBounds bounds, double maxSpanDeg) {
+		if (!isValidCoordinates(bounds)) {
 			throw new ApiException(GridErrorCode.INVALID_VIEWPORT);
 		}
 		if (bounds.swLat() > bounds.neLat() || bounds.swLng() > bounds.neLng()) {
@@ -159,13 +190,25 @@ public class GridQueryServiceImpl implements GridQueryService {
 		}
 		double latSpan = bounds.neLat() - bounds.swLat();
 		double lngSpan = bounds.neLng() - bounds.swLng();
-		if (latSpan > MAX_VIEWPORT_SPAN_DEG || lngSpan > MAX_VIEWPORT_SPAN_DEG) {
+		if (latSpan > maxSpanDeg || lngSpan > maxSpanDeg) {
 			throw new ApiException(GridErrorCode.VIEWPORT_TOO_LARGE);
 		}
 	}
 
-	private static boolean isWgs84(double lat, double lng) {
-		return Double.isFinite(lat) && Double.isFinite(lng)
-			&& lat >= -90.0 && lat <= 90.0 && lng >= -180.0 && lng <= 180.0;
+	/**
+	 * 네 좌표가 모두 WGS84 유효 범위(위도 ±90, 경도 ±180) 안인지. 범위 비교가 NaN·±무한대까지 함께 걸러낸다
+	 * (NaN 은 두 비교가 모두 false, 무한대는 한쪽을 넘는다).
+	 */
+	private boolean isValidCoordinates(ViewportBounds bounds) {
+		return isValidLat(bounds.swLat()) && isValidLat(bounds.neLat())
+			&& isValidLng(bounds.swLng()) && isValidLng(bounds.neLng());
+	}
+
+	private boolean isValidLat(double lat) {
+		return lat >= MIN_LATITUDE_DEG && lat <= MAX_LATITUDE_DEG;
+	}
+
+	private boolean isValidLng(double lng) {
+		return lng >= MIN_LONGITUDE_DEG && lng <= MAX_LONGITUDE_DEG;
 	}
 }
