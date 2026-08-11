@@ -67,11 +67,13 @@ jobs:
             # 000000 이 되어 오판한다 — `|| true` 로 실제 코드만 본다.
             # 재시도는 회수가 아니라 경과 시간으로 센다 — 회수x간격(30x5초)은 curl 대기(최대 3초)가
             # 회마다 얹혀 최악 240초까지 늘어나 명시한 150초 데드라인과 어긋났다.
-            SECONDS=0
-            while [ "$SECONDS" -lt 150 ]; do
+            # 시계는 bash 전용 SECONDS 가 아니라 date +%s 를 쓴다 — ssh-action 이 원격 기본 셸로
+            # 실행하므로 sh/dash 로 떨어지면 SECONDS 는 0 고정 변수가 되어 무한 루프가 된다 (PR #153 리뷰).
+            deadline_start=$(date +%s)
+            while [ $(( $(date +%s) - deadline_start )) -lt 150 ]; do
               code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:8081/actuator/health || true)
               if [ "$code" = "200" ]; then
-                echo "기동 확인 — health HTTP 200 (${SECONDS}초)"
+                echo "기동 확인 — health HTTP 200 ($(( $(date +%s) - deadline_start ))초)"
                 exit 0
               fi
               sleep 5
