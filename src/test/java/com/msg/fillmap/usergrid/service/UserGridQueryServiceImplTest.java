@@ -5,7 +5,9 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.times;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +25,7 @@ import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
 import com.msg.fillmap.usergrid.repository.FriendCollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.RegionVideoProjection;
+import com.msg.fillmap.usergrid.repository.UploadHistoryProjection;
 import com.msg.fillmap.usergrid.repository.UserGridRepository;
 import com.msg.fillmap.usergrid.service.impl.UserGridQueryServiceImpl;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
@@ -69,24 +72,44 @@ class UserGridQueryServiceImplTest {
 		@DisplayName("요약은 점령격자수 영상총합 방문행정동수를 담은 뷰를 반환한다")
 		void 요약은_점령격자수_영상총합_방문행정동수를_담은_뷰를_반환한다() {
 			given(userGridRepository.getCollectionSummary(1L))
-				.willReturn(projection(15, 42L, 6));
+				.willReturn(projection(15, 42L, 6, 12, 21, 7));
 
 			CollectionSummaryView view = userGridQueryService.getCollectionSummary(1L);
 
 			assertThat(view.totalGridCount()).isEqualTo(15);
 			assertThat(view.totalVideoCount()).isEqualTo(42L);
 			assertThat(view.visitedRegionCount()).isEqualTo(6);
+			assertThat(view.currentStreak()).isEqualTo(12);
+			assertThat(view.maxStreak()).isEqualTo(21);
+			assertThat(view.badgeCount()).isEqualTo(7);
 		}
 
 		@Test
-		@DisplayName("점령이 없으면 세 집계가 모두 0인 뷰를 반환한다")
-		void 점령이_없으면_세_집계가_모두_0인_뷰를_반환한다() {
+		@DisplayName("점령이 없으면 여섯 집계가 모두 0인 뷰를 반환한다")
+		void 점령이_없으면_여섯_집계가_모두_0인_뷰를_반환한다() {
 			given(userGridRepository.getCollectionSummary(2L))
-				.willReturn(projection(0, 0L, 0));
+				.willReturn(projection(0, 0L, 0, 0, 0, 0));
 
 			CollectionSummaryView view = userGridQueryService.getCollectionSummary(2L);
 
-			assertThat(view).isEqualTo(new CollectionSummaryView(0, 0L, 0));
+			assertThat(view).isEqualTo(new CollectionSummaryView(0, 0L, 0, 0, 0, 0));
+		}
+	}
+
+	@Nested
+	@DisplayName("getUploadHistory")
+	class GetUploadHistory {
+
+		@Test
+		@DisplayName("저장 존은 JVM 기본 존으로 바인딩하고 프로젝션의 날짜와 건수를 그대로 담는다")
+		void 저장_존은_JVM_기본_존으로_바인딩하고_프로젝션의_날짜와_건수를_그대로_담는다() {
+			// D-4: storedZone 인자가 어긋나면 이 스텁이 매치되지 않아 테스트가 깨진다 — 존 배선 검증을 겸한다.
+			given(userGridRepository.getUploadHistory(1L, ZoneId.systemDefault().getId()))
+				.willReturn(List.of(historyProjection(LocalDate.of(2026, 8, 10), 3)));
+
+			List<UploadHistoryView> views = userGridQueryService.getUploadHistory(1L);
+
+			assertThat(views).containsExactly(new UploadHistoryView(LocalDate.of(2026, 8, 10), 3));
 		}
 	}
 
@@ -348,7 +371,8 @@ class UserGridQueryServiceImplTest {
 		};
 	}
 
-	private CollectionSummaryProjection projection(int totalGridCount, long totalVideoCount, int visitedRegionCount) {
+	private CollectionSummaryProjection projection(int totalGridCount, long totalVideoCount, int visitedRegionCount,
+		int currentStreak, int maxStreak, int badgeCount) {
 		return new CollectionSummaryProjection() {
 			@Override
 			public Integer getTotalGridCount() {
@@ -363,6 +387,35 @@ class UserGridQueryServiceImplTest {
 			@Override
 			public Integer getVisitedRegionCount() {
 				return visitedRegionCount;
+			}
+
+			@Override
+			public Integer getCurrentStreak() {
+				return currentStreak;
+			}
+
+			@Override
+			public Integer getMaxStreak() {
+				return maxStreak;
+			}
+
+			@Override
+			public Integer getBadgeCount() {
+				return badgeCount;
+			}
+		};
+	}
+
+	private UploadHistoryProjection historyProjection(LocalDate uploadDate, int uploadCount) {
+		return new UploadHistoryProjection() {
+			@Override
+			public LocalDate getUploadDate() {
+				return uploadDate;
+			}
+
+			@Override
+			public Integer getUploadCount() {
+				return uploadCount;
 			}
 		};
 	}

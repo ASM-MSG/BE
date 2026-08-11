@@ -178,7 +178,8 @@ public class GridQueryServiceImpl implements GridQueryService {
 	 * 뷰포트 공통 검증 — 개별 조회(0.5°)와 집계 조회(단위별 상한)가 같은 술어를 쓴다.
 	 * 좌표 자체 검증이 맨 앞이다: NaN 은 어떤 비교도 false 라 뒤집힘·상한 검사를 그대로 통과하고(fail-open),
 	 * 무한대는 격자 인덱스 환산에서 전 범위 스캔이 되며, 위도 100 처럼 유한해도 좌표계에 없는 값은
-	 * 조용한 빈 결과가 아니라 명시 거절이어야 한다 (MSG-356 Codex 리뷰 반영).
+	 * 조용한 빈 결과가 아니라 명시 거절이어야 한다 (MSG-356 Codex 리뷰 반영). 1e308 급 유한값이
+	 * Proj4J 경도 정규화(반복 감산)를 사실상 무한 루프로 만드는 문제도 같은 검사가 막는다 (MSG-347 fix 합류).
 	 */
 	private void validateBounds(ViewportBounds bounds, double maxSpanDeg) {
 		if (!isValidCoordinates(bounds)) {

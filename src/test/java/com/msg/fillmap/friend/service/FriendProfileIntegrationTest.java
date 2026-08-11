@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -128,6 +130,21 @@ class FriendProfileIntegrationTest {
 		assertThat(profile.summary().totalVideoCount()).isZero();
 		assertThat(profile.summary().visitedRegionCount()).isZero();
 		assertThat(profile.recentGrids()).isEmpty();
+	}
+
+	@Test
+	@DisplayName("친구 프로필 요약에도 스트릭과 뱃지 수가 실린다 (MSG-362 FR-4)")
+	void 친구_프로필_요약에도_스트릭과_뱃지_수가_실린다() {
+		// friend 패키지 무수정으로 성립해야 한다 — summary 가 CollectionSummaryResponseDto 중첩 재사용이라
+		// 자동으로 같은 필드를 받는지 확인. 오늘 기록이라 currentStreak 은 저장값 그대로다.
+		seedStreak(friend.getId(), 3, 5, LocalDate.now(ZoneId.of("Asia/Seoul")));
+		grantBadge(friend.getId(), "EXPLORER_1");
+
+		FriendProfileResponseDto profile = friendService.getFriendProfile(me.getId(), friend.getId());
+
+		assertThat(profile.summary().currentStreak()).isEqualTo(3);
+		assertThat(profile.summary().maxStreak()).isEqualTo(5);
+		assertThat(profile.summary().badgeCount()).isEqualTo(1);
 	}
 
 	@Test
@@ -294,6 +311,30 @@ class FriendProfileIntegrationTest {
 
 	private FriendCollectionGridResponseDto firstGrid() {
 		return friendService.getFriendProfile(me.getId(), friend.getId()).recentGrids().get(0);
+	}
+
+	/** 스트릭 행 시드 (StreakCommandServiceIntegrationTest 패턴). */
+	private void seedStreak(long userId, int currentCount, int maxCount, LocalDate lastRecordedDate) {
+		em.createNativeQuery("""
+			INSERT INTO streaks (user_id, current_count, max_count, last_recorded_date)
+			VALUES (:userId, :current, :max, CAST(:lastDate AS date))
+			""")
+			.setParameter("userId", userId)
+			.setParameter("current", currentCount)
+			.setParameter("max", maxCount)
+			.setParameter("lastDate", lastRecordedDate.toString())
+			.executeUpdate();
+	}
+
+	/** V9 시드 뱃지를 code 로 지급한다 (BadgeQueryServiceIntegrationTest 의 grantRetro 패턴). */
+	private void grantBadge(long userId, String code) {
+		em.createNativeQuery("""
+			INSERT INTO user_badges (user_id, badge_id)
+			SELECT :userId, id FROM badges WHERE code = :code
+			""")
+			.setParameter("userId", userId)
+			.setParameter("code", code)
+			.executeUpdate();
 	}
 
 	private User seedUser(String nickname) {

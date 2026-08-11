@@ -19,9 +19,11 @@ import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.usergrid.dto.CollectionGridResponseDto;
 import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
 import com.msg.fillmap.usergrid.dto.RegionVideoResponseDto;
+import com.msg.fillmap.usergrid.dto.UploadHistoryResponseDto;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
 import com.msg.fillmap.usergrid.service.RegionVideoView;
+import com.msg.fillmap.usergrid.service.UploadHistoryView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
 
 /**
@@ -38,8 +40,9 @@ public class CollectionController {
 
 	@Operation(
 		summary = "개인 도감 요약 조회",
-		description = "로그인 사용자의 점령한 격자 수·올린 영상 총합·방문한 행정동 수를 한 번에 반환한다. "
-			+ "점령 0건 사용자도 에러 없이 세 값이 모두 0으로 응답한다."
+		description = "로그인 사용자의 점령한 격자 수·올린 영상 총합·방문한 행정동 수에 더해 현재 스트릭·"
+			+ "최장 스트릭·획득 뱃지 수를 한 번에 반환한다. 현재 스트릭은 마지막 기록이 KST 그제 이전이면 0이다. "
+			+ "업로드 경험 0 사용자도 에러 없이 여섯 값이 모두 0으로 응답한다."
 	)
 	@GetMapping("/summary")
 	public SuccessResponse<CollectionSummaryResponseDto> getSummary(
@@ -78,5 +81,19 @@ public class CollectionController {
 	) {
 		List<RegionVideoView> views = userGridQueryService.getRegionVideos(principal.userId(), regionCode);
 		return SuccessResponse.of(views.stream().map(RegionVideoResponseDto::from).toList());
+	}
+
+	@Operation(
+		summary = "날짜별 업로드 기록 조회",
+		description = "로그인 사용자 본인의 업로드를 KST 날짜로 접어, 업로드가 있었던 날과 그날의 건수를 "
+			+ "날짜 오름차순으로 반환한다(잔디 재료 — 빈 날은 항목 없음, 빈 칸 채우기는 FE 몫). "
+			+ "삭제·블라인드된 영상의 업로드도 센다. 업로드 0건 사용자는 에러 없이 빈 배열을 받는다."
+	)
+	@GetMapping("/upload-history")
+	public SuccessResponse<List<UploadHistoryResponseDto>> getUploadHistory(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal
+	) {
+		List<UploadHistoryView> views = userGridQueryService.getUploadHistory(principal.userId());
+		return SuccessResponse.of(views.stream().map(UploadHistoryResponseDto::from).toList());
 	}
 }

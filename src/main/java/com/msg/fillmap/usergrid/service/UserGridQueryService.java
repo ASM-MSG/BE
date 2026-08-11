@@ -8,7 +8,10 @@ import java.util.List;
  */
 public interface UserGridQueryService {
 
-	/** 로그인 사용자의 도감 요약: 점령 격자 수 · 영상 총합 · 방문 행정동 수. 점령 0건이면 (0, 0, 0). */
+	/**
+	 * 로그인 사용자의 도감 요약: 점령 격자 수 · 영상 총합 · 방문 행정동 수 + 현재/최장 스트릭 · 뱃지 수
+	 * (MSG-362 비파괴 확장 — 기존 접근자 불변). 업로드 경험 0 사용자도 여섯 지표 전부 0.
+	 */
 	CollectionSummaryView getCollectionSummary(long userId);
 
 	/**
@@ -41,4 +44,11 @@ public interface UserGridQueryService {
 	 * notification 만 소비, Owner A 미소비라 non-breaking). 행정동 없는 격자(해상 등)는 regionName null.
 	 */
 	List<GridOccupantView> getGridOccupants(String gridId);
+
+	/**
+	 * 날짜별 업로드 기록: 내 영상을 KST 날짜로 접어 업로드가 있었던 날만 날짜 오름차순으로 반환한다
+	 * (MSG-362, B-내부 read — CollectionController 만 소비, Owner A 미소비라 non-breaking).
+	 * 삭제·블라인드 영상의 업로드도 센다(FR-8, 스트릭 소급 차감 없음과 정합). 업로드 0건이면 빈 리스트.
+	 */
+	List<UploadHistoryView> getUploadHistory(long userId);
 }

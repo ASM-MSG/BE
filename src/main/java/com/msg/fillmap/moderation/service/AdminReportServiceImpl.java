@@ -60,12 +60,16 @@ public class AdminReportServiceImpl implements AdminReportService {
 	@Override
 	@Transactional
 	public AdminReportProcessResponseDto approve(Long adminId, Long reportId) {
+		// 잠금 순서는 videos 먼저, reports 다음이다 (Codex 지적으로 §D3 수정) — 소유자 탈퇴의
+		// FK CASCADE 가 users → videos → reports 순으로 행을 잠그므로, 신고를 먼저 잠그면 탈퇴와
+		// AB-BA 데드락이 된다. videoId 는 신고 행에서 불변이라 무잠금 스칼라 선독으로 읽고,
+		// 영상 잠금 확보 뒤 신고를 잠가 PENDING 을 재검증한다(그사이 처리됐으면 11410).
+		Long videoId = reportRepository.findVideoIdById(reportId)
+			.orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
+		// 영상 행 없음 = 선독과 잠금 사이 소유자 탈퇴 CASCADE 로 신고도 함께 사라진 것 — 신고 부재로 알린다.
+		Video video = videoRepository.findWithLockById(videoId)
+			.orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
 		Report report = lockPendingReport(reportId);
-		// 잠금 순서는 reports 먼저, videos 다음 하나뿐이다 (§D3) — 기존 경로(접수·삭제·블라인드)는 videos 만
-		// 잠그고 reports 를 잠그지 않으므로 역순 획득이 없어 데드락이 불가능하다.
-		// 영상 행 없음은 FK(reports.video_id ON DELETE CASCADE) 때문에 이론상 불가하지만 방어적으로 3404 다.
-		Video video = videoRepository.findWithLockById(report.getVideoId())
-			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
 		// FR-5 는 예외 포획이 아니라 잠금 보유 중 상태 사전 확인으로 구현한다 (§D2) — blind 의 3409·3404 를
 		// 잡아 분기하면 그쪽 가드 변경에 조용히 깨진다. 위 행 잠금 덕에 확인과 전이 사이 경합도 없다.
 		if (video.getStatus() == VideoStatus.ACTIVE) {

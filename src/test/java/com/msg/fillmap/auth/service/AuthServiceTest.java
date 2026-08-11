@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -73,7 +74,7 @@ class AuthServiceTest {
 		void signup_success() {
 			given(userRepository.existsByEmail(request.email())).willReturn(false);
 			given(passwordEncoder.encode(request.password())).willReturn("encoded-hash");
-			given(userRepository.save(any(User.class))).willAnswer(invocation -> {
+			given(userRepository.saveAndFlush(any(User.class))).willAnswer(invocation -> {
 				User saved = invocation.getArgument(0);
 				ReflectionTestUtils.setField(saved, "id", 1L);
 				ReflectionTestUtils.setField(saved, "createdAt", LocalDateTime.now());
@@ -83,7 +84,7 @@ class AuthServiceTest {
 			SignupResponseDto response = authService.signup(request);
 
 			ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
-			verify(userRepository).save(captor.capture());
+			verify(userRepository).saveAndFlush(captor.capture());
 			User persisted = captor.getValue();
 
 			assertThat(persisted.getEmail()).isEqualTo(request.email());
@@ -100,7 +101,7 @@ class AuthServiceTest {
 		}
 
 		@Test
-		@DisplayName("실패: 이메일이 이미 존재하면 EMAIL_ALREADY_EXISTS ApiException 을 던지고 save 를 호출하지 않는다")
+		@DisplayName("실패: 이메일이 이미 존재하면 EMAIL_ALREADY_EXISTS ApiException 을 던지고 삽입을 호출하지 않는다")
 		void signup_duplicateEmail() {
 			given(userRepository.existsByEmail(request.email())).willReturn(true);
 
@@ -112,7 +113,23 @@ class AuthServiceTest {
 				});
 
 			verify(passwordEncoder, never()).encode(any());
-			verify(userRepository, never()).save(any());
+			verify(userRepository, never()).saveAndFlush(any());
+		}
+
+		@Test
+		@DisplayName("실패: 선확인을 통과해도 삽입에서 이메일 UNIQUE 충돌이 나면 EMAIL_ALREADY_EXISTS 다 (동시 가입 경합)")
+		void signup_concurrentDuplicateEmail() {
+			given(userRepository.existsByEmail(request.email())).willReturn(false);
+			given(passwordEncoder.encode(request.password())).willReturn("encoded-hash");
+			given(userRepository.saveAndFlush(any(User.class)))
+				.willThrow(new DataIntegrityViolationException("uq_users_email"));
+
+			assertThatThrownBy(() -> authService.signup(request))
+				.isInstanceOf(ApiException.class)
+				.satisfies(thrown -> {
+					ApiException apiException = (ApiException) thrown;
+					assertThat(apiException.getErrorCode()).isEqualTo(UserErrorCode.EMAIL_ALREADY_EXISTS);
+				});
 		}
 	}
 
