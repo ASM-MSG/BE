@@ -62,7 +62,7 @@ class VideoUploadRecordedAtControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
-	// 검증: MSG-376 FR-4
+	// 검증: MSG-376 — 오프셋 입력의 UTC 환산 관통 (PRD 기능 요구 4, SRS 등재는 NFR DATA 06)
 	@Test
 	@DisplayName("recordedAt 에 +09:00 오프셋을 담아 보내면 UTC 로 환산돼 서비스에 전달된다")
 	void 오프셋_입력_recordedAt은_UTC로_환산되어_서비스에_전달된다() throws Exception {
