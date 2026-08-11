@@ -2,6 +2,7 @@ package com.msg.fillmap.moderation.entity;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -74,7 +75,8 @@ public class Report {
 		this.reason = reason;
 		this.detail = detail;
 		this.status = ReportStatus.PENDING;
-		this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
+		// DB TIMESTAMP 정밀도(µs)로 절단 — 리눅스 나노초 시계에서 재조회 값과 어긋나지 않게
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
 	}
 
 	/** 신고 접수 — 항상 PENDING 으로 시작한다 (FR-1). */

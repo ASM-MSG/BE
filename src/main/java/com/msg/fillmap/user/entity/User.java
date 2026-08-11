@@ -3,6 +3,7 @@ package com.msg.fillmap.user.entity;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -90,7 +91,8 @@ public class User {
 		this.gridColor = GridColor.BLUE;
 		this.emailVerified = false;
 		this.friendCode = generateFriendCode();
-		this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
+		// DB TIMESTAMP 정밀도(µs)로 절단 — 리눅스 나노초 시계에서 재조회 값과 어긋나지 않게
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
 	}
 
 	// 생성자 한 곳이 팩토리 2개(LOCAL·OAuth)를 전부 커버한다 — 가입 경로별 생성 코드 불요 (§D2).

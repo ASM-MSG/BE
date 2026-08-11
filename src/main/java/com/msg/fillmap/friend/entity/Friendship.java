@@ -2,6 +2,7 @@ package com.msg.fillmap.friend.entity;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
@@ -46,7 +47,8 @@ public class Friendship {
 	private Friendship(Long requesterId, Long addresseeId) {
 		this.id = new FriendshipId(requesterId, addresseeId);
 		this.status = FriendshipStatus.PENDING;
-		this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
+		// DB TIMESTAMP 정밀도(µs)로 절단 — 리눅스 나노초 시계에서 재조회 값과 어긋나지 않게
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
 	}
 
 	/** 친구 요청 생성 — PENDING (FR-4). */

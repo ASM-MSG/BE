@@ -2,6 +2,7 @@ package com.msg.fillmap.video.entity;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import jakarta.persistence.Column;
@@ -131,7 +132,8 @@ public class Video {
 		this.visibility = visibility;
 		this.status = VideoStatus.ACTIVE;
 		this.viewCount = 0L;
-		this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
+		// DB TIMESTAMP 정밀도(µs)로 절단 — 리눅스 나노초 시계에서 재조회 값과 어긋나지 않게
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
 	}
 
 	/** visibility 는 받은 값을 저장만 한다 — "미지정은 PUBLIC" 기본값 결정은 제품 결정이라 서비스 몫이다 (MSG-204). */
