@@ -60,22 +60,22 @@ jobs:
           username: ${{ secrets.PROD_EC2_USER }}
           key: ${{ secrets.PROD_EC2_SSH_KEY }}
           script: |
-            # 모든 경로가 인증을 요구하므로(SecurityConfig anyRequest().authenticated) 401 이 곧 기동 성공이다.
-            # 기동에 실패하면 컨텍스트가 안 떠서 포트가 안 열린다. 연결 실패 시 curl 은 000 을 '출력하므로'
-            # `|| echo 000` 을 붙이면 000000 이 되어 항상 통과해버린다 — 실제 HTTP 코드만 통과시킨다.
-            # TODO(MSG-128): actuator 도입되면 URL 을 /actuator/health 로 교체.
-            # ⚠️ prod 앱은 아직 구성 전이다(systemd 유닛·env 없음). dev 와 같은 EC2 를 쓰면 8080 이 겹치므로
-            #    prod 를 세울 때 SERVER_PORT 를 정하고 아래 포트를 맞출 것.
-            for i in $(seq 1 30); do
-              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:8080/ || true)
-              case "$code" in
-                2??|3??|4??)
-                  echo "기동 확인 — HTTP $code ($((i * 5))초)"
-                  exit 0
-                  ;;
-              esac
+            # health 는 관리 포트(8081, MSG-344)에서 본다 — 공개 포트에선 /actuator/** 가 404 다.
+            # 200 만 통과시킨다: DB·Redis 장애면 health 가 503(DOWN)이라 "떠 있지만 병든" 배포를 잡고,
+            # 미기동(000)도 당연히 실패다. 기존 "401 이 곧 기동 성공"(루트 경로 4xx 허용)은 간접
+            # 신호라 폐기했다. 연결 실패 시 curl 은 000 을 '출력하므로' `|| echo 000` 을 붙이면
+            # 000000 이 되어 오판한다 — `|| true` 로 실제 코드만 본다.
+            # 재시도는 회수가 아니라 경과 시간으로 센다 — 회수x간격(30x5초)은 curl 대기(최대 3초)가
+            # 회마다 얹혀 최악 240초까지 늘어나 명시한 150초 데드라인과 어긋났다.
+            SECONDS=0
+            while [ "$SECONDS" -lt 150 ]; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:8081/actuator/health || true)
+              if [ "$code" = "200" ]; then
+                echo "기동 확인 — health HTTP 200 (${SECONDS}초)"
+                exit 0
+              fi
               sleep 5
             done
-            echo "::error::150초 내 기동 실패 — 아래 로그에서 원인 확인"
+            echo "::error::150초 내 health 200 실패 (마지막 코드: $code) — 아래 로그에서 원인 확인"
             journalctl -u fillmap-prod -n 50 --no-pager
             exit 1
