@@ -1,12 +1,27 @@
 {
   "uid": "fillmap-prod-overview",
-  "title": "FillMap prod 상시 관측 (MSG-344)",
-  "tags": ["fillmap", "prod"],
+  "title": "FillMap 상시 관측 (MSG-344/377)",
+  "tags": ["fillmap"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "label": "대상",
+        "type": "custom",
+        "query": "fillmap-prod,fillmap-dev",
+        "current": { "text": "fillmap-prod", "value": "fillmap-prod" },
+        "options": [
+          { "text": "fillmap-prod", "value": "fillmap-prod", "selected": true },
+          { "text": "fillmap-dev", "value": "fillmap-dev", "selected": false }
+        ]
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
@@ -27,8 +42,8 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "up{job=\"fillmap-prod\"}",
-          "legendFormat": "fillmap-prod"
+          "expr": "up{job=\"$job\"}",
+          "legendFormat": "{{job}}"
         }
       ]
     },
@@ -43,7 +58,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(http_server_requests_seconds_count{job=\"fillmap-prod\", status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count{job=\"fillmap-prod\"}[5m]))",
+          "expr": "sum(rate(http_server_requests_seconds_count{job=\"$job\", status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count{job=\"$job\"}[5m]))",
           "legendFormat": "5xx 비율"
         }
       ]
@@ -59,13 +74,13 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"fillmap-prod\", uri=\"/api/grids\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{job=\"$job\", uri=\"/api/grids\"}[5m])) by (le))",
           "legendFormat": "p95"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job=\"fillmap-prod\", uri=\"/api/grids\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{job=\"$job\", uri=\"/api/grids\"}[5m])) by (le))",
           "legendFormat": "p99"
         }
       ]
@@ -81,19 +96,19 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "hikaricp_connections_active{job=\"fillmap-prod\"}",
+          "expr": "hikaricp_connections_active{job=\"$job\"}",
           "legendFormat": "active"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "hikaricp_connections_pending{job=\"fillmap-prod\"}",
+          "expr": "hikaricp_connections_pending{job=\"$job\"}",
           "legendFormat": "pending"
         },
         {
           "refId": "C",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "hikaricp_connections_max{job=\"fillmap-prod\"}",
+          "expr": "hikaricp_connections_max{job=\"$job\"}",
           "legendFormat": "max"
         }
       ]
@@ -109,13 +124,13 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(jvm_memory_used_bytes{job=\"fillmap-prod\", area=\"heap\"})",
+          "expr": "sum(jvm_memory_used_bytes{job=\"$job\", area=\"heap\"})",
           "legendFormat": "used"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(jvm_memory_max_bytes{job=\"fillmap-prod\", area=\"heap\"})",
+          "expr": "sum(jvm_memory_max_bytes{job=\"$job\", area=\"heap\"})",
           "legendFormat": "max"
         }
       ]
@@ -131,7 +146,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "process_cpu_usage{job=\"fillmap-prod\"}",
+          "expr": "process_cpu_usage{job=\"$job\"}",
           "legendFormat": "process_cpu_usage"
         }
       ]

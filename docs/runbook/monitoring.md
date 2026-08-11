@@ -1,6 +1,6 @@
 # 운영 관측 runbook (MSG-344)
 
-prod 앱을 대상 서버 밖에서 상시 관측하는 스택의 운영 절차. 스택 파일 정본은 레포의
+prod와 dev 앱을 대상 서버 밖에서 상시 관측하는 스택의 운영 절차. 스택 파일 정본은 레포의
 `monitoring/prod/` 이고, 실제 가동 위치는 fillmap-ai EC2(52.78.158.240, t3.small)다.
 부하테스트용 임시 스택(`monitoring/`)과는 별개이며 서로 건드리지 않는다.
 
@@ -8,7 +8,7 @@ prod 앱을 대상 서버 밖에서 상시 관측하는 스택의 운영 절차.
 
 | 컨테이너 | 포트 | 역할 |
 |---|---|---|
-| Prometheus v2.54.1 | 9090 | prod 앱 관리 포트(10.0.1.24:8081, fillmap-dev 사설 IP)의 `/actuator/prometheus`를 15초 간격 scrape, 알림 규칙 평가 |
+| Prometheus v2.54.1 | 9090 | prod 앱 관리 포트(10.0.1.24:8081)와 dev 앱 포트(10.0.1.24:8080, MSG-377)의 `/actuator/prometheus`를 15초 간격 scrape, 알림 규칙 평가. 둘 다 fillmap-dev EC2의 사설 IP다 |
 | Alertmanager v0.27.0 | 9093 | 규칙 위반을 Slack incoming webhook으로 발송 |
 | Grafana 11.3.0 | 3000 | 상시 대시보드 1장(fillmap-prod-overview), 익명 접근 차단 |
 
@@ -39,12 +39,13 @@ SSH 터널이 유일한 접근 경로다. Grafana와 Prometheus가 평문 HTTP�
 1. 터널 연결: `ssh -L 3000:localhost:3000 -L 9090:localhost:9090 -L 9093:localhost:9093 <user>@52.78.158.240`
 2. Grafana: 브라우저에서 `http://localhost:3000`. 로그인 admin / `GRAFANA_ADMIN_PASSWORD` 값.
    익명 접근은 차단돼 있다
-3. 대시보드 "FillMap prod 상시 관측 (MSG-344)" 1장: 기동 상태(up), 5xx 비율, p95와 p99,
-   Hikari(active, pending, max), JVM heap, 프로세스 CPU
+3. 대시보드 "FillMap 상시 관측 (MSG-344/377)" 1장: 상단 "대상" 변수로 fillmap-prod와
+   fillmap-dev를 오간다. 패널은 기동 상태(up), 5xx 비율, p95와 p99, Hikari(active, pending,
+   max), JVM heap, 프로세스 CPU
 4. Prometheus 원본 조회는 `http://localhost:9090` (targets 상태는 `/targets`, 규칙은 `/rules`),
    Alertmanager는 `http://localhost:9093`
 
-## 알림 8종: 기준, 의미, 대응
+## 알림: 기준, 의미, 대응 (prod 8종 + dev 2종)
 
 임계값 근거는 둘로 갈린다. 지연(p95 < 300ms, p99 < 800ms)은 MSG-134 ADR이 지도 뷰포트
 조회에 대해 정한 SLO를 그대로 옮긴 것이라, p95와 p99 규칙은 `uri="/api/grids"` 정확 일치로
@@ -64,9 +65,23 @@ SSH 터널이 유일한 접근 경로다. Grafana와 Prometheus가 평문 HTTP�
 | JvmHeapHigh | heap used / max > 0.9 | 10분 | warning | GC 압박, OOM 전조. heap 패널에서 톱니(정상 GC)인지 우상향(누수 의심)인지 본다 |
 | CpuHigh | `process_cpu_usage > 0.9` | 10분 | warning | 앱 프로세스가 CPU를 다 쓴다. 트래픽 급증인지 특정 요청의 폭주인지 5xx, 지연 패널과 같이 본다 |
 
+dev 알림은 최소 구성 2종이다(MSG-377). 지연 SLO와 5xx 비율을 dev에 안 다는 이유: 트래픽이
+팀원뿐이라 분모가 작아 요청 몇 건으로도 비율이 널뛰어 소음이 된다.
+
+| 알림 | 기준 | 지속 | 심각도 | 의미와 대응 |
+|---|---|---|---|---|
+| DevAppDown | `up{job="fillmap-dev"} == 0` | 3분 | critical | develop 푸시마다 일어나는 배포 재시작보다 긴 다운이라 크래시 루프를 의심한다(과거 32시간 크래시 루프에도 CD는 초록불이었다). 아래 "up==0 구분 절차"를 dev 값으로 바꿔 밟는다 |
+| DevJvmHeapHigh | heap used / max > 0.9 | 10분 | warning | dev 박스(t3.small)는 앱과 DB, Redis, Kafka 컨테이너가 동거해 메모리가 빠듯하다. heap 압박은 OOM 크래시 루프의 전조 |
+
 해소되면 같은 채널로 resolved 알림이 온다(`send_resolved: true`).
 
-## up==0 구분 절차 (AppDown 수신 시)
+## up==0 구분 절차 (AppDown, DevAppDown 수신 시)
+
+DevAppDown이면 아래 절차에서 포트 8081을 8080으로, fillmap-prod라는 이름(systemd 서비스명,
+Prometheus 타깃명)을 fillmap-dev로 바꿔 같은 순서로 밟는다. 단 2번의 구성요소별 본문은 dev에
+없다. `show-details: always`가 prod 프로파일 전용이라 dev의 health 응답은 상태 한 줄뿐이다.
+dev에서 503이 나오면 본문 대신 앱 로그(`journalctl -u fillmap-dev`)로 어느 구성요소가
+병들었는지 확인한다.
 
 `up == 0`은 앱 중단과 수집 실패(네트워크, 보안그룹)를 구분하지 못한다. 알림 규칙이 아니라
 이 절차로 가른다. 핵심: 수집 서버에서 앱으로 가는 curl은 Prometheus의 scrape와 같은 경로라,
@@ -122,7 +137,8 @@ docker compose -f monitoring/prod/docker-compose.yml up -d
 
 반영 확인:
 
-- Prometheus `/targets`에서 타깃 UP, `/rules`에서 규칙 8종 로드 (규칙은 Prometheus가
+- Prometheus `/targets`에서 fillmap-dev 타깃 UP(fillmap-prod는 앱 가동 전까지 DOWN이 정상),
+  `/rules`에서 규칙 10종(prod 8종 + dev 2종) 로드 (규칙은 Prometheus가
   로드하고 평가한다. Alertmanager가 아니다)
 - Alertmanager 라우팅은 별도로 확인한다: UI(`http://localhost:9093/#/status`)의 config에
   slack receiver가 보이는지, 또는

@@ -27,6 +27,18 @@ scrape_configs:
           service: fillmap
           env: prod
 
+  # dev 앱 (MSG-377). dev 프로파일은 관리 포트 분리 없이 앱 포트 8080 에 actuator 가 있다
+  # (Nginx 가 /actuator 를 외부 차단하고, 8080 인바운드는 보안그룹이 수집 서버 소스만
+  # 허용 — 8081 규칙과 같은 패턴). 관리 포트를 새로 파지 않는 이유: application-dev.yml,
+  # cd-dev.yml 헬스체크, 이 파일 세 곳을 건드리는 비용 대비 실익이 없다.
+  - job_name: fillmap-dev
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["10.0.1.24:8080"]
+        labels:
+          service: fillmap
+          env: dev
+
   # 수집 서버 자기 자신 — 스택 자체의 이상을 남기기 위해.
   - job_name: prometheus
     static_configs:
