@@ -5,10 +5,14 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,23 +25,28 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
+import com.msg.fillmap.user.dto.ProfileImagePresignRequestDto;
+import com.msg.fillmap.user.dto.ProfileImagePresignResponseDto;
 import com.msg.fillmap.user.dto.UserProfileResponseDto;
 import com.msg.fillmap.user.entity.UserRole;
 import com.msg.fillmap.user.service.UserService;
 
 /**
- * 프로필 조회 · 닉네임 수정 컨트롤러 (MSG-203 FR-1~4). BadgeControllerTest 패턴 미러 —
- * TokenProvider 실 Bearer + @MockitoBean 정확값 스텁(principal userId 전달 검증).
+ * 프로필 조회 · 닉네임 수정 · 프로필 이미지 컨트롤러 (MSG-203 FR-1~4, MSG-373). BadgeControllerTest
+ * 패턴 미러 — TokenProvider 실 Bearer + @MockitoBean 정확값 스텁(principal userId 전달 검증).
  * 계정 삭제(DELETE /me)와 컨트롤러를 공유하지만 축이 달라 테스트 클래스는 분리한다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@DisplayName("UserController 프로필 조회 · 닉네임 수정")
+@DisplayName("UserController 프로필 조회 · 닉네임 수정 · 프로필 이미지")
 class UserProfileControllerTest {
 
 	private static final long USER_ID = 42L;
 	private static final String ME_URL = "/api/users/me";
 	private static final String NICKNAME_URL = "/api/users/me/nickname";
+	private static final String PROFILE_IMAGE_URL = "/api/users/me/profile-image";
+	private static final String PROFILE_IMAGE_PRESIGN_URL = "/api/users/me/profile-image/presigned-url";
+	private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 1, 12, 3, 24, 11);
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -58,7 +67,7 @@ class UserProfileControllerTest {
 	void 내_프로필을_조회한다() throws Exception {
 		// 정확값 스텁 — principal userId(토큰의 USER_ID)가 서비스에 그대로 전달돼야만 매치된다(사용자 격리).
 		given(userService.getMyProfile(USER_ID))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미"));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT));
 
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
@@ -72,7 +81,7 @@ class UserProfileControllerTest {
 	@DisplayName("카카오 가입 사용자는 email 필드가 존재하되 값이 null 이다 (MSG-310, required+nullable)")
 	void 카카오_가입_사용자는_email_필드가_존재하되_값이_null_이다() throws Exception {
 		given(userService.getMyProfile(USER_ID))
-			.willReturn(new UserProfileResponseDto(null, "카카오유저"));
+			.willReturn(new UserProfileResponseDto(null, "카카오유저", null, CREATED_AT));
 
 		// OpenAPI 계약(required + nullable) 그대로의 와이어 검증 — 필드 존재(hasKey)와 값 null 을 구분해 단언한다.
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -87,7 +96,7 @@ class UserProfileControllerTest {
 	@DisplayName("닉네임을 수정하면 변경 후 프로필을 반환한다 (FR-2·D2)")
 	void 닉네임을_수정하면_변경_후_프로필을_반환한다() throws Exception {
 		given(userService.updateNickname(USER_ID, "새닉네임"))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "새닉네임"));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "새닉네임", null, CREATED_AT));
 
 		mockMvc.perform(put(NICKNAME_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
@@ -136,7 +145,7 @@ class UserProfileControllerTest {
 	@DisplayName("두 글자·스무 글자 닉네임은 통과한다 (FR-2, @Size 경계 안)")
 	void 두_글자와_스무_글자_닉네임은_통과한다() throws Exception {
 		given(userService.updateNickname(eq(USER_ID), anyString()))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "무관"));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "무관", null, CREATED_AT));
 
 		mockMvc.perform(put(NICKNAME_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
@@ -183,6 +192,98 @@ class UserProfileControllerTest {
 		mockMvc.perform(put(NICKNAME_URL)
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"nickname\":\"새닉네임\"}"))
+			.andExpect(status().isUnauthorized());
+	}
+
+	// 검증: FR-USER-13
+	@Test
+	@DisplayName("프로필 응답에 이미지 URL 과 가입 시각이 실린다 — 미설정이면 필드 존재 + null (MSG-373 FR-2·3)")
+	void 프로필_응답에_이미지_URL과_가입_시각이_실린다() throws Exception {
+		given(userService.getMyProfile(USER_ID))
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT));
+
+		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data", hasKey("profileImageUrl")))
+			.andExpect(jsonPath("$.data.profileImageUrl").value(nullValue()))
+			.andExpect(jsonPath("$.data.createdAt").value("2026-01-12T03:24:11"));
+	}
+
+	// 검증: FR-USER-12
+	@Test
+	@DisplayName("프로필 이미지 presigned URL 을 발급한다 — 200 · uploadUrl · s3Key (MSG-373 FR-1)")
+	void 프로필_이미지_presigned_URL을_발급한다() throws Exception {
+		given(userService.issueProfileImagePresignedUrl(
+			USER_ID, new ProfileImagePresignRequestDto("jpg", "image/jpeg", 1048576L)))
+			.willReturn(new ProfileImagePresignResponseDto("https://s3/put", "profiles/pending/42/uuid.jpg", 600L));
+
+		mockMvc.perform(post(PROFILE_IMAGE_PRESIGN_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"extension\":\"jpg\",\"contentType\":\"image/jpeg\",\"contentLength\":1048576}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.uploadUrl").value("https://s3/put"))
+			.andExpect(jsonPath("$.data.s3Key").value("profiles/pending/42/uuid.jpg"))
+			.andExpect(jsonPath("$.data.expiresInSec").value(600));
+	}
+
+	// 검증: FR-USER-12
+	@Test
+	@DisplayName("크기 없는 presign 요청은 400 이다 (@NotNull)")
+	void 크기_없는_presign_요청은_400을_반환한다() throws Exception {
+		mockMvc.perform(post(PROFILE_IMAGE_PRESIGN_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"extension\":\"jpg\",\"contentType\":\"image/jpeg\"}"))
+			.andExpect(status().isBadRequest());
+	}
+
+	// 검증: FR-USER-12
+	@Test
+	@DisplayName("프로필 이미지를 변경하면 갱신된 프로필을 반환한다 (MSG-373 FR-1)")
+	void 프로필_이미지를_변경하면_갱신된_프로필을_반환한다() throws Exception {
+		given(userService.updateProfileImage(USER_ID, "profiles/pending/42/uuid.jpg"))
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", "https://cdn/img.jpg", CREATED_AT));
+
+		mockMvc.perform(put(PROFILE_IMAGE_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"s3Key\":\"profiles/pending/42/uuid.jpg\"}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.profileImageUrl").value("https://cdn/img.jpg"));
+	}
+
+	// 검증: FR-USER-12
+	@Test
+	@DisplayName("빈 s3Key 변경 요청은 400 이다 (@NotBlank)")
+	void 빈_s3Key_변경_요청은_400을_반환한다() throws Exception {
+		mockMvc.perform(put(PROFILE_IMAGE_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"s3Key\":\"\"}"))
+			.andExpect(status().isBadRequest());
+	}
+
+	// 검증: FR-USER-12
+	@Test
+	@DisplayName("프로필 이미지를 제거하면 이미지 URL 이 null 인 프로필을 반환한다 (MSG-373 FR-6)")
+	void 프로필_이미지를_제거하면_null인_프로필을_반환한다() throws Exception {
+		given(userService.removeProfileImage(USER_ID))
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT));
+
+		mockMvc.perform(delete(PROFILE_IMAGE_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.profileImageUrl").value(nullValue()));
+	}
+
+	@Test
+	@DisplayName("토큰 없는 프로필 이미지 요청은 401 이다 (비기능 — 본인만 변경)")
+	void 토큰_없는_프로필_이미지_요청은_401을_반환한다() throws Exception {
+		mockMvc.perform(put(PROFILE_IMAGE_URL)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"s3Key\":\"profiles/pending/42/uuid.jpg\"}"))
+			.andExpect(status().isUnauthorized());
+		mockMvc.perform(delete(PROFILE_IMAGE_URL))
 			.andExpect(status().isUnauthorized());
 	}
 }

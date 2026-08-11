@@ -81,7 +81,33 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
   필요 권한: `s3:PutObject`(업로드 presign, MSG-64) · `s3:GetObject`(썸네일 GET presign MSG-127/153 + headObject 실존 검증 MSG-132) · `s3:CopyObject`/`s3:DeleteObject`(pending→original 확정 복사·삭제 정리, MSG-133).
 - **버킷 CORS**: 브라우저 직접 PUT(64)은 CORS 필수(이미 설정됨). 썸네일 GET은 `<img src>` 로드라 **CORS 불요** —
   FE가 fetch()/canvas로 다루게 되면 그때 GET 메서드 허용을 추가해야 한다.
-- **Block Public Access**: 켜둔 채로 무관 — presigned URL은 서명된 인증 요청이지 익명 공개 접근이 아니다.
+- **Block Public Access**: ~~켜둔 채로 무관~~ → MSG-373부터 **버킷 수준 "공개 정책 차단"만 해제 필요**
+  (아래 프로필 이미지 절). presigned URL 경로(영상 업로드·썸네일)는 서명된 인증 요청이라 여전히 무관.
+
+### 프로필 이미지 (MSG-373) — 배포 전 콘솔 작업 2건
+
+프로필 이미지는 `users.profile_image_url`에 **완성 공개 URL**을 저장한다(스펙 §D-1, 2026-08-11 정민 승인).
+확정본 프리픽스가 익명 읽기로 열려 있어야 저장된 URL이 브라우저에서 그대로 열린다. 두 작업 모두
+코드 밖(콘솔 전용)이라 여기 기록한다. **적용 전까지 이미지 등록은 되지만 표시가 안 된다**(403).
+
+1. **`profiles/original/*` 공개 읽기 버킷 정책** — 대상은 이 프리픽스 하나뿐이다.
+   `videos/*`·`profiles/pending/*`는 지금처럼 비공개 유지.
+
+   ```json
+   {
+     "Sid": "PublicReadProfileOriginal",
+     "Effect": "Allow",
+     "Principal": "*",
+     "Action": "s3:GetObject",
+     "Resource": "arn:aws:s3:::{버킷명}/profiles/original/*"
+   }
+   ```
+
+   전제: 버킷의 Block Public Access 4항목 중 **"새 퍼블릭 버킷 정책 차단(BlockPublicPolicy)"과
+   "퍼블릭 정책이 있는 버킷 접근 차단(RestrictPublicBuckets)"을 버킷 수준에서 해제**해야 위 정책이
+   저장·동작한다. ACL 관련 2항목은 켜둔 채 무관(정책 기반 공개라 ACL을 안 쓴다).
+2. **`profiles/pending/` 라이프사이클 만료 규칙** — 확정되지 않은 업로드 자동 청소.
+   `videos/pending/` 규칙과 같은 방식으로 프리픽스 필터만 다르게 추가한다(만료 기간도 동일하게).
 
 ## DB 마이그레이션 (Flyway)
 

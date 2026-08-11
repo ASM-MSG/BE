@@ -124,4 +124,13 @@ public class User {
 	public void updateNickname(String nickname) {
 		this.nickname = nickname;
 	}
+
+	/**
+	 * 프로필 이미지 변경 (MSG-373). 저장 값은 S3 키가 아니라 그대로 열리는 공개 URL 이다 — 친구 축
+	 * 응답 3종의 프로젝션이 이 컬럼 원문을 그대로 싣기 때문(§D-1). null 전달이 제거(기본 상태)다.
+	 * 검증·URL 조립은 서비스 몫 — updateNickname 과 같이 엔티티는 전달값만 반영한다.
+	 */
+	public void changeProfileImage(String profileImageUrl) {
+		this.profileImageUrl = profileImageUrl;
+	}
 }
