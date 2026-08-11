@@ -10,8 +10,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 
-import org.hibernate.annotations.CreationTimestamp;
-
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -34,7 +32,11 @@ public class Friendship {
 	@Column(nullable = false, length = 10)
 	private FriendshipStatus status;
 
-	@CreationTimestamp
+	/**
+	 * 요청 시각. @CreationTimestamp 를 쓰지 않고 생성자에서 UTC 로 직접 넣는다 (MSG-376) —
+	 * 그 애너테이션은 JVM 기본 존의 벽시계를 만들어 KST 개발 머신에서 +9h 가 저장되는데, 이 값은
+	 * 응답에 실려 전역 코덱이 UTC 로 표기하므로 저장 축이 UTC 여야 한다. respondedAt 과 같은 축이다.
+	 */
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
@@ -44,6 +46,7 @@ public class Friendship {
 	private Friendship(Long requesterId, Long addresseeId) {
 		this.id = new FriendshipId(requesterId, addresseeId);
 		this.status = FriendshipStatus.PENDING;
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 
 	/** 친구 요청 생성 — PENDING (FR-4). */

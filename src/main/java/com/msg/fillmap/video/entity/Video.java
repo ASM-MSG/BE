@@ -13,7 +13,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -112,7 +111,11 @@ public class Video {
 	@Column(name = "recorded_at", nullable = false)
 	private LocalDateTime recordedAt;
 
-	@CreationTimestamp
+	/**
+	 * 생성 시각. @CreationTimestamp 를 쓰지 않고 생성자에서 UTC 로 직접 넣는다 (MSG-376) —
+	 * 그 애너테이션은 JVM 기본 존의 벽시계를 만들어 KST 개발 머신에서 +9h 가 저장되는데, 이 값은
+	 * 응답에 실려 전역 코덱이 UTC 로 표기하므로 저장 축이 UTC 여야 한다.
+	 */
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
@@ -128,6 +131,7 @@ public class Video {
 		this.visibility = visibility;
 		this.status = VideoStatus.ACTIVE;
 		this.viewCount = 0L;
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 
 	/** visibility 는 받은 값을 저장만 한다 — "미지정은 PUBLIC" 기본값 결정은 제품 결정이라 서비스 몫이다 (MSG-204). */
