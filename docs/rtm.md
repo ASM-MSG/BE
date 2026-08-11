@@ -2,7 +2,7 @@
 
 `scripts/generate-rtm.sh` 가 생성한다. 손으로 고치지 말 것. 원천은 테스트의 `// 검증: FR-...` 주석과 `docs/srs.md` 다.
 
-요약: FR 212건 중 테스트 연결 185건, 검증 공백 10건 (계획·폐기라 테스트 부재가 정상인 17건 별도)
+요약: FR 214건 중 테스트 연결 190건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 17건, 성격상 테스트 비대상 7건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -22,6 +22,7 @@
 | FR-GRID-10 | 구현됨 | GridRegionCodeBackfillTest |
 | FR-GRID-11 | 구현됨 | GridEpsg5179MigrationTest |
 | FR-GRID-12 | 구현됨 | (없음) |
+| FR-GRID-13 | 구현됨 | FriendControllerTest, GridAggregationIntegrationTest, GridControllerTest |
 | FR-ZONE-01 | 구현됨 | ZoneRepositoryTest |
 | FR-ZONE-02 | 구현됨 | ZoneRepositoryTest |
 | FR-ZONE-03 | 구현됨 | GridQueryServiceIntegrationTest, ZoneNamingContractTest |
@@ -29,7 +30,7 @@
 | FR-ZONE-05 | 구현됨 | GridControllerTest, GridQueryServiceIntegrationTest, HotZoneControllerTest, HotZoneServiceImplTest, PlaceSearchControllerTest, PlaceSearchServiceTest |
 | FR-ZONE-06 | 구현됨 | GridQueryServiceIntegrationTest |
 | FR-ZONE-07 | 구현됨 | ZoneNamingContractTest |
-| FR-ZONE-08 | 구현됨 | (없음) |
+| FR-ZONE-08 | 구현됨 | ZoneNameQueryServiceIntegrationTest |
 | FR-ZONE-09 | 구현됨 | GridQueryServiceIntegrationTest |
 | FR-ZONE-10 | 구현됨 | ZoneNamingContractTest |
 | FR-ZONE-11 | 구현됨 | ZoneControllerTest, ZoneQueryServiceTest |
@@ -92,6 +93,7 @@
 | FR-VIDEO-15 | 구현됨 | VideoServiceIntegrationTest, VideoVisibilityControllerTest, VideoVisibilityIntegrationTest |
 | FR-VIDEO-16 | 구현됨 | VideoPlaybackServiceTest |
 | FR-VIDEO-17 | 구현됨 | RegionExploreQueryTest, VideoGlobalCoverQueryTest, VideoGlobalListQueryTest, VideoServiceIntegrationTest, VideoVisibilityIntegrationTest |
+| FR-VIDEO-18 | 구현됨 | VideoAuthorNicknameIntegrationTest, VideoGlobalCoverServiceTest, VideoPlaybackServiceTest |
 | FR-MEDIA-01 | 구현됨 | FfmpegRunnerTest, VideoEncodingServiceTest |
 | FR-MEDIA-02 | 구현됨 | AiBlurPollerTest, VideoBlurTransitionTest, VideoEncodingAiTriggerTest, VideoEncodingServiceTest, VideoEncodingTriggerTest, VideoGridQueryServiceTest, VideoPlaybackServiceTest, VideoStatusTransitionTest, VideoStatusWriterTest |
 | FR-MEDIA-03 | 구현됨 | VideoEncodingServiceTest |
@@ -135,7 +137,7 @@
 | FR-BADGE-12 | 구현됨 | BadgeNearMissIntegrationTest, MissionAwardServiceTest, MissionTypeBadgeSeedTest, UserMissionRepositoryTest |
 | FR-BADGE-13 | 계획 | (없음) |
 | FR-STREAK-01 | 구현됨 | VideoStreakIntegrationTest |
-| FR-STREAK-02 | 구현됨 | (없음) |
+| FR-STREAK-02 | 구현됨 | StreakCommandServiceIntegrationTest |
 | FR-STREAK-03 | 구현됨 | StreakCommandServiceIntegrationTest |
 | FR-STREAK-04 | 구현됨 | StreakCommandServiceIntegrationTest |
 | FR-STREAK-05 | 구현됨 | VideoStreakIntegrationTest |
@@ -209,7 +211,7 @@
 | FR-AUTH-12 | 계획 | (없음) |
 | FR-USER-01 | 구현됨 | UserProfileControllerTest, UserProfileIntegrationTest |
 | FR-USER-02 | 구현됨 | UserProfileControllerTest, UserProfileIntegrationTest |
-| FR-USER-03 | 구현됨 | (없음) |
+| FR-USER-03 | 구현됨 | UserEmaillessPersistenceTest |
 | FR-USER-04 | 구현됨 | AuthControllerTest, AuthServiceTest, OidcLoginServiceTest, UserEmaillessPersistenceTest, UserProfileControllerTest, UserProfileIntegrationTest |
 | FR-USER-05 | 계획 | FriendControllerTest, FriendIntegrationTest, FriendProfileIntegrationTest |
 | FR-USER-06 | 구현됨 | UserAccountDeletionIntegrationTest, UserRepositoryDeletionTest |
@@ -221,16 +223,7 @@
 
 ## 검증 공백: 구현됐는데 대응 테스트가 없다 (조치 대상)
 
-- FR-GRID-12 (구현됨)
-- FR-ZONE-08 (구현됨)
-- FR-ZONE-14 (구현됨)
-- FR-HOTZONE-01 (구현됨)
-- FR-HOTZONE-12 (구현됨)
-- FR-VIDEO-06 (구현됨)
-- FR-MEDIA-17 (구현됨)
-- FR-MEDIA-16 (구현됨)
-- FR-STREAK-02 (구현됨)
-- FR-USER-03 (구현됨)
+(없음)
 
 ## 미구현(계획)·폐기: 테스트 부재가 정상
 
@@ -251,6 +244,20 @@
 - FR-FRIEND-13 (계획)
 - FR-MOD-14 (계획)
 - FR-AUTH-12 (계획)
+
+## 성격상 테스트로 검증하지 않는 요구 (사유 정본: SRS 8장 목록)
+
+- FR-GRID-12: 일회성 이행의 계약 동결 조항이다. 이행이 끝난 지금 검증할 전환 이벤트가 없고, 현행 계약 자체는 각 API 테스트가 본다
+- FR-ZONE-14: 격자 체계 전환 때만 발생하는 일회성 이행 절차 요구라 상시 회귀 테스트가 성립하지 않는다. 미래 전환이 사각형 재산출을 잊지 않는 것은 테스트가 아니라 전환 티켓의 이행 절차가 보장할 일이다
+- FR-HOTZONE-01: 핫구역의 범위 단위가 격자라는 정의 조항이라 단정할 동작이 없다
+- FR-HOTZONE-12: 격자 체계 전환 때의 일회성 처리 방침이고, 이전 신호 폐기 허용은 부정형이라 상시 테스트 대상이 아니다
+- FR-VIDEO-06: 서버가 위치를 증명하지 않는다는 부정형 요구다. 하지 않는 동작은 단언할 대상이 없다
+- FR-MEDIA-17: 블러 처리는 AI 서버 쪽 판정이라 이 레포의 테스트 범위 밖이다
+- FR-MEDIA-16: 응답 시간 목표라 단위 테스트가 아니라 부하 테스트 영역이다. 수치 근거는 MSG-351 실측이다
+
+## 비대상 표기 점검 (표기와 실제가 어긋난 항목)
+
+(없음)
 
 ## 테스트에만 있고 SRS에 없는 ID (주석 오타 의심)
 
