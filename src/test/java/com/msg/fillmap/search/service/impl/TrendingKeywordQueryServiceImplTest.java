@@ -51,6 +51,7 @@ class TrendingKeywordQueryServiceImplTest {
 		}
 	}
 
+	// 검증: FR-SEARCH-07
 	@Test
 	void 오늘과_어제_합산_상위_10개가_순위와_검색어로_반환된다() {
 		String prefix = UUID.randomUUID().toString();
@@ -65,6 +66,7 @@ class TrendingKeywordQueryServiceImplTest {
 			new TrendingKeywordResponseDto(2, prefix + "-소수"));
 	}
 
+	// 검증: FR-SEARCH-07
 	@Test
 	void 그제_카운트는_순위에_반영되지_않는다() {
 		count(YESTERDAY.minusDays(1), UUID.randomUUID() + "-그제", 5);
@@ -72,11 +74,13 @@ class TrendingKeywordQueryServiceImplTest {
 		assertThat(trendingKeywordQueryService.findTop10()).isEmpty();
 	}
 
+	// 검증: FR-SEARCH-09
 	@Test
 	void 집계가_없으면_빈_목록을_반환한다() {
 		assertThat(trendingKeywordQueryService.findTop10()).isEmpty();
 	}
 
+	// 검증: FR-SEARCH-07
 	@Test
 	void 동률이면_키워드_사전순으로_순위가_결정된다() {
 		String prefix = UUID.randomUUID().toString();
@@ -89,6 +93,7 @@ class TrendingKeywordQueryServiceImplTest {
 			.containsExactly(prefix + "-a", prefix + "-b");
 	}
 
+	// 검증: FR-SEARCH-07
 	@Test
 	void 순위는_1부터_빈틈없이_부여된다() {
 		String prefix = UUID.randomUUID().toString();

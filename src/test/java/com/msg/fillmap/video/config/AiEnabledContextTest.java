@@ -19,6 +19,7 @@ import com.msg.fillmap.video.service.AiClient;
  *
  * 폴러 @Scheduled 는 기동 직후 1회 돌지만 BLURRING 영상이 없어 no-op 다 — AI 서버 연결도 시도하지 않는다.
  */
+// 검증: FR-MEDIA-05
 @SpringBootTest(properties = "ai.enabled=true")
 @DisplayName("AI 활성 컨텍스트 스모크")
 class AiEnabledContextTest {

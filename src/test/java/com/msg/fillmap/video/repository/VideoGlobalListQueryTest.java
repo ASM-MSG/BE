@@ -124,6 +124,7 @@ class VideoGlobalListQueryTest {
 		assertThat(list(성수_GRID, 20)).extracting(Video::getId).containsExactly(top, mid, low);
 	}
 
+	// 검증: FR-VIDEO-17
 	@Test
 	@DisplayName("비공개 PRIVATE 영상은 목록에 포함되지 않는다")
 	void 비공개_PRIVATE_영상은_목록에_포함되지_않는다() {
@@ -132,6 +133,7 @@ class VideoGlobalListQueryTest {
 		assertThat(list(성수_GRID, 20)).isEmpty();
 	}
 
+	// 검증: FR-VIDEO-17
 	@Test
 	@DisplayName("내 PRIVATE 영상도 전역 목록엔 포함되지 않는다 (§D1 축 구분 — 내 비공개는 my-videos 축)")
 	void 내_PRIVATE_영상도_전역_목록엔_포함되지_않는다() {

@@ -110,6 +110,7 @@ class VideoGlobalListViewCountIntegrationTest {
 		return LocalDateTime.of(2026, 7, 20, hour, 0, 0);
 	}
 
+	// 검증: FR-VIDEO-14
 	@Test
 	@DisplayName("타인 재생으로 오른 view_count 가 목록 인기순 정렬에 반영된다")
 	void 타인_재생으로_오른_view_count가_목록_인기순_정렬에_반영된다() {

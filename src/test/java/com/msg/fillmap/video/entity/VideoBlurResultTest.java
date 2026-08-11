@@ -134,6 +134,7 @@ class VideoBlurResultTest {
 	@DisplayName("엔티티 라운드트립")
 	class Roundtrip {
 
+		// 검증: FR-MEDIA-09
 		@Test
 		@DisplayName("블러본키와 하이라이트를 저장하고 다시 읽으면 값이 보존된다")
 		void 블러본키와_하이라이트를_저장하고_다시_읽으면_값이_보존된다() {
@@ -146,6 +147,7 @@ class VideoBlurResultTest {
 			assertThat(found.getHighlights()).containsExactly(List.of(2.0, 6.0));
 		}
 
+		// 검증: FR-MEDIA-09
 		@Test
 		@DisplayName("하이라이트 JSONB 는 구간 배열로 라운드트립된다")
 		void 하이라이트_JSONB는_구간_배열로_라운드트립된다() {
@@ -159,6 +161,7 @@ class VideoBlurResultTest {
 				.containsExactly(List.of(0.0, 3.0), List.of(10.0, 14.0));
 		}
 
+		// 검증: FR-MEDIA-09
 		@Test
 		@DisplayName("하이라이트 초는 소수점까지 라운드트립된다")
 		void 하이라이트_초는_소수점까지_라운드트립된다() {
@@ -188,6 +191,7 @@ class VideoBlurResultTest {
 	@DisplayName("CHECK 제약 위반")
 	class CheckConstraint {
 
+		// 검증: FR-MEDIA-09
 		@Test
 		@DisplayName("하이라이트가 4구간이면 제약 위반으로 저장에 실패한다")
 		void 하이라이트가_4구간이면_제약_위반으로_저장에_실패한다() {

@@ -48,6 +48,7 @@ class PushTokenControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-NOTI-01
 	@Test
 	@DisplayName("토큰을 등록하면 200과 body null 을 반환한다 — principal userId 정확값 전달")
 	void 토큰을_등록하면_200과_body_null을_반환한다() throws Exception {
@@ -120,6 +121,7 @@ class PushTokenControllerTest {
 			.andExpect(jsonPath("$.developCode").value(2403));
 	}
 
+	// 검증: FR-NOTI-01
 	@Test
 	@DisplayName("해제는 200과 body null 을 반환한다 — 멱등, principal userId + 토큰 그대로 전달(소유 검증)")
 	void 해제는_200과_body_null을_반환한다() throws Exception {

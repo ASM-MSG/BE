@@ -68,6 +68,7 @@ class NotificationPreferenceServiceIntegrationTest {
 				.executeUpdate());
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("설정 행이 없으면 모든 카테고리가 on 이다 — FR-7 opt-out 기본 (179 스텁 테스트 부재 해소)")
 	void 설정_행이_없으면_모든_카테고리가_on이다() {
@@ -81,6 +82,7 @@ class NotificationPreferenceServiceIntegrationTest {
 		}
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("카테고리를 off 하면 isEnabled 가 false 다 — FR-8 접점의 실구현 판정")
 	void 카테고리를_off하면_isEnabled가_false다() {
@@ -99,6 +101,7 @@ class NotificationPreferenceServiceIntegrationTest {
 				tuple(NotificationCategory.WEEKLY, true));
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("off 를 다시 on 하면 행이 삭제되고 isEnabled 가 true 다")
 	void off를_다시_on하면_행이_삭제되고_isEnabled가_true다() {
@@ -110,6 +113,7 @@ class NotificationPreferenceServiceIntegrationTest {
 		assertThat(optOutCount(me)).isZero();
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("off 중복 저장은 멱등이다 — ON CONFLICT DO NOTHING 경로, 행 1개 유지")
 	void off_중복_저장은_멱등이다() {
@@ -124,6 +128,7 @@ class NotificationPreferenceServiceIntegrationTest {
 			.containsExactly(false);
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("조회는 카테고리 5종 전부를 반환한다 — 부재 카테고리 on 합성, enum 선언 순 (MSG-315 WEEKLY 포함)")
 	void 조회는_카테고리_5종_전부를_반환한다() {
@@ -141,6 +146,7 @@ class NotificationPreferenceServiceIntegrationTest {
 				tuple(NotificationCategory.WEEKLY, true));
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("WEEKLY 카테고리를 토글하면 조회에 반영된다 — off/on 왕복 (MSG-315 FR-7)")
 	void WEEKLY_카테고리를_토글하면_조회에_반영된다() {
@@ -157,6 +163,7 @@ class NotificationPreferenceServiceIntegrationTest {
 		assertThat(optOutCount(me)).isZero();
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("VIDEO 카테고리를 토글하면 조회에 반영된다 — off/on 왕복 (MSG-313 FR-7)")
 	void VIDEO_카테고리를_토글하면_조회에_반영된다() {
@@ -173,6 +180,7 @@ class NotificationPreferenceServiceIntegrationTest {
 		assertThat(optOutCount(me)).isZero();
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("잘못된 카테고리는 10420 이다 — 소문자 badge 는 성공(대소문자 무시), FRIEND 는 10420")
 	void 잘못된_카테고리는_10420이다() {
@@ -184,6 +192,7 @@ class NotificationPreferenceServiceIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", NotificationErrorCode.INVALID_CATEGORY);
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("다른 사용자의 off 는 내 설정에 영향이 없다 — 복합 PK 격리")
 	void 다른_사용자의_off는_내_설정에_영향이_없다() {

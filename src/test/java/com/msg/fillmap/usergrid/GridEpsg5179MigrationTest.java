@@ -52,6 +52,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  * 좌표가 새 체계에서는 같은 셀(17413_7646)로 합쳐지고(FR-6 "점령 격자 수는 달라질 수 있다"), DELETED 영상은
  * 행은 살아남되(FR-5 유실 0건) video_count 에는 안 잡힌다.
  */
+// 검증: FR-GRID-11
 @SpringBootTest
 @Transactional
 @DisplayName("V28 격자 이행 (EPSG:5179 재구축, 실 PostGIS)")

@@ -111,6 +111,7 @@ class NotificationRelayTest {
 			em.createNativeQuery("DELETE FROM users WHERE id = :me").setParameter("me", me).executeUpdate());
 	}
 
+	// 검증: FR-NOTI-02
 	@Test
 	@DisplayName("PENDING 행을 발행하고 PUBLISHED 로 갱신한다 — 발행은 별도 그룹 재소비로 실증")
 	void PENDING_행을_발행하고_PUBLISHED로_갱신한다() {
@@ -122,6 +123,7 @@ class NotificationRelayTest {
 		assertThat(topicContains(String.valueOf(id))).isTrue();
 	}
 
+	// 검증: FR-NOTI-02
 	@Test
 	@DisplayName("발행 실패 시 상태가 유지돼 다음 주기에 재시도된다 — 브로커 오류 주입 시 배치 중단, PENDING 잔존")
 	@SuppressWarnings("unchecked")
@@ -161,6 +163,7 @@ class NotificationRelayTest {
 		assertThat(statusOf(third)).isEqualTo("PENDING");
 	}
 
+	// 검증: FR-NOTI-02
 	@Test
 	@DisplayName("오래된 PUBLISHED 행은 PENDING 으로 복구돼 재발행된다 — 컨슈머 장기 다운 대비, 최근 발행 행은 리셋 안 됨")
 	@SuppressWarnings("unchecked")

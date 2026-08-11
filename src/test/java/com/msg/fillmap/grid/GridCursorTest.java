@@ -16,6 +16,7 @@ class GridCursorTest {
 		return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
 	}
 
+	// 검증: FR-GRID-08
 	@Test
 	@DisplayName("커서는 gridY_gridX 를 Base64URL 로 왕복 인코딩한다")
 	void 커서는_gridY_gridX를_Base64URL로_왕복인코딩한다() {
@@ -29,6 +30,7 @@ class GridCursorTest {
 		assertThat(decoded.gridX()).isEqualTo(110460);
 	}
 
+	// 검증: FR-GRID-09
 	@Test
 	@DisplayName("형식이 틀린 커서 디코드는 예외다")
 	void 형식이_틀린_커서_디코드는_예외다() {

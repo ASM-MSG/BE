@@ -59,6 +59,7 @@ class NotificationPreferenceControllerTest {
 			new CategoryPreferenceDto(NotificationCategory.REMIND, NotificationCategory.REMIND != offCategory)));
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("설정을 조회하면 200과 카테고리별 상태를 반환한다 — principal userId 정확값 전달")
 	void 설정을_조회하면_200과_카테고리별_상태를_반환한다() throws Exception {
@@ -78,6 +79,7 @@ class NotificationPreferenceControllerTest {
 		then(notificationPreferenceService).should().getPreferences(USER_ID);
 	}
 
+	// 검증: FR-NOTI-06
 	@Test
 	@DisplayName("카테고리를 토글하면 변경 후 전체 상태를 반환한다 — category·enabled 그대로 전달")
 	void 카테고리를_토글하면_변경_후_전체_상태를_반환한다() throws Exception {

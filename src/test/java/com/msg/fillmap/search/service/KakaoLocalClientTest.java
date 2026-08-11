@@ -54,6 +54,7 @@ class KakaoLocalClientTest {
 		client = new KakaoLocalClient(restClient);
 	}
 
+	// 검증: FR-SEARCH-02, FR-SEARCH-03
 	@Test
 	void 키워드_검색은_KakaoAK_헤더와_query_size15로_요청한다() {
 		server.expect(requestTo(KEYWORD_URL))
@@ -66,6 +67,7 @@ class KakaoLocalClientTest {
 		server.verify();
 	}
 
+	// 검증: FR-SEARCH-01
 	@Test
 	void documents를_장소_결과로_매핑한다() {
 		// 카카오는 좌표(x/y)를 문자열로 준다 — double 파싱까지가 어댑터 계약이다 (x→lng, y→lat)
@@ -102,6 +104,7 @@ class KakaoLocalClientTest {
 		assertThat(places).extracting(KakaoPlace::roadAddressName).containsExactly("", "");
 	}
 
+	// 검증: FR-SEARCH-02
 	@Test
 	void 결과가_없으면_빈_리스트다() {
 		server.expect(requestTo(KEYWORD_URL))
@@ -110,6 +113,7 @@ class KakaoLocalClientTest {
 		assertThat(client.search("부산대")).isEmpty();
 	}
 
+	// 검증: FR-SEARCH-04
 	@Test
 	void 카카오_5xx면_5502_업스트림_예외다() {
 		server.expect(requestTo(KEYWORD_URL))
@@ -118,6 +122,7 @@ class KakaoLocalClientTest {
 		assertUpstreamError();
 	}
 
+	// 검증: FR-SEARCH-04
 	@Test
 	void 카카오_4xx도_5502로_수렴한다() {
 		// 401 = REST 키 문제 — 사용자 입력 잘못이 아니라 업스트림 실패이므로 400 계열로 새지 않고 5502 로 수렴한다(§D3)
@@ -127,6 +132,7 @@ class KakaoLocalClientTest {
 		assertUpstreamError();
 	}
 
+	// 검증: FR-SEARCH-04
 	@Test
 	void 타임아웃이면_5502_업스트림_예외다() {
 		server.expect(requestTo(KEYWORD_URL))
@@ -135,6 +141,7 @@ class KakaoLocalClientTest {
 		assertUpstreamError();
 	}
 
+	// 검증: FR-SEARCH-04
 	@Test
 	void documents_배열이_없는_2xx_응답은_5502로_수렴한다() {
 		// {} 같은 기형 성공 응답 — 빈 결과 200 으로 위장되면 스키마 변경을 못 잡는다(§D3, Codex P2)
@@ -144,6 +151,7 @@ class KakaoLocalClientTest {
 		assertUpstreamError();
 	}
 
+	// 검증: FR-SEARCH-04
 	@Test
 	void documents가_배열이_아니면_5502로_수렴한다() {
 		server.expect(requestTo(KEYWORD_URL))
@@ -152,6 +160,7 @@ class KakaoLocalClientTest {
 		assertUpstreamError();
 	}
 
+	// 검증: FR-SEARCH-04
 	@Test
 	void 본문이_JSON이_아니면_5502로_수렴한다() {
 		// 게이트웨이 장애 페이지(HTML) 등 — 파싱 실패도 업스트림 실패다(§D3)

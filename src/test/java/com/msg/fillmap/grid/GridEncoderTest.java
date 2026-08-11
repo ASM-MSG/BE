@@ -26,6 +26,7 @@ class GridEncoderTest {
 
 	// ==================== 정방향 (좌표 → 격자) ====================
 
+	// 검증: FR-GRID-01
 	@Test
 	void 강남역_좌표는_같은_격자로_매핑된다() {
 		assertThat(GridEncoder.encode(37.4979, 127.0276)).isEqualTo(GANGNAM_GRID_ID);
@@ -34,12 +35,14 @@ class GridEncoderTest {
 		assertThat(GridEncoder.encode(37.4978, 127.0280)).isEqualTo(GANGNAM_GRID_ID);
 	}
 
+	// 검증: FR-GRID-01
 	@Test
 	void 서로_다른_셀의_좌표는_다른_grid_id를_반환한다() {
 		assertThat(GridEncoder.encode(37.4989, 127.0276)).isNotEqualTo(GANGNAM_GRID_ID);   // 북쪽 한 칸 이상
 		assertThat(GridEncoder.encode(37.4979, 127.0290)).isNotEqualTo(GANGNAM_GRID_ID);   // 동쪽 한 칸 이상
 	}
 
+	// 검증: FR-GRID-01
 	@Test
 	void grid_id_포맷은_grid_y_언더바_grid_x_형식이다() {
 		GridEncoder.GridIndex index = GridEncoder.decode(GANGNAM_GRID_ID);
@@ -48,6 +51,7 @@ class GridEncoderTest {
 		assertThat(index.gridX()).isEqualTo(9582L);
 	}
 
+	// 검증: FR-GRID-01
 	@Test
 	void 서울과_부산과_제주에서_셀_변_길이가_모두_100m다() {
 		List<String> gridIds = List.of(
@@ -65,6 +69,7 @@ class GridEncoderTest {
 		}
 	}
 
+	// 검증: FR-GRID-02
 	@Test
 	void 셀_경계선_위의_좌표는_한_셀에만_속한다() {
 		// 셀 남서 꼭짓점에서 대각으로 약 1m 씩 움직이면 경계 안쪽은 그 셀, 바깥쪽은 남서 이웃 셀이다.
@@ -77,6 +82,7 @@ class GridEncoderTest {
 			.isEqualTo("19442_9581");
 	}
 
+	// 검증: FR-GRID-01
 	@Test
 	void encode_decode_왕복이_항등이다() {
 		String gridId = GridEncoder.encode(37.4979, 127.0276);
@@ -103,6 +109,7 @@ class GridEncoderTest {
 		assertThat(GridEncoder.encode(center.lat(), center.lon())).isEqualTo(GANGNAM_GRID_ID);
 	}
 
+	// 검증: FR-GRID-03
 	@Test
 	void bbox는_닫힌_링_5점을_유지한다() {
 		List<GridEncoder.GridPoint> ring = GridEncoder.bbox(GANGNAM_GRID_ID);
@@ -116,6 +123,7 @@ class GridEncoderTest {
 
 	// ==================== 뷰포트 범위 ====================
 
+	// 검증: FR-GRID-03
 	@Test
 	void 뷰포트_꼭짓점_4점의_minmax_범위가_뷰포트_안_모든_셀을_포함한다() {
 		// 중앙자오선(경도 127.5)에서 먼 부산 일대 — 격자 축 기울기가 커서 2점 방식의 누락이 드러난다.
@@ -147,6 +155,7 @@ class GridEncoderTest {
 
 	// ==================== 계약·동시성 ====================
 
+	// 검증: FR-GRID-05
 	@Test
 	void 계약_문자열은_내장_EPSG_5179_정의와_같은_격자를_만든다() {
 		// proj4j-epsg 레지스트리의 EPSG:5179 정의로 같은 좌표를 변환해 계약 문자열이 표준과 어긋나지 않음을 본다.

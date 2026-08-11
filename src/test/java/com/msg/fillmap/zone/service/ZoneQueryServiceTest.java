@@ -21,6 +21,7 @@ import com.msg.fillmap.zone.repository.ZoneRepository;
  * 컨트롤러 테스트는 서비스를 mock 하므로 impl·DTO 매핑은 여기가 실행형 검증이다
  * (검색 제거로 SearchServiceTest 가 지워지며 생긴 커버리지 공백 복원 — 2026-07-28).
  */
+// 검증: FR-ZONE-11
 @SpringBootTest
 @Transactional
 @DisplayName("ZoneQueryService 목록 조회 (실 PostgreSQL) — 합성 zone_key·롤백 격리")

@@ -91,6 +91,7 @@ class FestivalMissionSeederIntegrationTest {
 		return newSeeder(true, "unused");
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("플래그 off(기본)면 러너는 아무것도 하지 않는다 — 평시 기동 무영향")
 	void 플래그_off면_아무것도_하지_않는다() {
@@ -103,6 +104,7 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(festivalCount()).isEqualTo(before);
 	}
 
+	// 검증: FR-MISSION-08
 	@Test
 	@DisplayName("시드 실행이 EVENT 미션과 격자 81행을 적재한다 — target_count=1·seq NULL·region_code NULL")
 	void 시드_실행이_EVENT_미션과_격자_81행을_적재한다() throws IOException {
@@ -132,6 +134,7 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(grids).extracting(MissionGrid::getGridId).contains(GridEncoder.encode(합성_LAT, 합성_LON));
 	}
 
+	// 검증: FR-MISSION-08
 	@Test
 	@DisplayName("같은 파일 재실행은 신규 0건이다 — 중심 격자+기간 dedupe 멱등")
 	void 같은_파일_재실행은_신규_0건이다() throws IOException {
@@ -160,6 +163,7 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(gridCountOf(endedId)).isZero();
 	}
 
+	// 검증: FR-MISSION-04
 	@Test
 	@DisplayName("스탬프 걸린 종료 미션은 삭제되지 않는다 — V6 FK(NO ACTION) 보호")
 	void 스탬프_걸린_종료_미션은_삭제되지_않는다() {
@@ -187,6 +191,7 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(missionRepository.findById(course)).isPresent();
 	}
 
+	// 검증: FR-MISSION-08
 	@Test
 	@DisplayName("1격자 EVENT 는 dedupe 대조에 포함되지 않는다 — 가짜 중심 키가 실축제를 오스킵하지 않는다")
 	void 일격자_EVENT는_dedupe_대조에_포함되지_않는다() throws IOException {
@@ -221,6 +226,7 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(missionRepository.findById(ended)).isEmpty();
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("파일이 없으면 예외로 조기 실패한다 — 조용한 no-op 금지 (FR-5)")
 	void 파일이_없으면_예외로_조기_실패한다() {
@@ -231,6 +237,7 @@ class FestivalMissionSeederIntegrationTest {
 			.hasMessageContaining("jsonl");
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("유효 0건이면 예외로 조기 실패한다 — 전부 종료된 스냅샷 방어 (FR-5)")
 	void 유효_0건이면_예외로_조기_실패한다() throws IOException {
@@ -241,6 +248,7 @@ class FestivalMissionSeederIntegrationTest {
 			.hasMessageContaining("0건");
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@Transactional(propagation = Propagation.NOT_SUPPORTED)
 	@DisplayName("중간 실패 시 전체 롤백으로 기존 데이터가 유지된다 — INSERT·DELETE 단일 트랜잭션 (FR-5)")

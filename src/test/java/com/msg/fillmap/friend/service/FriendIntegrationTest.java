@@ -75,6 +75,7 @@ class FriendIntegrationTest {
 			User.createLocalUser("friend-" + UUID.randomUUID() + "@example.com", "hash", nickname));
 	}
 
+	// 검증: FR-FRIEND-01
 	@Test
 	@DisplayName("내 친구 코드를 조회한다 (FR-1)")
 	void 내_친구_코드를_조회한다() {
@@ -82,12 +83,14 @@ class FriendIntegrationTest {
 			.isEqualTo(me.getFriendCode());
 	}
 
+	// 검증: FR-FRIEND-02
 	@Test
 	@DisplayName("코드로 상대 닉네임을 미리본다 (FR-3)")
 	void 코드로_상대_닉네임을_미리본다() {
 		assertThat(friendService.preview(other.getFriendCode()).nickname()).isEqualTo("상대방");
 	}
 
+	// 검증: FR-FRIEND-02
 	@Test
 	@DisplayName("없는 코드 미리보기는 9404 다")
 	void 없는_코드_미리보기는_9404를_반환한다() {
@@ -96,6 +99,7 @@ class FriendIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIEND_CODE_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-02
 	@Test
 	@DisplayName("코드로 요청하면 PENDING 행이 생긴다 (FR-4)")
 	void 코드로_요청하면_PENDING_행이_생긴다() {
@@ -107,6 +111,7 @@ class FriendIntegrationTest {
 		assertThat(saved.getRespondedAt()).isNull();
 	}
 
+	// 검증: FR-FRIEND-02
 	@Test
 	@DisplayName("자기 코드로 요청하면 9400 이다 (FR-5)")
 	void 자기_코드로_요청하면_9400을_반환한다() {
@@ -115,6 +120,7 @@ class FriendIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.SELF_FRIEND_REQUEST);
 	}
 
+	// 검증: FR-FRIEND-02
 	@Test
 	@DisplayName("없는 코드로 요청하면 9404 다 (FR-6)")
 	void 없는_코드로_요청하면_9404를_반환한다() {
@@ -123,6 +129,7 @@ class FriendIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIEND_CODE_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-02
 	@Test
 	@DisplayName("이미 친구면 재요청은 방향 무관 9409 다 (FR-7)")
 	void 이미_친구면_재요청은_9409를_반환한다() {
@@ -138,6 +145,7 @@ class FriendIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.ALREADY_FRIENDS);
 	}
 
+	// 검증: FR-FRIEND-02
 	@Test
 	@DisplayName("내가 보낸 요청이 대기 중이면 재요청은 9410 이다 (FR-7)")
 	void 내가_보낸_요청이_대기중이면_재요청은_9410을_반환한다() {
@@ -148,6 +156,7 @@ class FriendIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIEND_REQUEST_ALREADY_PENDING);
 	}
 
+	// 검증: FR-FRIEND-03
 	@Test
 	@DisplayName("역방향 대기 요청에 요청하면 자동 수락된다 — 행 1개 유지 (FR-8)")
 	void 역방향_대기_요청에_요청하면_자동_수락된다() {
@@ -183,6 +192,7 @@ class FriendIntegrationTest {
 		assertThat(received.get(1).requesterId()).isEqualTo(other.getId());
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("수락하면 ACCEPTED 와 responded_at 이 기록된다 (FR-10)")
 	void 수락하면_ACCEPTED와_responded_at이_기록된다() {
@@ -198,6 +208,7 @@ class FriendIntegrationTest {
 		assertThat(accepted.getRespondedAt()).isNotNull();
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("타인의 요청은 수락 경로에서 조회되지 않아 9414 다 (FR-13)")
 	void 타인의_요청은_수락_경로에서_조회되지_않아_9414다() {
@@ -218,6 +229,7 @@ class FriendIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIEND_REQUEST_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("거절하면 행이 삭제된다 (FR-11·§D3)")
 	void 거절하면_행이_삭제된다() {
@@ -228,6 +240,7 @@ class FriendIntegrationTest {
 		assertThat(friendshipRepository.findPair(me.getId(), other.getId())).isEmpty();
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("거절 후 상대는 같은 요청을 다시 보낼 수 있다 (FR-11·§D3 불변식)")
 	void 거절_후_상대는_같은_요청을_다시_보낼_수_있다() {
@@ -239,6 +252,7 @@ class FriendIntegrationTest {
 		assertThat(status).isEqualTo(FriendshipStatus.PENDING);
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("친구 삭제는 방향 무관하게 행을 지운다 (FR-12)")
 	void 친구_삭제는_방향_무관하게_행을_지운다() {
@@ -273,6 +287,7 @@ class FriendIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-06, FR-USER-05
 	@Test
 	@DisplayName("친구 목록은 방향 무관하게 수락 시각 내림차순이다 (MSG-186 FR-1·2)")
 	void 친구_목록은_방향_무관하게_수락_시각_내림차순이다() {
@@ -292,6 +307,7 @@ class FriendIntegrationTest {
 		assertThat(friends.get(1).userId()).isEqualTo(other.getId());
 	}
 
+	// 검증: FR-FRIEND-06
 	@Test
 	@DisplayName("sort=nickname 이면 닉네임순이고 동명이인은 id 순이다 (FR-2)")
 	void sort_nickname_이면_닉네임순으로_정렬된다() {
@@ -312,12 +328,14 @@ class FriendIntegrationTest {
 			.containsExactly(aaaFirst.getId(), aaaSecond.getId(), bbb.getId());
 	}
 
+	// 검증: FR-FRIEND-06
 	@Test
 	@DisplayName("친구가 없으면 빈 목록이다 — 에러 아님 (FR-4)")
 	void 친구가_없으면_빈_목록이다() {
 		assertThat(friendService.getFriends(me.getId(), null)).isEmpty();
 	}
 
+	// 검증: FR-FRIEND-06
 	@Test
 	@DisplayName("대기 중 요청 상대는 친구 목록에 없다 (FR-1)")
 	void 대기중_요청_상대는_친구_목록에_없다() {
@@ -326,6 +344,7 @@ class FriendIntegrationTest {
 		assertThat(friendService.getFriends(me.getId(), null)).isEmpty();
 	}
 
+	// 검증: FR-FRIEND-06
 	@Test
 	@DisplayName("잘못된 sort 값은 9420 이다 (§D3)")
 	void 잘못된_sort_값은_9420을_반환한다() {
@@ -334,6 +353,7 @@ class FriendIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.INVALID_FRIEND_SORT);
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("친구 삭제 후 목록에서 즉시 사라진다 (FR-8)")
 	void 친구_삭제_후_목록에서_즉시_사라진다() {
@@ -350,6 +370,7 @@ class FriendIntegrationTest {
 		friendService.accept(addressee.getId(), requester.getId());
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("ACCEPTED 행이 있으면 방향과 무관하게 친구다 (MSG-285 FR-4)")
 	void ACCEPTED_행이_있으면_방향과_무관하게_친구다() {
@@ -372,6 +393,7 @@ class FriendIntegrationTest {
 		assertThat(friendshipQueryService.isFriend(other.getId(), me.getId())).as("대기 중 요청 역방향").isFalse();
 	}
 
+	// 검증: FR-FRIEND-09
 	@Test
 	@DisplayName("친구 삭제 직후 친구 판정이 즉시 false 가 된다 (MSG-285 FR-6 실시간 판정)")
 	void 친구_삭제_직후_친구_판정은_false다() {

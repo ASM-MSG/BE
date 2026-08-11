@@ -62,6 +62,7 @@ class MissionTypeBadgeSeedTest {
 	@DisplayName("마스터 시딩")
 	class 마스터_시딩 {
 
+		// 검증: FR-BADGE-01, FR-BADGE-12
 		@Test
 		@DisplayName("종류별 뱃지 9종이 임계값 1·3·10 으로 시딩된다")
 		void 종류별_뱃지_9종이_임계값_1_3_10으로_시딩된다() {
@@ -71,6 +72,7 @@ class MissionTypeBadgeSeedTest {
 			assertThat(seededTiers("POPUP_COUNT")).containsExactly("POPUP_1:1", "POPUP_3:3", "POPUP_10:10");
 		}
 
+		// 검증: FR-BADGE-12
 		@Test
 		@DisplayName("condition_type CHECK 가 종류별 축 3종을 허용한다 — enum 과 동기(§D1)")
 		void condition_type_CHECK가_종류별_축_3종을_허용한다() {
@@ -80,6 +82,7 @@ class MissionTypeBadgeSeedTest {
 			assertThat(insertSynthetic("POPUP_COUNT")).isEqualTo(1);
 		}
 
+		// 검증: FR-BADGE-12
 		@Test
 		@DisplayName("합산 뱃지 3종은 retired_at 이 채워져 있다 — 행은 남기고 지급만 끊는다(§D2)")
 		void 합산_뱃지_3종은_retired_at이_채워져_있다() {
@@ -130,6 +133,7 @@ class MissionTypeBadgeSeedTest {
 	@DisplayName("합산 뱃지 은퇴 (§D2)")
 	class 합산_뱃지_은퇴 {
 
+		// 검증: FR-BADGE-12
 		@Test
 		@DisplayName("은퇴 뱃지는 지급 후보로 조회되지 않는다 — 도달 불가 임계여도(FR-3)")
 		void 은퇴_뱃지는_지급_후보로_조회되지_않는다() {
@@ -141,6 +145,7 @@ class MissionTypeBadgeSeedTest {
 			assertThat(eligible).isEmpty();
 		}
 
+		// 검증: FR-BADGE-12
 		@Test
 		@DisplayName("은퇴 뱃지는 획득자에게만 목록에 보인다 — 미획득자에겐 회색 칸조차 없다(FR-4)")
 		void 은퇴_뱃지는_획득자에게만_목록에_보인다() {
@@ -163,6 +168,7 @@ class MissionTypeBadgeSeedTest {
 	@DisplayName("소급 지급 (§V29 5번 블록)")
 	class 소급_지급 {
 
+		// 검증: FR-BADGE-06, FR-BADGE-12
 		@Test
 		@DisplayName("소급 SQL 은 종류별로 충족 티어만 지급한다 — 축제 5곳이면 1·3 만(엣지 케이스 2)")
 		void 소급_SQL은_종류별로_충족_티어만_지급한다() {
@@ -175,6 +181,7 @@ class MissionTypeBadgeSeedTest {
 			assertThat(earnedCodes(me)).containsExactlyInAnyOrder("EVENT_1", "EVENT_3", "POPUP_1");
 		}
 
+		// 검증: FR-BADGE-12
 		@Test
 		@DisplayName("소급 SQL 은 구역·테마·지속 스탬프를 대상으로 삼지 않는다 (FR-6)")
 		void 소급_SQL은_구역_테마_지속_스탬프를_대상으로_삼지_않는다() {
@@ -188,6 +195,7 @@ class MissionTypeBadgeSeedTest {
 			assertThat(earnedCodes(me)).isEmpty();
 		}
 
+		// 검증: FR-BADGE-06, FR-BADGE-12
 		@Test
 		@DisplayName("소급 SQL 은 재실행해도 중복 row 가 생기지 않는다 — ON CONFLICT 멱등")
 		void 소급_SQL은_재실행해도_중복_row가_생기지_않는다() {
@@ -200,6 +208,7 @@ class MissionTypeBadgeSeedTest {
 			assertThat(earnedCodes(me)).containsExactlyInAnyOrder("COURSE_1", "COURSE_3");
 		}
 
+		// 검증: FR-BADGE-06, FR-BADGE-12
 		@Test
 		@DisplayName("소급 지급분은 notified_at 이 NULL 이다 — 다음 조회에서 '새 뱃지' 표시")
 		void 소급_지급분은_notified_at이_NULL이다() {

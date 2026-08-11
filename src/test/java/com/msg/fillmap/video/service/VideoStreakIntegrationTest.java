@@ -68,6 +68,7 @@ class VideoStreakIntegrationTest {
 		userId = userRepository.save(User.createLocalUser(email, "hash", "스트릭훅테스터")).getId();
 	}
 
+	// 검증: FR-STREAK-01
 	@Test
 	@DisplayName("재방문 업로드도 스트릭을 갱신한다 — 훅은 점령 분기 바깥(§D1)")
 	void 재방문_업로드도_스트릭을_갱신한다() {
@@ -93,6 +94,7 @@ class VideoStreakIntegrationTest {
 			.contains("EXPLORER_1", "STREAK_3");
 	}
 
+	// 검증: FR-STREAK-05
 	@Test
 	@DisplayName("영상 삭제는 스트릭을 변경하지 않는다 — 소급 차감 없음(§D4)")
 	void 영상_삭제는_스트릭을_변경하지_않는다() {

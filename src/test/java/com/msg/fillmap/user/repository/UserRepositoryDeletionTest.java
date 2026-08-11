@@ -77,12 +77,14 @@ class UserRepositoryDeletionTest {
 				.getSingleResult();
 		}
 
+		// 검증: FR-USER-11
 		@Test
 		@DisplayName("reporter_id FK 는 ON DELETE CASCADE 다 — 그가 한 신고는 함께 삭제 (FR-6)")
 		void reporter_FK는_CASCADE_정책이다() {
 			assertThat(onDeleteTypeOf("reports_reporter_id_fkey")).isEqualTo("c");
 		}
 
+		// 검증: FR-USER-11
 		@Test
 		@DisplayName("reviewed_by FK 는 ON DELETE SET NULL 이다 — 검토자 기록만 비움 (FR-6)")
 		void reviewed_by_FK는_SET_NULL_정책이다() {
@@ -94,6 +96,7 @@ class UserRepositoryDeletionTest {
 	@DisplayName("findAllS3KeysByUserId — 계정 삭제용 S3 키 수집")
 	class FindAllS3Keys {
 
+		// 검증: FR-USER-08
 		@Test
 		void 소프트_삭제된_영상_포함_그_유저_영상의_4컬럼_키를_전량_수집한다() {
 			long userId = createUser();
@@ -110,6 +113,7 @@ class UserRepositoryDeletionTest {
 				.containsExactlyInAnyOrder("k-original", "k-encoded", "k-thumb", "k-blurred", "k-deleted-original");
 		}
 
+		// 검증: FR-USER-08
 		@Test
 		void 타_사용자의_영상_키는_수집되지_않는다() {
 			long userId = createUser();
@@ -130,6 +134,7 @@ class UserRepositoryDeletionTest {
 				.setParameter("u", userId).getSingleResult()).longValue();
 		}
 
+		// 검증: FR-USER-06
 		@Test
 		void 존재하는_유저를_지우면_1을_반환하고_users_행이_사라진다() {
 			long userId = createUser();

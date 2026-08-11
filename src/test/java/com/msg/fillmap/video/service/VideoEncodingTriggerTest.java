@@ -47,6 +47,7 @@ class VideoEncodingTriggerTest {
 
 	private static final long USER_ID = 1L;
 
+	// 검증: FR-MEDIA-02
 	@Test
 	void 큐가_포화여도_업로드는_성공하고_FAILED_로_기록된다() {
 		VideoRepository repository = mock(VideoRepository.class);

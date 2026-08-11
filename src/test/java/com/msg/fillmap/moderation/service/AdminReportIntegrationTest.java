@@ -123,6 +123,7 @@ class AdminReportIntegrationTest {
 		return response.items().stream().filter(item -> reportIds.contains(item.reportId())).toList();
 	}
 
+	// 검증: FR-MOD-09
 	@Test
 	@DisplayName("신고 목록 기본 조회는 PENDING 을 최신 접수 순으로 반환한다 (FR-1)")
 	void 신고_목록_기본_조회는_PENDING을_최신_접수_순으로_반환한다() {
@@ -139,6 +140,7 @@ class AdminReportIntegrationTest {
 			.containsExactly(newer, older);
 	}
 
+	// 검증: FR-MOD-09
 	@Test
 	@DisplayName("목록 항목에 신고자와 영상 소유자 닉네임이 담긴다 (FR-2)")
 	void 목록_항목에_신고자와_영상_소유자_닉네임이_담긴다() {
@@ -160,6 +162,7 @@ class AdminReportIntegrationTest {
 		assertThat(item.reviewedAt()).isNull();
 	}
 
+	// 검증: FR-MOD-09
 	@Test
 	@DisplayName("상태 필터를 RESOLVED 로 바꾸면 처리된 신고와 처리 이력이 온다 (FR-1)")
 	void 상태_필터를_RESOLVED로_바꾸면_처리된_신고와_처리_이력이_온다() {
@@ -177,6 +180,7 @@ class AdminReportIntegrationTest {
 		assertThat(item.reviewedAt()).isNotNull();
 	}
 
+	// 검증: FR-MOD-09
 	@Test
 	@DisplayName("소문자 상태 값도 받는다 — 파싱은 대소문자 무관 (FR-1)")
 	void 소문자_상태_값도_받는다() {
@@ -185,6 +189,7 @@ class AdminReportIntegrationTest {
 		assertThat(mine(adminReportService.getReports("pending", 0, 20), List.of(reportId))).hasSize(1);
 	}
 
+	// 검증: FR-MOD-09
 	@Test
 	@DisplayName("REVIEWING 은 유효한 필터지만 만드는 경로가 없어 빈 목록이다")
 	void REVIEWING은_유효한_필터지만_빈_목록이다() {
@@ -193,6 +198,7 @@ class AdminReportIntegrationTest {
 		assertThat(mine(adminReportService.getReports("REVIEWING", 0, 20), List.of(reportId))).isEmpty();
 	}
 
+	// 검증: FR-MOD-09
 	@Test
 	@DisplayName("size 만큼 끊어 내려주고 다음 페이지에 나머지가 온다 (§D5 오프셋 페이징)")
 	void size_만큼_끊어_내려주고_다음_페이지에_나머지가_온다() {
@@ -210,6 +216,7 @@ class AdminReportIntegrationTest {
 		assertThat(page0.totalPages()).isEqualTo((int) page0.totalElements());
 	}
 
+	// 검증: FR-MOD-09
 	@Test
 	@DisplayName("지원하지 않는 상태 값은 400 이다 (11420)")
 	void 지원하지_않는_상태_값은_400이다() {
@@ -252,6 +259,7 @@ class AdminReportIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.INVALID_PAGE_REQUEST);
 	}
 
+	// 검증: FR-MOD-11
 	@Test
 	@DisplayName("승인하면 신고가 RESOLVED, 영상이 BLINDED 가 된다 (FR-4)")
 	void 승인하면_신고가_RESOLVED_영상이_BLINDED가_된다() {
@@ -267,6 +275,7 @@ class AdminReportIntegrationTest {
 		assertThat(videoRepository.findById(videoId).orElseThrow().getStatus()).isEqualTo(VideoStatus.BLINDED);
 	}
 
+	// 검증: FR-MOD-11
 	@Test
 	@DisplayName("승인 시 처리자와 처리 시각이 기록된다 (FR-4)")
 	void 승인_시_처리자와_처리_시각이_기록된다() {
@@ -281,6 +290,7 @@ class AdminReportIntegrationTest {
 		assertThat(response.reviewedAt()).isNotNull();
 	}
 
+	// 검증: FR-MOD-12
 	@Test
 	@DisplayName("이미 블라인드된 영상의 신고 승인은 영상 전이 없이 신고만 종결한다 (FR-5)")
 	void 이미_블라인드된_영상의_신고_승인은_영상_전이_없이_신고만_종결한다() {
@@ -295,6 +305,7 @@ class AdminReportIntegrationTest {
 		assertThat(reportRepository.findById(reportId).orElseThrow().getStatus()).isEqualTo(ReportStatus.RESOLVED);
 	}
 
+	// 검증: FR-MOD-12
 	@Test
 	@DisplayName("삭제된 영상의 신고 승인도 신고만 종결한다 (FR-5)")
 	void 삭제된_영상의_신고_승인도_신고만_종결한다() {
@@ -321,6 +332,7 @@ class AdminReportIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.REPORT_NOT_FOUND);
 	}
 
+	// 검증: FR-MOD-12
 	@Test
 	@DisplayName("이미 처리된 신고의 재승인·재기각은 409 다 (FR-7, 11410)")
 	void 이미_처리된_신고의_재승인은_409다() {
@@ -335,6 +347,7 @@ class AdminReportIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.ALREADY_PROCESSED_REPORT);
 	}
 
+	// 검증: FR-MOD-11
 	@Test
 	@DisplayName("기각하면 신고만 REJECTED 가 되고 영상은 그대로다 (FR-6)")
 	void 기각하면_신고만_REJECTED가_되고_영상은_그대로다() {
@@ -351,6 +364,7 @@ class AdminReportIntegrationTest {
 		assertThat(videoRepository.findById(videoId).orElseThrow().getStatus()).isEqualTo(VideoStatus.ACTIVE);
 	}
 
+	// 검증: FR-MOD-07, FR-MOD-11
 	@Test
 	@DisplayName("대표 영상 신고 승인 시 남은 ACTIVE 영상으로 대표가 재선정된다 (blind 위임 확인)")
 	void 대표_영상_신고_승인_시_남은_ACTIVE_영상으로_대표가_재선정된다() {
@@ -369,6 +383,7 @@ class AdminReportIntegrationTest {
 		assertThat(cover.longValue()).isEqualTo(secondVideoId);
 	}
 
+	// 검증: FR-MOD-05, FR-MOD-13
 	@Test
 	@DisplayName("해제하면 영상이 ACTIVE 로 돌아오고 신고는 RESOLVED 로 남는다 (FR-8)")
 	void 해제하면_영상이_ACTIVE로_돌아오고_신고는_RESOLVED로_남는다() {
@@ -384,6 +399,7 @@ class AdminReportIntegrationTest {
 			.as("해제는 신고 상태를 되돌리지 않는다").isEqualTo(ReportStatus.RESOLVED);
 	}
 
+	// 검증: FR-MOD-05
 	@Test
 	@DisplayName("이미 ACTIVE 인 영상의 해제는 409 다 (3409)")
 	void 이미_ACTIVE인_영상의_해제는_409다() {
@@ -392,6 +408,7 @@ class AdminReportIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.ALREADY_IN_TARGET_STATUS);
 	}
 
+	// 검증: FR-MOD-05
 	@Test
 	@DisplayName("삭제된 영상의 해제는 404 다 (3404)")
 	void 삭제된_영상의_해제는_404다() {
@@ -403,6 +420,7 @@ class AdminReportIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
+	// 검증: FR-MOD-10
 	@Test
 	@DisplayName("BLINDED 영상에도 재생 URL 이 발급되고, 블러본이 있으면 블러본을 서명한다 (FR-3)")
 	void BLINDED_영상에도_재생_URL이_발급된다() {
@@ -423,6 +441,7 @@ class AdminReportIntegrationTest {
 		assertThat(response.expiresInSec()).isEqualTo(600L);
 	}
 
+	// 검증: FR-MOD-10
 	@Test
 	@DisplayName("PRIVATE 영상도 관리자는 확인할 수 있다 — 블러본이 없으면 인코딩본 폴백 (FR-3)")
 	void PRIVATE_영상도_관리자는_확인할_수_있다() {
@@ -438,6 +457,7 @@ class AdminReportIntegrationTest {
 		assertThat(response.playbackUrl()).isEqualTo("https://signed/videos/encoded/m195.mp4");
 	}
 
+	// 검증: FR-MOD-10
 	@Test
 	@DisplayName("관리자 확인은 조회수를 올리지 않는다 (FR-3)")
 	void 관리자_확인은_조회수를_올리지_않는다() {
@@ -453,6 +473,7 @@ class AdminReportIntegrationTest {
 		assertThat(viewCount.longValue()).isZero();
 	}
 
+	// 검증: FR-MOD-10
 	@Test
 	@DisplayName("READY 이전 영상은 재생 URL 이 null 이다 (FR-3)")
 	void READY_이전_영상은_재생_URL이_null이다() {

@@ -130,6 +130,7 @@ class HotZoneEntryDetectorTest {
 		});
 	}
 
+	// 검증: FR-NOTI-09
 	@Test
 	void 신규_진입_격자를_점령한_사용자마다_HOTZONE_알림이_기록된다() {
 		tx.executeWithoutResult(status -> {
@@ -148,6 +149,7 @@ class HotZoneEntryDetectorTest {
 		assertThat(notificationCount(user2, eventKey)).isEqualTo(1);
 	}
 
+	// 검증: FR-NOTI-09
 	@Test
 	void 직전_사이클에도_핫구역이던_격자는_다시_기록하지_않는다() {
 		tx.executeWithoutResult(status -> GridFixtures.seedUserGrid(em, user1, GRID_A, 1));
@@ -159,6 +161,7 @@ class HotZoneEntryDetectorTest {
 		assertThat(notificationCount(user1, "HOTZONE:" + KST_DATE + ":" + GRID_A)).isZero();
 	}
 
+	// 검증: FR-NOTI-09
 	@Test
 	void 같은_날_이탈_후_재진입은_중복_기록되지_않는다() {
 		tx.executeWithoutResult(status -> GridFixtures.seedUserGrid(em, user1, GRID_A, 1));
@@ -183,6 +186,7 @@ class HotZoneEntryDetectorTest {
 		assertThat(redisTemplate.opsForSet().members(SNAPSHOT_KEY)).containsExactlyInAnyOrder(GRID_A, GRID_B);
 	}
 
+	// 검증: FR-NOTI-09
 	@Test
 	void 점령_사용자가_없는_격자는_기록_없이_스냅숏만_갱신된다() {
 		score(GRID_B, 3);

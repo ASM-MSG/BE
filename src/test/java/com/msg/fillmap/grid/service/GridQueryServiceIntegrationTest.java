@@ -154,6 +154,7 @@ class GridQueryServiceIntegrationTest {
 		return page.items().stream().map(OccupiedGridView::gridId).toList();
 	}
 
+	// 검증: FR-GRID-06
 	@Test
 	@DisplayName("미점령 격자 조회는 occupied 가 거짓이고 videoCount 가 0 이다")
 	void 미점령_격자_조회는_occupied가_거짓이고_videoCount가_0이다() {
@@ -164,6 +165,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.videoCount()).isZero();
 	}
 
+	// 검증: FR-GRID-06
 	@Test
 	@DisplayName("점령 격자 조회는 occupied 가 참이고 videoCount 를 반환한다")
 	void 점령_격자_조회는_occupied가_참이고_videoCount를_반환한다() {
@@ -173,6 +175,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.videoCount()).isEqualTo(3);
 	}
 
+	// 검증: FR-GRID-07
 	@Test
 	@DisplayName("뷰포트 조회는 내가 점령한 격자 목록을 최소 필드로 반환한다")
 	void 뷰포트_조회는_내가_점령한_격자_목록을_최소필드로_반환한다() {
@@ -185,6 +188,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.gridX()).isEqualTo((int) baseX);
 	}
 
+	// 검증: FR-ZONE-03, FR-ZONE-05
 	@Test
 	@DisplayName("구역 안 단일 격자 조회는 구역 이름과 위치 코드를 함께 담는다 (MSG-341 FR-1)")
 	void 단일_격자_조회는_구역_안이면_zoneName과_zoneCell을_담는다() {
@@ -195,6 +199,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.zoneCell()).isEqualTo("C-1");
 	}
 
+	// 검증: FR-ZONE-06
 	@Test
 	@DisplayName("미점령 격자도 구역 안이면 이름이 계산된다 (격자는 논리 개념 — grids row·점령 무관, FR-4)")
 	void 미점령_격자도_구역_안이면_이름이_계산된다() {
@@ -205,6 +210,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.zoneCell()).isEqualTo("B-2");
 	}
 
+	// 검증: FR-ZONE-04
 	@Test
 	@DisplayName("구역 밖 격자는 zoneName·zoneCell 이 모두 null 이다 (폴백 조립은 클라이언트 몫, FR-3)")
 	void 구역_밖_격자는_두_필드가_모두_null이다() {
@@ -215,6 +221,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.zoneCell()).isNull();
 	}
 
+	// 검증: FR-REGION-09
 	@Test
 	@DisplayName("미점령 격자 단일 조회도 regionName 을 준다 (MSG-349 FR-3)")
 	void 미점령_격자_단일_조회도_regionName을_준다() {
@@ -225,6 +232,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.regionName()).isEqualTo(REGION_NAME);
 	}
 
+	// 검증: FR-REGION-11
 	@Test
 	@DisplayName("점령 격자 단일 조회의 regionName 이 저장 라벨과 같다 (MSG-349 FR-6 술어 동일성)")
 	void 점령_격자_단일_조회의_regionName이_저장_라벨과_같다() {
@@ -235,6 +243,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(fromCenter).isEqualTo(REGION_NAME).isEqualTo(fromStoredLabel);
 	}
 
+	// 검증: FR-REGION-10
 	@Test
 	@DisplayName("무귀속 격자 단일 조회는 regionName 이 null 이다 (MSG-349 FR-5)")
 	void 무귀속_격자_단일_조회는_regionName이_null이다() {
@@ -246,6 +255,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.regionName()).isNull();
 	}
 
+	// 검증: FR-REGION-10
 	@Test
 	@DisplayName("서비스 범위 밖 격자 단일 조회는 에러 없이 regionName 이 null 이다 (MSG-349 FR-8 · 6400 흡수)")
 	void 서비스_범위_밖_격자_단일_조회는_에러_없이_regionName_null이다() {
@@ -258,6 +268,7 @@ class GridQueryServiceIntegrationTest {
 		verifyNoInteractions(regionQueryService);
 	}
 
+	// 검증: FR-ZONE-05, FR-ZONE-09
 	@Test
 	@DisplayName("뷰포트 페이지 항목마다 구역 이름이 붙고 zones 로드는 요청당 1회다 (N+1 금지, FR-8)")
 	void 뷰포트_페이지_항목마다_구역_이름이_붙고_zones_조회는_1회다() {
@@ -272,6 +283,7 @@ class GridQueryServiceIntegrationTest {
 		verify(zoneNameQueryService, times(1)).resolver();
 	}
 
+	// 검증: FR-ZONE-05, FR-REGION-08
 	@Test
 	@DisplayName("구역 안 격자는 zoneName 과 regionName 이 함께 실린다 (MSG-349 FR-9)")
 	void 구역_안_격자는_zoneName과_regionName이_함께_실린다() {
@@ -284,6 +296,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(result.get(0).regionName()).isEqualTo(REGION_NAME);
 	}
 
+	// 검증: FR-ZONE-04, FR-REGION-08
 	@Test
 	@DisplayName("구역 밖 격자는 zoneName 없이 regionName 만 실린다 (MSG-349 FR-1)")
 	void 구역_밖_격자는_zoneName_없이_regionName만_실린다() {
@@ -301,6 +314,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.regionName()).isEqualTo(REGION_NAME);
 	}
 
+	// 검증: FR-REGION-08, FR-REGION-12
 	@Test
 	@DisplayName("뷰포트 조회는 행정동 이름을 추가 쿼리 없이 같은 쿼리로 읽는다 (MSG-349 비기능 성능)")
 	void 뷰포트_조회는_행정동_이름을_추가_쿼리_없이_같은_쿼리로_읽는다() {
@@ -317,6 +331,7 @@ class GridQueryServiceIntegrationTest {
 		verifyNoInteractions(regionQueryService);
 	}
 
+	// 검증: FR-GRID-08, FR-REGION-10
 	@Test
 	@DisplayName("커서 페이지네이션 순서는 조인 후에도 불변이다 (MSG-349 회귀)")
 	void 커서_페이지네이션_순서는_조인_후에도_불변이다() {
@@ -333,6 +348,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(page2.items().get(0).regionName()).isNull();
 	}
 
+	// 검증: FR-GRID-08
 	@Test
 	@DisplayName("첫 페이지 nextCursor 를 다음 요청에 넣으면 다음 페이지가 이어진다 (keyset 왕복)")
 	void 첫페이지_nextCursor를_다음요청에_넣으면_다음페이지가_이어진다() {
@@ -349,6 +365,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(gridIds(page2)).containsExactly(c, d);
 	}
 
+	// 검증: FR-GRID-08
 	@Test
 	@DisplayName("마지막 페이지의 nextCursor 는 null 이다")
 	void 마지막페이지의_nextCursor는_null이다() {
@@ -363,6 +380,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(page2.nextCursor()).isNull();
 	}
 
+	// 검증: FR-GRID-08
 	@Test
 	@DisplayName("정확히 size 로 나눠떨어져도 빈 마지막 페이지 없이 nextCursor 가 null 이 된다 (lookahead +1)")
 	void 정확히_size로_나눠떨어져도_빈_마지막페이지없이_nextCursor가_null이_된다() {
@@ -378,6 +396,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(page2.nextCursor()).isNull();
 	}
 
+	// 검증: FR-GRID-08
 	@Test
 	@DisplayName("전체 페이지 순회 결과는 비페이지 조회 결과와 동일 집합이다 (누락·중복 없음)")
 	void 전체페이지_순회결과는_비페이지_조회결과와_동일_집합이다() {
@@ -400,6 +419,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(collected).containsExactlyInAnyOrderElementsOf(full);
 	}
 
+	// 검증: FR-GRID-09
 	@Test
 	@DisplayName("잘못된 커서는 INVALID_CURSOR 를 던진다 (Base64 불량·정수 아님·구분자 없음)")
 	void 잘못된_커서는_INVALID_CURSOR를_던진다() {
@@ -415,6 +435,7 @@ class GridQueryServiceIntegrationTest {
 		}
 	}
 
+	// 검증: FR-GRID-09
 	@Test
 	@DisplayName("size 가 0 이하거나 상한을 초과하면 INVALID_PAGE_SIZE 를 던진다")
 	void size가_0이하거나_상한초과면_INVALID_PAGE_SIZE를_던진다() {
@@ -425,6 +446,7 @@ class GridQueryServiceIntegrationTest {
 		}
 	}
 
+	// 검증: FR-GRID-09
 	@Test
 	@DisplayName("남서 좌표가 북동보다 크면 INVALID_VIEWPORT 를 던진다")
 	void 남서_좌표가_북동보다_크면_INVALID_VIEWPORT를_던진다() {
@@ -435,6 +457,7 @@ class GridQueryServiceIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.INVALID_VIEWPORT);
 	}
 
+	// 검증: FR-GRID-09
 	@Test
 	@DisplayName("WGS84 범위 밖 유한 좌표는 INVALID_VIEWPORT 를 던진다")
 	void WGS84_범위_밖_유한_좌표는_INVALID_VIEWPORT를_던진다() {
@@ -446,6 +469,7 @@ class GridQueryServiceIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.INVALID_VIEWPORT);
 	}
 
+	// 검증: FR-GRID-09
 	@Test
 	@DisplayName("NaN 좌표는 INVALID_VIEWPORT 를 던진다")
 	void NaN_좌표는_INVALID_VIEWPORT를_던진다() {
@@ -456,6 +480,7 @@ class GridQueryServiceIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.INVALID_VIEWPORT);
 	}
 
+	// 검증: FR-GRID-09
 	@Test
 	@DisplayName("면적 상한을 초과하면 VIEWPORT_TOO_LARGE 를 던진다")
 	void 면적_상한을_초과하면_VIEWPORT_TOO_LARGE를_던진다() {

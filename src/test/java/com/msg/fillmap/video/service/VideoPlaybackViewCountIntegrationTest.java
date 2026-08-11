@@ -106,6 +106,7 @@ class VideoPlaybackViewCountIntegrationTest {
 		return LocalDateTime.of(2026, 7, 20, hour, 0, 0);
 	}
 
+	// 검증: FR-VIDEO-14
 	@Test
 	@DisplayName("타인 재생으로 오른 view_count 가 대표 영상 선정 정렬에 반영된다")
 	void 타인_재생으로_오른_view_count가_대표_영상_선정_정렬에_반영된다() {

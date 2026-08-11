@@ -131,6 +131,7 @@ class RegionVideosRepositoryTest {
 			GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), createdAt);
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("그_행정동_격자들에_올린_내_영상을_created_at_내림차순으로_반환한다")
 	void 그_행정동_격자들에_올린_내_영상을_created_at_내림차순으로_반환한다() {
@@ -149,6 +150,7 @@ class RegionVideosRepositoryTest {
 		assertThat(result.get(0).getDurationSec()).isEqualTo(10);
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("같은_created_at_영상들은_id_내림차순_타이브레이크로_결정적으로_정렬된다")
 	void 같은_created_at_영상들은_id_내림차순_타이브레이크로_결정적으로_정렬된다() {
@@ -167,6 +169,7 @@ class RegionVideosRepositoryTest {
 			.containsExactly(third, second, first);
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("영상_좌표가_옆_행정동이어도_격자_소속_행정동_기준으로_포함된다")
 	void 영상_좌표가_옆_행정동이어도_격자_소속_행정동_기준으로_포함된다() {
@@ -184,6 +187,7 @@ class RegionVideosRepositoryTest {
 		assertThat(userGridRepository.getRegionVideos(me, REGION_B)).isEmpty();
 	}
 
+	// 검증: FR-COLLECT-10, FR-COLLECT-12
 	@Test
 	@DisplayName("다른_사용자의_영상은_포함되지_않는다")
 	void 다른_사용자의_영상은_포함되지_않는다() {
@@ -199,6 +203,7 @@ class RegionVideosRepositoryTest {
 		assertThat(result).extracting(RegionVideoProjection::getVideoId).containsExactly(mine);
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("DELETED_영상은_포함되지_않는다")
 	void DELETED_영상은_포함되지_않는다() {
@@ -214,6 +219,7 @@ class RegionVideosRepositoryTest {
 		assertThat(result).extracting(RegionVideoProjection::getVideoId).containsExactly(active);
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("PRIVATE_영상도_내_도감이라_포함된다")
 	void PRIVATE_영상도_내_도감이라_포함된다() {
@@ -228,6 +234,7 @@ class RegionVideosRepositoryTest {
 		assertThat(result).extracting(RegionVideoProjection::getVideoId).containsExactly(privateVideo);
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("인코딩_중_영상은_thumbnailUrl이_null로_포함된다")
 	void 인코딩_중_영상은_thumbnailUrl이_null로_포함된다() {
@@ -245,6 +252,7 @@ class RegionVideosRepositoryTest {
 		assertThat(row.getThumbnailKey()).isNull();
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("항목에_gridId가_포함된다")
 	void 항목에_gridId가_포함된다() {
@@ -258,6 +266,7 @@ class RegionVideosRepositoryTest {
 		assertThat(row.getGridId()).isEqualTo(grid);
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("그_행정동에_내_영상이_없으면_빈_리스트다")
 	void 그_행정동에_내_영상이_없으면_빈_리스트다() {
@@ -268,6 +277,7 @@ class RegionVideosRepositoryTest {
 		assertThat(userGridRepository.getRegionVideos(me, REGION_A)).isEmpty();
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("존재하지_않는_regionCode는_빈_리스트다")
 	void 존재하지_않는_regionCode는_빈_리스트다() {

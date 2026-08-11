@@ -21,6 +21,7 @@ class ReportTest {
 		return Report.create(3L, 1042L, ReportReason.INAPPROPRIATE, null);
 	}
 
+	// 검증: FR-MOD-11
 	@Test
 	@DisplayName("승인 처리는 RESOLVED 로 바꾸고 처리자와 처리 시각을 남긴다 (FR-4)")
 	void 승인_처리는_RESOLVED로_바꾸고_처리자와_처리_시각을_남긴다() {
@@ -34,6 +35,7 @@ class ReportTest {
 		assertThat(report.getReviewedAt()).isNotNull().isAfterOrEqualTo(before);
 	}
 
+	// 검증: FR-MOD-11
 	@Test
 	@DisplayName("기각 처리는 REJECTED 로 바꾸고 처리자와 처리 시각을 남긴다 (FR-6)")
 	void 기각_처리는_REJECTED로_바꾸고_처리자와_처리_시각을_남긴다() {

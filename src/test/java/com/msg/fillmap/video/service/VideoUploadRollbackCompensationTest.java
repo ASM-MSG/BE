@@ -62,6 +62,7 @@ import com.msg.fillmap.video.dto.VideoUploadRequestDto;
  * 예외 롤백과 같은 afterCompletion(STATUS_ROLLED_BACK) 경로를 탄다. 커밋한 합성 행은 @AfterEach 에서
  * 대상 지정 삭제로 걷어낸다(truncate 아님 — 실데이터 불가침).
  */
+// 검증: FR-VIDEO-09
 @SpringBootTest
 @DisplayName("확정 롤백 시 original 보상 삭제 (실 PostGIS)")
 class VideoUploadRollbackCompensationTest {

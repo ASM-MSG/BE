@@ -50,6 +50,7 @@ class VideoPlaybackControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-VIDEO-12
 	@Test
 	@DisplayName("단건 조회는 200과 재생메타를 반환한다")
 	void 단건_조회는_200과_재생메타를_반환한다() throws Exception {
@@ -74,6 +75,7 @@ class VideoPlaybackControllerTest {
 			.andExpect(jsonPath("$.data.regionName").value("서울특별시 강남구 역삼1동"));
 	}
 
+	// 검증: FR-MEDIA-10
 	@Test
 	@DisplayName("단건 조회 응답에 highlights 배열이 실린다")
 	void 단건_조회_응답에_highlights_배열이_실린다() throws Exception {
@@ -123,6 +125,7 @@ class VideoPlaybackControllerTest {
 			.andExpect(status().isUnauthorized());
 	}
 
+	// 검증: FR-VIDEO-14
 	@Test
 	@DisplayName("HEAD 요청은 조회수 증가 없이 200을 반환한다")
 	void HEAD_요청은_조회수_증가_없이_200을_반환한다() throws Exception {

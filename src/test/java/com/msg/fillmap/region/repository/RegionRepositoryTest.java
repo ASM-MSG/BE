@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.region.repository.RegionRepository;
 
+// 검증: FR-REGION-01
 @SpringBootTest
 @Transactional
 @DisplayName("RegionRepository native UPSERT (실 PostGIS) — 합성 코드·롤백 격리")

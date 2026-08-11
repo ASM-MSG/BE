@@ -75,6 +75,7 @@ class PushTokenRepositoryIntegrationTest {
 			.containsExactlyInAnyOrder(mine1, mine2);
 	}
 
+	// 검증: FR-NOTI-05
 	@Test
 	@DisplayName("deleteAllByTokens 는 소유자 무관하게 지정 토큰만 지운다 — FR-5 시스템 삭제 (의도된 무검증)")
 	void deleteAllByTokens는_소유자_무관하게_지정_토큰만_지운다() {
@@ -90,6 +91,7 @@ class PushTokenRepositoryIntegrationTest {
 		assertThat(pushTokenRepository.findById(survivor)).isPresent();
 	}
 
+	// 검증: FR-NOTI-05
 	@Test
 	@DisplayName("deleteStale 은 threshold 이전 last_used_at 행만 지운다 — D10 스테일 배치 쿼리")
 	void deleteStale은_threshold_이전_행만_지운다() {

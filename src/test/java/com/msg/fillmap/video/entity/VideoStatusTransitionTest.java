@@ -18,11 +18,13 @@ class VideoStatusTransitionTest {
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 	}
 
+	// 검증: FR-MEDIA-02
 	@Test
 	void 생성_직후는_UPLOADED_다() {
 		assertThat(newVideo().getProcessingStatus()).isEqualTo(ProcessingStatus.UPLOADED);
 	}
 
+	// 검증: FR-MEDIA-02
 	@Test
 	void markEncoding_이면_ENCODING_으로_바뀐다() {
 		Video video = newVideo();
@@ -32,6 +34,7 @@ class VideoStatusTransitionTest {
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.ENCODING);
 	}
 
+	// 검증: FR-MEDIA-02
 	@Test
 	void markReady_는_READY_와_함께_encoded_thumbnail_키를_채운다() {
 		Video video = newVideo();
@@ -56,6 +59,7 @@ class VideoStatusTransitionTest {
 		assertThat(video.getAiJobId()).isNull();
 	}
 
+	// 검증: FR-MEDIA-02
 	@Test
 	void markFailed_이면_FAILED_이고_결과물_키는_비어있다() {
 		Video video = newVideo();

@@ -112,6 +112,7 @@ class VideoDeleteIntegrationTest {
 			.getSingleResult()).longValue();
 	}
 
+	// 검증: FR-VIDEO-11, FR-COLLECT-05
 	@Test
 	void 마지막_영상을_지우면_점령이_풀리고_격자는_남는다() {
 		long videoId = upload();
@@ -136,6 +137,7 @@ class VideoDeleteIntegrationTest {
 		assertThat(videoCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-COLLECT-04
 	@Test
 	void cover_영상을_지우면_남은_영상_중_가장_오래된_것으로_재선정된다() {
 		long first = upload();
@@ -157,6 +159,7 @@ class VideoDeleteIntegrationTest {
 		assertThat(coverVideoId()).isEqualTo(first);
 	}
 
+	// 검증: FR-VIDEO-11
 	@Test
 	void 타인의_영상은_지울_수_없다() {
 		long videoId = upload();

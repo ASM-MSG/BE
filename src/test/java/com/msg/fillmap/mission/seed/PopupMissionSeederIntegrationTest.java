@@ -86,6 +86,7 @@ class PopupMissionSeederIntegrationTest {
 		return newSeeder(true, "unused");
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("플래그 off(기본)면 러너는 아무것도 하지 않는다 — 평시 기동 무영향")
 	void 플래그_off면_아무것도_하지_않는다() {
@@ -98,6 +99,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(popgaCount()).isEqualTo(before);
 	}
 
+	// 검증: FR-MISSION-10
 	@Test
 	@DisplayName("시드 실행이 POPUP 미션과 격자 81행을 적재한다 — source_key=팝가 id·target_count=1·seq NULL")
 	void 시드_실행이_POPUP_미션과_격자_81행을_적재한다() throws IOException {
@@ -127,6 +129,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(grids).extracting(MissionGrid::getGridId).contains(GridEncoder.encode(합성_LAT, 합성_LON));
 	}
 
+	// 검증: FR-MISSION-10
 	@Test
 	@DisplayName("같은 파일 재실행은 신규 0건이다 — source_key(팝가 id) 멱등")
 	void 같은_파일_재실행은_신규_0건이다() throws IOException {
@@ -141,6 +144,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(countByKey(id)).isEqualTo(1);
 	}
 
+	// 검증: FR-MISSION-10
 	@Test
 	@DisplayName("종료 팝업이 정리되고 mission_grids 가 CASCADE 로 사라진다")
 	void 종료_팝업이_정리되고_mission_grids가_CASCADE로_사라진다() throws IOException {
@@ -155,6 +159,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(gridCountOf(endedId)).isZero();
 	}
 
+	// 검증: FR-MISSION-10
 	@Test
 	@DisplayName("정리가 적재보다 먼저라 연장 팝업이 같은 실행에서 재적재된다 — 노출 공백 없음 (D4 순서)")
 	void 정리가_적재보다_먼저라_연장_팝업이_같은_실행에서_재적재된다() throws IOException {
@@ -174,6 +179,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(findByKey(id).getEndAt()).isEqualTo(FestivalMissionSeeder.toUtcEnd(종료일));
 	}
 
+	// 검증: FR-MISSION-04, FR-MISSION-10
 	@Test
 	@DisplayName("스탬프 걸린 종료 미션은 삭제되지 않는다 — V6 FK(NO ACTION) 보호")
 	void 스탬프_걸린_종료_미션은_삭제되지_않는다() {
@@ -187,6 +193,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(missionRepository.findById(endedId)).isPresent();
 	}
 
+	// 검증: FR-MISSION-10
 	@Test
 	@DisplayName("타 소스와 수동 미션은 정리에서 불가침이다 — 종료된 FESTIVAL·DURUNUBI·source NULL 잔존 (FR-8)")
 	void 타_소스와_수동_미션은_정리에서_불가침이다() {
@@ -203,6 +210,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(missionRepository.findById(manual)).isPresent();
 	}
 
+	// 검증: FR-MISSION-10
 	@Test
 	@DisplayName("종료 판정이 KST 세션에서도 스큐 없이 동작한다 — AT TIME ZONE 'UTC' (MSG-223 §D2 규칙)")
 	void 종료_판정이_KST_세션에서도_스큐없이_동작한다() {
@@ -218,6 +226,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(missionRepository.findById(ended)).isEmpty();
 	}
 
+	// 검증: FR-MISSION-10
 	@Test
 	@DisplayName("같은 source·source_key 중복 INSERT 는 DB 가 거부한다 — 부분 유니크 인덱스 백스톱 (D3)")
 	void 같은_source와_source_key_중복_INSERT는_DB가_거부한다() {
@@ -228,6 +237,7 @@ class PopupMissionSeederIntegrationTest {
 			.hasStackTraceContaining("duplicate key value");
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("파일이 없으면 예외로 조기 실패한다 — 조용한 no-op 금지 (FR-5)")
 	void 파일이_없으면_예외로_조기_실패한다() {
@@ -238,6 +248,7 @@ class PopupMissionSeederIntegrationTest {
 			.hasMessageContaining("jsonl");
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("종료 필터 후 유효 0건이면 예외로 조기 실패한다 — 전부 종료된 스냅샷 방어 (FR-5)")
 	void 종료_필터_후_유효_0건이면_예외로_조기_실패한다() throws IOException {
@@ -249,6 +260,7 @@ class PopupMissionSeederIntegrationTest {
 			.hasMessageContaining("0건");
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("검증 위반 시 전체 롤백으로 기존 데이터가 유지된다 — 검증이 정리·적재보다 먼저 (FR-5·6)")
 	void 검증_위반_시_전체_롤백으로_기존_데이터가_유지된다() throws IOException {

@@ -54,6 +54,7 @@ class BadgeControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-BADGE-07
 	@Test
 	@DisplayName("내 뱃지 목록을 조회한다 — 200·행 필드 9종(MSG-201 §D2)")
 	void 내_뱃지_목록을_조회한다() throws Exception {
@@ -87,6 +88,7 @@ class BadgeControllerTest {
 			.andExpect(status().isUnauthorized());
 	}
 
+	// 검증: FR-BADGE-09
 	@Test
 	@DisplayName("교체 요청은 200과 적용된 대표 뱃지(rank 순)를 반환한다")
 	void 교체_요청은_200과_적용된_대표_뱃지를_반환한다() throws Exception {
@@ -106,6 +108,7 @@ class BadgeControllerTest {
 			.andExpect(jsonPath("$.data[1].rank").value(2));
 	}
 
+	// 검증: FR-BADGE-09
 	@Test
 	@DisplayName("3개 이상 지정하면 400 이다 — @Size global(신규 코드 아님, §D7)")
 	void 삼개_이상_지정하면_400이다() throws Exception {

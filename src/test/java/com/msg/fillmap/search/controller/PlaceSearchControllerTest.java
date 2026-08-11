@@ -48,6 +48,7 @@ class PlaceSearchControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-SEARCH-01, FR-ZONE-05
 	@Test
 	@DisplayName("성공은 SuccessResponse 포맷으로 장소 리스트를 반환한다")
 	void 성공은_SuccessResponse_포맷으로_장소_리스트를_반환한다() throws Exception {
@@ -69,6 +70,7 @@ class PlaceSearchControllerTest {
 			.andExpect(jsonPath("$.data[0].zoneCell").value("B-3"));
 	}
 
+	// 검증: FR-SEARCH-02
 	@Test
 	@DisplayName("q 가 공백이면 에러가 아니라 200 과 빈 배열이다 (§D3 trim 가드는 서비스 단위 테스트가 검증)")
 	void q가_공백이면_200과_빈_배열이다() throws Exception {
@@ -82,6 +84,7 @@ class PlaceSearchControllerTest {
 			.andExpect(jsonPath("$.data", hasSize(0)));
 	}
 
+	// 검증: FR-SEARCH-02
 	@Test
 	@DisplayName("q 누락이면 400 이다 (global MissingServletRequestParameter — 신규 코드 0)")
 	void q_누락이면_400이다() throws Exception {
@@ -98,6 +101,7 @@ class PlaceSearchControllerTest {
 			.andExpect(status().isUnauthorized());
 	}
 
+	// 검증: FR-SEARCH-04
 	@Test
 	@DisplayName("업스트림 실패면 502 와 developCode 5502 다 (§D3 단일 수렴)")
 	void 업스트림_실패면_502와_developCode_5502다() throws Exception {

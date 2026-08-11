@@ -81,6 +81,7 @@ class ZoneNamingContractTest {
 		return new ZoneNameResolver(zones);
 	}
 
+	// 검증: FR-ZONE-13
 	@Test
 	@DisplayName("픽스처 케이스가 비어 있으면 실패한다 (파일 누락·파싱 실패가 조용히 0건 통과로 새지 않게)")
 	void 픽스처_케이스가_비어있으면_테스트가_실패한다() {
@@ -89,6 +90,7 @@ class ZoneNamingContractTest {
 		assertThat(fixture.cases()).isNotEmpty();
 	}
 
+	// 검증: FR-ZONE-03, FR-ZONE-04, FR-ZONE-07, FR-ZONE-13
 	@TestFactory
 	@DisplayName("픽스처 전 케이스: resolver.name(gridY, gridX) == (expectedZoneName, expectedZoneCell)")
 	Stream<DynamicTest> 픽스처_케이스를_전부_검증한다() {
@@ -102,6 +104,7 @@ class ZoneNamingContractTest {
 		}));
 	}
 
+	// 검증: FR-ZONE-13
 	@Test
 	@DisplayName("분리 기대값과 통짜 expected 가 어긋나면 실패한다 (픽스처 자체 모순 가드)")
 	void 픽스처의_분리_기대값과_통짜_기대값이_어긋나면_실패한다() {
@@ -118,6 +121,7 @@ class ZoneNamingContractTest {
 		}
 	}
 
+	// 검증: FR-ZONE-04
 	@Test
 	@DisplayName("구역 밖 격자는 NONE 을 반환한다 — null 이 아니라 소비처가 분기 없이 두 필드를 옮긴다")
 	void 구역_밖_격자는_NONE을_반환하고_null이_아니다() {
@@ -137,6 +141,7 @@ class ZoneNamingContractTest {
 		assertThatThrownBy(() -> new ZoneCellName("m234서면", null)).isInstanceOf(IllegalArgumentException.class);
 	}
 
+	// 검증: FR-ZONE-10
 	@Test
 	@DisplayName("zone 이 0건인 리졸버도 전 격자를 NONE 으로 계산한다 (시딩 전에도 응답이 폴백으로 동작)")
 	void 리졸버는_구역이_0건이어도_전_격자를_NONE으로_계산한다() {

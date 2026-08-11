@@ -16,6 +16,7 @@ import tools.jackson.databind.ObjectMapper;
  * festivals.jsonl 파서 검증 (MSG-224 모듈 1, 순수 단위 · DB 무관). 행 필터 3종(날짜 누락/파싱 실패 ·
  * 종료 축제 · JSON 파싱 실패)과 사유별 집계, "오늘(KST)" 주입 경계를 본다 (D1).
  */
+// 검증: FR-MISSION-08
 @DisplayName("FestivalJsonlReader 행 파싱·필터·사유별 집계")
 class FestivalJsonlReaderTest {
 

@@ -48,6 +48,7 @@ class GridVideoControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-COLLECT-11
 	@Test
 	@DisplayName("격자별 내영상 조회는 200 과 영상배열을 반환한다")
 	void 격자별_내영상_조회는_200과_영상배열을_반환한다() throws Exception {

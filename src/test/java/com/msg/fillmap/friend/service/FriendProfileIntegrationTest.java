@@ -96,6 +96,7 @@ class FriendProfileIntegrationTest {
 		baseX = base.gridX();
 	}
 
+	// 검증: FR-FRIEND-07, FR-USER-05
 	@Test
 	@DisplayName("친구 프로필은 닉네임·이미지·색상과 도감 요약을 담는다 (FR-5)")
 	void 친구_프로필은_닉네임_이미지_색상과_도감_요약을_담는다() {
@@ -121,6 +122,7 @@ class FriendProfileIntegrationTest {
 		assertThat(item.regionName()).isNull();
 	}
 
+	// 검증: FR-FRIEND-07
 	@Test
 	@DisplayName("수집 0건 친구는 요약 0과 빈 격자 목록이다 — 에러 아님")
 	void 수집_0건_친구는_요약_0과_빈_격자_목록이다() {
@@ -132,6 +134,7 @@ class FriendProfileIntegrationTest {
 		assertThat(profile.recentGrids()).isEmpty();
 	}
 
+	// 검증: FR-FRIEND-07
 	@Test
 	@DisplayName("친구 프로필 요약에도 스트릭과 뱃지 수가 실린다 (MSG-362 FR-4)")
 	void 친구_프로필_요약에도_스트릭과_뱃지_수가_실린다() {
@@ -147,6 +150,7 @@ class FriendProfileIntegrationTest {
 		assertThat(profile.summary().badgeCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("비친구 조회는 9424 다 (FR-7)")
 	void 비친구_조회는_9424를_반환한다() {
@@ -157,6 +161,7 @@ class FriendProfileIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("본인 ID 조회는 9424 다 — 본인 도감은 도감 API 몫 (FR-7)")
 	void 본인_ID_조회는_9424를_반환한다() {
@@ -165,6 +170,7 @@ class FriendProfileIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("대기 중 요청 상대 조회는 9424 다 (FR-7)")
 	void 대기중_요청_상대_조회는_9424를_반환한다() {
@@ -176,6 +182,7 @@ class FriendProfileIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-08
 	@Test
 	@DisplayName("미존재 userId 조회는 비친구와 구분 불가한 9424 다 — 계정 존재 은닉 (FR-7)")
 	void 미존재_userId_조회는_9424를_반환한다() {
@@ -184,6 +191,7 @@ class FriendProfileIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-09
 	@Test
 	@DisplayName("친구 삭제 즉시 프로필 조회는 9424 다 — 실시간 판정 (FR-8)")
 	void 친구_삭제_즉시_프로필_조회는_9424를_반환한다() {
@@ -194,6 +202,7 @@ class FriendProfileIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIENDSHIP_NOT_FOUND);
 	}
 
+	// 검증: FR-FRIEND-07
 	@Test
 	@DisplayName("최근 수집 격자는 수집 시각 역순 최대 30개다 (FR-6)")
 	void 최근_수집_격자는_수집_시각_역순_최대_30개다() {
@@ -219,6 +228,7 @@ class FriendProfileIntegrationTest {
 		assertThat(grids).extracting(FriendCollectionGridResponseDto::gridId).doesNotContain(oldest);
 	}
 
+	// 검증: FR-FRIEND-12
 	@Test
 	@DisplayName("공개 영상이 있는 격자는 썸네일이 붙는다 (FR-6)")
 	void 공개_영상이_있는_격자는_썸네일이_붙는다() {
@@ -231,6 +241,7 @@ class FriendProfileIntegrationTest {
 		assertThat(item.thumbnailUrl()).isEqualTo("https://signed/thumbs/m186-public.jpg");
 	}
 
+	// 검증: FR-FRIEND-12
 	@Test
 	@DisplayName("비공개 영상만 있는 격자는 썸네일이 null 이고 격자 사실은 내려간다 (FR-6)")
 	void 비공개_영상만_있는_격자는_썸네일이_null_이고_격자_사실은_내려간다() {
@@ -246,6 +257,7 @@ class FriendProfileIntegrationTest {
 		assertThat(item.firstCollectedAt()).isEqualTo(BASE);
 	}
 
+	// 검증: FR-FRIEND-12
 	@Test
 	@DisplayName("cover 가 비공개면 다른 공개 영상 썸네일로 폴백한다 (§D6)")
 	void cover가_비공개면_다른_공개_영상_썸네일로_폴백한다() {
@@ -259,6 +271,7 @@ class FriendProfileIntegrationTest {
 		assertThat(item.thumbnailUrl()).isEqualTo("https://signed/thumbs/m186-fallback.jpg");
 	}
 
+	// 검증: FR-FRIEND-12
 	@Test
 	@DisplayName("cover 가 공개면 더 최신 영상보다 cover 썸네일이 우선이다 (§D6)")
 	void cover가_공개면_최신_영상보다_cover_썸네일이_우선이다() {
@@ -272,6 +285,7 @@ class FriendProfileIntegrationTest {
 		assertThat(item.thumbnailUrl()).isEqualTo("https://signed/thumbs/m186-cover.jpg");
 	}
 
+	// 검증: FR-FRIEND-12
 	@Test
 	@DisplayName("친구만 보기 영상만 있는 격자도 썸네일이 붙는다 (MSG-187 FR-6)")
 	void FRIENDS_영상만_있는_격자도_친구_프로필에_썸네일이_붙는다() {
@@ -283,6 +297,7 @@ class FriendProfileIntegrationTest {
 		assertThat(firstGrid().thumbnailUrl()).isEqualTo("https://signed/thumbs/m187-friends.jpg");
 	}
 
+	// 검증: FR-FRIEND-12
 	@Test
 	@DisplayName("공개여도 READY 이전 영상은 썸네일 대상이 아니다 (§D6)")
 	void 공개여도_READY_이전_영상은_썸네일_대상이_아니다() {
@@ -294,6 +309,7 @@ class FriendProfileIntegrationTest {
 		assertThat(firstGrid().thumbnailUrl()).isNull();
 	}
 
+	// 검증: FR-FRIEND-07
 	@Test
 	@DisplayName("videoCount 는 비공개 영상을 포함한 전체 수다 — 요약 totalVideoCount 와 같은 축")
 	void videoCount는_비공개_영상을_포함한_전체_수다() {

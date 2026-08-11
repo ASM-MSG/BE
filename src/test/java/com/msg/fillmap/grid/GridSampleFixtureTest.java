@@ -21,6 +21,7 @@ import com.msg.fillmap.grid.GridEncoder.GridPoint;
  * 내주는 자료다. 값은 PROJ(pyproj)로 생성했으므로 여기서 서버 구현(Proj4J)으로 전수 재계산해 일치를 확인하면
  * 두 PROJ 구현이 같은 격자를 낸다는 근거가 된다 — FE 는 이 파일과 계약 문자열만 가지고 자기 구현을 검증한다.
  */
+// 검증: FR-GRID-05
 @DisplayName("FE 정합성 샘플 픽스처 (grid-epsg5179-samples.json)")
 class GridSampleFixtureTest {
 

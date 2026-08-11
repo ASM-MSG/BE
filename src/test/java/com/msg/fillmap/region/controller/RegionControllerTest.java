@@ -64,6 +64,7 @@ class RegionControllerTest {
 			5, 20, new BigDecimal("25.00"), LocalDateTime.of(2026, 7, 20, 10, 0, 0));
 	}
 
+	// 검증: FR-REGION-02
 	@Test
 	@DisplayName("reverse-geocode 는 200 과 regionCode·regionName 을 반환한다")
 	void reverse_geocode는_200과_regionCode_regionName을_반환한다() throws Exception {
@@ -81,6 +82,7 @@ class RegionControllerTest {
 			.andExpect(jsonPath("$.data.parentCode").value("11680"));
 	}
 
+	// 검증: FR-REGION-02
 	@Test
 	@DisplayName("포함 행정동이 없으면 200 과 null body 를 반환한다 (§D3)")
 	void 포함_행정동이_없으면_200과_null_body를_반환한다() throws Exception {
@@ -95,6 +97,7 @@ class RegionControllerTest {
 			.andExpect(jsonPath("$.data").value(nullValue()));
 	}
 
+	// 검증: FR-REGION-02
 	@Test
 	@DisplayName("서비스범위 밖 좌표는 400 과 6400 을 반환한다")
 	void 서비스범위_밖_좌표는_400과_6400을_반환한다() throws Exception {
@@ -119,6 +122,7 @@ class RegionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(6400));
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("인증된 요청은 200 과 수집률 리스트를 반환한다")
 	void 인증된_요청은_200과_수집률_리스트를_반환한다() throws Exception {
@@ -137,6 +141,7 @@ class RegionControllerTest {
 			.andExpect(jsonPath("$.data[0].totalCount").value(20));
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("collectedOnly 를 생략하면 기본값 true 로 동작한다")
 	void collectedOnly를_생략하면_기본값_true로_동작한다() throws Exception {
@@ -149,6 +154,7 @@ class RegionControllerTest {
 			.andExpect(jsonPath("$.data", hasSize(1)));
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("빈 결과는 200 과 빈 배열로 응답한다")
 	void 빈_결과는_200과_빈_배열로_응답한다() throws Exception {
@@ -175,6 +181,7 @@ class RegionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(6404));
 	}
 
+	// 검증: FR-REGION-07
 	@Test
 	@DisplayName("by-point 는 200 과 현재 위치 행정동 수집률을 반환한다")
 	void by_point는_200과_현재위치_행정동_수집률을_반환한다() throws Exception {
@@ -192,6 +199,7 @@ class RegionControllerTest {
 			.andExpect(jsonPath("$.data.totalCount").value(20));
 	}
 
+	// 검증: FR-REGION-07
 	@Test
 	@DisplayName("by-point 는 행정동이 없으면 200 과 null body 를 반환한다")
 	void by_point는_행정동이_없으면_200과_null_body를_반환한다() throws Exception {
@@ -231,6 +239,7 @@ class RegionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(6400));
 	}
 
+	// 검증: FR-REGION-07
 	@Test
 	@DisplayName("by-grid 는 200 과 격자 중심 행정동 수집률을 반환한다")
 	void by_grid는_200과_격자_중심_행정동_수집률을_반환한다() throws Exception {
@@ -246,6 +255,7 @@ class RegionControllerTest {
 			.andExpect(jsonPath("$.data.collectedCount").value(5));
 	}
 
+	// 검증: FR-REGION-07
 	@Test
 	@DisplayName("by-grid 는 중심점이 무귀속이면 200 과 null body 를 반환한다")
 	void by_grid는_중심점이_무귀속이면_200과_null_body를_반환한다() throws Exception {

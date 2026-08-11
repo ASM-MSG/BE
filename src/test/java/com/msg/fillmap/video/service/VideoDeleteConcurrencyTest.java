@@ -124,6 +124,7 @@ class VideoDeleteConcurrencyTest {
 		});
 	}
 
+	// 검증: FR-COLLECT-06
 	@Test
 	@DisplayName("같은 영상 동시 삭제 2건이면 video_count 는 1만 감소하고 점령이 유지된다")
 	void 같은_영상_동시_삭제_2건이면_video_count_는_1만_감소하고_점령이_유지된다() throws Exception {

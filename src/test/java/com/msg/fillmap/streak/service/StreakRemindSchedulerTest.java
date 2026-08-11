@@ -31,6 +31,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  * 과거 고정 일자와 겹칠 수 없다. record 는 자체 트랜잭션 커밋이라 @Transactional 격리를 못 쓴다 —
  * 합성 유저 삭제(streaks·notifications CASCADE)로 걷어낸다.
  */
+// 검증: FR-STREAK-07
 @SpringBootTest
 @DisplayName("StreakRemindScheduler — 리마인드 대상 판정·REMIND 기록 (실 PostGIS)")
 class StreakRemindSchedulerTest {

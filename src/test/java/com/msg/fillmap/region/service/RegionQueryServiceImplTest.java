@@ -22,6 +22,7 @@ import com.msg.fillmap.region.repository.RegionRepository;
  * RegionQueryServiceImpl.resolveByPoint 통합 (실 PostGIS · 합성 폴리곤 · 롤백 격리).
  * 좌표 검증 → native ST_Covers 조회 → RegionView 매핑, no-match=Optional.empty(§D3) 경로를 검증한다.
  */
+// 검증: FR-REGION-02
 @SpringBootTest
 @Transactional
 @DisplayName("RegionQueryServiceImpl.resolveByPoint (합성 폴리곤 · 롤백 격리)")

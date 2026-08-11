@@ -57,6 +57,7 @@ class CollectionGridsRepositoryTest {
 		baseX = base.gridX();
 	}
 
+	// 검증: FR-COLLECT-08
 	@Test
 	@DisplayName("점령 격자를 first_collected_at 내림차순으로 반환한다")
 	void 점령_격자를_first_collected_at_내림차순으로_반환한다() {
@@ -74,6 +75,7 @@ class CollectionGridsRepositoryTest {
 			.containsExactly(newer, middle, older);
 	}
 
+	// 검증: FR-COLLECT-08
 	@Test
 	@DisplayName("점령이 30개를 넘으면 최근 수집 30개만 반환한다")
 	void 점령이_30개를_넘으면_최근_수집_30개만_반환한다() {
@@ -99,6 +101,7 @@ class CollectionGridsRepositoryTest {
 		assertThat(result).extracting(CollectionGridProjection::getGridId).doesNotContain(oldest);
 	}
 
+	// 검증: FR-COLLECT-08
 	@Test
 	@DisplayName("cover_video_id가 null이면 coverVideoId와 coverThumbnailKey가 null이다")
 	void cover_video_id가_null이면_coverVideoId와_coverThumbnailKey가_null이다() {
@@ -111,6 +114,7 @@ class CollectionGridsRepositoryTest {
 		assertThat(row.getCoverThumbnailKey()).isNull();
 	}
 
+	// 검증: FR-COLLECT-08
 	@Test
 	@DisplayName("cover영상이 READY 이전이면 썸네일이 남아있어도 key는 null이고 id는 유지된다")
 	void cover영상이_READY_이전이면_썸네일이_남아있어도_key는_null이고_id는_유지된다() {
@@ -126,6 +130,7 @@ class CollectionGridsRepositoryTest {
 		assertThat(row.getCoverThumbnailKey()).isNull();        // §D4 — READY 이전 썸네일 미노출
 	}
 
+	// 검증: FR-COLLECT-08
 	@Test
 	@DisplayName("점령이 없으면 빈 리스트를 반환한다")
 	void 점령이_없으면_빈_리스트를_반환한다() {
@@ -136,6 +141,7 @@ class CollectionGridsRepositoryTest {
 		assertThat(result).isEmpty();
 	}
 
+	// 검증: FR-COLLECT-08, FR-COLLECT-12
 	@Test
 	@DisplayName("다른 사용자의 점령은 섞이지 않는다")
 	void 다른_사용자의_점령은_섞이지_않는다() {
@@ -152,6 +158,7 @@ class CollectionGridsRepositoryTest {
 		assertThat(result).extracting(CollectionGridProjection::getGridId).containsExactly(mine);
 	}
 
+	// 검증: FR-COLLECT-08
 	@Test
 	@DisplayName("videoCount와 lastUploadedAt이 user_grids 값과 일치한다")
 	void videoCount와_lastUploadedAt이_user_grids_값과_일치한다() {
