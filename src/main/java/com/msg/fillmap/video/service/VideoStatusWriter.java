@@ -48,6 +48,9 @@ public class VideoStatusWriter {
 	private final VideoRepository videoRepository;
 	private final UserRepository userRepository;
 	private final NotificationCommandService notificationCommandService;
+	// 종결(READY·FAILED) 계측 (MSG-343 D5) — 인코딩·AI 경로가 모두 이 라이터를 지나므로 여기 한 곳에서만
+	// 증가시켜 중복 계상을 막는다. 호출은 스테일 가드를 통과한 전이 적용 분기에만 둔다.
+	private final VideoProcessingMetrics videoProcessingMetrics;
 
 	/** 적용 여부를 반환한다 — false 면 태스크 시작 시점부터 스테일(큐 대기 중 교체·삭제됨)이라 ffmpeg 을 돌릴 이유가 없다. */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -73,6 +76,7 @@ public class VideoStatusWriter {
 			}
 			video.markReady(encodedKey, thumbnailKey);
 			recordOutcomeNotification(video, true);
+			videoProcessingMetrics.recordOutcome(videoId, true, VideoProcessingMetrics.PATH_ENCODING);
 		});
 	}
 
@@ -127,6 +131,7 @@ public class VideoStatusWriter {
 		video.applyBlurResult(blurredS3Key, highlights);
 		video.markReadyFromBlurring(thumbnailKey);
 		recordOutcomeNotification(video, true);
+		videoProcessingMetrics.recordOutcome(videoId, true, VideoProcessingMetrics.PATH_AI);
 		return true;
 	}
 
@@ -151,6 +156,7 @@ public class VideoStatusWriter {
 			}
 			video.markFailed(failReason);
 			recordOutcomeNotification(video, false);
+			videoProcessingMetrics.recordOutcome(videoId, false, VideoProcessingMetrics.PATH_AI);
 		});
 	}
 
@@ -186,6 +192,7 @@ public class VideoStatusWriter {
 			}
 			video.markFailed();
 			recordOutcomeNotification(video, false);
+			videoProcessingMetrics.recordOutcome(videoId, false, VideoProcessingMetrics.PATH_ENCODING);
 		});
 	}
 

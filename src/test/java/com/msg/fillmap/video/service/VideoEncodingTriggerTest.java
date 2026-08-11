@@ -1,5 +1,6 @@
 package com.msg.fillmap.video.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -12,6 +13,8 @@ import static org.mockito.Mockito.verify;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -77,7 +80,8 @@ class VideoEncodingTriggerTest {
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
-			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
+			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
+			mock(VideoProcessingMetrics.class));
 
 		VideoUploadRequestDto request = new VideoUploadRequestDto(
 			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE");
@@ -89,5 +93,47 @@ class VideoEncodingTriggerTest {
 		// 키는 시도별 발급이라(MSG-247 2R) 정확값 대신 pendingStem 파생 prefix 로 검증한다.
 		verify(statusWriter).markFailed(
 			org.mockito.ArgumentMatchers.eq(7L), org.mockito.ArgumentMatchers.startsWith("videos/original/1/x-"));
+	}
+
+	// 검증: MSG-343 모듈 2 — submitEncoding 의 TaskRejectedException catch 는 encode 본문이 돌지 않아
+	// completed/failed 와 겹치지 않는다 (이어지는 markFailed 의 종결 Counter 는 별도 관점).
+	@Test
+	void 큐_포화_거부는_rejected만_증가시키고_completed와_failed는_증가하지_않는다() {
+		VideoRepository repository = mock(VideoRepository.class);
+		VideoEncodingService encodingService = mock(VideoEncodingService.class);
+		VideoStatusWriter statusWriter = mock(VideoStatusWriter.class);
+		SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+
+		Video saved = Video.create(USER_ID, "19495_9607", "videos/original/1/x.mp4", null, (short) 10,
+			LocalDateTime.now(ZoneOffset.UTC), Visibility.PRIVATE);
+		org.springframework.test.util.ReflectionTestUtils.setField(saved, "id", 7L);
+		org.mockito.BDDMockito.given(repository.saveAndFlush(org.mockito.ArgumentMatchers.any(Video.class)))
+			.willReturn(saved);
+		willThrow(new TaskRejectedException("queue full")).given(encodingService).encode(anyLong(), anyString());
+
+		MissionAwardService missionAwardService = mock(MissionAwardService.class);
+		org.mockito.BDDMockito.given(missionAwardService.awardOnUpload(anyLong(), anyString()))
+			.willReturn(MissionAwardResult.EMPTY);
+		S3Client s3Client = mock(S3Client.class);
+		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		VideoService service = new VideoServiceImpl(repository, encodingService, statusWriter,
+			mock(S3Presigner.class), s3Client,
+			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
+			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
+			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
+			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
+			new VideoProcessingMetrics(meterRegistry));
+
+		service.saveVideo(USER_ID, new VideoUploadRequestDto(
+			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE"));
+
+		assertThat(taskCount(meterRegistry, "rejected")).isEqualTo(1.0);
+		assertThat(taskCount(meterRegistry, "completed")).isZero();
+		assertThat(taskCount(meterRegistry, "failed_over_duration")).isZero();
+		assertThat(taskCount(meterRegistry, "failed_error")).isZero();
+	}
+
+	private double taskCount(SimpleMeterRegistry meterRegistry, String result) {
+		return meterRegistry.get("video.encoding.task").tag("result", result).counter().count();
 	}
 }

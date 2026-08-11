@@ -63,7 +63,8 @@ class VideoPresignTest {
 			presigner, mock(software.amazon.awssdk.services.s3.S3Client.class), properties,
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
-			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
+			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
+			mock(VideoProcessingMetrics.class));
 	}
 
 	// 검증: FR-VIDEO-02

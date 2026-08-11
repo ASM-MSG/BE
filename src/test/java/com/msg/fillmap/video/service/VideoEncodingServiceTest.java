@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,7 @@ class VideoEncodingServiceTest {
 	private VideoStatusWriter statusWriter;
 	private FfmpegRunner ffmpegRunner;
 	private S3Client s3Client;
+	private SimpleMeterRegistry meterRegistry;
 	private VideoEncodingService encodingService;
 	private Video video;
 
@@ -57,11 +60,13 @@ class VideoEncodingServiceTest {
 		statusWriter = mock(VideoStatusWriter.class);
 		ffmpegRunner = mock(FfmpegRunner.class);
 		s3Client = mock(S3Client.class);
+		meterRegistry = new SimpleMeterRegistry();
 		AwsProperties properties = new AwsProperties(
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 
 		encodingService = new VideoEncodingServiceImpl(
-			videoRepository, statusWriter, ffmpegRunner, s3Client, properties);
+			videoRepository, statusWriter, ffmpegRunner, s3Client, properties,
+			new VideoProcessingMetrics(meterRegistry));
 
 		video = Video.create(1L, "19495_9607", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
@@ -190,6 +195,52 @@ class VideoEncodingServiceTest {
 		verify(ffmpegRunner, never()).extractThumbnail(any(), any(), anyDouble());
 		// thumbnail 키는 폴러가 완료 시 기록(R5)
 		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4");
+	}
+
+	// ── 인코딩 태스크 계측 (MSG-343 모듈 2) ──
+
+	private double taskCount(String result) {
+		return meterRegistry.get("video.encoding.task").tag("result", result).counter().count();
+	}
+
+	@Test
+	void 인코딩_성공은_completed를_한_번_증가시킨다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // aiEnabled=false → markReady 경로
+		assertThat(taskCount("completed")).isEqualTo(1.0);
+
+		ReflectionTestUtils.setField(encodingService, "aiEnabled", true);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // aiEnabled=true → markEncoded 경로도 completed (스펙 표)
+		assertThat(taskCount("completed")).isEqualTo(2.0);
+		assertThat(taskCount("failed_over_duration")).isZero();
+		assertThat(taskCount("failed_error")).isZero();
+	}
+
+	@Test
+	void 실측_길이_초과는_failed_over_duration으로_기록된다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.5);
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		assertThat(taskCount("failed_over_duration")).isEqualTo(1.0);
+		assertThat(taskCount("completed")).isZero();
+		assertThat(taskCount("failed_error")).isZero();
+	}
+
+	@Test
+	void ffmpeg_예외는_failed_error로_기록된다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		willThrow(new IllegalStateException("ffmpeg 실패"))
+			.given(ffmpegRunner).encode720p(any(Path.class), any(Path.class));
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		assertThat(taskCount("failed_error")).isEqualTo(1.0);
+		assertThat(taskCount("completed")).isZero();
+		assertThat(taskCount("failed_over_duration")).isZero();
 	}
 
 	@Test

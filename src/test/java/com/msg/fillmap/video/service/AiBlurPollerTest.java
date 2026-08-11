@@ -21,6 +21,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,6 +66,7 @@ class AiBlurPollerTest {
 	private S3Client s3Client;
 	private FfmpegRunner ffmpegRunner;
 	private ThreadPoolTaskExecutor encodingExecutor;
+	private SimpleMeterRegistry meterRegistry;
 	private AiBlurPoller poller;
 
 	@BeforeEach
@@ -79,8 +82,9 @@ class AiBlurPollerTest {
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 		AiProperties aiProperties = new AiProperties(true, "http://ai.test", Duration.ofMinutes(30), 30000L);
 
+		meterRegistry = new SimpleMeterRegistry();
 		poller = new AiBlurPoller(videoRepository, statusWriter, aiClient, s3Client, awsProperties, aiProperties,
-			ffmpegRunner, encodingExecutor);
+			ffmpegRunner, encodingExecutor, new VideoProcessingMetrics(meterRegistry));
 
 		// 목 ffmpeg 가 썸네일 산출물을 만든 것처럼 흉내낸다 (VideoEncodingServiceTest 관례).
 		willAnswer(invocation -> {
@@ -496,6 +500,93 @@ class AiBlurPollerTest {
 		verify(statusWriter).markBlurReady(7L, "job-new", "videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg",
 			List.of(List.of(0.0, 3.33)));
 		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 세 주기 어디서도 FAILED 없음
+	}
+
+	// ── AI 잡 계측 (MSG-343 모듈 3) ──
+
+	private double aiCount(String event) {
+		return meterRegistry.get("video.ai.job").tag("event", event).counter().count();
+	}
+
+	@Test
+	void 제출_성공은_submitted를_증가시킨다() {
+		givenBlurring(blurring(7L, null, LocalDateTime.now()));
+		givenS3Download("encoded".getBytes());
+		given(aiClient.submit(any())).willReturn("job-1");
+
+		poller.reconcile();
+
+		assertThat(aiCount("submitted")).isEqualTo(1.0);
+	}
+
+	@Test
+	void DONE_적용은_done을_증가시킨다() {
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		givenDone("job-1", List.of());
+		given(statusWriter.markBlurReady(anyLong(), anyString(), anyString(), anyString(), any())).willReturn(true);
+
+		poller.reconcile();
+
+		assertThat(aiCount("done")).isEqualTo(1.0);
+		assertThat(aiCount("failed")).isZero();
+	}
+
+	@Test
+	void 명시_FAILED는_failed를_증가시킨다() {
+		givenBlurring(blurring(7L, "job-fail", LocalDateTime.now()));
+		given(aiClient.poll("job-fail")).willReturn(new AiJobResult(AiJobStatus.FAILED, null, false));
+
+		poller.reconcile();
+
+		assertThat(aiCount("failed")).isEqualTo(1.0);
+		assertThat(aiCount("timeout")).isZero();
+	}
+
+	@Test
+	void 프리체크_탈락은_precheck_rejected이고_사유_원문이_태그에_없다() {
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		given(aiClient.poll("job-1")).willReturn(
+			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(false, "too_dark: std 3.18 < 10.0")));
+
+		poller.reconcile();
+
+		assertThat(aiCount("precheck_rejected")).isEqualTo(1.0);
+		// 사유 원문은 태그 금지 (D1) — 레지스트리 어느 Meter 의 어느 태그 값에도 실리지 않는다.
+		assertThat(meterRegistry.getMeters())
+			.allSatisfy(meter -> assertThat(meter.getId().getTags())
+				.noneMatch(tag -> tag.getValue().contains("too_dark")));
+	}
+
+	@Test
+	void 타임아웃_초과는_경로와_무관하게_timeout_한_번으로_기록된다() {
+		// 경로 1: 미제출 타임아웃
+		givenBlurring(blurring(7L, null, LocalDateTime.now().minusMinutes(40)));
+		poller.reconcile();
+		assertThat(aiCount("timeout")).isEqualTo(1.0);
+
+		// 경로 2: poll 불가(연결 실패) 타임아웃 — 같은 failIfTimedOut 한 곳으로 수렴한다
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40)));
+		willThrow(new ResourceAccessException("connection refused")).given(aiClient).poll("job-1");
+		poller.reconcile();
+		assertThat(aiCount("timeout")).isEqualTo(2.0);
+		assertThat(aiCount("failed")).isZero();   // 타임아웃은 명시 FAILED 와 구분된다
+	}
+
+	@Test
+	void 잡_404_유실은_job_lost를_증가시키고_다음_주기_재제출이_submitted로_잡힌다() {
+		// 1주기: poll 404 → 미제출 복귀 (MSG-283)
+		givenBlurring(blurring(7L, "job-old", LocalDateTime.now()));
+		given(aiClient.poll("job-old")).willReturn(new AiJobResult(null, null, true));
+		poller.reconcile();
+		assertThat(aiCount("job_lost")).isEqualTo(1.0);
+		assertThat(aiCount("submitted")).isZero();
+
+		// 2주기: clear 반영 행(jobId null) → 재제출도 submitted 로 다시 잡힌다 (스펙 표)
+		givenBlurring(blurring(7L, null, LocalDateTime.now()));
+		givenS3Download("encoded".getBytes());
+		given(aiClient.submit(any())).willReturn("job-new");
+		poller.reconcile();
+		assertThat(aiCount("submitted")).isEqualTo(1.0);
 	}
 
 	// 검증: FR-MEDIA-06

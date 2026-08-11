@@ -63,7 +63,8 @@ class VideoGridQueryServiceTest {
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
-			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
+			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
+			() -> new ZoneNameResolver(List.of()), mock(VideoProcessingMetrics.class));
 	}
 
 	private void givenVideos(Video... videos) {

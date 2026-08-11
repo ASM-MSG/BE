@@ -40,6 +40,9 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 	private final FfmpegRunner ffmpegRunner;
 	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
+	// 인코딩 태스크 결과 계측 (MSG-343) — completed·failed_over_duration·failed_error. rejected 는
+	// 태스크 본문이 돌지 않는 submit 스레드의 일이라 VideoServiceImpl.submitEncoding 이 센다.
+	private final VideoProcessingMetrics videoProcessingMetrics;
 
 	// AI 활성이면 인코딩 완료가 READY 대신 BLURRING 으로 가서 폴러가 이어받는다 (MSG-149).
 	// RegionSeeder 게이트 관례처럼 @Value 로 읽어 기본 off — 비활성이면 오늘 흐름(READY) 그대로다.
@@ -72,6 +75,7 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			if (duration > MAX_DURATION_SEC) {
 				log.warn("영상 길이 초과로 인코딩 중단: videoId={} duration={}s", videoId, duration);
 				statusWriter.markFailed(videoId, originalKey);
+				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_OVER_DURATION);
 				return;
 			}
 
@@ -105,11 +109,13 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 				upload(thumbnailKey, "image/jpeg", thumbnail);
 				statusWriter.markReady(videoId, originalKey, encodedKey, thumbnailKey);
 			}
+			videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_COMPLETED);
 			log.info("인코딩 완료: videoId={} duration={}s aiEnabled={}", videoId, duration, aiEnabled);
 		} catch (Exception e) {
 			// 비동기라 던져봐야 받을 곳이 없다. 기록만 남기고 재시도하지 않는다 (MSG-65 D8).
 			log.error("인코딩 실패: videoId={}", videoId, e);
 			statusWriter.markFailed(videoId, originalKey);
+			videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_ERROR);
 		} finally {
 			deleteQuietly(workDir);
 		}

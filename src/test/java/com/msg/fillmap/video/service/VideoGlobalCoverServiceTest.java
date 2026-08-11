@@ -69,7 +69,8 @@ class VideoGlobalCoverServiceTest {
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
-			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
+			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
+			() -> new ZoneNameResolver(List.of()), mock(VideoProcessingMetrics.class));
 
 		// 기본값 = 작성자가 살아 있다. 닉네임이 빈손이면 대표 없음(null)이 되므로(MSG-371), 닉네임을 안 보는
 		// 테스트도 이 기본 스텁이 있어야 대표를 받는다. 탈퇴 경합을 보는 테스트는 given 으로 덮어쓴다.

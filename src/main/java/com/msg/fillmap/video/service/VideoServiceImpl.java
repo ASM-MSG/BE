@@ -122,6 +122,8 @@ public class VideoServiceImpl implements VideoService {
 	private final FriendshipQueryService friendshipQueryService;
 	// 업로드 확정·재생 응답의 격자 표시명 (MSG-341). 단건 경로라 리졸버를 응답 조립 직전에 1회 받는다.
 	private final ZoneNameQueryService zoneNameQueryService;
+	// 처리 시간 시작점 등록·제거 (MSG-343 D2) — submitEncoding 진입(확정 커밋 직후)이 시작점이다.
+	private final VideoProcessingMetrics videoProcessingMetrics;
 	private final Clock clock;
 
 	/**
@@ -136,11 +138,12 @@ public class VideoServiceImpl implements VideoService {
 		RegionStatsCommandService regionStatsCommandService, ThumbnailUrlPresigner thumbnailUrlPresigner,
 		BadgeAwardService badgeAwardService, StreakCommandService streakCommandService,
 		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService,
-		FriendshipQueryService friendshipQueryService, ZoneNameQueryService zoneNameQueryService) {
+		FriendshipQueryService friendshipQueryService, ZoneNameQueryService zoneNameQueryService,
+		VideoProcessingMetrics videoProcessingMetrics) {
 		this(videoRepository, videoEncodingService, videoStatusWriter, s3Presigner, s3Client, awsProperties,
 			regionStatsCommandService, thumbnailUrlPresigner, badgeAwardService, streakCommandService,
 			missionAwardService, hotScoreCommandService, friendshipQueryService, zoneNameQueryService,
-			Clock.systemUTC());
+			videoProcessingMetrics, Clock.systemUTC());
 	}
 
 	@Override
@@ -323,6 +326,8 @@ public class VideoServiceImpl implements VideoService {
 		// 자동 flush 하기 때문이다(FlushMode.AUTO). 그러지 않으면 cover 재선정이 방금 지운 영상을
 		// 다시 고른다. VideoDeleteIntegrationTest 의 cover 재선정 테스트가 이 순서를 지킨다.
 		video.markDeleted();
+		// 종결이 오지 않을 처리 시간 시작점 제거 (MSG-343 D2) — 탈퇴 CASCADE 등 그 밖의 경로는 극소량 허용.
+		videoProcessingMetrics.removeStart(videoId);
 
 		// 지웠으면 실제로 지운다 (MSG-133). MSG-72 D2 의 "즉시 삭제 안 함"은 보존 원칙이 아니라
 		// "정리는 별도 배치 백로그"라는 범위 유예였고, undelete 기능은 없다. 파일이 영원히 남는 쪽이
@@ -403,10 +408,13 @@ public class VideoServiceImpl implements VideoService {
 	 * 영상이 UPLOADED 로 남는다. 그래서 여기서 삼키고 FAILED 로 기록한다.
 	 */
 	private void submitEncoding(Long videoId, String originalKey) {
+		// 처리 시간 시작점 (MSG-343 D2) — 확정 커밋 직후, 업로드·교체 공용. 교체는 같은 키를 덮어쓴다.
+		videoProcessingMetrics.markStart(videoId);
 		try {
 			videoEncodingService.encode(videoId, originalKey);
 		} catch (TaskRejectedException e) {
 			log.error("인코딩 큐 포화로 작업이 거부됨: videoId={}", videoId, e);
+			videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_REJECTED);
 			videoStatusWriter.markFailed(videoId, originalKey);
 		}
 	}
