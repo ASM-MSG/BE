@@ -2,6 +2,8 @@ package com.msg.fillmap.global;
 
 import java.util.stream.Collectors;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -10,10 +12,13 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import lombok.extern.slf4j.Slf4j;
+
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.response.ApiResponseDto;
 import com.msg.fillmap.response.ErrorCode;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -76,7 +81,11 @@ public class GlobalExceptionHandler {
 	}
 
 	@ExceptionHandler(Exception.class)
-	public ResponseEntity<ApiResponseDto<Object>> handleException(Exception e) {
+	public ResponseEntity<ApiResponseDto<Object>> handleException(Exception e, HttpServletRequest request) {
+		// 경로는 getRequestURI 만 — 쿼리 문자열·본문·헤더는 싣지 않는다(검색어·토큰 재유출 방지, MSG-342 D-1)
+		log.error("처리되지 않은 예외: {} {} developCode={}",
+				request.getMethod(), request.getRequestURI(),
+				ErrorCode.INTERNAL_SERVER_ERROR.getErrorCode(), e);
 		return ResponseEntity
 				.status(ErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus())
 				.body(ApiResponseDto.builder()
