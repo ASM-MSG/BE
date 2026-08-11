@@ -70,6 +70,7 @@ class PlaceSearchServiceTest {
 		return new KakaoPlace(name, name + " 지번", name + " 도로명", lat, lng);
 	}
 
+	// 검증: FR-SEARCH-02
 	@Test
 	void 트림_후_빈_검색어는_집계도_카카오_호출도_되지_않는다() {
 		// 빈 쿼리를 카카오에 흘리면 카카오가 400 을 내고 쿼터만 소모한다 — 호출 0 이 계약이다(§D3, 234 trim 가드 계승)
@@ -79,6 +80,7 @@ class PlaceSearchServiceTest {
 		verifyNoInteractions(searchKeywordCommandService);   // MSG-258 FR-9
 	}
 
+	// 검증: FR-SEARCH-05
 	@Test
 	void 카카오_호출이_실패해도_검색어는_집계된다() {
 		// 집계 훅이 카카오 호출 앞에 있으므로 5502 로 수렴하는 경로에서도 신호가 접수된다(MSG-258 FR-1)
@@ -91,6 +93,7 @@ class PlaceSearchServiceTest {
 		verify(searchKeywordCommandService).recordSearch(USER_ID, "부산대");
 	}
 
+	// 검증: FR-SEARCH-06
 	@Test
 	void 집계에는_trim된_검색어가_전달된다() {
 		given(kakaoLocalClient.search("부산대")).willReturn(List.of(place("부산대학교", 35.23272, 129.08246)));
@@ -100,6 +103,7 @@ class PlaceSearchServiceTest {
 		verify(searchKeywordCommandService).recordSearch(USER_ID, "부산대");
 	}
 
+	// 검증: FR-SEARCH-01
 	@Test
 	void 좌표를_격자ID로_즉석_계산해_결과에_싣는다() {
 		given(kakaoLocalClient.search("강남역"))
@@ -115,6 +119,7 @@ class PlaceSearchServiceTest {
 		assertThat(results.getFirst().lng()).isEqualTo(127.0276);
 	}
 
+	// 검증: FR-SEARCH-01
 	@Test
 	void 부산대_서면역_홍대입구역_광안리_좌표는_스모크_실측_격자ID와_일치한다() {
 		// 스모크 실측(스펙 §배경) 격자 셀 내부 좌표 fixture — 이 기대값이 깨지면 격자 인코딩 규칙이 변한 것이다(§D7)
@@ -130,6 +135,7 @@ class PlaceSearchServiceTest {
 			.containsExactly("16941_11439", "16858_11420", "19509_9491", "16854_11474");
 	}
 
+	// 검증: FR-ZONE-05
 	@Test
 	void 장소_검색_결과에_구역_이름이_붙는다() {
 		given(kakaoLocalClient.search("서면")).willReturn(List.of(
@@ -143,6 +149,7 @@ class PlaceSearchServiceTest {
 		assertThat(results).extracting(PlaceSearchResponseDto::zoneCell).containsExactly("A-1", null);
 	}
 
+	// 검증: FR-SEARCH-01
 	@Test
 	void 도로명주소가_있으면_도로명을_없으면_지번을_address로_쓴다() {
 		// §D2 주소 규칙 — FE 분기 제거용 1필드. 클라이언트가 누락을 "" 로 정규화하므로 isEmpty 분기 하나로 끝난다

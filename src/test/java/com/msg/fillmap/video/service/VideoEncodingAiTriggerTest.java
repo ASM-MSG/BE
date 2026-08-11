@@ -63,6 +63,7 @@ class VideoEncodingAiTriggerTest {
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 	}
 
+	// 검증: FR-MEDIA-05, FR-MEDIA-02
 	@Test
 	void AI_활성이면_인코딩_완료_시_BLURRING으로_전이하고_encoded_키가_저장된다() {
 		ReflectionTestUtils.setField(encodingService, "aiEnabled", true);
@@ -74,6 +75,7 @@ class VideoEncodingAiTriggerTest {
 		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any());
 	}
 
+	// 검증: FR-MEDIA-05
 	@Test
 	void AI_비활성이면_인코딩_완료_시_READY로_끝난다() {
 		ReflectionTestUtils.setField(encodingService, "aiEnabled", false);

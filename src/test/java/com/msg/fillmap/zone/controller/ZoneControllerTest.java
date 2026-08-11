@@ -45,6 +45,7 @@ class ZoneControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-ZONE-11
 	@Test
 	@DisplayName("구역 목록을 전체 반환한다")
 	void 구역_목록을_전체_반환한다() throws Exception {
@@ -61,6 +62,7 @@ class ZoneControllerTest {
 			.andExpect(jsonPath("$.data[0].maxGridY").value(39725));
 	}
 
+	// 검증: FR-ZONE-11
 	@Test
 	@DisplayName("zones 가 비어있으면 빈 배열 200 이다 (시딩 전)")
 	void zones가_비어있으면_빈_배열_200이다() throws Exception {

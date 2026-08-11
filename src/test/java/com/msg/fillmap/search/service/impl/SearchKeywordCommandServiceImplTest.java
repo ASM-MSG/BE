@@ -88,6 +88,7 @@ class SearchKeywordCommandServiceImplTest {
 		connectionFactory.destroy();
 	}
 
+	// 검증: FR-SEARCH-05
 	@Test
 	void 유효한_검색어_1건은_오늘_날짜의_카운트를_올린다() {
 		service.recordSearch(USER_ID, "부산대");
@@ -95,6 +96,7 @@ class SearchKeywordCommandServiceImplTest {
 		verify(repository).upsertIncrement(KST_DATE, "부산대");
 	}
 
+	// 검증: FR-SEARCH-06
 	@Test
 	void 연속_공백과_대소문자가_다른_검색어는_같은_검색어로_정규화되어_합산된다() {
 		service.recordSearch(USER_ID, "  홍대   Cafe  ");
@@ -103,6 +105,7 @@ class SearchKeywordCommandServiceImplTest {
 		verify(repository, times(2)).upsertIncrement(KST_DATE, "홍대 cafe");
 	}
 
+	// 검증: FR-SEARCH-06
 	@Test
 	void 같은_사용자가_같은_날_같은_검색어를_두번_검색해도_카운트는_한번만_오른다() {
 		service.recordSearch(USER_ID, "부산대");
@@ -111,6 +114,7 @@ class SearchKeywordCommandServiceImplTest {
 		verify(repository, times(1)).upsertIncrement(KST_DATE, "부산대");
 	}
 
+	// 검증: FR-SEARCH-06
 	@Test
 	void 다른_사용자의_같은_검색어는_각각_카운트된다() {
 		service.recordSearch(USER_ID, "부산대");
@@ -136,6 +140,7 @@ class SearchKeywordCommandServiceImplTest {
 		verify(repository).upsertIncrement(KST_DATE, keyword);
 	}
 
+	// 검증: FR-SEARCH-05
 	@Test
 	void 집계_날짜는_KST_기준으로_접수_시점에_확정된다() {
 		AtomicReference<Instant> now = new AtomicReference<>(FIXED_INSTANT);
@@ -183,6 +188,7 @@ class SearchKeywordCommandServiceImplTest {
 		assertThat(redisTemplate.opsForSet().members(DEDUPE_KEY)).containsExactly(USER_ID + ":부산대");
 	}
 
+	// 검증: FR-SEARCH-10
 	@Test
 	void 레디스_장애면_카운트를_올리지_않고_예외도_전파하지_않는다() {
 		LettuceConnectionFactory deadFactory = new LettuceConnectionFactory("localhost", 6390);
@@ -198,6 +204,7 @@ class SearchKeywordCommandServiceImplTest {
 		deadFactory.destroy();
 	}
 
+	// 검증: FR-SEARCH-10
 	@Test
 	void 집계_실패_로그에_검색어_원문이_남지_않는다() {
 		// 실패 예외 메시지는 바인딩 값(검색어)을 에코할 수 있다 — 예: Postgres UNIQUE 위반 DETAIL (MSG-342 D-2)
@@ -228,6 +235,7 @@ class SearchKeywordCommandServiceImplTest {
 		assertThatCode(() -> service.recordSearch(USER_ID, "부산대")).doesNotThrowAnyException();
 	}
 
+	// 검증: FR-SEARCH-10
 	@Test
 	void 큐가_포화되면_예외_없이_신호를_버린다() {
 		SearchKeywordCommandServiceImpl saturatedService = new SearchKeywordCommandServiceImpl(redisTemplate,

@@ -18,6 +18,7 @@ import tools.jackson.databind.ObjectMapper;
  * courses-seed.json 파서·검증 (MSG-225 모듈 1, 순수 단위 · DB 무관). 산출물 결함(D5·D6·D7 위반)은
  * 축제 파서의 행 스킵과 달리 **즉시 예외**다 — 코스는 파이프라인 산출물이라 결함 = 산출물 재생성 대상.
  */
+// 검증: FR-MISSION-09
 @DisplayName("CourseSeedReader 산출물 파싱·검증 — 위반 즉시 예외")
 class CourseSeedReaderTest {
 

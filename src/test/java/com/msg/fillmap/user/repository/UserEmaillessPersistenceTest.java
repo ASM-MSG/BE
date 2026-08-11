@@ -26,6 +26,7 @@ class UserEmaillessPersistenceTest {
 	@Autowired
 	private UserRepository userRepository;
 
+	// 검증: FR-USER-04
 	@Test
 	@DisplayName("이메일 없이(null) 카카오 유저가 저장된다 — V16 NOT NULL 해제 검증")
 	void 이메일_없이_카카오_유저가_저장된다() {

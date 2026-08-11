@@ -75,6 +75,7 @@ class RegionStatsCommandServiceTest {
 		assertThat(statsRowCount(user1)).isZero();
 	}
 
+	// 검증: FR-REGION-05
 	@Test
 	@DisplayName("refresh 는 격자 중심 행정동의 region_stats 를 recompute 한다")
 	void refresh는_격자_중심_행정동의_region_stats를_recompute한다() {

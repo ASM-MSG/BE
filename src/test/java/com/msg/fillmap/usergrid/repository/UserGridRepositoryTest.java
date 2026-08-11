@@ -52,6 +52,7 @@ class UserGridRepositoryTest {
 	@Autowired
 	private EntityManager em;
 
+	// 검증: FR-COLLECT-07
 	@Test
 	@DisplayName("점령 격자 수와 영상 총합을 집계한다")
 	void 점령_격자_수와_영상_총합을_집계한다() {
@@ -65,6 +66,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getTotalVideoCount()).isEqualTo(5L);
 	}
 
+	// 검증: FR-COLLECT-07
 	@Test
 	@DisplayName("점령이 없는 사용자는 격자수0 영상합0을 반환한다")
 	void 점령이_없는_사용자는_격자수0_영상합0을_반환한다() {
@@ -77,6 +79,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getTotalVideoCount()).isEqualTo(0L);
 	}
 
+	// 검증: FR-COLLECT-07
 	@Test
 	@DisplayName("프로덕션 데이터 형상에서 방문 행정동 수가 1 이상이다")
 	void 프로덕션_데이터_형상에서_방문_행정동_수가_1_이상이다() {
@@ -92,6 +95,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getVisitedRegionCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-COLLECT-07
 	@Test
 	@DisplayName("방문 행정동 수는 영상이 있는 격자들의 행정동 distinct 개수다")
 	void 방문_행정동_수는_영상이_있는_격자들의_행정동_distinct_개수다() {
@@ -113,6 +117,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getVisitedRegionCount()).isEqualTo(2);
 	}
 
+	// 검증: FR-COLLECT-07
 	@Test
 	@DisplayName("라벨 없는 격자의 영상은 방문 행정동 수에 포함되지 않는다")
 	void 라벨_없는_격자의_영상은_방문_행정동_수에_포함되지_않는다() {
@@ -131,6 +136,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getVisitedRegionCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-COLLECT-07
 	@Test
 	@DisplayName("DELETED 영상만 있는 행정동은 방문 수에 포함되지 않는다")
 	void DELETED_영상만_있는_행정동은_방문_수에_포함되지_않는다() {
@@ -148,6 +154,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getVisitedRegionCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-COLLECT-07
 	@Test
 	@DisplayName("BLINDED 영상의 행정동은 방문 행정동 수에 포함된다")
 	void BLINDED_영상의_행정동은_방문_행정동_수에_포함된다() {
@@ -167,6 +174,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getVisitedRegionCount()).isEqualTo(2);
 	}
 
+	// 검증: FR-COLLECT-07, FR-COLLECT-12
 	@Test
 	@DisplayName("다른 사용자의 점령과 영상은 집계에 포함되지 않는다")
 	void 다른_사용자의_점령과_영상은_집계에_포함되지_않는다() {
@@ -191,6 +199,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getVisitedRegionCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-STREAK-08
 	@Test
 	@DisplayName("스트릭 행이 없는 사용자는 새 세 지표가 모두 0이다")
 	void 스트릭_행이_없는_사용자는_새_세_지표가_모두_0이다() {
@@ -204,6 +213,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getBadgeCount()).isEqualTo(0);
 	}
 
+	// 검증: FR-STREAK-08
 	@Test
 	@DisplayName("오늘 기록한 사용자는 현재 스트릭이 저장값 그대로다")
 	void 오늘_기록한_사용자는_현재_스트릭이_저장값_그대로다() {
@@ -216,6 +226,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getMaxStreak()).isEqualTo(21);
 	}
 
+	// 검증: FR-STREAK-08
 	@Test
 	@DisplayName("마지막 기록이 어제면 현재 스트릭이 유지된다")
 	void 마지막_기록이_어제면_현재_스트릭이_유지된다() {
@@ -227,6 +238,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getCurrentStreak()).isEqualTo(5);
 	}
 
+	// 검증: FR-STREAK-08
 	@Test
 	@DisplayName("마지막 기록이 그제 이전이면 현재 스트릭은 0이고 최장 스트릭은 남는다")
 	void 마지막_기록이_그제_이전이면_현재_스트릭은_0이고_최장_스트릭은_남는다() {
@@ -240,6 +252,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getMaxStreak()).isEqualTo(21);
 	}
 
+	// 검증: FR-STREAK-08
 	@Test
 	@DisplayName("획득한 뱃지 수가 요약에 실린다")
 	void 획득한_뱃지_수가_요약에_실린다() {
@@ -252,6 +265,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getBadgeCount()).isEqualTo(2);
 	}
 
+	// 검증: FR-COLLECT-07
 	@Test
 	@DisplayName("기존 세 지표는 값이 변하지 않는다")
 	void 기존_세_지표는_값이_변하지_않는다() {
@@ -272,6 +286,7 @@ class UserGridRepositoryTest {
 		assertThat(summary.getVisitedRegionCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-COLLECT-07
 	@Test
 	@DisplayName("같은 행정동의 격자 여러개여도 행정동 수는 한번만 센다")
 	void 같은_행정동의_격자_여러개여도_행정동_수는_한번만_센다() {

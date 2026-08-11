@@ -65,6 +65,7 @@ class StaleTokenCleanerTest {
 			em.createNativeQuery("DELETE FROM users WHERE id = :me").setParameter("me", me).executeUpdate());
 	}
 
+	// 검증: FR-NOTI-05
 	@Test
 	@DisplayName("60일 무갱신 토큰이 삭제된다 — threshold 는 앱 UTC 계산 (D10)")
 	void 육십일_무갱신_토큰이_삭제된다() {
@@ -75,6 +76,7 @@ class StaleTokenCleanerTest {
 		assertThat(tokenCount()).isZero();
 	}
 
+	// 검증: FR-NOTI-05
 	@Test
 	@DisplayName("기준 이내 토큰은 남는다")
 	void 기준_이내_토큰은_남는다() {

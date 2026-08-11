@@ -30,6 +30,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  *
  * 격리(공유 로컬 DB): 99952 대역 합성 region_code + 서해 공해상 grid(GY 17516) + @Transactional 롤백.
  */
+// 검증: FR-COLLECT-09
 @SpringBootTest
 @Transactional
 @DisplayName("갤러리 목록 regionName (grids·regions equi-join, 실 PostGIS)")

@@ -100,6 +100,7 @@ class VideoViewCountQueryTest {
 		em.createNativeQuery(sql).setParameter(param, value).executeUpdate();
 	}
 
+	// 검증: FR-VIDEO-14
 	@Test
 	@DisplayName("incrementViewCount 는 view_count 를 1 증가시킨다")
 	void incrementViewCount는_view_count를_1_증가시킨다() {
@@ -108,6 +109,7 @@ class VideoViewCountQueryTest {
 		assertThat(viewCount()).isEqualTo(1L);
 	}
 
+	// 검증: FR-VIDEO-14
 	@Test
 	@DisplayName("incrementViewCount 동시 호출도 원자적으로 누락없이 증가한다")
 	void incrementViewCount_동시_호출도_원자적으로_누락없이_증가한다() throws Exception {

@@ -87,6 +87,7 @@ class VideoS3KeyValidationTest {
 			.getSingleResult()).longValue();
 	}
 
+	// 검증: FR-VIDEO-08
 	@Test
 	@DisplayName("S3 에 없는 s3Key 로는 저장도 점령도 안 된다 — 핵심")
 	void 올리지_않은_s3Key는_거부된다() {
@@ -100,6 +101,7 @@ class VideoS3KeyValidationTest {
 		assertThat(userGridCount()).as("파일 없이 격자가 점령되면 안 된다").isZero();
 	}
 
+	// 검증: FR-VIDEO-08
 	@Test
 	void 형식이_아예_다른_s3Key는_거부된다() {
 		assertThatThrownBy(() -> videoService.saveVideo(userId, request("아무거나")))
@@ -108,6 +110,7 @@ class VideoS3KeyValidationTest {
 		assertThat(userGridCount()).isZero();
 	}
 
+	// 검증: FR-VIDEO-08
 	@Test
 	void 타인_경로의_s3Key는_거부된다() {
 		String othersKey = "videos/pending/" + (userId + 999) + "/" + java.util.UUID.randomUUID() + ".mp4";
@@ -118,6 +121,7 @@ class VideoS3KeyValidationTest {
 		assertThat(userGridCount()).isZero();
 	}
 
+	// 검증: FR-VIDEO-08
 	@Test
 	void 같은_s3Key_를_두_번_확정할_수_없다() {
 		String key = myKey();
@@ -133,6 +137,7 @@ class VideoS3KeyValidationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_S3_KEY);
 	}
 
+	// 검증: FR-VIDEO-04, FR-MEDIA-14
 	@Test
 	@DisplayName("선분석용 대용량 presign 으로 올린 객체는 확정 단계에서 크기로 거부된다")
 	void 상한을_넘는_pending_객체는_확정할_수_없다() {
@@ -148,6 +153,7 @@ class VideoS3KeyValidationTest {
 		assertThat(userGridCount()).isZero();
 	}
 
+	// 검증: FR-VIDEO-08
 	@Test
 	@DisplayName("정상 업로드(실제로 S3 에 있는 내 키)는 그대로 통과한다")
 	void 정상_업로드는_통과한다() {

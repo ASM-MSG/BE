@@ -138,6 +138,7 @@ class ReportIntegrationTest {
 		return reportService.report(reporterId, videoId, new ReportCreateRequestDto(reason, detail));
 	}
 
+	// 검증: FR-MOD-01
 	@Test
 	@DisplayName("타인의 ACTIVE 영상 신고는 PENDING 으로 접수되고 reportId 를 반환한다 (FR-1)")
 	void 타인의_ACTIVE_영상_신고는_PENDING으로_접수되고_reportId를_반환한다() {
@@ -153,6 +154,7 @@ class ReportIntegrationTest {
 		assertThat(reportCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-MOD-02
 	@Test
 	@DisplayName("OTHER 가 아닌 사유는 상세 설명 없이 접수된다 (FR-5a)")
 	void OTHER가_아닌_사유는_상세_설명_없이_접수된다() {
@@ -163,6 +165,7 @@ class ReportIntegrationTest {
 		assertThat(saved.getDetail()).isNull();
 	}
 
+	// 검증: FR-MOD-02
 	@Test
 	@DisplayName("상세 설명을 보내면 그대로 저장된다 — OTHER 가 아닌 사유도 포함 (FR-5a)")
 	void 상세_설명을_보내면_그대로_저장된다() {
@@ -179,6 +182,7 @@ class ReportIntegrationTest {
 		assertThat(withSpam.getDetail()).isEqualTo("같은 광고 반복");
 	}
 
+	// 검증: FR-MOD-01
 	@Test
 	@DisplayName("지원하지 않는 reason 은 11400 으로 거부된다 (FR-5)")
 	void 지원하지_않는_reason은_11400으로_거부된다() {
@@ -188,6 +192,7 @@ class ReportIntegrationTest {
 		assertThat(reportCount()).isZero();
 	}
 
+	// 검증: FR-MOD-02
 	@Test
 	@DisplayName("OTHER 사유에 상세 설명이 없으면 11401 로 거부된다 — null 과 공백 둘 다 (FR-5a)")
 	void OTHER_사유에_상세_설명이_없으면_11401로_거부된다() {
@@ -200,6 +205,7 @@ class ReportIntegrationTest {
 		assertThat(reportCount()).isZero();
 	}
 
+	// 검증: FR-MOD-02
 	@Test
 	@DisplayName("상세 설명 500자 초과는 400 이다 — Bean Validation (FR-5a)")
 	void 상세_설명_500자_초과는_400으로_거부된다() throws Exception {
@@ -215,6 +221,7 @@ class ReportIntegrationTest {
 		assertThat(reportCount()).isZero();
 	}
 
+	// 검증: FR-MOD-04
 	@Test
 	@DisplayName("존재하지 않는 영상 신고는 404 다 (FR-3)")
 	void 존재하지_않는_영상_신고는_404다() {
@@ -224,6 +231,7 @@ class ReportIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
+	// 검증: FR-MOD-04
 	@Test
 	@DisplayName("DELETED 영상 신고는 404 다 — 재생 경로와 같은 존재 은닉 (FR-3)")
 	void DELETED_영상_신고는_404다() {
@@ -234,6 +242,7 @@ class ReportIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
+	// 검증: FR-MOD-04
 	@Test
 	@DisplayName("BLINDED 영상 신고는 404 다 — 소유자 여부와 무관 (FR-3)")
 	void BLINDED_영상_신고는_404다() {
@@ -244,6 +253,7 @@ class ReportIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
+	// 검증: FR-MOD-04
 	@Test
 	@DisplayName("자기 영상 신고는 11402 로 거부된다 (FR-4)")
 	void 자기_영상_신고는_11402로_거부된다() {
@@ -252,6 +262,7 @@ class ReportIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", ReportErrorCode.SELF_REPORT);
 	}
 
+	// 검증: FR-MOD-03
 	@Test
 	@DisplayName("같은 영상 재신고는 11409 로 거부되고 행이 늘지 않는다 (FR-2)")
 	void 같은_영상_재신고는_11409로_거부되고_행이_늘지_않는다() {
@@ -263,6 +274,7 @@ class ReportIntegrationTest {
 		assertThat(reportCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-MOD-03
 	@Test
 	@DisplayName("처리 완료된 신고가 있어도 재신고는 거부된다 — 유니크는 status 무관 (§D3)")
 	void 처리_완료된_신고가_있어도_재신고는_거부된다() {
@@ -278,6 +290,7 @@ class ReportIntegrationTest {
 		assertThat(reportCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-MOD-03
 	@Test
 	@DisplayName("동일 신고 2행 저장은 유니크 제약이 막는다 — V27 백스톱 (§D2)")
 	void 동일_신고_2행_저장은_유니크_제약이_막는다() {
@@ -290,6 +303,7 @@ class ReportIntegrationTest {
 			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
+	// 검증: FR-MOD-05
 	@Test
 	@DisplayName("신고 접수는 영상 상태를 바꾸지 않는다 — 자동 블라인드 없음 (확정 2번)")
 	void 신고_접수는_영상_상태를_바꾸지_않는다() {

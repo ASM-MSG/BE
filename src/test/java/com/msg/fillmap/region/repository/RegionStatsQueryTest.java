@@ -75,6 +75,7 @@ class RegionStatsQueryTest {
 		seedStats(userId, code, collected, total, rate, LocalDateTime.of(2026, 7, 20, 10, 0, 0));
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("내 region_stats 를 regions 와 조인해 regionName 과 parentCode 가 채워진다")
 	void 내_region_stats를_regions와_조인해_regionName과_parentCode가_채워진다() {
@@ -93,6 +94,7 @@ class RegionStatsQueryTest {
 		assertThat(row.getTotalCount()).isEqualTo(20);
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("parentCode 로 필터하면 그 시군구 산하 행정동 stats 만 반환된다")
 	void parentCode로_필터하면_그_시군구_산하_행정동_stats만_반환된다() {
@@ -109,6 +111,7 @@ class RegionStatsQueryTest {
 		assertThat(stats.get(0).getRegionCode()).isEqualTo(inParent);
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("collectedOnly true 면 collected_count 가 0 인 롤백행은 제외된다")
 	void collectedOnly_true면_collected_count가_0인_롤백행은_제외된다() {
@@ -125,6 +128,7 @@ class RegionStatsQueryTest {
 		assertThat(stats.get(0).getRegionCode()).isEqualTo(occupied);
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("collectedOnly false 면 collected_count 가 0 인 손댄행도 포함된다")
 	void collectedOnly_false면_collected_count가_0인_손댄행도_포함된다() {
@@ -141,6 +145,7 @@ class RegionStatsQueryTest {
 			.containsExactlyInAnyOrder(occupied, rolledBack);
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("수집한 행정동이 없으면 빈 리스트를 반환한다")
 	void 수집한_행정동이_없으면_빈_리스트를_반환한다() {
@@ -149,6 +154,7 @@ class RegionStatsQueryTest {
 		assertThat(stats).isEmpty();
 	}
 
+	// 검증: FR-REGION-04
 	@Test
 	@DisplayName("progress_rate 가 100 을 넘어도 100 으로 clamp 되어 반환된다")
 	void progress_rate가_100을_넘어도_100으로_clamp되어_반환된다() {
@@ -161,6 +167,7 @@ class RegionStatsQueryTest {
 		assertThat(stats.get(0).getProgressRate()).isEqualByComparingTo("100.00");
 	}
 
+	// 검증: FR-REGION-06
 	@Test
 	@DisplayName("다른 사용자의 region_stats 는 섞이지 않는다")
 	void 다른_사용자의_region_stats는_섞이지_않는다() {
@@ -190,6 +197,7 @@ class RegionStatsQueryTest {
 		assertThat(stats.get(0).getUpdatedAt()).isEqualTo(cachedAt);
 	}
 
+	// 검증: FR-REGION-12
 	@Test
 	@DisplayName("조회는 geospatial 없이 region_stats 와 regions equi-join 만 한다")
 	void 조회는_geospatial_없이_region_stats와_regions_equi_join만_한다() throws Exception {

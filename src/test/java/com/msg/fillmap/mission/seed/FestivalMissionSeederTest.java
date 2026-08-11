@@ -17,6 +17,7 @@ import com.msg.fillmap.mission.entity.MissionGrid;
  * 시더 순수 로직 검증 (MSG-224 모듈 2, DB 무관). 9×9 전개(D2) · KST→UTC 변환(D5, MSG-223 §D3 계약) ·
  * 중심 격자+기간 dedupe 키(D3)를 본다. 러너 배선·DB 경로는 통합 테스트(모듈 3) 담당.
  */
+// 검증: FR-MISSION-08
 @DisplayName("FestivalMissionSeeder 순수 로직 — 9×9 전개·시간 변환·dedupe")
 class FestivalMissionSeederTest {
 

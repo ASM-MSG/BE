@@ -63,6 +63,7 @@ class RedisRefreshTokenStoreTest {
 		assertThat(store.findJti(USER_ID, "device-a")).isNull();
 	}
 
+	// 검증: FR-AUTH-06
 	@Test
 	void 같은_유저의_다른_deviceId는_서로_독립적으로_저장_삭제된다() {
 		store.save(USER_ID, "device-a", "jti-a", TTL);
@@ -74,6 +75,7 @@ class RedisRefreshTokenStoreTest {
 		assertThat(store.findJti(USER_ID, "device-b")).isEqualTo("jti-b");
 	}
 
+	// 검증: FR-AUTH-05
 	@Test
 	void TTL_2주가_설정된다() {
 		store.save(USER_ID, "device-a", "jti-1", TTL);

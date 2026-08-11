@@ -31,6 +31,7 @@ import com.msg.fillmap.user.entity.UserRole;
  * 등록한 CustomAccessDeniedHandler 가 만든다 — 미등록이면 스프링 시큐리티 기본 핸들러가 /error 로
  * 포워드해 Boot 기본 에러 JSON(timestamp·status·path)이 나가고 developCode 가 없다 (§D7).
  */
+// 검증: FR-MOD-13
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(AdminAuthorizationTest.AdminProbeController.class)

@@ -48,6 +48,7 @@ class VideoControllerTest {
 	@MockitoBean
 	private HighlightPreviewService highlightPreviewService;
 
+	// 검증: FR-VIDEO-01
 	@Test
 	@DisplayName("duration 이 30 초를 초과하면 400 을 반환하고 서비스는 호출되지 않는다")
 	void duration_31이면_400() throws Exception {

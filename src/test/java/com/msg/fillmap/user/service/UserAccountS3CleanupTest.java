@@ -67,6 +67,7 @@ class UserAccountS3CleanupTest {
 			.toList();
 	}
 
+	// 검증: FR-USER-08
 	@Test
 	void 삭제_시_그_유저_영상의_원본_인코딩본_썸네일_블러본_키가_S3_삭제_요청에_담긴다() {
 		// 인코딩 완료 영상(4키 전부) + 미인코딩 영상(원본만, 나머지 null — null 은 요청에서 제외돼야 한다).
@@ -82,6 +83,7 @@ class UserAccountS3CleanupTest {
 			"k-original", "k-encoded", "k-thumb", "k-blurred", "k-raw-original");
 	}
 
+	// 검증: FR-USER-08
 	@Test
 	void 영상이_없으면_S3_삭제_요청을_보내지_않는다() {
 		given(userRepository.findAllS3KeysByUserId(USER_ID)).willReturn(List.of());
@@ -91,6 +93,7 @@ class UserAccountS3CleanupTest {
 		then(s3Client).should(never()).deleteObjects(any(DeleteObjectsRequest.class));
 	}
 
+	// 검증: FR-USER-08, FR-USER-09
 	@Test
 	void S3_삭제_실패는_응답을_실패로_만들지_않는다() {
 		given(userRepository.findAllS3KeysByUserId(USER_ID)).willReturn(
@@ -106,6 +109,7 @@ class UserAccountS3CleanupTest {
 		then(tokenProvider).should().invalidateAccessToken("access-token");
 	}
 
+	// 검증: FR-USER-09
 	@Test
 	void refresh_삭제_실패가_액세스_토큰_블랙리스트를_막지_않는다() {
 		given(userRepository.findAllS3KeysByUserId(USER_ID)).willReturn(List.of());
@@ -117,6 +121,7 @@ class UserAccountS3CleanupTest {
 		then(tokenProvider).should().invalidateAccessToken("access-token");
 	}
 
+	// 검증: FR-USER-08
 	@Test
 	void 영상이_1000건을_넘으면_요청이_청크로_분할된다() {
 		// 1001개 단일 키 행 → 1000 + 1 두 요청 (DeleteObjects 요청당 상한).

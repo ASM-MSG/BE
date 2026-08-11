@@ -86,6 +86,7 @@ class HotScoreCommandServiceImplTest {
 		connectionFactory.destroy();
 	}
 
+	// 검증: FR-HOTZONE-02, FR-HOTZONE-03
 	@Test
 	void 업로드_신호_1건은_현재_버킷의_해당_격자_핫스코어를_1_올린다() {
 		service.recordUpload(GRID_ID);
@@ -93,6 +94,7 @@ class HotScoreCommandServiceImplTest {
 		assertThat(redisTemplate.opsForZSet().score(BUCKET_KEY, GRID_ID)).isEqualTo(1.0);
 	}
 
+	// 검증: FR-HOTZONE-02, FR-HOTZONE-03
 	@Test
 	void 같은_격자에_신호가_반복되면_핫스코어가_누적된다() {
 		service.recordUpload(GRID_ID);
@@ -102,6 +104,7 @@ class HotScoreCommandServiceImplTest {
 		assertThat(redisTemplate.opsForZSet().score(BUCKET_KEY, GRID_ID)).isEqualTo(3.0);
 	}
 
+	// 검증: FR-HOTZONE-04
 	@Test
 	void 버킷_키에_54시간_TTL이_설정된다() {
 		service.recordUpload(GRID_ID);
@@ -125,6 +128,7 @@ class HotScoreCommandServiceImplTest {
 		assertThat(redisTemplate.opsForZSet().score(NEXT_BUCKET_KEY, GRID_ID)).isEqualTo(1.0);
 	}
 
+	// 검증: FR-HOTZONE-03
 	@Test
 	void 워커_실행이_버킷_경계를_넘겨_지연돼도_호출_시각_버킷에_기록된다() {
 		AtomicReference<Instant> now = new AtomicReference<>(FIXED_INSTANT);
@@ -140,6 +144,7 @@ class HotScoreCommandServiceImplTest {
 		assertThat(redisTemplate.opsForZSet().score(NEXT_BUCKET_KEY, GRID_ID)).isNull();
 	}
 
+	// 검증: FR-HOTZONE-05
 	@Test
 	void 큐가_포화되면_예외_없이_신호를_버린다() {
 		HotScoreCommandServiceImpl saturatedService = serviceWithFailingExecutor(
@@ -226,6 +231,7 @@ class HotScoreCommandServiceImplTest {
 		assertThat(logAppender.list.get(1).getFormattedMessage()).contains("종료 시점 잔여분").contains("1건");
 	}
 
+	// 검증: FR-HOTZONE-05
 	@Test
 	void 포화가_아닌_적재_실패는_스택_추적을_남긴다() {
 		HotScoreCommandServiceImpl brokenService = serviceWithFailingExecutor(
@@ -316,6 +322,7 @@ class HotScoreCommandServiceImplTest {
 		deadFactory.destroy();
 	}
 
+	// 검증: FR-HOTZONE-05, FR-HOTZONE-11
 	@Test
 	void Redis_장애에도_예외를_전파하지_않는다() {
 		LettuceConnectionFactory deadFactory = new LettuceConnectionFactory("localhost", 6390);

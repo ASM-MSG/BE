@@ -92,6 +92,7 @@ class BadgeAwardServiceIntegrationTest {
 	@DisplayName("지급 엔진 (§D5)")
 	class 지급_엔진 {
 
+		// 검증: FR-BADGE-03
 		@Test
 		@DisplayName("이미 획득한 뱃지는 같은 행동을 반복해도 다시 지급되지 않는다 (FR-3)")
 		void 이미_획득한_뱃지는_같은_행동을_반복해도_다시_지급되지_않는다() {
@@ -105,6 +106,7 @@ class BadgeAwardServiceIntegrationTest {
 			assertThat(earnedCodes()).containsExactly("EXPLORER_1");
 		}
 
+		// 검증: FR-BADGE-03
 		@Test
 		@DisplayName("하나의 행동으로 여러 티어를 동시에 충족하면 전부 지급된다 (FR-4)")
 		void 하나의_행동으로_여러_티어를_동시에_충족하면_전부_지급된다() {
@@ -117,6 +119,7 @@ class BadgeAwardServiceIntegrationTest {
 			assertThat(earnedCodes()).containsExactlyInAnyOrder("EXPLORER_1", "EXPLORER_10");
 		}
 
+		// 검증: FR-BADGE-03
 		@Test
 		@DisplayName("동시 업로드에서도 user_badges 에 중복 row 가 생기지 않는다 — ON CONFLICT(FR-3)")
 		void 동시_업로드에서도_user_badges에_중복_row가_생기지_않는다() {
@@ -146,6 +149,7 @@ class BadgeAwardServiceIntegrationTest {
 	@DisplayName("업로드 훅·응답 동봉 (§D3·FR-9)")
 	class 업로드_훅 {
 
+		// 검증: FR-COLLECT-01, FR-BADGE-02, FR-BADGE-05
 		@Test
 		@DisplayName("첫 업로드는 첫 발자국 뱃지를 지급하고 응답에 동봉한다 (EXPLORER_1)")
 		void 첫_업로드는_첫_발자국_뱃지를_지급하고_응답에_동봉한다() {
@@ -156,6 +160,7 @@ class BadgeAwardServiceIntegrationTest {
 			assertThat(earnedCodes()).contains("EXPLORER_1");
 		}
 
+		// 검증: FR-BADGE-08
 		@Test
 		@DisplayName("동기 지급분은 notified_at 이 기록된다 (§D8)")
 		void 동기_지급분은_notified_at이_기록된다() {
@@ -169,6 +174,7 @@ class BadgeAwardServiceIntegrationTest {
 			assertThat(unnotified.longValue()).isZero();
 		}
 
+		// 검증: FR-BADGE-02
 		@Test
 		@DisplayName("재방문 업로드는 업로드 수 뱃지만 판정한다 — 축 한정(FR-2)")
 		void 재방문_업로드는_업로드_수_뱃지만_판정한다() {
@@ -182,6 +188,7 @@ class BadgeAwardServiceIntegrationTest {
 			then(badgeAwardService).should(never()).awardCollectionBadges(eq(userId), any());
 		}
 
+		// 검증: FR-BADGE-02, FR-BADGE-05
 		@Test
 		@DisplayName("수집률이 임계를 넘으면 지역 마스터 뱃지가 지급된다 (10% → REGION_MASTER_10)")
 		void 수집률이_임계를_넘으면_지역_마스터_뱃지가_지급된다() {
@@ -195,6 +202,7 @@ class BadgeAwardServiceIntegrationTest {
 				.containsExactlyInAnyOrder("EXPLORER_1", "REGION_MASTER_10");
 		}
 
+		// 검증: FR-BADGE-02
 		@Test
 		@DisplayName("무라벨 격자 수집은 지역 뱃지 판정을 건너뛴다 (§D4 no-op)")
 		void 무라벨_격자_수집은_지역_뱃지_판정을_건너뛴다() {
@@ -206,6 +214,7 @@ class BadgeAwardServiceIntegrationTest {
 				.containsExactly("EXPLORER_1");
 		}
 
+		// 검증: FR-BADGE-05
 		@Test
 		@DisplayName("조건 미충족이면 응답의 newBadges 는 빈 배열이다")
 		void 조건_미충족이면_응답의_newBadges는_빈_배열이다() {
@@ -222,6 +231,7 @@ class BadgeAwardServiceIntegrationTest {
 	@DisplayName("비회수 (FR-5)")
 	class 비회수 {
 
+		// 검증: FR-BADGE-04, FR-COLLECT-02
 		@Test
 		@DisplayName("영상을 모두 삭제해 수집이 롤백되어도 획득한 뱃지는 유지된다")
 		void 영상을_모두_삭제해_수집이_롤백되어도_획득한_뱃지는_유지된다() {

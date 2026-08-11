@@ -48,6 +48,7 @@ class CollectionControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-COLLECT-07, FR-STREAK-08
 	@Test
 	@DisplayName("도감 요약 조회는 200 과 여섯 집계 필드를 반환한다")
 	void 도감_요약_조회는_200과_여섯_집계_필드를_반환한다() throws Exception {
@@ -66,6 +67,7 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.data.badgeCount").value(7));
 	}
 
+	// 검증: FR-COLLECT-07, FR-STREAK-08
 	@Test
 	@DisplayName("점령이 0건인 사용자는 모든 필드가 0인 요약을 받는다")
 	void 점령이_0건인_사용자는_모든_필드가_0인_요약을_받는다() throws Exception {
@@ -92,6 +94,7 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(2403));
 	}
 
+	// 검증: FR-COLLECT-08, FR-COLLECT-09
 	@Test
 	@DisplayName("인증된 요청은 200 과 갤러리 격자 리스트를 반환한다")
 	void 인증된_요청은_200과_갤러리_격자_리스트를_반환한다() throws Exception {
@@ -119,6 +122,7 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.data[0].zoneCell").value("I-9"));
 	}
 
+	// 검증: FR-COLLECT-08
 	@Test
 	@DisplayName("점령 0건 사용자는 200 과 빈 배열을 받는다")
 	void 점령0건_사용자는_200과_빈_배열을_받는다() throws Exception {
@@ -139,6 +143,7 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(2403));
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("동 단위 영상 조회는 200 과 gridId 포함 영상 리스트를 반환한다")
 	void 동_단위_영상_조회는_200과_gridId_포함_영상_리스트를_반환한다() throws Exception {
@@ -163,6 +168,7 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.data[0].zoneCell").value("I-9"));
 	}
 
+	// 검증: FR-COLLECT-10
 	@Test
 	@DisplayName("그 행정동에 내 영상이 없으면 200 과 빈 배열이다")
 	void 그_행정동에_내_영상이_없으면_200과_빈_배열이다() throws Exception {
@@ -194,6 +200,7 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(2403));
 	}
 
+	// 검증: FR-STREAK-08
 	@Test
 	@DisplayName("업로드 기록 조회는 200 과 날짜별 건수 배열을 반환한다")
 	void 업로드_기록_조회는_200과_날짜별_건수_배열을_반환한다() throws Exception {
@@ -212,6 +219,7 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.data[1].uploadCount").value(1));
 	}
 
+	// 검증: FR-STREAK-08
 	@Test
 	@DisplayName("업로드 0건 사용자는 200 과 빈 배열을 받는다")
 	void 업로드_0건_사용자는_200과_빈_배열을_받는다() throws Exception {

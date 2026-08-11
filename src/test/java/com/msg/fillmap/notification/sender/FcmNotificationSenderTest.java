@@ -39,6 +39,7 @@ class FcmNotificationSenderTest {
 	@InjectMocks
 	private FcmNotificationSender sender;
 
+	// 검증: FR-NOTI-05
 	@Test
 	@DisplayName("501개 토큰은 500 단위 2회 호출로 나뉘고 successCount·invalidTokens 가 합산된다")
 	void 오백_초과_토큰은_500_단위로_나눠_호출하고_결과를_합산한다() throws FirebaseMessagingException {

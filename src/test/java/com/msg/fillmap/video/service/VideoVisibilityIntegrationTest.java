@@ -105,6 +105,7 @@ class VideoVisibilityIntegrationTest {
 			.executeUpdate();
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	void 본인_영상을_PUBLIC으로_전환하면_visibility가_PUBLIC이_된다() {
 		long videoId = upload();
@@ -113,6 +114,7 @@ class VideoVisibilityIntegrationTest {
 		assertThat(visibilityOf(videoId)).as("DB 에도 반영된다").isEqualTo("PUBLIC");
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	void 본인_영상을_다시_PRIVATE로_전환할_수_있다() {
 		long videoId = upload();
@@ -122,6 +124,7 @@ class VideoVisibilityIntegrationTest {
 		assertThat(visibilityOf(videoId)).isEqualTo("PRIVATE");
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	void 타인_영상을_전환하면_VIDEO_FORBIDDEN이다() {
 		long videoId = upload();
@@ -150,6 +153,7 @@ class VideoVisibilityIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	void 허용_외_값이면_INVALID_VISIBILITY다() {
 		long videoId = upload();
@@ -160,6 +164,7 @@ class VideoVisibilityIntegrationTest {
 			.hasMessageContaining("PUBLIC, PRIVATE, FRIENDS");   // 3 값 안내 (MSG-285 FR-8)
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	@DisplayName("공개범위를 FRIENDS 로 전환하고 다시 PUBLIC 으로 되돌릴 수 있다 (MSG-285 FR-2)")
 	void 공개범위를_FRIENDS로_전환하고_다시_PUBLIC으로_되돌릴_수_있다() {
@@ -172,6 +177,7 @@ class VideoVisibilityIntegrationTest {
 		assertThat(visibilityOf(videoId)).isEqualTo("PUBLIC");
 	}
 
+	// 검증: FR-VIDEO-17
 	@Test
 	@DisplayName("FRIENDS 영상은 격자 대표 영상·격자 전역 목록 어디에도 잡히지 않는다 (MSG-285 FR-7)")
 	void FRIENDS_영상은_전역_노출_경로에_잡히지_않는다() {
@@ -192,6 +198,7 @@ class VideoVisibilityIntegrationTest {
 		assertThat(globalVideos()).map(Video::getId).containsExactly(videoId);
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	@DisplayName("V20 이후 visibility='FRIENDS' 행은 CHECK 를 통과하고 허용 외 값은 위반한다 (MSG-285)")
 	void FRIENDS는_CHECK를_통과하고_허용_외_값은_위반한다() {
@@ -215,6 +222,7 @@ class VideoVisibilityIntegrationTest {
 		assertThat(visibilityOf(videoId)).isEqualTo("PUBLIC");
 	}
 
+	// 검증: FR-VIDEO-15
 	@Test
 	void 인코딩중_UPLOADED_영상도_PUBLIC으로_전환된다() {
 		long videoId = upload();   // 업로드 직후는 UPLOADED — 노출 게이트는 read 경로 책임이라 전환은 허용된다
@@ -248,6 +256,7 @@ class VideoVisibilityIntegrationTest {
 			.isEqualTo("DELETED");
 	}
 
+	// 검증: FR-VIDEO-17
 	@Test
 	@DisplayName("PRIVATE만 있던 격자는 대표가 null이지만 PUBLIC·READY로 전환하면 대표로 잡힌다 (MSG-87 연동)")
 	void PRIVATE만_있던_격자는_대표가_null이지만_PUBLIC_READY로_전환하면_대표로_잡힌다() {

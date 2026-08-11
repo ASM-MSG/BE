@@ -45,6 +45,7 @@ class HotZoneControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-HOTZONE-09
 	@Test
 	@DisplayName("뷰포트 파라미터가 누락되면 공통 400 이다")
 	void 뷰포트_파라미터가_누락되면_공통_400이다() throws Exception {
@@ -56,6 +57,7 @@ class HotZoneControllerTest {
 			.andExpect(jsonPath("$.developCode").value(400));   // 전역 핸들러 경로 — 8400 아님
 	}
 
+	// 검증: FR-HOTZONE-10
 	@Test
 	@DisplayName("응답에 user_id 가 포함되지 않는다")
 	void 응답에_user_id가_포함되지_않는다() throws Exception {
@@ -70,6 +72,7 @@ class HotZoneControllerTest {
 			.andExpect(jsonPath("$.data.hotZones[0].user_id").doesNotExist());
 	}
 
+	// 검증: FR-ZONE-05, FR-REGION-08
 	@Test
 	@DisplayName("핫구역 목록이 핫스코어 내림차순 JSON 으로 직렬화된다")
 	void 핫구역_목록이_핫스코어_내림차순_JSON으로_직렬화된다() throws Exception {

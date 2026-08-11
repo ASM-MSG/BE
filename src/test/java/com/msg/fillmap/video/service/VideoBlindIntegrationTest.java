@@ -181,6 +181,7 @@ class VideoBlindIntegrationTest {
 		assertThat(videoService.getVideoPlayback(otherUserId, videoId).status()).isEqualTo("ACTIVE");
 	}
 
+	// 검증: FR-VIDEO-13, FR-MOD-06
 	@Test
 	void 블라인드된_영상은_타인_재생이_404_로_거부된다() {
 		long videoId = upload("PUBLIC");
@@ -192,6 +193,7 @@ class VideoBlindIntegrationTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
+	// 검증: FR-VIDEO-13, FR-MOD-06
 	@Test
 	void 블라인드된_영상은_소유자_조회에서_상태는_보이지만_재생_URL_이_발급되지_않는다() {
 		long videoId = upload("PUBLIC");
@@ -207,6 +209,7 @@ class VideoBlindIntegrationTest {
 		assertThat(playback.expiresInSec()).isNull();
 	}
 
+	// 검증: FR-MOD-06
 	@Test
 	void 블라인드된_영상은_격자_전역_대표에서_제외된다() {
 		long videoId = upload("PUBLIC");
@@ -220,6 +223,7 @@ class VideoBlindIntegrationTest {
 		assertThat(videoService.getGridCover(gridId)).isNull();
 	}
 
+	// 검증: FR-MOD-06
 	@Test
 	void 블라인드된_영상은_격자_전역_목록에서_제외된다() {
 		long kept = upload("PUBLIC");
@@ -232,6 +236,7 @@ class VideoBlindIntegrationTest {
 		assertThat(globalVideoIds()).contains(kept).doesNotContain(blinded);
 	}
 
+	// 검증: FR-MOD-06
 	@Test
 	void 블라인드된_영상은_격자별_내_영상_리스트에서_제외된다() {
 		long kept = upload("PRIVATE");
@@ -286,6 +291,7 @@ class VideoBlindIntegrationTest {
 		assertThat(coverVideoId()).as("해제는 상태 복귀만 한다 (D6)").isEqualTo(second);
 	}
 
+	// 검증: FR-MOD-08
 	@Test
 	void 블라인드_전환과_해제는_점령_row_와_video_count_를_바꾸지_않는다() {
 		long videoId = upload("PRIVATE");

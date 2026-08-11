@@ -163,6 +163,7 @@ class RegionExploreQueryTest {
 		assertThat(card.getCoverDurationSec()).isEqualTo((short) 10);
 	}
 
+	// 검증: FR-VIDEO-17
 	@Test
 	@DisplayName("PRIVATE_영상만_있는_격자는_카드에_나오지_않는다")
 	void PRIVATE_영상만_있는_격자는_카드에_나오지_않는다() {
@@ -439,6 +440,7 @@ class RegionExploreQueryTest {
 		assertThat(row.getGridCount()).isEqualTo(videoRepository.findExploreGridsPopular(REGION_A, null).size());
 	}
 
+	// 검증: FR-VIDEO-17
 	@Test
 	@DisplayName("비공개_영상만_있는_행정동은_리스트에_나오지_않는다")
 	void 비공개_영상만_있는_행정동은_리스트에_나오지_않는다() {

@@ -52,6 +52,7 @@ class UserProfileControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-USER-01
 	@Test
 	@DisplayName("내 프로필을 조회한다 — 200 · email · nickname (FR-1)")
 	void 내_프로필을_조회한다() throws Exception {
@@ -66,6 +67,7 @@ class UserProfileControllerTest {
 			.andExpect(jsonPath("$.data.nickname").value("채우미"));
 	}
 
+	// 검증: FR-USER-04
 	@Test
 	@DisplayName("카카오 가입 사용자는 email 필드가 존재하되 값이 null 이다 (MSG-310, required+nullable)")
 	void 카카오_가입_사용자는_email_필드가_존재하되_값이_null_이다() throws Exception {
@@ -80,6 +82,7 @@ class UserProfileControllerTest {
 			.andExpect(jsonPath("$.data.nickname").value("카카오유저"));
 	}
 
+	// 검증: FR-USER-02
 	@Test
 	@DisplayName("닉네임을 수정하면 변경 후 프로필을 반환한다 (FR-2·D2)")
 	void 닉네임을_수정하면_변경_후_프로필을_반환한다() throws Exception {
@@ -95,6 +98,7 @@ class UserProfileControllerTest {
 			.andExpect(jsonPath("$.data.nickname").value("새닉네임"));
 	}
 
+	// 검증: FR-USER-02
 	@Test
 	@DisplayName("빈 닉네임은 400 이다 (FR-3, @NotBlank)")
 	void 빈_닉네임은_400을_반환한다() throws Exception {
@@ -105,6 +109,7 @@ class UserProfileControllerTest {
 			.andExpect(status().isBadRequest());
 	}
 
+	// 검증: FR-USER-02
 	@Test
 	@DisplayName("한 글자 닉네임은 400 이다 (FR-3, @Size 하한 밖)")
 	void 한_글자_닉네임은_400을_반환한다() throws Exception {
@@ -115,6 +120,7 @@ class UserProfileControllerTest {
 			.andExpect(status().isBadRequest());
 	}
 
+	// 검증: FR-USER-02
 	@Test
 	@DisplayName("스물한 글자 닉네임은 400 이다 (FR-3, @Size 상한 밖)")
 	void 스물한_글자_닉네임은_400을_반환한다() throws Exception {
@@ -125,6 +131,7 @@ class UserProfileControllerTest {
 			.andExpect(status().isBadRequest());
 	}
 
+	// 검증: FR-USER-02
 	@Test
 	@DisplayName("두 글자·스무 글자 닉네임은 통과한다 (FR-2, @Size 경계 안)")
 	void 두_글자와_스무_글자_닉네임은_통과한다() throws Exception {

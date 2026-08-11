@@ -50,6 +50,7 @@ class MissionControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-MISSION-01
 	@Test
 	@DisplayName("active 조회는 200과 미션 리스트를 반환한다")
 	void active_조회는_200과_미션_리스트를_반환한다() throws Exception {
@@ -71,6 +72,7 @@ class MissionControllerTest {
 			.andExpect(jsonPath("$.data[0].shape.cells[0].gridId").value("19422_9582"));
 	}
 
+	// 검증: FR-MISSION-01
 	@Test
 	@DisplayName("PATH의 line은 GeoJSON 객체로 직렬화된다")
 	void PATH의_line은_GeoJSON_객체로_직렬화된다() throws Exception {
@@ -90,6 +92,7 @@ class MissionControllerTest {
 			.andExpect(jsonPath("$.data[0].shape.spots[0].seq").value(1));
 	}
 
+	// 검증: FR-MISSION-02
 	@Test
 	@DisplayName("active가 없으면 200과 빈 배열이다")
 	void active가_없으면_200과_빈_배열이다() throws Exception {

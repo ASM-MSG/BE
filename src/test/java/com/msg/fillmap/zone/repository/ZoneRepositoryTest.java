@@ -34,6 +34,7 @@ class ZoneRepositoryTest {
 	@Autowired
 	private EntityManager em;
 
+	// 검증: FR-ZONE-01
 	@Test
 	@DisplayName("min 이 max 보다 크면 삽입이 거부된다 (chk_zones_y_range)")
 	void min이_max보다_크면_삽입이_거부된다() {
@@ -43,6 +44,7 @@ class ZoneRepositoryTest {
 			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
+	// 검증: FR-ZONE-02
 	@Test
 	@DisplayName("행 폭이 25 를 넘으면 삽입이 거부된다 (chk_zones_row_cap — 26행 한계)")
 	void 행_폭이_25를_넘으면_삽입이_거부된다() {
@@ -61,6 +63,7 @@ class ZoneRepositoryTest {
 		assertThat(saved.getRegionCode()).isNull();
 	}
 
+	// 검증: FR-ZONE-12
 	@Test
 	@DisplayName("같은 zone_key 는 UNIQUE 로 중복 삽입이 거부된다 (자연키)")
 	void 같은_zone_key는_중복_삽입이_거부된다() {
@@ -70,6 +73,7 @@ class ZoneRepositoryTest {
 			.isInstanceOf(DataIntegrityViolationException.class);
 	}
 
+	// 검증: FR-ZONE-01
 	@Test
 	@DisplayName("zones 에 geometry 컬럼과 GIST 인덱스가 없다 (정수 사각형 — 스키마 메타)")
 	void zones에_geometry_컬럼과_GIST_인덱스가_없다() {
@@ -92,6 +96,7 @@ class ZoneRepositoryTest {
 		assertThat(checks.longValue()).isEqualTo(3L); // x-range 포함 CHECK 3종 존재
 	}
 
+	// 검증: FR-ZONE-01
 	@Test
 	@DisplayName("구역 목록 조회에 geospatial 연산이 없다 (findAll 전 컬럼 정수 로드)")
 	void 구역_목록_조회에_geospatial_연산이_없다() {

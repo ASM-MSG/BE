@@ -25,6 +25,7 @@ import com.msg.fillmap.zone.repository.ZoneRepository;
  * ZoneSeeder 게이트·멱등성 (실 PostgreSQL) — 합성 zone_key·롤백 격리 (MSG-234 §D7, MSG-154 선례).
  * 데이터는 ByteArrayResource(합성 JSON)로 주입하고, region_code 는 FK 충돌을 피해 null 로 둔다.
  */
+// 검증: FR-ZONE-12
 @SpringBootTest
 @Transactional
 @DisplayName("ZoneSeeder 게이트·멱등 (실 PostgreSQL) — 합성 zone_key·롤백 격리")

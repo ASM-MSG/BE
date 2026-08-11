@@ -18,6 +18,7 @@ import tools.jackson.databind.ObjectMapper;
  * 달리 **즉시 예외**(전량 거부, D6)이고, 종료 필터(closeDate &lt; todayKst)만 skip+집계다. periodType
  * 미사용(날짜 직접 판정)도 여기서 증명한다.
  */
+// 검증: FR-MISSION-10
 @DisplayName("PopupJsonlReader 행 파싱·전량 검증 — 위반 즉시 예외, 종료만 집계")
 class PopupJsonlReaderTest {
 

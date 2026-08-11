@@ -77,6 +77,7 @@ class AdminReportControllerTest {
 			0, 20, 1, 1);
 	}
 
+	// 검증: FR-MOD-09
 	@Test
 	@DisplayName("신고 목록 조회는 200과 항목·페이지 정보를 반환한다 (FR-1, FR-2)")
 	void 신고_목록_조회는_200과_항목과_페이지_정보를_반환한다() throws Exception {
@@ -98,6 +99,7 @@ class AdminReportControllerTest {
 			.andExpect(jsonPath("$.data.totalPages").value(1));
 	}
 
+	// 검증: FR-MOD-09
 	@Test
 	@DisplayName("파라미터를 생략하면 PENDING·page 0·size 20 으로 조회한다 (API 명세 기본값)")
 	void 파라미터를_생략하면_PENDING과_page0과_size20으로_조회한다() throws Exception {
@@ -124,6 +126,7 @@ class AdminReportControllerTest {
 		then(adminReportService).should().getReports("resolved", 2, 5);
 	}
 
+	// 검증: FR-MOD-09
 	@Test
 	@DisplayName("지원하지 않는 상태 값은 400 · developCode 11420 이다")
 	void 지원하지_않는_상태_값은_400과_11420을_반환한다() throws Exception {
@@ -161,6 +164,7 @@ class AdminReportControllerTest {
 			.andExpect(jsonPath("$.developCode").value(400));
 	}
 
+	// 검증: FR-MOD-11
 	@Test
 	@DisplayName("승인은 200 과 처리 결과를 반환하고, 처리자는 토큰의 사용자 id 다 (FR-4)")
 	void 승인은_200과_처리_결과를_반환한다() throws Exception {
@@ -181,6 +185,7 @@ class AdminReportControllerTest {
 		then(adminReportService).should().approve(ADMIN_ID, 7L);
 	}
 
+	// 검증: FR-MOD-11
 	@Test
 	@DisplayName("기각은 200 과 REJECTED, 손대지 않은 영상 상태를 반환한다 (FR-6)")
 	void 기각은_200과_REJECTED를_반환한다() throws Exception {
@@ -209,6 +214,7 @@ class AdminReportControllerTest {
 			.andExpect(jsonPath("$.data").doesNotExist());
 	}
 
+	// 검증: FR-MOD-12
 	@Test
 	@DisplayName("이미 처리된 신고는 409 · developCode 11410 이다")
 	void 이미_처리된_신고는_409와_11410을_반환한다() throws Exception {
@@ -221,6 +227,7 @@ class AdminReportControllerTest {
 			.andExpect(jsonPath("$.data").doesNotExist());
 	}
 
+	// 검증: FR-MOD-05
 	@Test
 	@DisplayName("블라인드 해제는 200 과 ACTIVE 를 반환한다 (FR-8)")
 	void 블라인드_해제는_200과_ACTIVE를_반환한다() throws Exception {
@@ -236,6 +243,7 @@ class AdminReportControllerTest {
 		then(adminReportService).should().unblindVideo(1042L);
 	}
 
+	// 검증: FR-MOD-05
 	@Test
 	@DisplayName("이미 ACTIVE 인 영상의 해제는 409 · developCode 3409 다")
 	void 이미_ACTIVE인_영상의_해제는_409와_3409를_반환한다() throws Exception {
@@ -248,6 +256,7 @@ class AdminReportControllerTest {
 			.andExpect(jsonPath("$.data").doesNotExist());
 	}
 
+	// 검증: FR-MOD-10
 	@Test
 	@DisplayName("단건 확인은 200 과 영상 메타·재생 URL 을 반환한다 (FR-3)")
 	void 단건_확인은_200과_영상_메타와_재생_URL을_반환한다() throws Exception {

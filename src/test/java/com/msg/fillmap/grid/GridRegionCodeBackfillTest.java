@@ -92,6 +92,7 @@ class GridRegionCodeBackfillTest {
 			.map(RegionView::regionCode).orElse(null);
 	}
 
+	// 검증: FR-GRID-10, FR-REGION-03
 	@Test
 	@DisplayName("백필 라벨은 격자 중심점 행정동이고 그 격자 by-grid 귀속과 같은 행정동이다")
 	void 백필_라벨은_격자_중심점_행정동이고_by_grid_귀속과_같다() {
@@ -103,6 +104,7 @@ class GridRegionCodeBackfillTest {
 		assertThat(regionCodeOf(grid)).isEqualTo(REGION_A).isEqualTo(byGridLabel(GY0, GX0));
 	}
 
+	// 검증: FR-GRID-10, FR-REGION-03
 	@Test
 	@DisplayName("경계에 인접한 두 행정동에서도 중심점 기준 한 행정동으로 라벨되고 by-grid 와 일치한다")
 	void 경계에_인접한_두_행정동에서도_중심점_기준_한_행정동으로_라벨되고_by_grid와_일치한다() {
@@ -124,6 +126,7 @@ class GridRegionCodeBackfillTest {
 		assertThat(regionCodeOf(grid)).isEqualTo(REGION_A).isEqualTo(byGridLabel(GY0, GX0));
 	}
 
+	// 검증: FR-REGION-03
 	@Test
 	@DisplayName("중심점을 두 행정동이 함께 덮어도 백필과 by-grid 가 같은 타이브레이크(region_code 오름차순)로 귀속된다")
 	void 중심점을_두_행정동이_함께_덮어도_백필과_by_grid가_같은_타이브레이크로_귀속된다() {
@@ -138,6 +141,7 @@ class GridRegionCodeBackfillTest {
 		assertThat(regionCodeOf(grid)).isEqualTo(REGION_A).isEqualTo(byGridLabel(GY0, GX0));
 	}
 
+	// 검증: FR-GRID-10
 	@Test
 	@DisplayName("백필을 두 번 실행해도 같은 region_code 로 수렴한다 (IS NULL 가드 멱등)")
 	void 백필을_두번_실행해도_같은_region_code로_수렴한다() {
@@ -153,6 +157,7 @@ class GridRegionCodeBackfillTest {
 		assertThat(regionCodeOf(grid)).isEqualTo(afterFirst).isEqualTo(REGION_A);
 	}
 
+	// 검증: FR-GRID-10
 	@Test
 	@DisplayName("백필은 이미 라벨된 격자를 재판정하지 않는다 (region_code IS NULL 행만 채운다)")
 	void 백필은_이미_라벨된_격자를_재판정하지_않는다() {
@@ -170,6 +175,7 @@ class GridRegionCodeBackfillTest {
 		assertThat(regionCodeOf(grid)).isEqualTo(REGION_B);      // 판정이면 A 지만, 가드가 재판정을 막아 B 유지
 	}
 
+	// 검증: FR-GRID-10
 	@Test
 	@DisplayName("regions 가 격자보다 늦게 시딩돼도 시딩 직후 보정 백필이 기존 NULL 격자를 라벨한다")
 	void regions가_격자보다_늦게_시딩돼도_보정_백필이_기존_NULL_격자를_라벨한다() {
@@ -205,6 +211,7 @@ class GridRegionCodeBackfillTest {
 			.setParameter("g", gridId).getSingleResult();
 	}
 
+	// 검증: FR-REGION-10
 	@Test
 	@DisplayName("중심점이 어느 행정동에도 안 속하는 해안 격자는 백필 후에도 region_code 가 null 이다")
 	void 중심점이_어느_행정동에도_안속하는_해안_격자는_백필_후에도_region_code가_null이다() {

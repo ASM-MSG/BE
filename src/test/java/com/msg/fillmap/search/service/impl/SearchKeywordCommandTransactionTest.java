@@ -60,6 +60,7 @@ class SearchKeywordCommandTransactionTest {
 		redisTemplate.opsForSet().remove(DEDUPE_KEY, USER_ID + ":" + keyword);
 	}
 
+	// 검증: FR-SEARCH-05
 	@Test
 	void 주변_트랜잭션이_없어도_집계_카운트가_커밋된다() {
 		SearchKeywordCommandServiceImpl service = new SearchKeywordCommandServiceImpl(redisTemplate,

@@ -33,6 +33,7 @@ class FriendshipTest {
 		assertThat(id).isNotEqualTo("1_2");
 	}
 
+	// 검증: FR-FRIEND-02
 	@Test
 	@DisplayName("요청 생성은 PENDING 이고 응답 시각이 없다 (FR-4)")
 	void 요청_생성은_PENDING이고_응답_시각이_없다() {
@@ -44,6 +45,7 @@ class FriendshipTest {
 		assertThat(friendship.getRespondedAt()).isNull();
 	}
 
+	// 검증: FR-FRIEND-04
 	@Test
 	@DisplayName("수락하면 ACCEPTED 로 승격되고 응답 시각이 기록된다 (FR-10)")
 	void 수락하면_ACCEPTED로_승격되고_응답_시각이_기록된다() {

@@ -55,6 +55,7 @@ class PlaceSearchAggregationIntegrationTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-SEARCH-05
 	@Test
 	@DisplayName("인증된 검색 요청은 principal 의 userId 로 집계에 접수된다")
 	void 인증된_검색_요청은_principal의_userId로_집계에_접수된다() throws Exception {
@@ -69,6 +70,7 @@ class PlaceSearchAggregationIntegrationTest {
 		verify(searchKeywordCommandService).recordSearch(USER_ID, "부산대");
 	}
 
+	// 검증: FR-SEARCH-05
 	@Test
 	@DisplayName("카카오 실패(5502) 응답에도 검색어는 집계에 접수된다 (FR-1)")
 	void 카카오_실패_응답에도_검색어는_집계에_접수된다() throws Exception {
@@ -83,6 +85,7 @@ class PlaceSearchAggregationIntegrationTest {
 		verify(searchKeywordCommandService).recordSearch(USER_ID, "부산대");
 	}
 
+	// 검증: FR-SEARCH-02
 	@Test
 	@DisplayName("트림 후 빈 검색어는 집계도 카카오 호출도 되지 않는다 (FR-9)")
 	void 트림_후_빈_검색어는_집계도_카카오_호출도_되지_않는다() throws Exception {

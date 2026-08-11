@@ -110,6 +110,7 @@ class VideoMissionIntegrationTest {
 			.doesNotContain("MISSION_1");
 	}
 
+	// 검증: FR-MISSION-05
 	@Test
 	@DisplayName("미션 판정은 user_grids 를 변경하지 않는다 — 도감은 기존 upsertUserGrid 1회뿐 (FR-16)")
 	void 미션_판정은_user_grids를_변경하지_않는다() {

@@ -87,6 +87,7 @@ class BadgeSchemaSeedTest {
 	@DisplayName("마스터 시딩")
 	class 마스터_시딩 {
 
+		// 검증: FR-BADGE-01
 		@Test
 		@DisplayName("활성 3축 11종이 code 유일로 시딩되어 있다")
 		void 활성_3축_11종이_code_유일로_시딩되어_있다() {
@@ -99,6 +100,7 @@ class BadgeSchemaSeedTest {
 				"REGION_MASTER_10", "REGION_MASTER_25", "REGION_MASTER_50");
 		}
 
+		// 검증: FR-BADGE-01
 		@Test
 		@DisplayName("스트릭 뱃지 3종이 시딩되어 있다 — V10 훅과 한 세트(MSG-200)")
 		void 스트릭_뱃지_3종이_시딩되어_있다() {
@@ -106,12 +108,14 @@ class BadgeSchemaSeedTest {
 				.containsExactlyInAnyOrder("STREAK_3", "STREAK_7", "STREAK_30");
 		}
 
+		// 검증: FR-BADGE-01
 		@Test
 		@DisplayName("스페셜 뱃지는 시딩되어 있지 않다 — 훅 없는 시딩은 획득 불가 뱃지 노출(§D2). 미션은 V12 활성화(MSG-223)")
 		void 스페셜_뱃지는_시딩되어_있지_않다() {
 			assertThat(seededCodes("SPECIAL")).isEmpty();
 		}
 
+		// 검증: FR-BADGE-06
 		@Test
 		@DisplayName("스트릭 뱃지 소급 지급분이 없다 — 전원 0부터(MSG-200 §D6)")
 		void 스트릭_뱃지_소급_지급분이_없다() throws IOException {
@@ -155,6 +159,7 @@ class BadgeSchemaSeedTest {
 			assertThat(inserted).isEqualTo(1);
 		}
 
+		// 검증: FR-BADGE-09
 		@Test
 		@DisplayName("대표 뱃지는 사용자당 rank 별 1개만 허용된다 — partial UNIQUE(§D6)")
 		void 대표_뱃지는_사용자당_rank별_1개만_허용된다() {
@@ -182,6 +187,7 @@ class BadgeSchemaSeedTest {
 	@DisplayName("소급 지급 (§D9)")
 	class 소급_지급 {
 
+		// 검증: FR-BADGE-06
 		@Test
 		@DisplayName("소급 SQL 은 기존 수집·업로드·수집률 데이터로 충족 티어를 일괄 지급한다")
 		void 소급_SQL은_기존_수집_업로드_수집률_데이터로_충족_티어를_일괄_지급한다() {
@@ -197,6 +203,7 @@ class BadgeSchemaSeedTest {
 				"EXPLORER_1", "EXPLORER_10", "RECORDER_10", "REGION_MASTER_10", "REGION_MASTER_25");
 		}
 
+		// 검증: FR-BADGE-06
 		@Test
 		@DisplayName("소급 지급분은 notified_at 이 NULL 이다 — 미확인(§D8)")
 		void 소급_지급분은_notified_at이_NULL이다() {
@@ -213,6 +220,7 @@ class BadgeSchemaSeedTest {
 			assertThat(notified.longValue()).isZero();
 		}
 
+		// 검증: FR-BADGE-06
 		@Test
 		@DisplayName("소급 SQL 은 재실행해도 중복 row 가 생기지 않는다 — ON CONFLICT 멱등(§D9)")
 		void 소급_SQL은_재실행해도_중복_row가_생기지_않는다() {

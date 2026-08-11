@@ -63,6 +63,7 @@ class JwtTokenProviderTest {
 	@DisplayName("invalidateAccessToken")
 	class Invalidate {
 
+		// 검증: FR-AUTH-09
 		@Test
 		@DisplayName("성공: 무효화한 토큰은 이후 INVALID_TOKEN 으로 거부된다")
 		void invalidate_success() {

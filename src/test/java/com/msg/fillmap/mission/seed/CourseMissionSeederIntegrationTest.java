@@ -73,6 +73,7 @@ class CourseMissionSeederIntegrationTest {
 		return newSeeder(true, "unused");
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("플래그 off(기본)면 러너는 아무것도 하지 않는다 — 평시 기동 무영향")
 	void 플래그_off면_아무것도_하지_않는다() {
@@ -85,6 +86,7 @@ class CourseMissionSeederIntegrationTest {
 		assertThat(courseCount()).isEqualTo(before);
 	}
 
+	// 검증: FR-MISSION-09
 	@Test
 	@DisplayName("시드 실행이 무기간 COURSE 미션과 스팟 격자를 적재한다 — NULL 기간·target 3·source DURUNUBI·seq 1..N")
 	void 시드_실행이_무기간_COURSE_미션과_스팟_격자를_적재한다() throws IOException {
@@ -115,6 +117,7 @@ class CourseMissionSeederIntegrationTest {
 		assertThat(spots.get(0).getGridId()).isEqualTo("-39001_112198");
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("같은 산출물 재실행은 신규 0건이다 — 제목 dedupe 멱등")
 	void 같은_산출물_재실행은_신규_0건이다() throws IOException {
@@ -143,6 +146,7 @@ class CourseMissionSeederIntegrationTest {
 		assertThat(countByTitle(title)).isEqualTo(1);
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("파일이 없으면 예외로 조기 실패한다 — 조용한 no-op 금지")
 	void 파일이_없으면_예외로_조기_실패한다() {
@@ -153,6 +157,7 @@ class CourseMissionSeederIntegrationTest {
 			.hasMessageContaining("courses-seed");
 	}
 
+	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("검증 위반이면 전체 롤백으로 기존 데이터가 유지된다 — reader 가 INSERT 이전에 실패")
 	void 검증_위반이면_전체_롤백으로_기존_데이터가_유지된다() throws IOException {

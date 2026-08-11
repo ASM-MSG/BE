@@ -61,6 +61,7 @@ class BadgeNotificationIntegrationTest {
 				.executeUpdate());
 	}
 
+	// 검증: FR-NOTI-08
 	@Test
 	@DisplayName("뱃지 발급 시 뱃지당 BADGE 알림이 한 건씩 기록된다 — 다중 발급 N건, event_key·문구 (D1·D2)")
 	void 뱃지_발급_시_뱃지당_BADGE_알림이_한_건씩_기록된다() {
@@ -76,6 +77,7 @@ class BadgeNotificationIntegrationTest {
 		assertThat(explorer10[2]).isEqualTo("'탐험가 I' 뱃지를 획득했어요");
 	}
 
+	// 검증: FR-NOTI-08
 	@Test
 	@DisplayName("이미 보유한 뱃지 재판정은 알림을 기록하지 않는다 — award 0건 경로 (D1)")
 	void 이미_보유한_뱃지_재판정은_알림을_기록하지_않는다() {

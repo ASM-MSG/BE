@@ -62,6 +62,7 @@ class BadgeQueryServiceIntegrationTest {
 		explorer10Id = badgeId("EXPLORER_10");
 	}
 
+	// 검증: FR-BADGE-07
 	@Test
 	@DisplayName("전체 뱃지 목록은 획득과 미획득을 모두 포함해 시딩 순으로 반환한다 — §D2·D6")
 	void 전체_뱃지_목록은_획득과_미획득을_모두_포함해_시딩_순으로_반환한다() {
@@ -76,6 +77,7 @@ class BadgeQueryServiceIntegrationTest {
 		assertThat(result).filteredOn(row -> !row.earned()).isNotEmpty();
 	}
 
+	// 검증: FR-BADGE-01
 	@Test
 	@DisplayName("미시딩 축의 뱃지는 목록에 없다 — 마스터 driven, 목록 = badges 전체(§성공 기준 1)")
 	void 미시딩_축의_뱃지는_목록에_없다() {
@@ -88,6 +90,7 @@ class BadgeQueryServiceIntegrationTest {
 		assertThat(result).hasSize(masterCount.intValue());
 	}
 
+	// 검증: FR-BADGE-07
 	@Test
 	@DisplayName("미획득 뱃지는 earned false 에 earnedAt·featuredRank 가 null 이고 isNew 는 false 다 — §D2 null 규칙")
 	void 미획득_뱃지는_earned_false에_earnedAt과_featuredRank가_null이고_isNew는_false다() {
@@ -102,6 +105,7 @@ class BadgeQueryServiceIntegrationTest {
 		});
 	}
 
+	// 검증: FR-BADGE-07
 	@Test
 	@DisplayName("획득 뱃지는 earnedAt 이 포함된다 — 진열장 파생 키(§D4)")
 	void 획득_뱃지는_earnedAt이_포함된다() {
@@ -114,6 +118,7 @@ class BadgeQueryServiceIntegrationTest {
 		assertThat(earned.earnedAt()).isNotNull();
 	}
 
+	// 검증: FR-BADGE-07, FR-BADGE-08
 	@Test
 	@DisplayName("미확인 뱃지는 첫 조회에서 isNew true 로 표시된다 — SELECT 시점 값(§D3)")
 	void 미확인_뱃지는_첫_조회에서_isNew_true로_표시된다() {
@@ -124,6 +129,7 @@ class BadgeQueryServiceIntegrationTest {
 		assertThat(rowOf(result, "EXPLORER_1").isNew()).isTrue();
 	}
 
+	// 검증: FR-BADGE-08
 	@Test
 	@DisplayName("조회 후 미확인 뱃지의 notified_at 이 기록된다 — 자동 스탬프(§D3)")
 	void 조회_후_미확인_뱃지의_notified_at이_기록된다() {
@@ -134,6 +140,7 @@ class BadgeQueryServiceIntegrationTest {
 		assertThat(notifiedAt(me, explorer1Id)).isNotNull();
 	}
 
+	// 검증: FR-BADGE-08
 	@Test
 	@DisplayName("두 번째 조회부터 isNew 는 false 다 — §D3")
 	void 두번째_조회부터_isNew는_false다() {
@@ -145,6 +152,7 @@ class BadgeQueryServiceIntegrationTest {
 		assertThat(rowOf(second, "EXPLORER_1").isNew()).isFalse();
 	}
 
+	// 검증: FR-BADGE-08
 	@Test
 	@DisplayName("동기 지급분은 첫 조회부터 isNew 가 false 다 — 업로드 응답에 이미 노출(MSG-239 §D8)")
 	void 동기_지급분은_첫_조회부터_isNew가_false다() {
@@ -157,6 +165,7 @@ class BadgeQueryServiceIntegrationTest {
 		assertThat(earned.isNew()).isFalse();
 	}
 
+	// 검증: FR-BADGE-08
 	@Test
 	@DisplayName("스탬프는 조회 응답에 노출된 뱃지에만 적용된다 — IN 리스트 한정(§D3)")
 	void 스탬프는_조회_응답에_노출된_뱃지에만_적용된다() {
@@ -171,6 +180,7 @@ class BadgeQueryServiceIntegrationTest {
 		assertThat(notifiedAt(me, explorer10Id)).isNull();
 	}
 
+	// 검증: FR-BADGE-07
 	@Test
 	@DisplayName("대표 뱃지는 featuredRank 로 노출된다 — 별도 API 없음(§D5)")
 	void 대표_뱃지는_featuredRank로_노출된다() {
@@ -186,6 +196,7 @@ class BadgeQueryServiceIntegrationTest {
 		assertThat(result).filteredOn(row -> row.featuredRank() != null).hasSize(2);
 	}
 
+	// 검증: FR-BADGE-07, FR-BADGE-08
 	@Test
 	@DisplayName("조회는 타인의 획득 상태와 미확인 플래그에 영향을 주지 않는다 — userId 스코프(§성공 기준 6)")
 	void 조회는_타인의_획득_상태와_미확인_플래그에_영향을_주지_않는다() {

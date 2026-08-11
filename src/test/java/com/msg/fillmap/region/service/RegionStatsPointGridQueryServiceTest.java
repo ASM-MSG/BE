@@ -96,6 +96,7 @@ class RegionStatsPointGridQueryServiceTest {
 		return GridFixtures.pointAt(GY + 0.5, GX + 0.5).lon();
 	}
 
+	// 검증: FR-REGION-07
 	@Test
 	@DisplayName("현재 위치 행정동의 수집률을 반환한다")
 	void 현재위치_행정동의_수집률을_반환한다() {
@@ -111,6 +112,7 @@ class RegionStatsPointGridQueryServiceTest {
 		assertThat(stat.get().progressRate()).isEqualByComparingTo("25.00");
 	}
 
+	// 검증: FR-REGION-07
 	@Test
 	@DisplayName("수집이 없는 행정동은 0퍼센트로 합성해 반환한다")
 	void 수집이_없는_행정동은_0퍼센트로_합성해_반환한다() {
@@ -127,6 +129,7 @@ class RegionStatsPointGridQueryServiceTest {
 		assertThat(stat.get().updatedAt()).isNull();
 	}
 
+	// 검증: FR-REGION-07
 	@Test
 	@DisplayName("행정동에 속하지 않는 좌표는 200과 null이다")
 	void 행정동에_속하지_않는_좌표는_200과_null이다() {
@@ -145,6 +148,7 @@ class RegionStatsPointGridQueryServiceTest {
 			.isEqualTo(RegionErrorCode.INVALID_COORDINATE);
 	}
 
+	// 검증: FR-REGION-04
 	@Test
 	@DisplayName("progress_rate가 100을 넘어도 100으로 clamp되어 반환된다")
 	void progress_rate가_100을_넘어도_100으로_clamp되어_반환된다() {
@@ -157,6 +161,7 @@ class RegionStatsPointGridQueryServiceTest {
 		assertThat(stat.get().progressRate()).isEqualByComparingTo("100.00");
 	}
 
+	// 검증: FR-REGION-07
 	@Test
 	@DisplayName("격자 중심점이 속한 행정동의 수집률을 반환한다")
 	void 격자_중심점이_속한_행정동의_수집률을_반환한다() {
@@ -170,6 +175,7 @@ class RegionStatsPointGridQueryServiceTest {
 		assertThat(stat.get().collectedCount()).isEqualTo(3);
 	}
 
+	// 검증: FR-REGION-03, FR-REGION-07
 	@Test
 	@DisplayName("중심점 귀속은 155 refreshRegionStats와 같은 행정동을 고른다")
 	void 중심점_귀속은_155_refreshRegionStats와_같은_행정동을_고른다() {
@@ -188,6 +194,7 @@ class RegionStatsPointGridQueryServiceTest {
 		assertThat(stat.get().collectedCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-REGION-07
 	@Test
 	@DisplayName("중심점이 어떤 행정동에도 안 속하면 200과 null이다")
 	void 중심점이_어떤_행정동에도_안_속하면_200과_null이다() {

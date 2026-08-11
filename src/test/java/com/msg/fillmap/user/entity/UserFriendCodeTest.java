@@ -14,6 +14,7 @@ class UserFriendCodeTest {
 
 	private static final String ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+	// 검증: FR-FRIEND-01
 	@Test
 	@DisplayName("가입한 사용자는 8자 친구 코드를 가진다 — LOCAL·OAuth 양쪽 (FR-2)")
 	void 가입한_사용자는_8자_친구_코드를_가진다() {
@@ -24,6 +25,7 @@ class UserFriendCodeTest {
 		assertThat(oauth.getFriendCode()).hasSize(8);
 	}
 
+	// 검증: FR-FRIEND-01
 	@Test
 	@DisplayName("친구 코드는 허용 알파벳 32종만 사용한다 — 혼동 문자 I·O·0·1 배제 (§D1)")
 	void 친구_코드는_허용_알파벳_32종만_사용한다() {

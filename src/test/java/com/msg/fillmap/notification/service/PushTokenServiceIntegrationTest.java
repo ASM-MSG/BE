@@ -74,6 +74,7 @@ class PushTokenServiceIntegrationTest {
 				.executeUpdate());
 	}
 
+	// 검증: FR-NOTI-01
 	@Test
 	@DisplayName("새 토큰 등록은 행을 만들고 last_used_at 을 채운다")
 	void 새_토큰_등록은_행을_만들고_last_used_at을_채운다() {
@@ -86,6 +87,7 @@ class PushTokenServiceIntegrationTest {
 		assertThat(saved.getLastUsedAt()).isNotNull();
 	}
 
+	// 검증: FR-NOTI-01
 	@Test
 	@DisplayName("같은 토큰 재등록은 충돌 없이 전 필드를 갱신한다 — 행 1개 유지")
 	void 같은_토큰_재등록은_충돌_없이_전_필드를_갱신한다() {
@@ -100,6 +102,7 @@ class PushTokenServiceIntegrationTest {
 		assertThat(saved.getAppVersion()).isEqualTo("1.1.0");
 	}
 
+	// 검증: FR-NOTI-01
 	@Test
 	@DisplayName("다른 계정 재로그인 토큰은 새 user_id 로 넘어간다 — 계정 전환 이관 (핵심 확정 요구)")
 	void 다른_계정_재로그인_토큰은_새_user_id로_넘어간다() {
@@ -111,6 +114,7 @@ class PushTokenServiceIntegrationTest {
 		assertThat(pushTokenRepository.findById(token).orElseThrow().getUserId()).isEqualTo(other);
 	}
 
+	// 검증: FR-NOTI-01
 	@Test
 	@DisplayName("없는 토큰 해제도 예외 없이 끝난다 — 멱등")
 	void 없는_토큰_해제도_예외_없이_끝난다() {
@@ -118,6 +122,7 @@ class PushTokenServiceIntegrationTest {
 			.doesNotThrowAnyException();
 	}
 
+	// 검증: FR-NOTI-01
 	@Test
 	@DisplayName("해제하면 행이 삭제된다")
 	void 해제하면_행이_삭제된다() {
@@ -128,6 +133,7 @@ class PushTokenServiceIntegrationTest {
 		assertThat(pushTokenRepository.findById(token)).isEmpty();
 	}
 
+	// 검증: FR-NOTI-01
 	@Test
 	@DisplayName("다른 사용자의 해제는 행을 지우지 않는다 — 소유 검증 (Codex 1R), 200이되 행 잔존")
 	void 다른_사용자의_해제는_행을_지우지_않는다() {
@@ -149,6 +155,7 @@ class PushTokenServiceIntegrationTest {
 		assertThat(pushTokenRepository.findById(token)).isEmpty();
 	}
 
+	// 검증: FR-USER-07
 	@Test
 	@DisplayName("사용자 삭제 시 토큰이 CASCADE 로 사라진다 — 코드 0줄 근거 (FK 실측)")
 	void 사용자_삭제_시_토큰이_CASCADE로_사라진다() {

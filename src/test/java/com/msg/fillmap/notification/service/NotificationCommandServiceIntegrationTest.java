@@ -75,6 +75,7 @@ class NotificationCommandServiceIntegrationTest {
 				.executeUpdate());
 	}
 
+	// 검증: FR-NOTI-02
 	@Test
 	@DisplayName("기록은 호출자 트랜잭션과 함께 롤백된다 — FR-3 원자성 (전파 REQUIRED 실증)")
 	void 기록은_호출자_트랜잭션과_함께_롤백된다() {
@@ -87,6 +88,7 @@ class NotificationCommandServiceIntegrationTest {
 		assertThat(rowCount(me, eventKey)).isZero();
 	}
 
+	// 검증: FR-NOTI-03
 	@Test
 	@DisplayName("같은 이벤트 키 중복 기록은 한 행만 남는다 — FR-6, ON CONFLICT DO NOTHING 경로")
 	void 같은_이벤트_키_중복_기록은_한_행만_남는다() {
@@ -103,6 +105,7 @@ class NotificationCommandServiceIntegrationTest {
 		assertThat(saved.getCreatedAt()).isNotNull();
 	}
 
+	// 검증: FR-NOTI-03
 	@Test
 	@DisplayName("다른 사용자의 같은 이벤트 키는 각각 기록된다 — UNIQUE 는 (user_id, event_key) 복합")
 	void 다른_사용자의_같은_이벤트_키는_각각_기록된다() {

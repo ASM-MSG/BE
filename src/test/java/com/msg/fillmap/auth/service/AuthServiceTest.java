@@ -69,6 +69,7 @@ class AuthServiceTest {
 			"test@example.com", "password123", "테스터"
 		);
 
+		// 검증: FR-AUTH-11
 		@Test
 		@DisplayName("성공: 새 이메일이면 인코딩된 비밀번호로 저장하고 응답 DTO 를 반환한다")
 		void signup_success() {
@@ -100,6 +101,7 @@ class AuthServiceTest {
 			assertThat(response.createdAt()).isNotNull();
 		}
 
+		// 검증: FR-USER-04
 		@Test
 		@DisplayName("실패: 이메일이 이미 존재하면 EMAIL_ALREADY_EXISTS ApiException 을 던지고 삽입을 호출하지 않는다")
 		void signup_duplicateEmail() {
@@ -116,6 +118,7 @@ class AuthServiceTest {
 			verify(userRepository, never()).saveAndFlush(any());
 		}
 
+		// 검증: FR-USER-04
 		@Test
 		@DisplayName("실패: 선확인을 통과해도 삽입에서 이메일 UNIQUE 충돌이 나면 EMAIL_ALREADY_EXISTS 다 (동시 가입 경합)")
 		void signup_concurrentDuplicateEmail() {
@@ -139,6 +142,7 @@ class AuthServiceTest {
 
 		private final LoginRequestDto request = new LoginRequestDto("test@example.com", "password123");
 
+		// 검증: FR-AUTH-05
 		@Test
 		@DisplayName("성공: 이메일·비밀번호가 맞으면 액세스와 리프레시를 함께 발급·저장해 반환한다 (MSG-135)")
 		void 로그인하면_액세스와_리프레시가_함께_발급되고_저장된다() {
@@ -195,6 +199,7 @@ class AuthServiceTest {
 	@DisplayName("logout")
 	class Logout {
 
+		// 검증: FR-AUTH-06, FR-AUTH-09
 		@Test
 		@DisplayName("성공: 액세스를 블랙리스트에 올리고 해당 디바이스 리프레시를 삭제한다 (MSG-135)")
 		void 로그아웃하면_액세스가_블랙리스트에_오르고_해당_디바이스_리프레시가_삭제된다() {
@@ -221,6 +226,7 @@ class AuthServiceTest {
 			verify(refreshTokenService, never()).delete(any(), any());
 		}
 
+		// 검증: FR-NOTI-01
 		@Test
 		@DisplayName("성공: fcmToken 이 있으면 파싱한 userId 로 푸시 토큰도 함께 정리한다 (MSG-178 logout 통합)")
 		void fcmToken이_있으면_푸시_토큰도_함께_정리한다() {

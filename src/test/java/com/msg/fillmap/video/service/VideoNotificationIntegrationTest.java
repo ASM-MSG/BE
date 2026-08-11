@@ -88,6 +88,7 @@ class VideoNotificationIntegrationTest {
 		});
 	}
 
+	// 검증: FR-MEDIA-08, FR-NOTI-10
 	@Test
 	@DisplayName("인코딩만 경로 완료 전이는 VIDEO 완료 알림을 기록한다 — event_key·문구 (FR-1)")
 	void 인코딩만_경로_완료_전이는_VIDEO_완료_알림을_기록한다() {
@@ -100,6 +101,7 @@ class VideoNotificationIntegrationTest {
 		assertThat(row[2]).isEqualTo("올린 영상 처리가 끝났어요. 지금 확인해 보세요");
 	}
 
+	// 검증: FR-MEDIA-08, FR-NOTI-10
 	@Test
 	@DisplayName("블러 경로 완료 전이는 VIDEO 완료 알림을 기록한다 — markBlurReady 적용 경로 (FR-1)")
 	void 블러_경로_완료_전이는_VIDEO_완료_알림을_기록한다() {
@@ -114,6 +116,7 @@ class VideoNotificationIntegrationTest {
 		assertThat(row[1]).isEqualTo("영상이 준비됐어요");
 	}
 
+	// 검증: FR-MEDIA-08, FR-NOTI-10
 	@Test
 	@DisplayName("인코딩 실패 전이는 재업로드 유도 문구의 실패 알림을 기록한다 (FR-2b)")
 	void 인코딩_실패_전이는_재업로드_유도_문구의_실패_알림을_기록한다() {
@@ -125,6 +128,7 @@ class VideoNotificationIntegrationTest {
 		assertThat(row[2]).isEqualTo("올린 영상을 준비하지 못했어요. 영상을 다시 올려 주세요");
 	}
 
+	// 검증: FR-MEDIA-08, FR-NOTI-10
 	@Test
 	@DisplayName("블러 실패 전이는 실패 알림을 기록하고 탈락 사유는 문구에 넣지 않는다 (FR-2b)")
 	void 블러_실패_전이는_실패_알림을_기록하고_탈락_사유는_문구에_넣지_않는다() {
@@ -157,6 +161,7 @@ class VideoNotificationIntegrationTest {
 		assertThat(notificationCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-MEDIA-08, FR-NOTI-10
 	@Test
 	@DisplayName("교체 후 재처리 완료는 새 알림으로 기록된다 — 다른 originalS3Key = 다른 event_key (FR-2)")
 	void 교체_후_재처리_완료는_새_알림으로_기록된다() {

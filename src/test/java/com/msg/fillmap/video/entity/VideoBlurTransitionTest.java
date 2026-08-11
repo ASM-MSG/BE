@@ -21,6 +21,7 @@ class VideoBlurTransitionTest {
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 	}
 
+	// 검증: FR-MEDIA-02, FR-MEDIA-04
 	@Test
 	void BLURRING_동안_thumbnailUrl은_null이다() {
 		Video video = newVideo();
@@ -34,6 +35,7 @@ class VideoBlurTransitionTest {
 		assertThat(video.getThumbnailUrl()).isNull();
 	}
 
+	// 검증: FR-MEDIA-02
 	@Test
 	void markReadyFromBlurring은_thumbnailUrl을_채우며_BLURRING에서_READY로_바뀐다() {
 		Video video = newVideo();

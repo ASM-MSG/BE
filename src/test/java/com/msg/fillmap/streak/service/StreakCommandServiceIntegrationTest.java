@@ -58,6 +58,7 @@ class StreakCommandServiceIntegrationTest {
 	@DisplayName("갱신 판정 (§도메인 로직 1)")
 	class 갱신_판정 {
 
+		// 검증: FR-STREAK-03
 		@Test
 		@DisplayName("첫 업로드는 스트릭 행을 lazy 생성하고 1을 기록한다 (§D5)")
 		void 첫_업로드는_스트릭_행을_생성하고_1을_기록한다() {
@@ -69,6 +70,7 @@ class StreakCommandServiceIntegrationTest {
 			assertThat(row[2]).isEqualTo(LocalDate.now(KST));
 		}
 
+		// 검증: FR-STREAK-03
 		@Test
 		@DisplayName("같은 날 두 번째 업로드는 스트릭을 바꾸지 않는다 — 카운트 no-op")
 		void 같은_날_두번째_업로드는_스트릭을_바꾸지_않는다() {
@@ -80,6 +82,7 @@ class StreakCommandServiceIntegrationTest {
 			assertThat(((Number) row[1]).intValue()).isEqualTo(1);
 		}
 
+		// 검증: FR-STREAK-03
 		@Test
 		@DisplayName("어제 기록이 있으면 스트릭이 1 증가한다 — max 동반 갱신")
 		void 어제_기록이_있으면_스트릭이_1_증가한다() {
@@ -92,6 +95,7 @@ class StreakCommandServiceIntegrationTest {
 			assertThat(((Number) row[1]).intValue()).isEqualTo(2);
 		}
 
+		// 검증: FR-STREAK-03, FR-STREAK-06
 		@Test
 		@DisplayName("하루 이상 끊기면 스트릭이 1로 리셋된다 (§D2 freeze 미도입)")
 		void 하루_이상_끊기면_스트릭이_1로_리셋된다() {
@@ -102,6 +106,7 @@ class StreakCommandServiceIntegrationTest {
 			assertThat(((Number) streakRow()[0]).intValue()).isEqualTo(1);
 		}
 
+		// 검증: FR-STREAK-03
 		@Test
 		@DisplayName("최대 스트릭은 리셋되어도 유지된다 — max_count 불변")
 		void 최대_스트릭은_리셋되어도_유지된다() {
@@ -114,6 +119,7 @@ class StreakCommandServiceIntegrationTest {
 			assertThat(((Number) row[1]).intValue()).isEqualTo(5);
 		}
 
+		// 검증: FR-STREAK-03
 		@Test
 		@DisplayName("동시 업로드에서도 스트릭 행은 하나만 생성된다 — ON CONFLICT 직렬화(§D5)")
 		void 동시_업로드에서도_스트릭_행은_하나만_생성된다() {
@@ -137,6 +143,7 @@ class StreakCommandServiceIntegrationTest {
 	@DisplayName("꾸준함 뱃지 배선 (§D7)")
 	class 뱃지_배선 {
 
+		// 검증: FR-STREAK-04
 		@Test
 		@DisplayName("스트릭 3일 도달 시 꾸준함 뱃지가 지급되고 반환된다 (STREAK_3)")
 		void 스트릭_3일_도달_시_꾸준함_뱃지가_지급되고_반환된다() {
@@ -148,6 +155,7 @@ class StreakCommandServiceIntegrationTest {
 			assertThat(earnedStreakCodes()).containsExactly("STREAK_3");
 		}
 
+		// 검증: FR-STREAK-04, FR-BADGE-08
 		@Test
 		@DisplayName("동기 지급된 스트릭 뱃지는 notified_at 이 기록된다 (239 §D8)")
 		void 동기_지급된_스트릭_뱃지는_notified_at이_기록된다() {
@@ -167,6 +175,7 @@ class StreakCommandServiceIntegrationTest {
 			assertThat(unnotified.longValue()).isZero();
 		}
 
+		// 검증: FR-BADGE-03, FR-BADGE-04
 		@Test
 		@DisplayName("이미 획득한 스트릭 뱃지는 리셋 후 재도달해도 다시 지급되지 않는다 — 비회수(FR-3)")
 		void 이미_획득한_스트릭_뱃지는_리셋_후_재도달해도_다시_지급되지_않는다() {
@@ -181,6 +190,7 @@ class StreakCommandServiceIntegrationTest {
 			assertThat(earnedStreakCodes()).containsExactly("STREAK_3");
 		}
 
+		// 검증: FR-BADGE-03
 		@Test
 		@DisplayName("같은 날 반복 업로드에도 뱃지가 중복 지급되지 않는다")
 		void 같은_날_반복_업로드에도_뱃지가_중복_지급되지_않는다() {

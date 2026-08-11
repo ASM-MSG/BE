@@ -91,6 +91,7 @@ class BadgeNearMissIntegrationTest {
 				.executeUpdate());
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("다음 티어까지 1개 남으면 BADGE_NEAR 알림이 기록된다 — 지급 후보 0건 경로에서도 (D1·D5)")
 	void 다음_티어까지_1개_남은_업로드는_임박_알림을_기록한다() {
@@ -105,6 +106,7 @@ class BadgeNearMissIntegrationTest {
 		assertThat(row[2]).isEqualTo("'기록러 I' 뱃지까지 딱 하나 남았어요");
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("티어에 도달하면 획득만 기록한다 — 획득·임박 서로소 (D1)")
 	void 티어에_도달한_업로드는_획득만_기록하고_임박은_기록하지_않는다() {
@@ -114,6 +116,7 @@ class BadgeNearMissIntegrationTest {
 		assertThat(nearCount()).isZero();
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("같은 뱃지의 임박은 생애 1회 — 다음 날에도 같은 키 재기록은 0행으로 무시 (D2)")
 	void 같은_뱃지의_임박_알림은_생애_1회만_기록된다() {
@@ -126,6 +129,7 @@ class BadgeNearMissIntegrationTest {
 		assertThat(nearCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("점령 롤백으로 임박 상태를 다시 만들어도 재기록되지 않는다 — FR-4 '오가도 반복 없음'")
 	void 점령_롤백으로_임박_상태를_다시_만들어도_재기록되지_않는다() {
@@ -140,6 +144,7 @@ class BadgeNearMissIntegrationTest {
 		assertThat(nearCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("하루에 임박 알림은 사용자당 1건 — 서로 다른 뱃지가 같은 KST 날에 임박해도 (D3)")
 	void 하루에_임박_알림은_사용자당_1건만_기록된다() {
@@ -151,6 +156,7 @@ class BadgeNearMissIntegrationTest {
 		assertThat(notificationRow("BADGE_NEAR:" + badgeId("RECORDER_10"))).isNotNull();
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("한 업로드에서 두 축이 동시에 임박해도 1건 — 같은 트랜잭션의 미커밋 행을 보고 스킵 (D3)")
 	void 한_업로드에서_두_축이_동시에_임박해도_1건만_기록된다() {
@@ -164,6 +170,7 @@ class BadgeNearMissIntegrationTest {
 		assertThat(nearCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("미션 두 축이 동시에 임박해도 알림은 하루 한 건이다 — 종류별 축 분리 후에도(MSG-363 §D5)")
 	void 미션_두_축이_동시에_임박해도_알림은_하루_한_건이다() {
@@ -177,6 +184,7 @@ class BadgeNearMissIntegrationTest {
 		assertThat(notificationRow("BADGE_NEAR:" + badgeId("EVENT_3"))).isNotNull();
 	}
 
+	// 검증: FR-BADGE-10, FR-BADGE-12
 	@Test
 	@DisplayName("은퇴한 뱃지는 임박 후보로 조회되지 않는다 — findNearMiss 의 retired_at 필터(MSG-363 §D2)")
 	void 은퇴한_뱃지는_임박_후보로_조회되지_않는다() {
@@ -199,6 +207,7 @@ class BadgeNearMissIntegrationTest {
 		}
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("다음 날에는 다른 뱃지의 임박이 기록될 수 있다 — KST 일 경계 전진 (D4)")
 	void 다음_날에는_다른_뱃지의_임박이_기록될_수_있다() {
@@ -211,6 +220,7 @@ class BadgeNearMissIntegrationTest {
 		assertThat(notificationRow("BADGE_NEAR:" + badgeId("EXPLORER_10"))).isNotNull();
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("수집률 축에서는 임박을 판정하지 않는다 — 등식이 성립하는 값이어도 (D1 축 범위)")
 	void 수집률_축에서는_임박을_판정하지_않는다() {
@@ -220,6 +230,7 @@ class BadgeNearMissIntegrationTest {
 		assertThat(nearCount()).isZero();
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("SPECIAL 축에서는 임박을 판정하지 않는다 — allowlist 미포함 축 (D1, Codex 1R P2)")
 	void SPECIAL_축에서는_임박을_판정하지_않는다() {
@@ -253,6 +264,7 @@ class BadgeNearMissIntegrationTest {
 		});
 	}
 
+	// 검증: FR-BADGE-10
 	@Test
 	@DisplayName("업로드 트랜잭션이 롤백되면 임박 알림도 남지 않는다 — 같은 커밋 원자성 (성공 기준 1)")
 	void 업로드_트랜잭션이_롤백되면_임박_알림도_남지_않는다() {

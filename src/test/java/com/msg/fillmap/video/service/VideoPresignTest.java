@@ -66,6 +66,7 @@ class VideoPresignTest {
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
 	}
 
+	// 검증: FR-VIDEO-02
 	@Test
 	void mp4_요청이면_s3Key가_videos_pending_userId_uuid_mp4_형식이다() {
 		PresignedUrlResponseDto response = videoService.issuePresignedUrl(
@@ -76,6 +77,7 @@ class VideoPresignTest {
 		assertThat(response.expiresInSec()).isEqualTo(600L);
 	}
 
+	// 검증: FR-VIDEO-03
 	@Test
 	void avi_확장자는_UNSUPPORTED_EXTENSION_을_던진다() {
 		assertThatThrownBy(() -> videoService.issuePresignedUrl(
@@ -84,6 +86,7 @@ class VideoPresignTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.UNSUPPORTED_EXTENSION);
 	}
 
+	// 검증: FR-VIDEO-03
 	@Test
 	void mp4에_video_quicktime_을_보내면_거부한다() {
 		assertThatThrownBy(() -> videoService.issuePresignedUrl(
@@ -92,6 +95,7 @@ class VideoPresignTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.UNSUPPORTED_EXTENSION);
 	}
 
+	// 검증: FR-VIDEO-04
 	@Test
 	void 상한_초과_크기는_FILE_TOO_LARGE_를_던진다() {
 		assertThatThrownBy(() -> videoService.issuePresignedUrl(
@@ -100,6 +104,7 @@ class VideoPresignTest {
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.FILE_TOO_LARGE);
 	}
 
+	// 검증: FR-MEDIA-14
 	@Test
 	void purpose가_하이라이트면_전용_상한이_적용된다() {
 		// 500MB — 기존 상한(100MB)은 넘지만 선분석 전용 상한(2GiB) 아래다 (MSG-351 D-4)
@@ -109,6 +114,7 @@ class VideoPresignTest {
 		assertThat(response.s3Key()).matches("videos/pending/42/[0-9a-f-]{36}\\.mp4");
 	}
 
+	// 검증: FR-VIDEO-04, FR-MEDIA-14
 	@Test
 	void purpose_없는_발급은_기존_상한_그대로다() {
 		assertThatThrownBy(() -> videoService.issuePresignedUrl(
@@ -122,6 +128,7 @@ class VideoPresignTest {
 	 * content-length 가 서명되지 않으면 클라이언트가 선언과 다른 크기를 올려도 S3 가 막지 못한다.
 	 * AWS SDK 업그레이드로 서명 헤더 구성이 바뀌면 이 테스트가 회귀를 잡는다.
 	 */
+	// 검증: FR-VIDEO-04
 	@Test
 	void presigned_URL_은_content_length_와_content_type_을_서명한다() {
 		PresignedUrlResponseDto response = videoService.issuePresignedUrl(
