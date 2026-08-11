@@ -28,7 +28,7 @@ public record GridCoverVideoResponseDto(
 	@Schema(description = "조회수 — 대표 선정 정렬 키", example = "37")
 	Long viewCount,
 
-	@Schema(description = "촬영 시각 (표시용). 정렬 tie-break 키는 createdAt 이다", example = "2026-07-20T18:03:11")
+	@Schema(description = "촬영 시각 (표시용). 정렬 tie-break 키는 createdAt 이다", example = "2026-07-20T18:03:11Z")
 	LocalDateTime recordedAt,
 
 	@Schema(description = "작성자 닉네임 원문. @ 등 화면 표기는 FE 가 붙인다", example = "busan.vlog")

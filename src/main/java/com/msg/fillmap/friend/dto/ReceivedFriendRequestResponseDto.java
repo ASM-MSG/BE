@@ -18,7 +18,7 @@ public record ReceivedFriendRequestResponseDto(
 	@Schema(description = "보낸 사용자의 프로필 이미지 URL — 미설정이면 null", nullable = true)
 	String profileImageUrl,
 
-	@Schema(description = "요청 시각", example = "2026-08-03T12:00:00")
+	@Schema(description = "요청 시각", example = "2026-08-03T12:00:00Z")
 	LocalDateTime requestedAt
 ) {
 }

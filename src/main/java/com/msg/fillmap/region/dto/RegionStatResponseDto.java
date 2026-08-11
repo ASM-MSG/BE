@@ -34,7 +34,7 @@ public record RegionStatResponseDto(
 	@Schema(description = "수집률(%) — 100 상한 clamp", example = "25.00")
 	BigDecimal progressRate,
 
-	@Schema(description = "수집률 캐시 기준 시각", example = "2026-07-20T10:00:00")
+	@Schema(description = "수집률 캐시 기준 시각", example = "2026-07-20T10:00:00Z")
 	LocalDateTime updatedAt
 ) {
 

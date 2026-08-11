@@ -34,7 +34,7 @@ public record VideoUploadRequestDto(
 	@Max(30)
 	Short durationSec,
 
-	@Schema(description = "촬영 시각", example = "2026-07-17T14:30:00")
+	@Schema(description = "촬영 시각", example = "2026-07-17T14:30:00Z")
 	@NotNull
 	LocalDateTime recordedAt,
 
