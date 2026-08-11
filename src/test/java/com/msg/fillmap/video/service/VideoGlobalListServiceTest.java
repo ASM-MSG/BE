@@ -78,6 +78,14 @@ class VideoGlobalListServiceTest {
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
+
+		// 기본값 = 요청한 작성자가 전부 살아 있다(탈퇴 CASCADE 로 정상 경로엔 빈손이 없다). 닉네임이 없으면
+		// 항목이 응답에서 빠지므로(MSG-371), 닉네임을 안 보는 테스트도 이 기본 스텁이 있어야 항목을 받는다.
+		// 탈퇴 경합을 보는 테스트는 각자 given 으로 덮어쓴다.
+		given(videoRepository.findAuthorNicknames(anyCollection())).willAnswer(invocation -> {
+			Collection<Long> userIds = invocation.getArgument(0);
+			return userIds.stream().map(id -> authorNickname(id, "user" + id)).toList();
+		});
 	}
 
 	/** 목록 후보 조건(PUBLIC 는 repository 필터 소관)·READY·썸네일 key 를 갖춘 픽스처 — 정상 경로 기준. */
@@ -312,16 +320,40 @@ class VideoGlobalListServiceTest {
 	}
 
 	@Test
-	@DisplayName("작성자가 배치 결과에 없으면 그 항목의 닉네임은 null 이다")
-	void 작성자가_배치_결과에_없으면_그_항목의_닉네임은_null이다() {
+	@DisplayName("작성자가 배치 결과에 없는 항목은 응답에서 빠진다 — 방금 연쇄 삭제된 영상")
+	void 작성자가_배치_결과에_없는_항목은_응답에서_빠진다() {
 		// 목록 조회와 닉네임 조회 사이(READ COMMITTED, ms 창)에 탈퇴 커밋이 끼는 이론상 케이스.
-		// 방어 분기를 두지 않는다 — 다음 조회에서 그 영상 자체가 CASCADE 로 사라지는 자연 소멸 창이다.
-		given(videoRepository.findGlobalVideos(GRID_ID, 21)).willReturn(List.of(readyVideo(3L, 7L, 30L, at(12))));
-		given(videoRepository.findAuthorNicknames(anyCollection())).willReturn(List.of());
+		// 닉네임이 빈손 = 그 영상이 방금 CASCADE 로 사라졌다는 뜻이라 숨긴다 — null 을 싣지 않는다.
+		given(videoRepository.findGlobalVideos(GRID_ID, 21)).willReturn(List.of(
+			readyVideo(3L, 7L, 30L, at(12)),
+			readyVideo(2L, 9L, 20L, at(11))));
+		given(videoRepository.findAuthorNicknames(anyCollection()))
+			.willReturn(List.of(authorNickname(9L, "seoul.walk")));
 
 		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(GRID_ID, null, 20);
 
-		assertThat(result.videos()).hasSize(1);
-		assertThat(result.videos().get(0).nickname()).isNull();
+		// 살아있는 작성자의 항목만 남고, 사라진 작성자(7)의 항목은 통째로 빠진다.
+		assertThat(result.videos())
+			.extracting(GridGlobalVideoResponseDto::videoId, GridGlobalVideoResponseDto::nickname)
+			.containsExactly(tuple(2L, "seoul.walk"));
+	}
+
+	@Test
+	@DisplayName("숨긴 항목이 페이지 끝이어도 커서는 그 행 기준 그대로다 — 같은 페이지 무한 재조회 방지")
+	void 숨긴_항목이_페이지_끝이어도_커서는_그_행_기준_그대로다() {
+		// 커서를 "보이는 마지막 항목"에서 뽑으면 숨긴 행 앞에 멈춰 다음 페이지가 같은 자리를 다시 읽는다.
+		// 걸러내기 전 pageRows 의 마지막 행 기준이라는 기존 규칙이 유지되는지 고정한다.
+		given(videoRepository.findGlobalVideos(GRID_ID, 3)).willReturn(List.of(
+			readyVideo(3L, 9L, 30L, at(12)),
+			readyVideo(2L, 7L, 20L, at(11)),     // 작성자 탈퇴 — 응답에서 숨겨지는 페이지 끝 행
+			readyVideo(1L, 9L, 10L, at(10))));   // lookahead 초과분
+		given(videoRepository.findAuthorNicknames(anyCollection()))
+			.willReturn(List.of(authorNickname(9L, "seoul.walk")));
+
+		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(GRID_ID, null, 2);
+
+		assertThat(result.videos()).extracting(GridGlobalVideoResponseDto::videoId).containsExactly(3L);
+		assertThat(result.hasNext()).isTrue();
+		assertThat(VideoCursor.decode(result.nextCursor()).id()).isEqualTo(2L);
 	}
 }

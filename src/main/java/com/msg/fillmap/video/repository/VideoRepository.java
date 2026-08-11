@@ -129,7 +129,9 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	 * 프로젝션으로 바꿔 커서·presign·DTO 팩토리까지 연쇄 재작성을 부르고, idx_videos_grid_popular 부분
 	 * 인덱스와의 바이트 단위 일치도 흔들린다. 매 요청 users 를 읽는 구조라 닉네임 변경이 다음 조회에
 	 * 그대로 반영된다(비정규화 사본 없음). 쿼리를 user 가 아닌 video 쪽에 두는 것은 "쿼리 소속은 용도
-	 * 기준" 관례다(UserRepository.findAllS3KeysByUserId 선례). 탈퇴 CASCADE 로 정상 경로엔 empty 가 없다.
+	 * 기준" 관례다(UserRepository.findAllS3KeysByUserId 선례). 탈퇴 CASCADE 로 정상 경로엔 empty 가 없다 —
+	 * empty 는 두 문장 사이에 탈퇴가 커밋돼 그 영상이 방금 사라졌다는 뜻이고, 호출자는 응답에서 숨긴다
+	 * (대표는 대표 없음, 재생은 404). null 닉네임을 응답에 싣는 경로는 없다.
 	 */
 	@Query("SELECT u.nickname FROM User u WHERE u.id = :userId")
 	Optional<String> findAuthorNickname(@Param("userId") Long userId);

@@ -89,6 +89,10 @@ class VideoPlaybackServiceTest {
 			mock(RegionStatsCommandService.class), thumbnailUrlPresigner, mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
 			friendshipQueryService, () -> new ZoneNameResolver(List.of(SEOMYEON)));
+
+		// 기본값 = 작성자가 살아 있다. 닉네임이 빈손이면 404 로 수렴하므로(MSG-371), 닉네임을 안 보는
+		// 테스트도 이 기본 스텁이 있어야 응답까지 간다. 탈퇴 경합을 보는 테스트는 given 으로 덮어쓴다.
+		given(videoRepository.findAuthorNickname(anyLong())).willReturn(Optional.of("busan.vlog"));
 	}
 
 	/** 모든 상태 축을 명시 지정하는 코어 빌더 — 엔티티에 세터가 없어 리플렉션으로 벌린다. */
@@ -471,6 +475,20 @@ class VideoPlaybackServiceTest {
 			.isInstanceOf(ApiException.class);
 
 		verify(videoRepository, never()).findAuthorNickname(anyLong());
+	}
+
+	@Test
+	@DisplayName("작성자 닉네임이 빈손이면 삭제 영상과 같은 VIDEO_NOT_FOUND 다")
+	void 작성자_닉네임이_빈손이면_VIDEO_NOT_FOUND다() {
+		// 영상 조회와 닉네임 조회 사이(READ COMMITTED, ms 창)에 탈퇴 커밋이 끼는 이론상 케이스.
+		// 빈손 = 그 영상이 방금 CASCADE 로 사라졌다는 뜻이라 DELETED 분기와 같은 404 로 수렴한다.
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(videoRepository.findAuthorNickname(OWNER_ID)).willReturn(Optional.empty());
+
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
 	}
 
 	@Test

@@ -70,6 +70,10 @@ class VideoGlobalCoverServiceTest {
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
+
+		// 기본값 = 작성자가 살아 있다. 닉네임이 빈손이면 대표 없음(null)이 되므로(MSG-371), 닉네임을 안 보는
+		// 테스트도 이 기본 스텁이 있어야 대표를 받는다. 탈퇴 경합을 보는 테스트는 given 으로 덮어쓴다.
+		given(videoRepository.findAuthorNickname(AUTHOR_ID)).willReturn(Optional.of("busan.vlog"));
 	}
 
 	private Video readyVideo(long id, String thumbKey, LocalDateTime recordedAt, long viewCount) {
@@ -170,5 +174,17 @@ class VideoGlobalCoverServiceTest {
 
 		assertThat(videoService.getGridCover(GRID_ID)).isNull();
 		then(videoRepository).should(never()).findAuthorNickname(any());
+	}
+
+	@Test
+	@DisplayName("작성자 닉네임이 빈손이면 대표 없음으로 응답한다 — 방금 연쇄 삭제된 영상")
+	void 작성자_닉네임이_빈손이면_대표_없음으로_응답한다() {
+		// 대표 조회와 닉네임 조회 사이(READ COMMITTED, ms 창)에 탈퇴 커밋이 끼는 이론상 케이스.
+		// 대표가 원래 없는 격자와 완전히 같은 응답(null)이라 nickname 이 null 로 실리는 경로가 없다.
+		given(videoRepository.findGlobalCover(GRID_ID))
+			.willReturn(Optional.of(readyVideo(1042L, THUMB_KEY, LocalDateTime.now(), 37L)));
+		given(videoRepository.findAuthorNickname(AUTHOR_ID)).willReturn(Optional.empty());
+
+		assertThat(videoService.getGridCover(GRID_ID)).isNull();
 	}
 }
