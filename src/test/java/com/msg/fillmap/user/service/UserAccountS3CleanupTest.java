@@ -11,6 +11,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.LongStream;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +24,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.auth.service.RefreshTokenService;
@@ -55,7 +57,8 @@ class UserAccountS3CleanupTest {
 		given(s3Client.deleteObjects(any(DeleteObjectsRequest.class)))
 			.willReturn(DeleteObjectsResponse.builder().build());
 		given(userRepository.deleteUser(USER_ID)).willReturn(1);
-		service = new UserServiceImpl(userRepository, refreshTokenService, tokenProvider, s3Client,
+		service = new UserServiceImpl(userRepository, refreshTokenService, tokenProvider, mock(S3Presigner.class),
+			s3Client,
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)));
 	}
 
@@ -115,6 +118,31 @@ class UserAccountS3CleanupTest {
 
 		// 독립 try-catch — refresh 정리 실패가 블랙리스트 시도까지 막으면 안 된다 (Codex 리뷰 반영).
 		then(tokenProvider).should().invalidateAccessToken("access-token");
+	}
+
+	@Test
+	void 계정을_삭제하면_프로필_이미지_키가_정리_대상에_포함된다() {
+		// MSG-373 §D-5 — 저장 값은 공개 URL 이므로 키로 역산해 영상 키와 함께 한 요청에 담긴다.
+		given(userRepository.findAllS3KeysByUserId(USER_ID)).willReturn(
+			List.<Object[]>of(new Object[] {"k-original", null, null, null}));
+		given(userRepository.findProfileImageUrlById(USER_ID)).willReturn(Optional.of(
+			"https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/profiles/original/1/img.jpg"));
+
+		service.deleteAccount(USER_ID, "access-token");
+
+		assertThat(deletedKeyBatches().get(0))
+			.containsExactlyInAnyOrder("k-original", "profiles/original/1/img.jpg");
+	}
+
+	@Test
+	void 프로필_이미지가_없는_계정_삭제는_기존과_동일하게_동작한다() {
+		given(userRepository.findAllS3KeysByUserId(USER_ID)).willReturn(
+			List.<Object[]>of(new Object[] {"k-original", null, null, null}));
+		given(userRepository.findProfileImageUrlById(USER_ID)).willReturn(Optional.empty());
+
+		service.deleteAccount(USER_ID, "access-token");
+
+		assertThat(deletedKeyBatches().get(0)).containsExactly("k-original");
 	}
 
 	@Test
