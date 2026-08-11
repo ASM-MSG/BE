@@ -2,14 +2,16 @@
 
 `scripts/generate-rtm.sh` 가 생성한다. 손으로 고치지 말 것. 원천은 테스트의 `// 검증: FR-...` 주석과 `docs/srs.md` 다.
 
-요약: FR 215건 중 테스트 연결 187건, 검증 공백 11건 (계획·폐기라 테스트 부재가 정상인 17건 별도)
+요약: FR 217건 중 테스트 연결 187건, 검증 공백 11건 (계획·폐기라 테스트 부재가 정상인 19건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
-| FR-MAP-01 | 계획 | (없음) |
+| FR-MAP-01 | 폐기됨 | (없음) |
 | FR-MAP-02 | 계획 | (없음) |
 | FR-MAP-03 | 계획 | (없음) |
 | FR-MAP-04 | 계획 | (없음) |
+| FR-MAP-05 | 계획 | (없음) |
+| FR-MAP-06 | 계획 | (없음) |
 | FR-GRID-01 | 구현됨 | GridEncoderTest |
 | FR-GRID-02 | 구현됨 | GridEncoderTest |
 | FR-GRID-03 | 구현됨 | GridEncoderTest |
@@ -238,10 +240,12 @@
 
 ## 미구현(계획)·폐기: 테스트 부재가 정상
 
-- FR-MAP-01 (계획)
+- FR-MAP-01 (폐기됨)
 - FR-MAP-02 (계획)
 - FR-MAP-03 (계획)
 - FR-MAP-04 (계획)
+- FR-MAP-05 (계획)
+- FR-MAP-06 (계획)
 - FR-REGION-13 (계획)
 - FR-SEARCH-13 (계획)
 - FR-SEARCH-14 (계획)
