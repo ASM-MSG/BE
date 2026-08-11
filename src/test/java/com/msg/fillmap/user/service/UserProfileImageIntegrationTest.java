@@ -86,6 +86,7 @@ class UserProfileImageIntegrationTest {
 	@DisplayName("변경 확정과 제거")
 	class 변경_확정과_제거 {
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("확정하면 공개 URL 이 저장되고 갱신된 프로필이 반환된다 (FR-1·§D-1)")
 		void 확정하면_공개_URL이_저장되고_갱신된_프로필이_반환된다() {
@@ -99,6 +100,7 @@ class UserProfileImageIntegrationTest {
 			assertThat(reloadProfileImageUrl(me.getId())).isEqualTo(updated.profileImageUrl());
 		}
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("제거하면 기본 상태(null)로 돌아간다 (FR-6)")
 		void 제거하면_기본_상태로_돌아간다() {
@@ -108,6 +110,7 @@ class UserProfileImageIntegrationTest {
 			assertThat(reloadProfileImageUrl(me.getId())).isNull();
 		}
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("이미 기본 상태여도 제거는 성공한다 (멱등)")
 		void 이미_기본_상태여도_제거는_성공한다() {
@@ -119,6 +122,7 @@ class UserProfileImageIntegrationTest {
 	@DisplayName("조회 반영")
 	class 조회_반영 {
 
+		// 검증: FR-USER-13
 		@Test
 		@DisplayName("내 프로필 조회에 이미지 URL 과 가입 시각이 담긴다 (FR-2·3)")
 		void 내_프로필_조회에_이미지_URL과_가입_시각이_담긴다() {
@@ -132,6 +136,7 @@ class UserProfileImageIntegrationTest {
 			assertThat(profile.createdAt()).isEqualTo(me.getCreatedAt());
 		}
 
+		// 검증: FR-USER-13
 		@Test
 		@DisplayName("미설정이면 이미지 URL 은 null 이고 가입 시각은 그대로 담긴다 (FR-2)")
 		void 미설정이면_이미지_URL은_null이다() {
@@ -145,6 +150,7 @@ class UserProfileImageIntegrationTest {
 		 * 친구 축 3종은 코드 변경 없이 반영된다는 전제(PRD 7절)의 회귀 방지 1건. 프로젝션이 컬럼 원문을
 		 * 그대로 싣기 때문에 저장 값이 완성 URL 이어야 성립한다 (§D-1). 3종 전수 확인은 불요.
 		 */
+		// 검증: FR-USER-13
 		@Test
 		@DisplayName("설정한 이미지가 친구 목록 응답에 반영된다 (FR-4)")
 		void 설정한_이미지가_친구_목록_응답에_반영된다() {

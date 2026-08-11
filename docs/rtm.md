@@ -2,14 +2,16 @@
 
 `scripts/generate-rtm.sh` 가 생성한다. 손으로 고치지 말 것. 원천은 테스트의 `// 검증: FR-...` 주석과 `docs/srs.md` 다.
 
-요약: FR 212건 중 테스트 연결 185건, 검증 공백 10건 (계획·폐기라 테스트 부재가 정상인 17건 별도)
+요약: FR 217건 중 테스트 연결 187건, 검증 공백 11건 (계획·폐기라 테스트 부재가 정상인 19건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
-| FR-MAP-01 | 계획 | (없음) |
+| FR-MAP-01 | 폐기됨 | (없음) |
 | FR-MAP-02 | 계획 | (없음) |
 | FR-MAP-03 | 계획 | (없음) |
 | FR-MAP-04 | 계획 | (없음) |
+| FR-MAP-05 | 계획 | (없음) |
+| FR-MAP-06 | 계획 | (없음) |
 | FR-GRID-01 | 구현됨 | GridEncoderTest |
 | FR-GRID-02 | 구현됨 | GridEncoderTest |
 | FR-GRID-03 | 구현됨 | GridEncoderTest |
@@ -92,6 +94,7 @@
 | FR-VIDEO-15 | 구현됨 | VideoServiceIntegrationTest, VideoVisibilityControllerTest, VideoVisibilityIntegrationTest |
 | FR-VIDEO-16 | 구현됨 | VideoPlaybackServiceTest |
 | FR-VIDEO-17 | 구현됨 | RegionExploreQueryTest, VideoGlobalCoverQueryTest, VideoGlobalListQueryTest, VideoServiceIntegrationTest, VideoVisibilityIntegrationTest |
+| FR-VIDEO-18 | 진행 중 | (없음) |
 | FR-MEDIA-01 | 구현됨 | FfmpegRunnerTest, VideoEncodingServiceTest |
 | FR-MEDIA-02 | 구현됨 | AiBlurPollerTest, VideoBlurTransitionTest, VideoEncodingAiTriggerTest, VideoEncodingServiceTest, VideoEncodingTriggerTest, VideoGridQueryServiceTest, VideoPlaybackServiceTest, VideoStatusTransitionTest, VideoStatusWriterTest |
 | FR-MEDIA-03 | 구현됨 | VideoEncodingServiceTest |
@@ -218,6 +221,8 @@
 | FR-USER-09 | 구현됨 | RefreshTokenServiceTest, UserAccountS3CleanupTest, UserAccountSessionInvalidationIntegrationTest |
 | FR-USER-10 | 구현됨 | UserAccountDeletionIntegrationTest |
 | FR-USER-11 | 구현됨 | UserAccountDeletionIntegrationTest, UserRepositoryDeletionTest |
+| FR-USER-12 | 진행 중 | UserAccountS3CleanupTest, UserProfileControllerTest, UserProfileImageIntegrationTest, UserProfileImagePresignTest, UserProfileImageS3Test |
+| FR-USER-13 | 진행 중 | UserProfileControllerTest, UserProfileImageIntegrationTest |
 
 ## 검증 공백: 구현됐는데 대응 테스트가 없다 (조치 대상)
 
@@ -227,6 +232,7 @@
 - FR-HOTZONE-01 (구현됨)
 - FR-HOTZONE-12 (구현됨)
 - FR-VIDEO-06 (구현됨)
+- FR-VIDEO-18 (진행 중)
 - FR-MEDIA-17 (구현됨)
 - FR-MEDIA-16 (구현됨)
 - FR-STREAK-02 (구현됨)
@@ -234,10 +240,12 @@
 
 ## 미구현(계획)·폐기: 테스트 부재가 정상
 
-- FR-MAP-01 (계획)
+- FR-MAP-01 (폐기됨)
 - FR-MAP-02 (계획)
 - FR-MAP-03 (계획)
 - FR-MAP-04 (계획)
+- FR-MAP-05 (계획)
+- FR-MAP-06 (계획)
 - FR-REGION-13 (계획)
 - FR-SEARCH-13 (계획)
 - FR-SEARCH-14 (계획)

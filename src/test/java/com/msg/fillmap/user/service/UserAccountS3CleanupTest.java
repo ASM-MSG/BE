@@ -124,7 +124,7 @@ class UserAccountS3CleanupTest {
 		then(tokenProvider).should().invalidateAccessToken("access-token");
 	}
 
-	// 검증: FR-USER-08
+	// 검증: FR-USER-12
 	@Test
 	void 계정을_삭제하면_프로필_이미지_키가_정리_대상에_포함된다() {
 		// MSG-373 §D-5 — 저장 값은 공개 URL 이므로 키로 역산해 영상 키와 함께 한 요청에 담긴다.
@@ -139,6 +139,7 @@ class UserAccountS3CleanupTest {
 			.containsExactlyInAnyOrder("k-original", "profiles/original/1/img.jpg");
 	}
 
+	// 검증: FR-USER-12
 	@Test
 	void 프로필_이미지가_없는_계정_삭제는_기존과_동일하게_동작한다() {
 		given(userRepository.findAllS3KeysByUserId(USER_ID)).willReturn(
@@ -150,6 +151,7 @@ class UserAccountS3CleanupTest {
 		assertThat(deletedKeyBatches().get(0)).containsExactly("k-original");
 	}
 
+	// 검증: FR-USER-08
 	@Test
 	void 영상이_1000건을_넘으면_요청이_청크로_분할된다() {
 		// 1001개 단일 키 행 → 1000 + 1 두 요청 (DeleteObjects 요청당 상한).

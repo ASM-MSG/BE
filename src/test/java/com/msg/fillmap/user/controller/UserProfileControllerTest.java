@@ -195,6 +195,7 @@ class UserProfileControllerTest {
 			.andExpect(status().isUnauthorized());
 	}
 
+	// 검증: FR-USER-13
 	@Test
 	@DisplayName("프로필 응답에 이미지 URL 과 가입 시각이 실린다 — 미설정이면 필드 존재 + null (MSG-373 FR-2·3)")
 	void 프로필_응답에_이미지_URL과_가입_시각이_실린다() throws Exception {
@@ -208,6 +209,7 @@ class UserProfileControllerTest {
 			.andExpect(jsonPath("$.data.createdAt").value("2026-01-12T03:24:11"));
 	}
 
+	// 검증: FR-USER-12
 	@Test
 	@DisplayName("프로필 이미지 presigned URL 을 발급한다 — 200 · uploadUrl · s3Key (MSG-373 FR-1)")
 	void 프로필_이미지_presigned_URL을_발급한다() throws Exception {
@@ -225,6 +227,7 @@ class UserProfileControllerTest {
 			.andExpect(jsonPath("$.data.expiresInSec").value(600));
 	}
 
+	// 검증: FR-USER-12
 	@Test
 	@DisplayName("크기 없는 presign 요청은 400 이다 (@NotNull)")
 	void 크기_없는_presign_요청은_400을_반환한다() throws Exception {
@@ -235,6 +238,7 @@ class UserProfileControllerTest {
 			.andExpect(status().isBadRequest());
 	}
 
+	// 검증: FR-USER-12
 	@Test
 	@DisplayName("프로필 이미지를 변경하면 갱신된 프로필을 반환한다 (MSG-373 FR-1)")
 	void 프로필_이미지를_변경하면_갱신된_프로필을_반환한다() throws Exception {
@@ -249,6 +253,7 @@ class UserProfileControllerTest {
 			.andExpect(jsonPath("$.data.profileImageUrl").value("https://cdn/img.jpg"));
 	}
 
+	// 검증: FR-USER-12
 	@Test
 	@DisplayName("빈 s3Key 변경 요청은 400 이다 (@NotBlank)")
 	void 빈_s3Key_변경_요청은_400을_반환한다() throws Exception {
@@ -259,6 +264,7 @@ class UserProfileControllerTest {
 			.andExpect(status().isBadRequest());
 	}
 
+	// 검증: FR-USER-12
 	@Test
 	@DisplayName("프로필 이미지를 제거하면 이미지 URL 이 null 인 프로필을 반환한다 (MSG-373 FR-6)")
 	void 프로필_이미지를_제거하면_null인_프로필을_반환한다() throws Exception {

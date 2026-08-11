@@ -65,6 +65,7 @@ class UserProfileImagePresignTest {
 	@DisplayName("허용 요청")
 	class 허용_요청 {
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("확장자와 타입 쌍이 맞으면 presigned URL 을 발급한다 (FR-1)")
 		void 허용_확장자와_타입_쌍이_맞으면_presigned_URL을_발급한다() {
@@ -74,6 +75,7 @@ class UserProfileImagePresignTest {
 			assertThat(response.expiresInSec()).isEqualTo(600L);
 		}
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("발급 키는 내 pending 경로 아래에 생성된다 (§D-2)")
 		void 발급_키는_내_pending_경로_아래에_생성된다() {
@@ -81,12 +83,14 @@ class UserProfileImagePresignTest {
 				.matches("profiles/pending/42/[0-9a-f-]{36}\\.png");
 		}
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("확장자 대문자는 소문자로 정규화해 발급한다")
 		void 확장자_대문자는_소문자로_정규화해_발급한다() {
 			assertThat(issue("JPG", "image/jpeg", 1048576L).s3Key()).endsWith(".jpg");
 		}
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("상한 5MB 정확히는 통과한다 (경계 안)")
 		void 상한_5MB_정확히는_통과한다() {
@@ -97,6 +101,7 @@ class UserProfileImagePresignTest {
 		 * 크기·타입 강제가 실제로 성립하는지 보는 지점 — 서명에 빠지면 클라이언트가 선언과 다른 파일을
 		 * 올려도 S3 가 막지 못한다. SDK 업그레이드로 서명 헤더 구성이 바뀌면 여기서 회귀를 잡는다.
 		 */
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("presigned URL 은 content-length 와 content-type 을 서명한다")
 		void presigned_URL은_크기와_타입을_서명한다() {
@@ -109,6 +114,7 @@ class UserProfileImagePresignTest {
 	@DisplayName("거부 요청")
 	class 거부_요청 {
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("지원하지 않는 확장자는 1415 로 거부한다 (FR-5)")
 		void 지원하지_않는_확장자는_1415로_거부한다() {
@@ -117,6 +123,7 @@ class UserProfileImagePresignTest {
 				.hasFieldOrPropertyWithValue("errorCode", UserErrorCode.UNSUPPORTED_IMAGE_EXTENSION);
 		}
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("아이폰 사진 형식(heic·heif)은 1415 로 거부한다 — 표시되지 않는 이미지를 받지 않는다 (§D-4 재확정)")
 		void 아이폰_사진_형식은_1415로_거부한다() {
@@ -130,6 +137,7 @@ class UserProfileImagePresignTest {
 				.hasFieldOrPropertyWithValue("errorCode", UserErrorCode.UNSUPPORTED_IMAGE_EXTENSION);
 		}
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("확장자와 Content-Type 이 어긋나면 1415 로 거부한다 (MSG-64 D2 미러)")
 		void 확장자와_ContentType이_어긋나면_1415로_거부한다() {
@@ -138,6 +146,7 @@ class UserProfileImagePresignTest {
 				.hasFieldOrPropertyWithValue("errorCode", UserErrorCode.UNSUPPORTED_IMAGE_EXTENSION);
 		}
 
+		// 검증: FR-USER-12
 		@Test
 		@DisplayName("선언 크기가 5MB 를 넘으면 1413 으로 거부한다 (FR-5)")
 		void 선언_크기가_5MB를_넘으면_1413으로_거부한다() {
