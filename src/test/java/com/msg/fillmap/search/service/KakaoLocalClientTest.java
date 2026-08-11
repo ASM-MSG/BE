@@ -2,6 +2,8 @@ package com.msg.fillmap.search.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -15,12 +17,17 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.search.exception.SearchErrorCode;
@@ -125,6 +132,61 @@ class KakaoLocalClientTest {
 			.andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
 		assertUpstreamError();
+	}
+
+	@Test
+	void 업스트림_실패_로그에_검색어_원문이_남지_않는다() {
+		// 응답 본문이 검색어를 에코해도 로그로 새지 않는다 (MSG-342 D-2) — 예외 메시지가 본문을 포함하기 때문
+		ListAppender<ILoggingEvent> logAppender = attachLogAppender();
+		try {
+			server.expect(requestTo(startsWith(BASE_URL + "/v2/local/search/keyword.json")))
+				.andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body("{\"error\":\"query 강남 맛집 처리 실패\"}"));
+
+			ApiException thrown = catchThrowableOfType(ApiException.class, () -> client.search("강남 맛집"));
+
+			// 원인 구분 손잡이는 예외 클래스명 + 상태 코드로 유지된다
+			assertThat(logAppender.list.get(0).getFormattedMessage())
+				.doesNotContain("강남")
+				.contains(thrown.getCause().getClass().getSimpleName())
+				.contains("status=500");
+		} finally {
+			detachLogAppender(logAppender);
+		}
+	}
+
+	@Test
+	void 타임아웃_실패_로그에_요청_URL이_남지_않는다() {
+		// ResourceAccessException 메시지는 요청 URL 전체(?query=검색어)를 포함한다 — 항상 유출 경로 (MSG-342 D-2)
+		ListAppender<ILoggingEvent> logAppender = attachLogAppender();
+		try {
+			server.expect(requestTo(startsWith(BASE_URL + "/v2/local/search/keyword.json")))
+				.andRespond(withException(new SocketTimeoutException("read timed out")));
+
+			assertThatThrownBy(() -> client.search("강남 맛집")).isInstanceOf(ApiException.class);
+
+			assertThat(logAppender.list.get(0).getFormattedMessage())
+				.doesNotContain("강남")
+				.doesNotContain("query=")
+				.contains("ResourceAccessException");
+		} finally {
+			detachLogAppender(logAppender);
+		}
+	}
+
+	private static ListAppender<ILoggingEvent> attachLogAppender() {
+		ListAppender<ILoggingEvent> logAppender = new ListAppender<>();
+		logAppender.start();
+		clientLogger().addAppender(logAppender);
+		return logAppender;
+	}
+
+	private static void detachLogAppender(ListAppender<ILoggingEvent> logAppender) {
+		clientLogger().detachAppender(logAppender);
+	}
+
+	private static Logger clientLogger() {
+		return (Logger) LoggerFactory.getLogger(KakaoLocalClient.class);
 	}
 
 	@Test

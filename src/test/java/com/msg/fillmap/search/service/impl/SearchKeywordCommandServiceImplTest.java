@@ -29,8 +29,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 import com.msg.fillmap.search.repository.SearchKeywordDailyCountRepository;
 
@@ -191,6 +196,29 @@ class SearchKeywordCommandServiceImplTest {
 
 		verifyNoInteractions(repository);   // dedupe 판정 없이 카운트하면 도배 방어가 뚫린다 (D4)
 		deadFactory.destroy();
+	}
+
+	@Test
+	void 집계_실패_로그에_검색어_원문이_남지_않는다() {
+		// 실패 예외 메시지는 바인딩 값(검색어)을 에코할 수 있다 — 예: Postgres UNIQUE 위반 DETAIL (MSG-342 D-2)
+		when(repository.upsertIncrement(any(), anyString()))
+			.thenThrow(new RuntimeException("Key (keyword)=(부산대) already exists"));
+		ListAppender<ILoggingEvent> logAppender = new ListAppender<>();
+		logAppender.start();
+		Logger logger = (Logger) LoggerFactory.getLogger(SearchKeywordCommandServiceImpl.class);
+		logger.addAppender(logAppender);
+		try {
+			service.recordSearch(USER_ID, "부산대");
+
+			ILoggingEvent event = logAppender.list.get(0);
+			assertThat(event.getThrowableProxy()).isNull();   // 스택·예외 메시지 자체를 로그에 싣지 않는다
+			assertThat(event.getFormattedMessage())
+				.doesNotContain("부산대")
+				.contains("userId=" + USER_ID)
+				.contains("causeType=RuntimeException");   // 원인 구분 손잡이는 클래스명으로 유지
+		} finally {
+			logger.detachAppender(logAppender);
+		}
 	}
 
 	@Test
