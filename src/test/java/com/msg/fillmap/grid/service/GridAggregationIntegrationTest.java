@@ -153,6 +153,7 @@ class GridAggregationIntegrationTest {
 			.orElseThrow();
 	}
 
+	// 검증: FR-GRID-13
 	@Test
 	@DisplayName("동 단위 집계는 행정동별로 묶어 격자 수를 센다")
 	void 동_단위_집계는_행정동별로_묶어_격자_수를_센다() {
@@ -167,6 +168,7 @@ class GridAggregationIntegrationTest {
 		assertThat(itemOf(items, DONG_C).count()).isEqualTo(1);
 	}
 
+	// 검증: FR-GRID-13
 	@Test
 	@DisplayName("구 단위 집계는 행정동 코드 앞 5자리로 묶는다")
 	void 구_단위_집계는_행정동_코드_앞_5자리로_묶는다() {
@@ -182,6 +184,7 @@ class GridAggregationIntegrationTest {
 		assertThat(itemOf(items, "99972").count()).isEqualTo(1);
 	}
 
+	// 검증: FR-GRID-13
 	@Test
 	@DisplayName("시 단위 이름은 시도 토큰이다")
 	void 시_단위_이름은_시도_토큰이다() {
@@ -193,6 +196,7 @@ class GridAggregationIntegrationTest {
 		assertThat(itemOf(items, "99").count()).isEqualTo(4);
 	}
 
+	// 검증: FR-GRID-13
 	@Test
 	@DisplayName("집계 합은 같은 뷰포트 개별 조회 총수와 같다 (동·구·시 전 단위, FR-3)")
 	void 집계_합은_같은_뷰포트_개별_조회_총수와_같다() {
@@ -207,6 +211,7 @@ class GridAggregationIntegrationTest {
 		}
 	}
 
+	// 검증: FR-GRID-13
 	@Test
 	@DisplayName("행정동 미판정 격자는 이름 없는 항목 하나로 집계된다 (FR-7)")
 	void 행정동_미판정_격자는_이름_없는_항목_하나로_집계된다() {
@@ -226,6 +231,7 @@ class GridAggregationIntegrationTest {
 		assertThat(items.get(items.size() - 1).regionCode()).isNull();
 	}
 
+	// 검증: FR-GRID-13
 	@Test
 	@DisplayName("대표 좌표는 그룹 점령 격자 중심의 평균이다")
 	void 대표_좌표는_그룹_점령_격자_중심의_평균이다() {
@@ -239,6 +245,7 @@ class GridAggregationIntegrationTest {
 		assertThat(item.lng()).isCloseTo((first.lon() + second.lon()) / 2, within(1e-7));
 	}
 
+	// 검증: FR-GRID-13
 	@Test
 	@DisplayName("점령 격자가 없는 뷰포트는 빈 목록이다 (FR-5)")
 	void 점령_격자가_없는_뷰포트는_빈_목록이다() {

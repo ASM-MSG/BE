@@ -37,6 +37,7 @@ import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
  * 여기서만 확인된다. presign 은 AWS 자격증명 의존을 피해 mock 으로 대체한다
  * (URL 서명 검증은 VideoGlobalListServiceTest 담당 — VideoGlobalListViewCountIntegrationTest 전략).
  */
+// 검증: FR-VIDEO-18
 @SpringBootTest
 @Transactional
 @DisplayName("전역 노출 응답 작성자 닉네임 (MSG-371, 실 DB)")
