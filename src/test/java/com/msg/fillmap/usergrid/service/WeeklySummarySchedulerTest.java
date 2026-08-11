@@ -216,9 +216,9 @@ class WeeklySummarySchedulerTest {
 		return userRepository.save(User.createLocalUser(email, "hash", "요약테스터")).getId();
 	}
 
-	/** KST 벽시계를 저장 존(JVM 기본 존) 벽시계로 환산한다 — 임계값 바인딩과 같은 규칙 (D2). */
+	/** KST 벽시계를 저장 존(UTC) 벽시계로 환산한다 — 임계값 바인딩과 같은 규칙 (D2, MSG-376 후속). */
 	private LocalDateTime stored(LocalDateTime kstWallClock) {
-		return kstWallClock.atZone(KST).withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+		return kstWallClock.atZone(KST).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
 	}
 
 	private void occupy(long user, LocalDateTime firstCollectedAtKst) {

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 
 import jakarta.persistence.EntityManager;
 
@@ -133,9 +134,9 @@ class UploadHistoryIntegrationTest {
 		return GridFixtures.seedGrid(em, GY0, GX0 + dx);
 	}
 
-	/** KST 벽시계 시각을 저장 존(JVM 기본 존) 벽시계로 환산한다 — 쿼리의 이중 AT TIME ZONE 역방향. */
+	/** KST 벽시계 시각을 저장 존(UTC) 벽시계로 환산한다 — 쿼리의 이중 AT TIME ZONE 역방향 (MSG-376 후속). */
 	private LocalDateTime storedAt(LocalDateTime kstWallClock) {
-		return kstWallClock.atZone(KST).withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+		return kstWallClock.atZone(KST).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
 	}
 
 	/** videos 삽입 — created_at 만 명시(KST 벽시계 입력을 저장 존으로 환산), 나머지는 요약 테스트 형상 그대로. */
