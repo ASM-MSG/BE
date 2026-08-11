@@ -50,6 +50,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 		""", nativeQuery = true)
 	List<Object[]> findAllS3KeysByUserId(@Param("userId") Long userId);
 
+	/**
+	 * 계정 삭제용 프로필 이미지 URL 수집 (MSG-373). 엔티티를 안 띄우는 스칼라 조회다 — deleteUser 는
+	 * 벌크 JPQL DELETE 라 영속성 컨텍스트에 남은 User 가 삭제된 행을 가리키는 상태를 만들지 않는다.
+	 * 컬럼이 null(미설정)이면 빈 Optional 이라 호출부에 별도 분기가 없다.
+	 */
+	@Query("SELECT u.profileImageUrl FROM User u WHERE u.id = :userId")
+	Optional<String> findProfileImageUrlById(@Param("userId") Long userId);
+
 	/** 삭제 행 수 반환 — 0 이면 이미 없는 유저(1404). deleteById 는 부재 시 조용히 무시라 판별 불가. */
 	@Modifying
 	@Query("DELETE FROM User u WHERE u.id = :userId")
