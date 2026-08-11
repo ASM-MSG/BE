@@ -1,5 +1,6 @@
 package com.msg.fillmap.video.controller;
 
+import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -104,7 +105,9 @@ class GridVideoControllerTest {
 			.andExpect(jsonPath("$.data.thumbnailUrl").value("https://bucket.s3/thumb.jpg?X-Amz-Signature=abc"))
 			.andExpect(jsonPath("$.data.durationSec").value(12))
 			.andExpect(jsonPath("$.data.viewCount").value(37))
-			.andExpect(jsonPath("$.data.recordedAt").value("2026-07-20T18:03:11"))
+			// MSG-376: 응답 시각은 UTC Z 표기로 나간다 (직렬화 관통 확인 — 정확 일치 + 표기 정규식)
+			.andExpect(jsonPath("$.data.recordedAt").value("2026-07-20T18:03:11Z"))
+			.andExpect(jsonPath("$.data.recordedAt").value(matchesPattern("^\\d{4}-\\d{2}-\\d{2}T[\\d:.]+Z$")))
 			.andExpect(jsonPath("$.data.nickname").value("busan.vlog"))
 			.andExpect(jsonPath("$.data.processingStatus").doesNotExist());
 	}

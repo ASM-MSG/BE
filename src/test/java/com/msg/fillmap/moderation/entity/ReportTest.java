@@ -3,6 +3,7 @@ package com.msg.fillmap.moderation.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,7 @@ class ReportTest {
 	@DisplayName("승인 처리는 RESOLVED 로 바꾸고 처리자와 처리 시각을 남긴다 (FR-4)")
 	void 승인_처리는_RESOLVED로_바꾸고_처리자와_처리_시각을_남긴다() {
 		Report report = pendingReport();
-		LocalDateTime before = LocalDateTime.now();
+		LocalDateTime before = LocalDateTime.now(ZoneOffset.UTC);
 
 		report.resolve(ADMIN_ID);
 
@@ -40,7 +41,7 @@ class ReportTest {
 	@DisplayName("기각 처리는 REJECTED 로 바꾸고 처리자와 처리 시각을 남긴다 (FR-6)")
 	void 기각_처리는_REJECTED로_바꾸고_처리자와_처리_시각을_남긴다() {
 		Report report = pendingReport();
-		LocalDateTime before = LocalDateTime.now();
+		LocalDateTime before = LocalDateTime.now(ZoneOffset.UTC);
 
 		report.reject(ADMIN_ID);
 

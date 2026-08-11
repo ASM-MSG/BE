@@ -45,7 +45,7 @@ public record VideoPlaybackResponseDto(
 	@Schema(description = "조회수 (이번 조회 증가 전 스냅샷)", example = "37")
 	Long viewCount,
 
-	@Schema(description = "촬영 시각 (표시용)", example = "2026-07-20T18:03:11")
+	@Schema(description = "촬영 시각 (표시용)", example = "2026-07-20T18:03:11Z")
 	LocalDateTime recordedAt,
 
 	@Schema(description = "playbackUrl presign TTL(초). playbackUrl=null 이면 null", nullable = true)

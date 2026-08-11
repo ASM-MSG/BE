@@ -1,6 +1,6 @@
 package com.msg.fillmap.usergrid.service.impl;
 
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -154,13 +154,15 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 	}
 
 	/**
-	 * created_at 은 타임존 없는 벽시계 저장이라 저장 존(JVM 기본 존)을 쿼리에 파라미터로 넘겨 해석시킨다
-	 * (MSG-362 §D4 — MSG-315 의 임계값 환산과 같은 전제를 읽기 방향으로 쓴 것). 날짜 접기는 전부 쿼리
-	 * 몫이라 여기는 프로젝션을 뷰로 옮기는 것이 전부다.
+	 * created_at 은 타임존 없는 벽시계 저장이라 저장 존을 쿼리에 파라미터로 넘겨 해석시킨다
+	 * (MSG-362 §D4 — MSG-315 의 임계값 환산과 같은 전제를 읽기 방향으로 쓴 것). 그 존은 UTC 다:
+	 * 쓰기 경로(Video 생성자)가 UTC 를 넣도록 고정된 MSG-376 후속 수정 이후의 사실이며, 그 전에는
+	 * JVM 기본 존이라 여기도 systemDefault 를 넘겼다. 날짜 접기는 전부 쿼리 몫이라 여기는
+	 * 프로젝션을 뷰로 옮기는 것이 전부다.
 	 */
 	@Override
 	public List<UploadHistoryView> getUploadHistory(long userId) {
-		return userGridRepository.getUploadHistory(userId, ZoneId.systemDefault().getId()).stream()
+		return userGridRepository.getUploadHistory(userId, ZoneOffset.UTC.getId()).stream()
 			.map(projection -> new UploadHistoryView(projection.getUploadDate(), projection.getUploadCount()))
 			.toList();
 	}

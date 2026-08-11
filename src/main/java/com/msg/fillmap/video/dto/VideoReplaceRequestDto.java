@@ -29,7 +29,7 @@ public record VideoReplaceRequestDto(
 	@Schema(description = "영상 길이(초). 1~30초", example = "15")
 	@NotNull @Min(1) @Max(30) Short durationSec,
 
-	@Schema(description = "촬영 시각", example = "2026-07-17T14:30:00")
+	@Schema(description = "촬영 시각", example = "2026-07-17T14:30:00Z")
 	@NotNull LocalDateTime recordedAt
 ) {
 

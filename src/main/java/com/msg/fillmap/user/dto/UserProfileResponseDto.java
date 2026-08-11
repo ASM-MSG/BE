@@ -29,7 +29,7 @@ public record UserProfileResponseDto(
 	String profileImageUrl,
 
 	@Schema(description = "가입 시각 — DB 저장값(UTC) 그대로다. \"2026.01.12\" 같은 표기는 FE 몫 (MSG-373)",
-		example = "2026-01-12T03:24:11")
+		example = "2026-01-12T03:24:11Z")
 	LocalDateTime createdAt
 ) {
 

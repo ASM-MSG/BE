@@ -38,7 +38,7 @@ public record AdminVideoReviewResponseDto(
 	@Schema(description = "영상 길이(초, 최대 30)", example = "12")
 	Short durationSec,
 
-	@Schema(description = "촬영 시각 (표시용)", example = "2026-07-20T18:03:11")
+	@Schema(description = "촬영 시각 (표시용)", example = "2026-07-20T18:03:11Z")
 	LocalDateTime recordedAt,
 
 	@Schema(description = "재생본 presigned GET URL — READY 가 아니면 null", nullable = true)

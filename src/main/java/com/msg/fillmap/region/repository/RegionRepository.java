@@ -163,6 +163,9 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	 * regions.total_grid_count 사본, progress_rate 는 ROUND(collected*100/total, 2) 물질화(§D4). 대상 격자가
 	 * 무라벨(region_code IS NULL — 해안·무귀속)이면 가드로 SELECT 가 empty → 무변경 no-op(equi JOIN 도 NULL 을
 	 * 탈락시키나 no-op 의도를 명시한다). recompute 라 방향 무관·멱등 — 첫 점령/롤백 둘 다 이 한 문장(롤백 마지막 격자는 0 으로 UPSERT).
+	 * updated_at 은 statement_timestamp() AT TIME ZONE 'UTC' (NotificationRepository.markSent 선례) —
+	 * now()(timestamptz)는 timestamp 컬럼 대입 시 세션 TZ 로 캐스트돼 KST JVM 에서 +9h 저장된다. 이 값은
+	 * RegionStatResponseDto.updatedAt 으로 API 에 나가고 전역 코덱이 UTC 'Z' 를 붙이므로 축자 UTC 여야 한다(MSG-376).
 	 */
 	@Modifying
 	@Query(value = """
@@ -173,7 +176,7 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 			cnt.collected,
 			tr.total_grid_count,
 			COALESCE(ROUND(cnt.collected * 100.0 / NULLIF(tr.total_grid_count, 0), 2), 0.00),
-			now()
+			statement_timestamp() AT TIME ZONE 'UTC'
 		FROM grids g
 		JOIN regions tr ON tr.region_code = g.region_code
 		JOIN LATERAL (
@@ -189,7 +192,7 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 			collected_count = EXCLUDED.collected_count,
 			total_count     = EXCLUDED.total_count,
 			progress_rate   = EXCLUDED.progress_rate,
-			updated_at      = now()
+			updated_at      = statement_timestamp() AT TIME ZONE 'UTC'
 		""", nativeQuery = true)
 	int refreshRegionStats(@Param("userId") long userId, @Param("gridId") String gridId);
 }

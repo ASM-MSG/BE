@@ -25,7 +25,7 @@ public record GridVideoResponseDto(
 	@Schema(description = "영상 길이(초, 최대 30)", example = "12")
 	Short durationSec,
 
-	@Schema(description = "업로드(방문) 시각 — 정렬 키", example = "2026-07-20T18:03:11")
+	@Schema(description = "업로드(방문) 시각 — 정렬 키", example = "2026-07-20T18:03:11Z")
 	LocalDateTime createdAt
 ) {
 

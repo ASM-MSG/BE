@@ -206,7 +206,7 @@ class UserProfileControllerTest {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data", hasKey("profileImageUrl")))
 			.andExpect(jsonPath("$.data.profileImageUrl").value(nullValue()))
-			.andExpect(jsonPath("$.data.createdAt").value("2026-01-12T03:24:11"));
+			.andExpect(jsonPath("$.data.createdAt").value("2026-01-12T03:24:11Z"));
 	}
 
 	// 검증: FR-USER-12
