@@ -1,6 +1,7 @@
 package com.msg.fillmap.friend.entity;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
@@ -53,7 +54,7 @@ public class Friendship {
 	/** 수락 — ACCEPTED 승격 + 응답 시각 기록 (FR-10). 거절은 행 DELETE 라 전이 메서드가 없다 (§D3). */
 	public void accept() {
 		this.status = FriendshipStatus.ACCEPTED;
-		this.respondedAt = LocalDateTime.now();
+		this.respondedAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 
 	public Long getRequesterId() {

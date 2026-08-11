@@ -1,6 +1,7 @@
 package com.msg.fillmap.video.entity;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import jakarta.persistence.Column;
@@ -157,7 +158,7 @@ public class Video {
 	public void markEncoded(String encodedKey) {
 		this.encodedUrl = encodedKey;
 		this.processingStatus = ProcessingStatus.BLURRING;
-		this.blurringStartedAt = LocalDateTime.now();
+		this.blurringStartedAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 
 	/**

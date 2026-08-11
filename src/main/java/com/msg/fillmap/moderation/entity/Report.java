@@ -1,6 +1,7 @@
 package com.msg.fillmap.moderation.entity;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -94,6 +95,6 @@ public class Report {
 	private void markReviewed(ReportStatus status, Long adminId) {
 		this.status = status;
 		this.reviewedBy = adminId;
-		this.reviewedAt = LocalDateTime.now();
+		this.reviewedAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 }

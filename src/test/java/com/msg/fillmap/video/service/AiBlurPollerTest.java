@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -100,7 +101,7 @@ class AiBlurPollerTest {
 	 */
 	private Video blurring(long id, String jobId, LocalDateTime startedAt) {
 		Video video = Video.create(1L, "19495_9607", "videos/original/1/x.mp4",
-			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
+			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(ZoneOffset.UTC), Visibility.PRIVATE);
 		video.markEncoding();
 		video.markEncoded("videos/encoded/1/" + id + ".mp4");
 		if (jobId != null) {
@@ -129,7 +130,7 @@ class AiBlurPollerTest {
 
 	@Test
 	void BLURRING이고_job_id가_null이면_encoded를_재다운로드해_제출하고_job_id를_기록한다() {
-		Video video = blurring(7L, null, LocalDateTime.now());
+		Video video = blurring(7L, null, LocalDateTime.now(ZoneOffset.UTC));
 		givenBlurring(video);
 		givenS3Download("encoded".getBytes());
 		given(aiClient.submit(any())).willReturn("job-1");
@@ -146,7 +147,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-04
 	@Test
 	void DONE이면_블러본을_S3에_올리고_blurred_key와_highlights를_채운_뒤_READY로_전이한다() {
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC)));
 		List<List<Double>> highlights = List.of(List.of(0.0, 3.33));
 		givenDone("job-1", highlights);
 		given(statusWriter.markBlurReady(anyLong(), anyString(), anyString(), anyString(), any())).willReturn(true);
@@ -164,7 +165,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-04
 	@Test
 	void 완료되면_블러본에서_썸네일을_재추출해_같은_키에_올린다() {
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC)));
 		givenDone("job-1", List.of());
 		given(statusWriter.markBlurReady(anyLong(), anyString(), anyString(), anyString(), any())).willReturn(true);
 
@@ -182,7 +183,7 @@ class AiBlurPollerTest {
 
 	@Test
 	void 가드가_거부하면_방금_올린_블러본과_재추출_썸네일을_지운다() {
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC)));
 		givenDone("job-1", List.of());
 		given(statusWriter.markBlurReady(anyLong(), anyString(), anyString(), anyString(), any())).willReturn(false);   // 가드 거부
 
@@ -197,7 +198,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void status가_해석불가면_타임아웃_경로로_수렴한다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40));   // 상한 초과
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC).minusMinutes(40));   // 상한 초과
 		givenBlurring(video);
 		given(aiClient.poll("job-1")).willReturn(new AiJobResult(AiJobStatus.UNKNOWN, null, false));
 
@@ -210,7 +211,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void DONE인데_다운로드나_추출이_실패하면_BLURRING을_유지하고_READY로_전이하지_않는다() {
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC)));
 		givenDone("job-1", List.of());
 		willThrow(new IllegalStateException("ffmpeg fail"))   // 썸네일 재추출 실패
 			.given(ffmpegRunner).extractThumbnail(any(Path.class), any(Path.class), anyDouble());
@@ -225,7 +226,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void DONE_소비가_계속_실패하고_타임아웃을_넘으면_FAILED로_수렴한다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40));   // 시도 시작 40분 전(상한 초과)
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC).minusMinutes(40));   // 시도 시작 40분 전(상한 초과)
 		givenBlurring(video);
 		given(aiClient.poll("job-1")).willReturn(new AiJobResult(AiJobStatus.DONE, List.of(), false));
 		given(aiClient.downloadBlurred("job-1")).willThrow(new RuntimeException("download fail"));   // 소비 실패 반복
@@ -240,7 +241,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void poll_응답_파싱이_실패하고_타임아웃을_넘으면_FAILED로_수렴한다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40));   // 상한 초과
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC).minusMinutes(40));   // 상한 초과
 		givenBlurring(video);
 		// 200 인데 malformed body → AiClient 파싱이 역참조 RuntimeException (RestClientException 아님)
 		given(aiClient.poll("job-1")).willThrow(new RuntimeException("malformed body"));
@@ -254,7 +255,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void DONE인데_영상이_계속_미가용이고_타임아웃을_넘으면_FAILED로_수렴한다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40));   // 상한 초과
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC).minusMinutes(40));   // 상한 초과
 		givenBlurring(video);
 		given(aiClient.poll("job-1")).willReturn(new AiJobResult(AiJobStatus.DONE, List.of(), false));
 		given(aiClient.downloadBlurred("job-1")).willReturn(null);   // 409 지속·빈 body
@@ -268,7 +269,7 @@ class AiBlurPollerTest {
 
 	@Test
 	void 블러본_업로드_후_persist가_실패하면_방금_올린_객체를_정리한다() {
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC)));
 		givenDone("job-1", List.of());
 		given(statusWriter.markBlurReady(anyLong(), anyString(), anyString(), anyString(), any()))
 			.willThrow(new RuntimeException("persist fail"));   // 두 업로드 성공 후 persist 실패
@@ -284,8 +285,8 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void 교체된_옛_영상의_재시도는_행_생성시각이_아니라_시도_시작시각으로_타임아웃을_잰다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(31));   // 행 생성은 31분 전
-		ReflectionTestUtils.setField(video, "blurringStartedAt", LocalDateTime.now());   // 이번 시도는 방금 시작
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC).minusMinutes(31));   // 행 생성은 31분 전
+		ReflectionTestUtils.setField(video, "blurringStartedAt", LocalDateTime.now(ZoneOffset.UTC));   // 이번 시도는 방금 시작
 		givenBlurring(video);
 		given(aiClient.poll("job-1")).willReturn(new AiJobResult(AiJobStatus.PROCESSING, null, false));
 
@@ -298,7 +299,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void AI가_QUEUED로_응답하면_타임아웃_상한을_넘어도_FAILED하지_않는다() {
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40)));   // 시도 시작 40분 전(상한 초과)
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC).minusMinutes(40)));   // 상한 초과
 		given(aiClient.poll("job-1")).willReturn(new AiJobResult(AiJobStatus.QUEUED, null, false));
 
 		poller.reconcile();
@@ -310,7 +311,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-02
 	@Test
 	void AI가_명시_FAILED면_즉시_markBlurFailed로_전이한다() {
-		Video video = blurring(7L, "job-fail", LocalDateTime.now());
+		Video video = blurring(7L, "job-fail", LocalDateTime.now(ZoneOffset.UTC));
 		givenBlurring(video);
 		given(aiClient.poll("job-fail")).willReturn(new AiJobResult(AiJobStatus.FAILED, null, false));
 
@@ -324,7 +325,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void 잡이_404면_markBlurFailed_대신_clearAiJob으로_미제출_복귀한다() {
-		Video video = blurring(7L, "job-lost", LocalDateTime.now());
+		Video video = blurring(7L, "job-lost", LocalDateTime.now(ZoneOffset.UTC));
 		givenBlurring(video);
 		given(aiClient.poll("job-lost")).willReturn(new AiJobResult(null, null, true));
 
@@ -339,7 +340,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void 미제출_BLURRING의_경과가_타임아웃_상한을_넘으면_markBlurFailed로_전이한다() {
-		Video video = blurring(7L, null, LocalDateTime.now().minusMinutes(40));
+		Video video = blurring(7L, null, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(40));
 		givenBlurring(video);
 
 		poller.reconcile();
@@ -352,7 +353,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void 제출된_잡의_poll이_연결실패하고_타임아웃_상한을_넘으면_markBlurFailed로_전이한다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40));
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC).minusMinutes(40));
 		givenBlurring(video);
 		willThrow(new ResourceAccessException("connection refused")).given(aiClient).poll("job-1");
 
@@ -364,7 +365,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void AI_연결_실패면_BLURRING을_유지하고_다음_주기에_재시도한다() {
-		givenBlurring(blurring(7L, null, LocalDateTime.now()));
+		givenBlurring(blurring(7L, null, LocalDateTime.now(ZoneOffset.UTC)));
 		givenS3Download("encoded".getBytes());
 		willThrow(new ResourceAccessException("connection refused")).given(aiClient).submit(any());
 
@@ -379,7 +380,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-07
 	@Test
 	void 프리체크_탈락이면_타임아웃_없이_즉시_사유와_함께_FAILED로_전이한다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now());   // 방금 시작 — 타임아웃 한참 전
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC));   // 방금 시작 — 타임아웃 한참 전
 		givenBlurring(video);
 		given(aiClient.poll("job-1")).willReturn(
 			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(false, "too_dark: std 3.18 < 10.0")));
@@ -396,7 +397,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-07
 	@Test
 	void 프리체크_reason이_null이어도_실패_처리는_동작한다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now());
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC));
 		givenBlurring(video);
 		given(aiClient.poll("job-1")).willReturn(
 			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(false, null)));
@@ -410,7 +411,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-07
 	@Test
 	void 프리체크_미지_코드는_원문_그대로_기록한다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now());
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC));
 		givenBlurring(video);
 		given(aiClient.poll("job-1")).willReturn(
 			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(false, "weird_new_code: x")));
@@ -424,7 +425,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-07
 	@Test
 	void 프리체크_사유_코드가_64자를_넘으면_64자로_절단해_기록한다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now());
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC));
 		givenBlurring(video);
 		String longCode = "x".repeat(80);   // 콜론 없는 비정상 장문 reason (성공 기준 5 — 비정상 길이)
 		given(aiClient.poll("job-1")).willReturn(
@@ -439,7 +440,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-07
 	@Test
 	void 프리체크_통과면_기존_DONE_경로로_블러본을_소비한다() {
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC)));
 		given(aiClient.poll("job-1")).willReturn(
 			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(true, null)));
 		given(aiClient.downloadBlurred("job-1")).willReturn("blurred".getBytes());
@@ -454,7 +455,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-07
 	@Test
 	void precheck가_없으면_기존_타임아웃_경로가_유지된다() {
-		Video video = blurring(7L, "job-1", LocalDateTime.now());   // 타임아웃 한참 전
+		Video video = blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC));   // 타임아웃 한참 전
 		givenBlurring(video);
 		// AI 구버전 응답(precheck 부재) + DONE 인데 완료본 미가용(409 지속) — 기존 `DONE인데_영상이_계속_미가용...`과 쌍
 		given(aiClient.poll("job-1")).willReturn(new AiJobResult(AiJobStatus.DONE, List.of(), false));
@@ -473,7 +474,7 @@ class AiBlurPollerTest {
 		// AI 컨테이너 교체 시나리오 (MSG-283 기준 1·4). 폴러는 매 주기 fresh 조회하므로 주기별 givenBlurring
 		// 갱신으로 clearAiJob/recordAiJob 이 커밋한 DB 상태 전이를 흉내낸다. startedAt 은 세 주기 내내 동일 —
 		// 재제출은 같은 시도의 계속이라 시도 넌스가 밀리지 않는다 (기준 3).
-		LocalDateTime startedAt = LocalDateTime.now();
+		LocalDateTime startedAt = LocalDateTime.now(ZoneOffset.UTC);
 
 		// 1주기: 제출됐던 잡이 AI 재시작으로 유실 → poll 404 → 미제출 복귀
 		givenBlurring(blurring(7L, "job-old", startedAt));
@@ -501,7 +502,7 @@ class AiBlurPollerTest {
 	// 검증: FR-MEDIA-06
 	@Test
 	void 재시작_후에도_BLURRING_영상이_폴러_조회에_잡힌다() {
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC)));
 		given(aiClient.poll("job-1")).willReturn(new AiJobResult(AiJobStatus.PROCESSING, null, false));
 
 		poller.reconcile();
