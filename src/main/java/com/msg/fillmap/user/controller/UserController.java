@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -23,6 +24,9 @@ import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.auth.support.RefreshTokenCookies;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.user.dto.NicknameUpdateRequestDto;
+import com.msg.fillmap.user.dto.ProfileImagePresignRequestDto;
+import com.msg.fillmap.user.dto.ProfileImagePresignResponseDto;
+import com.msg.fillmap.user.dto.ProfileImageUpdateRequestDto;
 import com.msg.fillmap.user.dto.UserProfileResponseDto;
 import com.msg.fillmap.user.service.UserService;
 
@@ -58,6 +62,50 @@ public class UserController {
 		@Valid @RequestBody NicknameUpdateRequestDto request
 	) {
 		return SuccessResponse.of(userService.updateNickname(principal.userId(), request.nickname()));
+	}
+
+	@Operation(
+		summary = "프로필 이미지 업로드용 presigned URL 발급",
+		description = "프로필 이미지를 S3 에 직접 올릴 presigned URL 을 발급한다. 이 URL 로 PUT 업로드한 뒤 "
+			+ "받은 s3Key 로 변경 확정(PUT /api/users/me/profile-image)을 호출한다. 허용 형식은 "
+			+ "jpg·jpeg·png·webp 이고 크기 상한은 5MB 다 — 확장자와 Content-Type 이 어긋나거나 "
+			+ "허용 밖이면 1415, 선언 크기가 상한을 넘으면 1413.\n\n"
+			+ "아이폰 사진(heic·heif)은 받지 않는다 — 저장해도 대부분의 브라우저가 표시하지 못하기 때문이다. "
+			+ "파일 선택 accept 목록에서 heic 를 빼면 iOS 가 플랫폼 수준에서 JPEG 로 변환해 주므로 "
+			+ "정상 경로에서는 거부가 나오지 않고, 그래도 새어 들어온 원본 heic 는 1415 응답을 안내 문구로 처리한다."
+	)
+	@PostMapping("/me/profile-image/presigned-url")
+	public SuccessResponse<ProfileImagePresignResponseDto> issueProfileImagePresignedUrl(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Valid @RequestBody ProfileImagePresignRequestDto request
+	) {
+		return SuccessResponse.of(userService.issueProfileImagePresignedUrl(principal.userId(), request));
+	}
+
+	@Operation(
+		summary = "프로필 이미지 변경 확정",
+		description = "presign 으로 올린 pending 키를 확정해 프로필 이미지를 교체하고 갱신된 프로필을 반환한다. "
+			+ "내 pending 경로가 아니거나 확장자 없는 키는 1401, S3 에 실제로 없는 키는 1402, 실측 크기가 "
+			+ "5MB 를 넘으면 1413. 교체된 이전 이미지는 응답 후 정리된다."
+	)
+	@PutMapping("/me/profile-image")
+	public SuccessResponse<UserProfileResponseDto> updateProfileImage(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Valid @RequestBody ProfileImageUpdateRequestDto request
+	) {
+		return SuccessResponse.of(userService.updateProfileImage(principal.userId(), request.s3Key()));
+	}
+
+	@Operation(
+		summary = "프로필 이미지 제거",
+		description = "프로필 이미지를 기본 상태(null)로 되돌린다. 이미 기본 상태여도 성공한다(멱등). "
+			+ "응답은 변경 확정과 같은 프로필 형태다."
+	)
+	@DeleteMapping("/me/profile-image")
+	public SuccessResponse<UserProfileResponseDto> removeProfileImage(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal
+	) {
+		return SuccessResponse.of(userService.removeProfileImage(principal.userId()));
 	}
 
 	@Operation(
