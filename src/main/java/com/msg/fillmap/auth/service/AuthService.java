@@ -1,5 +1,6 @@
 package com.msg.fillmap.auth.service;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,8 +38,15 @@ public class AuthService {
 		}
 		String encodedPassword = passwordEncoder.encode(request.password());
 		User user = User.createLocalUser(request.email(), encodedPassword, request.nickname());
-		User saved = userRepository.save(user);
-		return SignupResponseDto.from(saved);
+		try {
+			// flush 를 당겨 INSERT 를 여기서 실행한다 — save 만 하면 위반이 커밋 시점에 터져 못 잡는다.
+			User saved = userRepository.saveAndFlush(user);
+			return SignupResponseDto.from(saved);
+		} catch (DataIntegrityViolationException e) {
+			// 선확인과 삽입 사이에 같은 이메일이 먼저 커밋된 경합 (Codex 지적) — uq_users_email 위반을
+			// catch-all 500 대신 문서화된 중복 응답으로 수렴시킨다.
+			throw new ApiException(UserErrorCode.EMAIL_ALREADY_EXISTS, e);
+		}
 	}
 
 	@Transactional(readOnly = true)

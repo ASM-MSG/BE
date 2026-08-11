@@ -130,14 +130,19 @@ public class HotZoneServiceImpl implements HotZoneService {
 	}
 
 	private void validateBounds(ViewportBounds bounds) {
-		// NaN 은 모든 비교가 false 라 뒤집힘 검사를 통과하고 GridEncoder 환산에서 인덱스 0 으로 떨어진다
-		// — 비유한 값(NaN·Infinity)은 뒤집힘 검사보다 먼저 거른다.
-		if (!Double.isFinite(bounds.swLat()) || !Double.isFinite(bounds.swLng())
-			|| !Double.isFinite(bounds.neLat()) || !Double.isFinite(bounds.neLng())) {
+		// NaN 은 모든 비교가 false 라 뒤집힘 검사를 통과하고, 1e308 급 유한값은 Proj4J 경도 정규화
+		// (반복 감산)가 double 정밀도에서 값을 못 줄여 사실상 무한 루프다 (Codex 지적) — 유한성만으론
+		// 부족해 WGS84 범위 밖을 투영 전에 거른다.
+		if (!isWgs84(bounds.swLat(), bounds.swLng()) || !isWgs84(bounds.neLat(), bounds.neLng())) {
 			throw new ApiException(HotZoneErrorCode.INVALID_VIEWPORT);
 		}
 		if (bounds.swLat() > bounds.neLat() || bounds.swLng() > bounds.neLng()) {
 			throw new ApiException(HotZoneErrorCode.INVALID_VIEWPORT);
 		}
+	}
+
+	private static boolean isWgs84(double lat, double lng) {
+		return Double.isFinite(lat) && Double.isFinite(lng)
+			&& lat >= -90.0 && lat <= 90.0 && lng >= -180.0 && lng <= 180.0;
 	}
 }

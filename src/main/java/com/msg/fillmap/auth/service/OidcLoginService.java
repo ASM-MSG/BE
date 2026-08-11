@@ -70,6 +70,14 @@ public class OidcLoginService {
 		if (info.email() != null && userRepository.existsByEmail(info.email())) {
 			throw new ApiException(UserErrorCode.EMAIL_ALREADY_EXISTS);
 		}
-		return userRepository.save(User.createOAuthUser(provider, info.oid(), info.email(), info.nickname()));
+		// 동시 첫 로그인 경합 (Codex 지적): 두 요청이 모두 부재를 관측해도 ON CONFLICT 무삽입이라
+		// UNIQUE 위반 500 이 없다 — 삽입 후 재조회가 승자 행이면 그걸로 토큰을 발급한다(패자 회수).
+		// 팩토리를 거치는 건 friend_code 생성 로직을 엔티티 한 곳에 유지하기 위해서다 (NOT NULL, DB DEFAULT 없음).
+		User candidate = User.createOAuthUser(provider, info.oid(), info.email(), info.nickname());
+		userRepository.insertOAuthUserIgnoreConflict(
+			provider.name(), info.oid(), info.email(), info.nickname(), candidate.getFriendCode());
+		return userRepository.findByProviderAndOid(provider, info.oid())
+			// oid 재조회 부재 = 삽입이 email 충돌로 무효된 것 (다른 계정이 같은 이메일을 선점)
+			.orElseThrow(() -> new ApiException(UserErrorCode.EMAIL_ALREADY_EXISTS));
 	}
 }

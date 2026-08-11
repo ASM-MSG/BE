@@ -32,6 +32,14 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
 	Optional<Report> findWithLockById(Long id);
 
 	/**
+	 * 승인 잠금 전 무잠금 videoId 선독 (Codex 지적 후속). 엔티티가 아니라 스칼라만 읽는 이유:
+	 * Report 를 먼저 로드하면 이후 findWithLockById 가 1차 캐시의 같은 인스턴스를 돌려줘 잠금 사이에
+	 * 바뀐 상태(PENDING → 처리됨)를 못 본다. videoId 는 신고 행에서 불변이라 무잠금 선독이 안전하다.
+	 */
+	@Query("SELECT r.videoId FROM Report r WHERE r.id = :reportId")
+	Optional<Long> findVideoIdById(@Param("reportId") Long reportId);
+
+	/**
 	 * 관리자 신고 목록 (MSG-195 FR-1·FR-2). 신고자·영상·영상 소유자를 FK 매핑 없이 id 로 잇는 세타 조인
 	 * 한 방이라 항목당 추가 쿼리가 없다 (FriendshipRepository 의 "User 를 Long 조인" 선례).
 	 * 조인 결측은 없다 — 신고자는 FK(RESTRICT)로, 영상·소유자는 reports.video_id 의 ON DELETE CASCADE 로

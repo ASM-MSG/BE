@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -24,6 +25,7 @@ import com.msg.fillmap.user.entity.UserRole;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
 import com.msg.fillmap.usergrid.service.RegionVideoView;
+import com.msg.fillmap.usergrid.service.UploadHistoryView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
 
 @SpringBootTest
@@ -47,10 +49,10 @@ class CollectionControllerTest {
 	}
 
 	@Test
-	@DisplayName("도감 요약 조회는 200 과 세 집계 필드를 반환한다")
-	void 도감_요약_조회는_200과_세_집계_필드를_반환한다() throws Exception {
+	@DisplayName("도감 요약 조회는 200 과 여섯 집계 필드를 반환한다")
+	void 도감_요약_조회는_200과_여섯_집계_필드를_반환한다() throws Exception {
 		given(userGridQueryService.getCollectionSummary(anyLong()))
-			.willReturn(new CollectionSummaryView(15, 42L, 6));
+			.willReturn(new CollectionSummaryView(15, 42L, 6, 12, 21, 7));
 
 		mockMvc.perform(get("/api/collections/summary")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -58,14 +60,17 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(200))
 			.andExpect(jsonPath("$.data.totalGridCount").value(15))
 			.andExpect(jsonPath("$.data.totalVideoCount").value(42))
-			.andExpect(jsonPath("$.data.visitedRegionCount").value(6));
+			.andExpect(jsonPath("$.data.visitedRegionCount").value(6))
+			.andExpect(jsonPath("$.data.currentStreak").value(12))
+			.andExpect(jsonPath("$.data.maxStreak").value(21))
+			.andExpect(jsonPath("$.data.badgeCount").value(7));
 	}
 
 	@Test
 	@DisplayName("점령이 0건인 사용자는 모든 필드가 0인 요약을 받는다")
 	void 점령이_0건인_사용자는_모든_필드가_0인_요약을_받는다() throws Exception {
 		given(userGridQueryService.getCollectionSummary(anyLong()))
-			.willReturn(new CollectionSummaryView(0, 0L, 0));
+			.willReturn(new CollectionSummaryView(0, 0L, 0, 0, 0, 0));
 
 		mockMvc.perform(get("/api/collections/summary")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -73,7 +78,10 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(200))
 			.andExpect(jsonPath("$.data.totalGridCount").value(0))
 			.andExpect(jsonPath("$.data.totalVideoCount").value(0))
-			.andExpect(jsonPath("$.data.visitedRegionCount").value(0));
+			.andExpect(jsonPath("$.data.visitedRegionCount").value(0))
+			.andExpect(jsonPath("$.data.currentStreak").value(0))
+			.andExpect(jsonPath("$.data.maxStreak").value(0))
+			.andExpect(jsonPath("$.data.badgeCount").value(0));
 	}
 
 	@Test
@@ -182,6 +190,44 @@ class CollectionControllerTest {
 	void 인증_없이_동_단위_영상을_조회하면_401이다() throws Exception {
 		mockMvc.perform(get("/api/collections/videos")
 				.param("regionCode", "1168051500"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.developCode").value(2403));
+	}
+
+	@Test
+	@DisplayName("업로드 기록 조회는 200 과 날짜별 건수 배열을 반환한다")
+	void 업로드_기록_조회는_200과_날짜별_건수_배열을_반환한다() throws Exception {
+		given(userGridQueryService.getUploadHistory(anyLong())).willReturn(List.of(
+			new UploadHistoryView(LocalDate.of(2026, 8, 10), 3),
+			new UploadHistoryView(LocalDate.of(2026, 8, 11), 1)));
+
+		mockMvc.perform(get("/api/collections/upload-history")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.length()").value(2))
+			.andExpect(jsonPath("$.data[0].uploadDate").value("2026-08-10"))
+			.andExpect(jsonPath("$.data[0].uploadCount").value(3))
+			.andExpect(jsonPath("$.data[1].uploadDate").value("2026-08-11"))
+			.andExpect(jsonPath("$.data[1].uploadCount").value(1));
+	}
+
+	@Test
+	@DisplayName("업로드 0건 사용자는 200 과 빈 배열을 받는다")
+	void 업로드_0건_사용자는_200과_빈_배열을_받는다() throws Exception {
+		given(userGridQueryService.getUploadHistory(anyLong())).willReturn(List.of());
+
+		mockMvc.perform(get("/api/collections/upload-history")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.length()").value(0));
+	}
+
+	@Test
+	@DisplayName("인증 없이 업로드 기록을 조회하면 401 이다")
+	void 인증_없이_업로드_기록을_조회하면_401이다() throws Exception {
+		mockMvc.perform(get("/api/collections/upload-history"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.developCode").value(2403));
 	}

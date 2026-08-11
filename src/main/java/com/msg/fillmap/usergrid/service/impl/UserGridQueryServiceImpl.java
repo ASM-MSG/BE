@@ -1,5 +1,6 @@
 package com.msg.fillmap.usergrid.service.impl;
 
+import java.time.ZoneId;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import com.msg.fillmap.usergrid.service.CollectionSummaryView;
 import com.msg.fillmap.usergrid.service.FriendCollectionGridView;
 import com.msg.fillmap.usergrid.service.GridOccupantView;
 import com.msg.fillmap.usergrid.service.RegionVideoView;
+import com.msg.fillmap.usergrid.service.UploadHistoryView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.zone.service.ZoneCellName;
@@ -40,7 +42,10 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 		return new CollectionSummaryView(
 			projection.getTotalGridCount(),
 			projection.getTotalVideoCount(),
-			projection.getVisitedRegionCount()
+			projection.getVisitedRegionCount(),
+			projection.getCurrentStreak(),
+			projection.getMaxStreak(),
+			projection.getBadgeCount()
 		);
 	}
 
@@ -145,6 +150,18 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 	public List<GridOccupantView> getGridOccupants(String gridId) {
 		return userGridRepository.getGridOccupants(gridId).stream()
 			.map(projection -> new GridOccupantView(projection.getUserId(), projection.getRegionName()))
+			.toList();
+	}
+
+	/**
+	 * created_at 은 타임존 없는 벽시계 저장이라 저장 존(JVM 기본 존)을 쿼리에 파라미터로 넘겨 해석시킨다
+	 * (MSG-362 §D4 — MSG-315 의 임계값 환산과 같은 전제를 읽기 방향으로 쓴 것). 날짜 접기는 전부 쿼리
+	 * 몫이라 여기는 프로젝션을 뷰로 옮기는 것이 전부다.
+	 */
+	@Override
+	public List<UploadHistoryView> getUploadHistory(long userId) {
+		return userGridRepository.getUploadHistory(userId, ZoneId.systemDefault().getId()).stream()
+			.map(projection -> new UploadHistoryView(projection.getUploadDate(), projection.getUploadCount()))
 			.toList();
 	}
 }

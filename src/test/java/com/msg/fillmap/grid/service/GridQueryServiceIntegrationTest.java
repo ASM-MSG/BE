@@ -436,6 +436,27 @@ class GridQueryServiceIntegrationTest {
 	}
 
 	@Test
+	@DisplayName("WGS84 범위 밖 유한 좌표는 INVALID_VIEWPORT 를 던진다")
+	void WGS84_범위_밖_유한_좌표는_INVALID_VIEWPORT를_던진다() {
+		// 1e308 은 유한이라 뒤집힘·면적(폭 0) 검사를 다 통과하고 Proj4J 정규화에서 스레드가 안 돌아온다 (Codex 지적)
+		ViewportBounds outOfRange = new ViewportBounds(37.50, 1.0e308, 37.55, 1.0e308);
+
+		assertThatThrownBy(() -> gridQueryService.getOccupiedInViewport(me, outOfRange))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.INVALID_VIEWPORT);
+	}
+
+	@Test
+	@DisplayName("NaN 좌표는 INVALID_VIEWPORT 를 던진다")
+	void NaN_좌표는_INVALID_VIEWPORT를_던진다() {
+		ViewportBounds nanBounds = new ViewportBounds(Double.NaN, 127.00, 37.55, 127.05);
+
+		assertThatThrownBy(() -> gridQueryService.getOccupiedInViewport(me, nanBounds))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", GridErrorCode.INVALID_VIEWPORT);
+	}
+
+	@Test
 	@DisplayName("면적 상한을 초과하면 VIEWPORT_TOO_LARGE 를 던진다")
 	void 면적_상한을_초과하면_VIEWPORT_TOO_LARGE를_던진다() {
 		ViewportBounds huge = new ViewportBounds(37.0, 127.0, 38.0, 128.0);

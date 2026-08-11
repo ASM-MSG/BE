@@ -25,6 +25,14 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 	 *   DELETED 제외·BLINDED 포함(MSG-152 D6), 무라벨 격자(NULL)는 COUNT DISTINCT 가 자동 제외.
 	 *   videos.grid_id 는 NOT NULL FK 라 inner JOIN 에서 유실 없음. 저장 라벨 equi-join 소비(geospatial 0).
 	 * COUNT 는 bigint 라 ::int 캐스트로 Integer 프로젝션과 맞춘다.
+	 *
+	 * MSG-362 확장 — 같은 문장에 스트릭·뱃지 서브쿼리 3개를 얹어 왕복 1회를 유지한다(§D2).
+	 * - currentStreak: streaks.current_count 를 조회 시점 유효성 판정 후 노출(§D3) — last_recorded_date 가
+	 *   KST 오늘·어제면 저장값, 그보다 오래면 0(끊긴 옛 값 차단). KST 오늘 표현식은 upsertOnUpload 와
+	 *   글자 단위 동일해 판정 기준이 어긋나지 않는다. 행 없는 사용자(업로드 경험 0)는 COALESCE 로 0(FR-3).
+	 * - maxStreak: 끊겨도 유지되는 값이라 max_count 그대로.
+	 * - badgeCount: user_badges COUNT. streaks 를 두 서브쿼리가 각각 읽지만 user_id PK 단일 행 두 번이라
+	 *   비용 무시 가능 — 지표 하나에 서브쿼리 하나라는 기존 문장 구조를 유지한다.
 	 */
 	@Query(value = """
 		SELECT
@@ -35,7 +43,17 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 			(SELECT COUNT(DISTINCT g.region_code)::int
 				FROM videos v
 				JOIN grids g ON g.grid_id = v.grid_id
-				WHERE v.user_id = :userId AND v.status <> 'DELETED') AS "visitedRegionCount"
+				WHERE v.user_id = :userId AND v.status <> 'DELETED') AS "visitedRegionCount",
+			COALESCE((SELECT CASE
+					WHEN s.last_recorded_date >= (statement_timestamp() AT TIME ZONE 'Asia/Seoul')::date - 1
+						THEN s.current_count
+					ELSE 0
+				END
+				FROM streaks s WHERE s.user_id = :userId), 0) AS "currentStreak",
+			COALESCE((SELECT s.max_count
+				FROM streaks s WHERE s.user_id = :userId), 0) AS "maxStreak",
+			(SELECT COUNT(*)::int
+				FROM user_badges WHERE user_id = :userId) AS "badgeCount"
 		""", nativeQuery = true)
 	CollectionSummaryProjection getCollectionSummary(@Param("userId") long userId);
 
@@ -176,4 +194,25 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 		@Param("weekStart") LocalDateTime weekStart,
 		@Param("now") LocalDateTime now
 	);
+
+	/**
+	 * 날짜별 업로드 기록 — 내 영상을 KST 날짜로 접어 업로드가 있었던 날과 그날의 건수만 반환한다
+	 * (MSG-362 §D4, 잔디 재료). 날짜 축은 created_at(업로드 시각) — recorded_at 은 갤러리 업로드가 과거
+	 * 촬영 시각을 인정해(MSG-278) 스트릭 판정(업로드 이벤트 기준)과 어긋난다. created_at 은 타임존 없는
+	 * 벽시계 저장(MSG-315 실측)이라 첫 AT TIME ZONE 이 저장 존(:storedZone, 호출자가 JVM 기본 존 바인딩)으로
+	 * 해석하고 둘째가 KST 로 변환한다. status 무필터가 의도(FR-8) — DELETED·BLINDED 도 업로드 사실은 있었고
+	 * 스트릭이 삭제로 차감되지 않으므로 기록도 같아야 한다(소프트 삭제라 행이 남아 성립). GROUP BY 가
+	 * "업로드 있는 날만"(FR-6)을 별도 분기 없이 만들고, 구동은 idx_videos_user_created 로 사용자 행만
+	 * 몰아 읽는다(신규 인덱스 0).
+	 */
+	@Query(value = """
+		SELECT
+			((v.created_at AT TIME ZONE :storedZone) AT TIME ZONE 'Asia/Seoul')::date AS "uploadDate",
+			COUNT(*)::int AS "uploadCount"
+		FROM videos v
+		WHERE v.user_id = :userId
+		GROUP BY 1
+		ORDER BY 1
+		""", nativeQuery = true)
+	List<UploadHistoryProjection> getUploadHistory(@Param("userId") long userId, @Param("storedZone") String storedZone);
 }
