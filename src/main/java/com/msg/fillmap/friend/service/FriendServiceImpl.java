@@ -21,9 +21,11 @@ import com.msg.fillmap.friend.entity.FriendshipStatus;
 import com.msg.fillmap.friend.exception.FriendErrorCode;
 import com.msg.fillmap.friend.repository.FriendshipRepository;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.service.GridQueryService;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
+import com.msg.fillmap.grid.service.RegionAggregateView;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.exception.UserErrorCode;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -155,6 +157,18 @@ public class FriendServiceImpl implements FriendService {
 		int size) {
 		requireFriend(userId, targetUserId);
 		return gridQueryService.getOccupiedInViewport(targetUserId, bounds, cursor, size);
+	}
+
+	/**
+	 * 친구 격자 집계 조회 (MSG-356). 뷰포트 조회와 같은 배선이다 — 판정(9424) 뒤 친구 id 를 넣어 위임하고,
+	 * 뷰포트·단위 검증과 단위별 bbox 상한은 전부 위임분이 수행한다(friend 쪽 검증 코드 0줄, MSG-187 D2).
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public List<RegionAggregateView> getFriendGridAggregates(Long userId, Long targetUserId, ViewportBounds bounds,
+		RegionUnit unit) {
+		requireFriend(userId, targetUserId);
+		return gridQueryService.getOccupiedAggregatesInViewport(targetUserId, bounds, unit);
 	}
 
 	/**

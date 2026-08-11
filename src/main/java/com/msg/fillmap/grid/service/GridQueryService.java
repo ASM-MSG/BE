@@ -2,6 +2,7 @@ package com.msg.fillmap.grid.service;
 
 import java.util.List;
 
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 
 /**
@@ -31,4 +32,12 @@ public interface GridQueryService {
 	 * size 는 1..5000 범위 밖이면 INVALID_PAGE_SIZE. 마지막 페이지의 nextCursor 는 null 이다.
 	 */
 	OccupiedGridPage getOccupiedInViewport(long userId, ViewportBounds bounds, String cursor, int size);
+
+	/**
+	 * viewport 안 점령 격자를 행정 단위(동, 시군구, 시도)로 묶어 센 집계 목록 (MSG-356).
+	 * 항목은 묶음 키(regionCode 접두), 표시 이름, 대표 좌표(그룹 점령 격자 중심 평균), 격자 수.
+	 * region_code 미판정 격자는 키와 이름이 null 인 항목 하나로 포함된다(제외 불가, FR-7).
+	 * bbox 상한은 단위별 차등(RegionUnit 보유), 초과 시 VIEWPORT_TOO_LARGE.
+	 */
+	List<RegionAggregateView> getOccupiedAggregatesInViewport(long userId, ViewportBounds bounds, RegionUnit unit);
 }
