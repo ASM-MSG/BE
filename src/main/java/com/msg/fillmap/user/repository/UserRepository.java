@@ -19,6 +19,26 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
 	Optional<User> findByProviderAndOid(AuthProvider provider, String oid);
 
+	/**
+	 * OAuth 첫 로그인 가입 (Codex 지적 후속) — 동시 요청이 겹쳐도 UNIQUE 위반 없이 한쪽만 삽입된다.
+	 * JPA save 는 위반이 트랜잭션 abort 로 번져 같은 트랜잭션에서 승자 재조회가 불가하므로 ON CONFLICT
+	 * 무삽입으로 내린다(badge insertIgnoreConflict 선례). 대상 미지정 ON CONFLICT 라 provider+oid 충돌과
+	 * email 충돌 모두 0행 반환 — 어느 쪽인지는 호출자가 oid 재조회로 가른다. friend_code 는 NOT NULL 에
+	 * DB DEFAULT 가 없어(V18) 호출자가 엔티티 팩토리 생성값을 넘긴다 — ~1e-9 확률의 코드 충돌도 0행이
+	 * 되는 건 기존 500 이 1409 로 바뀌는 것뿐이라 재시도 없이 수용(User.generateFriendCode 주석 동일).
+	 * 그 외 미지정 컬럼(role·grid_color·created_at 등)은 스키마 DEFAULT 를 따르며 createOAuthUser 가
+	 * 넣던 값과 같다.
+	 */
+	@Modifying
+	@Query(value = """
+		INSERT INTO users (provider, oid, email, nickname, friend_code)
+		VALUES (:provider, :oid, :email, :nickname, :friendCode)
+		ON CONFLICT DO NOTHING
+		""", nativeQuery = true)
+	int insertOAuthUserIgnoreConflict(@Param("provider") String provider, @Param("oid") String oid,
+		@Param("email") String email, @Param("nickname") String nickname,
+		@Param("friendCode") String friendCode);
+
 	/** 친구 코드로 상대 특정 (MSG-185) — friend 도메인의 미리보기·요청이 소비한다. */
 	Optional<User> findByFriendCode(String friendCode);
 
