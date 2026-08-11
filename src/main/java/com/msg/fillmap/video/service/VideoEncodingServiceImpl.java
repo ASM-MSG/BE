@@ -30,8 +30,10 @@ import com.msg.fillmap.video.support.FfmpegRunner;
 @RequiredArgsConstructor
 public class VideoEncodingServiceImpl implements VideoEncodingService {
 
-	// 스키마 CHECK(duration_sec <= 30) 와 같은 상한 — 실제 영상 길이로 재확인한다 (MSG-65 D7).
-	private static final double MAX_DURATION_SEC = 30.0;
+	// 스키마 CHECK(duration_sec <= 30) 상한에 판정 여유 1초 — 업로드는 클라 신고 정수(≤30)로 통과하는데
+	// 실측은 컨테이너 메타데이터 반올림으로 30.0x 초가 나와, 정확히 30.0 으로 끊으면 정상 영상이 FAILED 로
+	// 끝난다 (MSG-370). 여유 구간(30~31초)의 초과분은 인코딩이 자르지 않고 그대로 둔다.
+	private static final double MAX_DURATION_SEC = 31.0;
 
 	private final VideoRepository videoRepository;
 	private final VideoStatusWriter statusWriter;

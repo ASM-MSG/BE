@@ -94,14 +94,27 @@ class VideoEncodingServiceTest {
 	}
 
 	@Test
-	void 길이가_30초를_넘으면_인코딩하지_않고_FAILED_다() {
-		given(ffmpegRunner.probeDurationSec(any())).willReturn(30.5);
+	void 길이가_판정_여유_31초를_넘으면_인코딩하지_않고_FAILED_다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.5);
 
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
 		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
 		verify(ffmpegRunner, never()).encode720p(any(), any());
 		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any());
+	}
+
+	@Test
+	void 실측이_30초를_살짝_넘어도_여유_구간이면_인코딩한다() {
+		// 업로드가 정수 30초로 통과시킨 영상의 실측이 메타데이터 반올림으로 30.0x 초가 나오는 케이스 (MSG-370).
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(30.5);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
 	}
 
 	@Test
