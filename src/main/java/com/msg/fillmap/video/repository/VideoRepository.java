@@ -201,14 +201,20 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 
 	/**
 	 * 점령 UPSERT. 첫 방문이면 INSERT(video_count=1), 재방문이면 video_count+1 + last_uploaded_at 갱신.
+	 *
+	 * <p>시각은 statement_timestamp() AT TIME ZONE 'UTC' (NotificationRepository.markSent 선례) —
+	 * 맨 now()(timestamptz)는 timestamp 컬럼 대입 시 세션 TZ 로 캐스트돼 KST JVM 에서 +9h 저장된다.
+	 * 두 컬럼 다 도감 응답(CollectionGridResponseDto·FriendCollectionGridResponseDto)으로 나가고
+	 * 전역 코덱이 그 값을 UTC 로 표기하므로(MSG-376), 저장 축이 UTC 여야 표기가 맞는다.
 	 */
 	@Modifying
 	@Query(value = """
 		INSERT INTO user_grids (user_id, grid_id, video_count, cover_video_id, first_collected_at, last_uploaded_at)
-		VALUES (:userId, :gridId, 1, :coverVideoId, now(), now())
+		VALUES (:userId, :gridId, 1, :coverVideoId,
+			statement_timestamp() AT TIME ZONE 'UTC', statement_timestamp() AT TIME ZONE 'UTC')
 		ON CONFLICT (user_id, grid_id) DO UPDATE
 			SET video_count = user_grids.video_count + 1,
-			    last_uploaded_at = now()
+			    last_uploaded_at = statement_timestamp() AT TIME ZONE 'UTC'
 		""", nativeQuery = true)
 	void upsertUserGrid(
 		@Param("userId") long userId,
