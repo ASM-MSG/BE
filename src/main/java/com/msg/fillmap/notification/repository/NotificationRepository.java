@@ -121,6 +121,17 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 	);
 
 	/**
+	 * 백로그 Gauge 폴링 (MSG-343 D3) — status 를 리터럴로 박아 partial index(idx_notifications_pending,
+	 * V21)가 항상 받는다. 바인드 파라미터면 generic plan 이 partial index 조건 일치를 증명하지 못한다.
+	 */
+	@Query(value = "SELECT count(*) FROM notifications WHERE status = 'PENDING'", nativeQuery = true)
+	long countPending();
+
+	/** countPending 과 같은 사정 — idx_notifications_published(partial, V21) 사용. */
+	@Query(value = "SELECT count(*) FROM notifications WHERE status = 'PUBLISHED'", nativeQuery = true)
+	long countPublished();
+
+	/**
 	 * 기간 내 기록 카운트 (MSG-314 D3) — 임박 알림 하루 1건 상한의 존재 확인. 발송 여부(status)는 보지
 	 * 않는다: 상한은 기록 단계 규칙이므로 발송 실패나 SKIPPED 여부와 무관하게 "오늘 기록했는가"만 센다.
 	 * threshold 는 countSentSince 와 같은 규칙으로 앱이 KST 자정을 UTC 변환해 바인딩 (insert 의 명시 UTC
