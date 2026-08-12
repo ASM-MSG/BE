@@ -34,7 +34,7 @@ public record MyBadgeResponseDto(
 	@Schema(description = "획득 여부", example = "true")
 	Boolean earned,
 
-	@Schema(description = "획득 시각 — 미획득이면 null", example = "2026-07-29T11:02:31", nullable = true)
+	@Schema(description = "획득 시각 — 미획득이면 null", example = "2026-07-29T11:02:31Z", nullable = true)
 	LocalDateTime earnedAt,
 
 	@Schema(description = "미확인(새 뱃지) 여부 — 미획득이면 false", example = "false")

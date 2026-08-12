@@ -101,7 +101,7 @@ class VideoGlobalListServiceTest {
 		video.markReady("videos/encoded/" + id + ".mp4", "videos/thumb/" + id + ".jpg");
 		ReflectionTestUtils.setField(video, "id", id);
 		ReflectionTestUtils.setField(video, "viewCount", viewCount);
-		ReflectionTestUtils.setField(video, "createdAt", createdAt);   // @CreationTimestamp 미동작(비영속) 보완
+		ReflectionTestUtils.setField(video, "createdAt", createdAt);   // 생성자 시각을 검증용 고정값으로 교체
 		return video;
 	}
 

@@ -169,8 +169,9 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 	/**
 	 * 주간 요약 대상·수치 동시 집계 (MSG-315 D3). 대상 판정("활동이 있었는가")과 수치("몇 개인가")가 같은
 	 * 재료라 UNION ALL 한 번으로 읽는다 — 결과에 든 사용자가 곧 활동자이므로 FR-6 이 별도 필터 없이 성립한다.
-	 * 임계값 두 개는 호출자가 KST 주 시작을 절대 시각으로 잡아 저장 존(JVM 기본 존)으로 환산해 바인딩한다 —
-	 * 이 두 컬럼은 notifications.created_at 과 달리 UTC 가 아니라 JVM 기본 존 벽시계로 저장되기 때문(D2 표).
+	 * 임계값 두 개는 호출자가 KST 주 시작을 절대 시각으로 잡아 저장 존(UTC)으로 환산해 바인딩한다 —
+	 * 두 컬럼의 쓰기 경로가 UTC 로 고정된 MSG-376 후속 수정 이후 notifications.created_at 과 같은 축이다
+	 * (그 전에는 JVM 기본 존 벽시계라 호출자도 systemDefault 로 환산했다).
 	 * 영상은 status &lt;&gt; 'DELETED'(도감 요약과 같은 기준, MSG-152 D6 — 삭제 제외·블라인드 포함),
 	 * 격자는 별도 필터가 없다(점령 롤백이 행 자체를 지우므로 남은 행이 곧 현재 진실).
 	 * COUNT 계열이 bigint 라 ::int 캐스트로 Integer 프로젝션과 맞춘다(도감 요약 선례).
@@ -199,8 +200,9 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 	 * 날짜별 업로드 기록 — 내 영상을 KST 날짜로 접어 업로드가 있었던 날과 그날의 건수만 반환한다
 	 * (MSG-362 §D4, 잔디 재료). 날짜 축은 created_at(업로드 시각) — recorded_at 은 갤러리 업로드가 과거
 	 * 촬영 시각을 인정해(MSG-278) 스트릭 판정(업로드 이벤트 기준)과 어긋난다. created_at 은 타임존 없는
-	 * 벽시계 저장(MSG-315 실측)이라 첫 AT TIME ZONE 이 저장 존(:storedZone, 호출자가 JVM 기본 존 바인딩)으로
-	 * 해석하고 둘째가 KST 로 변환한다. status 무필터가 의도(FR-8) — DELETED·BLINDED 도 업로드 사실은 있었고
+	 * 벽시계 저장이라 첫 AT TIME ZONE 이 저장 존(:storedZone, 호출자가 UTC 바인딩 — MSG-376 후속 수정으로
+	 * 쓰기 경로가 UTC 고정, 그 전에는 JVM 기본 존)으로 해석하고 둘째가 KST 로 변환한다.
+	 * status 무필터가 의도(FR-8) — DELETED·BLINDED 도 업로드 사실은 있었고
 	 * 스트릭이 삭제로 차감되지 않으므로 기록도 같아야 한다(소프트 삭제라 행이 남아 성립). GROUP BY 가
 	 * "업로드 있는 날만"(FR-6)을 별도 분기 없이 만들고, 구동은 idx_videos_user_created 로 사용자 행만
 	 * 몰아 읽는다(신규 인덱스 0).

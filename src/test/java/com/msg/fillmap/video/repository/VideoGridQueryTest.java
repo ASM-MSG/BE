@@ -74,7 +74,7 @@ class VideoGridQueryTest {
 		return videoRepository.save(video).getId();
 	}
 
-	/** created_at 은 @CreationTimestamp 라 저장 시각이 동일해질 수 있어, 정렬 검증용으로 명시적으로 벌린다. */
+	/** created_at 은 생성자에서 채워져 세 건이 같은 시각일 수 있어, 정렬 검증용으로 명시적으로 벌린다. */
 	private void setCreatedAt(Long videoId, LocalDateTime ts) {
 		em.createNativeQuery("UPDATE videos SET created_at = :ts WHERE id = :id")
 			.setParameter("ts", ts)

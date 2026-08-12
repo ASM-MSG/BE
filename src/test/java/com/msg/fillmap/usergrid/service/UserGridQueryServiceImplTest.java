@@ -7,7 +7,7 @@ import static org.mockito.Mockito.times;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -104,10 +104,11 @@ class UserGridQueryServiceImplTest {
 
 		// 검증: FR-STREAK-08
 		@Test
-		@DisplayName("저장 존은 JVM 기본 존으로 바인딩하고 프로젝션의 날짜와 건수를 그대로 담는다")
-		void 저장_존은_JVM_기본_존으로_바인딩하고_프로젝션의_날짜와_건수를_그대로_담는다() {
+		@DisplayName("저장 존은 UTC 로 바인딩하고 프로젝션의 날짜와 건수를 그대로 담는다")
+		void 저장_존은_UTC로_바인딩하고_프로젝션의_날짜와_건수를_그대로_담는다() {
 			// D-4: storedZone 인자가 어긋나면 이 스텁이 매치되지 않아 테스트가 깨진다 — 존 배선 검증을 겸한다.
-			given(userGridRepository.getUploadHistory(1L, ZoneId.systemDefault().getId()))
+			// 기대값이 UTC 인 이유는 쓰기 경로(Video 생성자)가 UTC 고정이기 때문 (MSG-376 후속).
+			given(userGridRepository.getUploadHistory(1L, ZoneOffset.UTC.getId()))
 				.willReturn(List.of(historyProjection(LocalDate.of(2026, 8, 10), 3)));
 
 			List<UploadHistoryView> views = userGridQueryService.getUploadHistory(1L);

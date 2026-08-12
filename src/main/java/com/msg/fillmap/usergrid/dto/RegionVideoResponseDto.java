@@ -32,7 +32,7 @@ public record RegionVideoResponseDto(
 	@Schema(description = "영상 길이(초, 최대 30)", example = "12")
 	Integer durationSec,
 
-	@Schema(description = "업로드(방문) 시각 — 정렬 키", example = "2026-07-20T18:03:11")
+	@Schema(description = "업로드(방문) 시각 — 정렬 키", example = "2026-07-20T18:03:11Z")
 	LocalDateTime createdAt,
 
 	@Schema(description = "격자가 속한 구역 이름 (예 \"서면\"). 구역 밖 격자면 null — 이 화면은 행정동 헤더 "

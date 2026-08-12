@@ -36,7 +36,7 @@ public record AdminReportItemResponseDto(
 	@Schema(description = "신고자가 적은 상세 설명 — OTHER 가 아닌 사유는 없을 수 있다", nullable = true)
 	String detail,
 
-	@Schema(description = "신고 접수 시각", example = "2026-08-06T10:15:00")
+	@Schema(description = "신고 접수 시각", example = "2026-08-06T10:15:00Z")
 	LocalDateTime createdAt,
 
 	@Schema(description = "신고자의 사용자 ID", example = "3")
@@ -57,7 +57,7 @@ public record AdminReportItemResponseDto(
 	@Schema(description = "처리한 관리자의 사용자 ID — 미처리면 null", nullable = true, example = "1")
 	Long reviewedBy,
 
-	@Schema(description = "처리 시각 — 미처리면 null", nullable = true, example = "2026-08-06T11:00:00")
+	@Schema(description = "처리 시각 — 미처리면 null", nullable = true, example = "2026-08-06T11:00:00Z")
 	LocalDateTime reviewedAt
 ) {
 }

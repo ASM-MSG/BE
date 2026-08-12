@@ -285,7 +285,7 @@ class AdminReportIntegrationTest {
 
 		Report processed = reportRepository.findById(reportId).orElseThrow();
 		assertThat(processed.getReviewedBy()).isEqualTo(adminId);
-		// reviewedAt 은 LocalDateTime.now()(JVM 기본 존)라 UTC 기준 시각과 값 비교하면 존 차이만큼 어긋난다.
+		// reviewedAt 은 UTC 기준으로 기록된다 (MSG-376) — 값 대조는 하지 않고 기록 여부만 본다.
 		assertThat(processed.getReviewedAt()).isNotNull();
 		assertThat(response.reviewedAt()).isNotNull();
 	}

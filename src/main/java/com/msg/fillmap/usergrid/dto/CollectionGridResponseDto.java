@@ -25,10 +25,10 @@ public record CollectionGridResponseDto(
 	@Schema(description = "격자 X 인덱스(지도 이동용, gridId 디코드값)", example = "9582")
 	Integer gridX,
 
-	@Schema(description = "최초 수집(점령) 시각 — 정렬 키", example = "2026-07-20T18:03:11")
+	@Schema(description = "최초 수집(점령) 시각 — 정렬 키", example = "2026-07-20T18:03:11Z")
 	LocalDateTime firstCollectedAt,
 
-	@Schema(description = "마지막 방문(업로드) 시각", example = "2026-07-21T09:12:00")
+	@Schema(description = "마지막 방문(업로드) 시각", example = "2026-07-21T09:12:00Z")
 	LocalDateTime lastUploadedAt,
 
 	@Schema(description = "그 격자 내 내 영상 수", example = "3")

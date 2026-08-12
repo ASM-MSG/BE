@@ -18,7 +18,7 @@ public record SignupResponseDto(
 	@Schema(description = "닉네임", example = "채우미")
 	String nickname,
 
-	@Schema(description = "가입 시각", example = "2026-07-17T20:11:03")
+	@Schema(description = "가입 시각", example = "2026-07-17T20:11:03Z")
 	LocalDateTime createdAt
 ) {
 
