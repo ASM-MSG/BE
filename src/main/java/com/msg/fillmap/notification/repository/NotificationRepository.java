@@ -84,25 +84,37 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 	 * (StreakRepository.upsertOnUpload updated_at 선례) — now()(timestamptz)는 timestamp 컬럼 대입 시
 	 * 세션 TZ 로 캐스트돼 KST JVM 에서 +9h 저장된다. push_tokens last_used_at 의 now() 는 60일 스테일
 	 * 판정이라 그 오차가 무해했지만, sent_at 은 D8 자정 경계 판정(countSentSince) 입력이라 UTC 축자여야 한다.
+	 *
+	 * 원본 상태 술어(PENDING·PUBLISHED)는 DB 레벨 compare-and-set 이다 (MSG-343 Codex 4R, markPublished 선례) —
+	 * 리밸런스·max.poll 만료로 두 소비자가 같은 행을 겹쳐 읽으면 consume 초입 가드는 둘 다 통과시키므로,
+	 * 여기서 승자 1명만 1행을 갱신하게 해 중복 발송 종결과 이중 계상을 함께 막는다. 허용 원본을 이 둘로 잡는
+	 * 근거는 초입 가드가 정확히 그 두 상태만 통과시키는 것 — 같은 술어라야 의미론이 일관된다. 종결 3전이가
+	 * 모두 같은 술어를 쓰므로 종결은 행마다 한 번뿐이고, 종결 후 재전달은 0행이라 상태도 안 덮인다.
 	 */
 	@Modifying
 	@Query(value = """
 		UPDATE notifications SET status = 'SENT', sent_at = statement_timestamp() AT TIME ZONE 'UTC'
-		WHERE id = :id
+		WHERE id = :id AND status IN ('PENDING', 'PUBLISHED')
 		""", nativeQuery = true)
 	int markSent(@Param("id") long id);
 
-	/** 미발송 종결 (D4·FR-8) — 사유(PREF_OFF·RATE_LIMITED·NO_TOKEN)를 last_error 에 남긴다. */
+	/** 미발송 종결 (D4·FR-8) — 사유(PREF_OFF·RATE_LIMITED·NO_TOKEN)를 last_error 에 남긴다. 술어는 markSent 와 동일. */
 	@Modifying
 	@Query(value = """
-		UPDATE notifications SET status = 'SKIPPED', last_error = left(:reason, 255) WHERE id = :id
+		UPDATE notifications SET status = 'SKIPPED', last_error = left(:reason, 255)
+		WHERE id = :id AND status IN ('PENDING', 'PUBLISHED')
 		""", nativeQuery = true)
 	int markSkipped(@Param("id") long id, @Param("reason") String reason);
 
-	/** 재시도 상한 소진 격리 (FR-4) — left(255): 예외 메시지가 컬럼 폭을 넘어도 DEAD 전이는 성공해야 한다. */
+	/**
+	 * 재시도 상한 소진 격리 (FR-4) — left(255): 예외 메시지가 컬럼 폭을 넘어도 DEAD 전이는 성공해야 한다.
+	 * 술어는 markSent 와 동일 — 백오프 재시도 중에도 상태는 PENDING·PUBLISHED 로 남아 마지막 시도의 DEAD 가
+	 * 통과한다(중간에 상태를 바꾸는 건 종결 3전이뿐이고, 종결됐다면 recoverer 까지 오지 않는다).
+	 */
 	@Modifying
 	@Query(value = """
-		UPDATE notifications SET status = 'DEAD', last_error = left(:error, 255) WHERE id = :id
+		UPDATE notifications SET status = 'DEAD', last_error = left(:error, 255)
+		WHERE id = :id AND status IN ('PENDING', 'PUBLISHED')
 		""", nativeQuery = true)
 	int markDead(@Param("id") long id, @Param("error") String error);
 
