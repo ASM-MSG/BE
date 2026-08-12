@@ -80,7 +80,7 @@ class VideoRecordedAtValidationTest {
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
-			Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
+			mock(VideoProcessingMetrics.class), Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
 	}
 
 	@Test

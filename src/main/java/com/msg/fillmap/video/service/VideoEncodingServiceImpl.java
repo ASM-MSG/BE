@@ -40,6 +40,9 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 	private final FfmpegRunner ffmpegRunner;
 	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
+	// 인코딩 태스크 결과 계측 (MSG-343) — completed·failed_over_duration·failed_error. rejected 는
+	// 태스크 본문이 돌지 않는 submit 스레드의 일이라 VideoServiceImpl.submitEncoding 이 센다.
+	private final VideoProcessingMetrics videoProcessingMetrics;
 
 	// AI 활성이면 인코딩 완료가 READY 대신 BLURRING 으로 가서 폴러가 이어받는다 (MSG-149).
 	// RegionSeeder 게이트 관례처럼 @Value 로 읽어 기본 off — 비활성이면 오늘 흐름(READY) 그대로다.
@@ -56,6 +59,9 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 		}
 
 		Path workDir = null;
+		// 태스크당 result 카운트 정확히 1회 (Codex 2R) — over_duration 계상 후 markFailed 가 던져
+		// outer catch 로 떨어져도 failed_error 로 이중 계상하지 않는다.
+		boolean resultCounted = false;
 		try {
 			// 큐 대기 중 교체/삭제됐으면 이 태스크의 원본은 더는 현재 시도가 아니다 — ffmpeg 을 돌리지 않는다 (MSG-241).
 			if (!statusWriter.markEncoding(videoId, originalKey)) {
@@ -71,6 +77,9 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			double duration = ffmpegRunner.probeDurationSec(original);
 			if (duration > MAX_DURATION_SEC) {
 				log.warn("영상 길이 초과로 인코딩 중단: videoId={} duration={}s", videoId, duration);
+				// 분류 보존 — markFailed(REQUIRES_NEW)가 던져도 over_duration 계상은 이미 끝나 있어야 한다.
+				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_OVER_DURATION);
+				resultCounted = true;
 				statusWriter.markFailed(videoId, originalKey);
 				return;
 			}
@@ -105,10 +114,16 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 				upload(thumbnailKey, "image/jpeg", thumbnail);
 				statusWriter.markReady(videoId, originalKey, encodedKey, thumbnailKey);
 			}
+			videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_COMPLETED);
 			log.info("인코딩 완료: videoId={} duration={}s aiEnabled={}", videoId, duration, aiEnabled);
 		} catch (Exception e) {
 			// 비동기라 던져봐야 받을 곳이 없다. 기록만 남기고 재시도하지 않는다 (MSG-65 D8).
 			log.error("인코딩 실패: videoId={}", videoId, e);
+			// over_duration 경로와 대칭 — 계상 먼저, 전이 나중 (Codex 3R). markFailed(REQUIRES_NEW)가 DB
+			// 장애로 던지면 인코더는 재시도하지 않으므로, 뒤에 두면 failed_error 가 영구 누락된다.
+			if (!resultCounted) {
+				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_ERROR);
+			}
 			statusWriter.markFailed(videoId, originalKey);
 		} finally {
 			deleteQuietly(workDir);

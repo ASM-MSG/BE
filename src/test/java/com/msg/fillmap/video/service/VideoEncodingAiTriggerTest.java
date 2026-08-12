@@ -52,7 +52,7 @@ class VideoEncodingAiTriggerTest {
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 
 		encodingService = new VideoEncodingServiceImpl(
-			videoRepository, statusWriter, ffmpegRunner, s3Client, properties);
+			videoRepository, statusWriter, ffmpegRunner, s3Client, properties, mock(VideoProcessingMetrics.class));
 
 		Video video = Video.create(1L, "19495_9607", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);

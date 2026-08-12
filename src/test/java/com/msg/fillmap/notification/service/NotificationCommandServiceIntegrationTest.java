@@ -132,6 +132,37 @@ class NotificationCommandServiceIntegrationTest {
 			.isCloseTo(Instant.now(), within(10, ChronoUnit.SECONDS));
 	}
 
+	// ── 종결 전이 compare-and-set (MSG-343 Codex 4R) ──
+
+	@Test
+	@DisplayName("이미 SENT 인 행의 markSent 는 0행이다 — 동시 중복 소비의 두 번째 전이·이중 계상 차단")
+	void 이미_SENT인_행의_markSent는_0행이다() {
+		notificationCommandService.record(me, NotificationCategory.BADGE, eventKey, "제목", "본문");
+		long id = findId(me, eventKey);
+		Integer first = tx.execute(status -> notificationRepository.markSent(id));
+
+		// 겹쳐 읽은 두 번째 소비자의 종결 시도 — 초입 가드를 통과했더라도 DB 술어가 승자 1명만 남긴다.
+		Integer second = tx.execute(status -> notificationRepository.markSent(id));
+
+		assertThat(first).isEqualTo(1);
+		assertThat(second).isZero();   // 0행 → 호출부가 sent 카운터를 올리지 않는다
+	}
+
+	@Test
+	@DisplayName("이미 SENT 인 행에 markDead 를 걸면 0행이고 상태가 SENT 로 유지된다 — 종결은 되덮이지 않는다")
+	void 이미_SENT인_행의_markDead는_0행이고_상태가_유지된다() {
+		notificationCommandService.record(me, NotificationCategory.BADGE, eventKey, "제목", "본문");
+		long id = findId(me, eventKey);
+		tx.executeWithoutResult(status -> notificationRepository.markSent(id));
+
+		Integer dead = tx.execute(status -> notificationRepository.markDead(id, "FCM 다운"));
+
+		assertThat(dead).isZero();
+		Notification row = notificationRepository.findById(id).orElseThrow();
+		assertThat(row.getStatus()).isEqualTo(NotificationStatus.SENT);
+		assertThat(row.getLastError()).isNull();   // 사유도 덮이지 않는다
+	}
+
 	private long newUser(String prefix) {
 		String email = prefix + "-" + System.nanoTime() + "@example.com";
 		return userRepository.save(User.createLocalUser(email, "hash", "알림테스터")).getId();

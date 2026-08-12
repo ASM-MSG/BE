@@ -122,6 +122,8 @@ public class VideoServiceImpl implements VideoService {
 	private final FriendshipQueryService friendshipQueryService;
 	// 업로드 확정·재생 응답의 격자 표시명 (MSG-341). 단건 경로라 리졸버를 응답 조립 직전에 1회 받는다.
 	private final ZoneNameQueryService zoneNameQueryService;
+	// 처리 시간 시작점 등록·제거 (MSG-343 D2) — submitEncoding 진입(확정 커밋 직후)이 시작점이다.
+	private final VideoProcessingMetrics videoProcessingMetrics;
 	private final Clock clock;
 
 	/**
@@ -136,11 +138,12 @@ public class VideoServiceImpl implements VideoService {
 		RegionStatsCommandService regionStatsCommandService, ThumbnailUrlPresigner thumbnailUrlPresigner,
 		BadgeAwardService badgeAwardService, StreakCommandService streakCommandService,
 		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService,
-		FriendshipQueryService friendshipQueryService, ZoneNameQueryService zoneNameQueryService) {
+		FriendshipQueryService friendshipQueryService, ZoneNameQueryService zoneNameQueryService,
+		VideoProcessingMetrics videoProcessingMetrics) {
 		this(videoRepository, videoEncodingService, videoStatusWriter, s3Presigner, s3Client, awsProperties,
 			regionStatsCommandService, thumbnailUrlPresigner, badgeAwardService, streakCommandService,
 			missionAwardService, hotScoreCommandService, friendshipQueryService, zoneNameQueryService,
-			Clock.systemUTC());
+			videoProcessingMetrics, Clock.systemUTC());
 	}
 
 	@Override
@@ -243,10 +246,13 @@ public class VideoServiceImpl implements VideoService {
 		videoRepository.flush();
 		copyToOriginal(request.s3Key(), originalKey);
 
+		// 인코딩 트리거를 먼저 등록한다 (MSG-343 Codex 리뷰) — afterCommit 콜백은 등록 순으로 돌아,
+		// 옛 키 S3 삭제 I/O 뒤에 markStart 가 찍히면 교체 처리 시간이 그만큼 과소 측정된다.
+		// 순서 의존 없음: 인코딩은 encodingExecutor 비동기 제출이고 새 originalKey ≠ replacedKey.
+		triggerEncodingAfterCommit(videoId, originalKey);
 		// 교체된 원본은 참조를 잃는다. 인코딩본·썸네일은 키가 videoId 기반이라 재인코딩이 같은 자리에
 		// 덮어쓰므로 지울 게 없다 — 고아가 되는 건 옛 original 과 블러본(MSG-145)이다.
 		afterCommit(() -> deleteQuietly(replacedKey, replacedBlurredKey));
-		triggerEncodingAfterCommit(videoId, originalKey);
 		return VideoReplaceResponseDto.from(video);
 	}
 
@@ -327,9 +333,15 @@ public class VideoServiceImpl implements VideoService {
 		// 지웠으면 실제로 지운다 (MSG-133). MSG-72 D2 의 "즉시 삭제 안 함"은 보존 원칙이 아니라
 		// "정리는 별도 배치 백로그"라는 범위 유예였고, undelete 기능은 없다. 파일이 영원히 남는 쪽이
 		// 오히려 문제다. 시점에 지우면 배치·스케줄러가 통째로 필요 없다.
-		afterCommit(() -> deleteQuietly(
-			video.getOriginalS3Key(), video.getEncodedUrl(), video.getThumbnailUrl(),
-			video.getBlurredS3Key()));
+		afterCommit(() -> {
+			// 종결이 오지 않을 처리 시간 시작점 제거 (MSG-343 D2) — 커밋 후에만. 트랜잭션 본문에서 지우면
+			// 이후 단계 롤백 시 영상은 살아있는데 시작점만 사라져 Timer 표본이 유실된다 (Codex 리뷰).
+			// 탈퇴 CASCADE 등 그 밖의 경로로 남는 엔트리는 극소량 허용.
+			videoProcessingMetrics.removeStart(videoId);
+			deleteQuietly(
+				video.getOriginalS3Key(), video.getEncodedUrl(), video.getThumbnailUrl(),
+				video.getBlurredS3Key());
+		});
 
 		String gridId = video.getGridId();
 		videoRepository.decrementVideoCount(userId, gridId);
@@ -403,10 +415,13 @@ public class VideoServiceImpl implements VideoService {
 	 * 영상이 UPLOADED 로 남는다. 그래서 여기서 삼키고 FAILED 로 기록한다.
 	 */
 	private void submitEncoding(Long videoId, String originalKey) {
+		// 처리 시간 시작점 (MSG-343 D2) — 확정 커밋 직후, 업로드·교체 공용. 교체는 같은 키를 덮어쓴다.
+		videoProcessingMetrics.markStart(videoId);
 		try {
 			videoEncodingService.encode(videoId, originalKey);
 		} catch (TaskRejectedException e) {
 			log.error("인코딩 큐 포화로 작업이 거부됨: videoId={}", videoId, e);
+			videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_REJECTED);
 			videoStatusWriter.markFailed(videoId, originalKey);
 		}
 	}

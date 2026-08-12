@@ -71,6 +71,8 @@ public class AiBlurPoller {
 	// 인코딩 워커와 같은 단일 풀 — 썸네일 재추출 ffmpeg 를 여기 태워 t3.small OOM 을 막는다 (P2-a).
 	// 구체 타입 주입: @Scheduled 가 만드는 taskScheduler 도 Executor 라 by-type 이 모호하므로.
 	private final ThreadPoolTaskExecutor encodingExecutor;
+	// AI 잡 이벤트 계측 (MSG-343) — submitted·done·failed·precheck_rejected·timeout·job_lost 고정 6종.
+	private final VideoProcessingMetrics videoProcessingMetrics;
 
 	@Scheduled(fixedDelayString = "${ai.poll-interval-ms:30000}")
 	public void reconcile() {
@@ -102,6 +104,9 @@ public class AiBlurPoller {
 	private void submit(Video video) {
 		byte[] encoded = download(video.getEncodedUrl());
 		String jobId = aiClient.submit(encoded);
+		// submitted 는 원격 제출 사실의 계측이라 recordAiJob(DB) 앞에서 증가시킨다 (MSG-343 Codex 리뷰) —
+		// DB 일시 실패로 잡ID 기록이 밀려도 원격 잡은 이미 생겼고, 뒤에 두면 재제출로 과소 계상된다.
+		videoProcessingMetrics.countAiJob(VideoProcessingMetrics.AI_SUBMITTED);
 		// ponytail: 크래시 창에서 중복 제출 1건 가능 — AI API에 멱등 키 생기면 적용
 		statusWriter.recordAiJob(video.getId(), jobId, video.getBlurringStartedAt());
 		log.info("AI 제출 완료: videoId={} jobId={}", video.getId(), jobId);
@@ -125,12 +130,14 @@ public class AiBlurPoller {
 			// 그 경로의 failIfTimedOut 이 같은 판정을 하고, 무한 재시도 방지(AI 재시작 반복)도 거기가 담당한다.
 			log.warn("AI 잡 유실(404) — 미제출 복귀: videoId={} jobId={}", video.getId(), video.getAiJobId());
 			statusWriter.clearAiJob(video.getId(), video.getAiJobId());
+			videoProcessingMetrics.countAiJob(VideoProcessingMetrics.AI_JOB_LOST);
 			return;
 		}
 		if (result.status() == AiJobStatus.FAILED) {
 			// AI 명시 실패 = 그 파일로 재시도해도 같은 결과 — 재제출 없이 즉시 수렴 (MSG-283 기준 2).
 			log.warn("AI 명시 FAILED: videoId={} jobId={}", video.getId(), video.getAiJobId());
 			statusWriter.markBlurFailed(video.getId(), video.getAiJobId(), video.getBlurringStartedAt(), null);
+			videoProcessingMetrics.countAiJob(VideoProcessingMetrics.AI_FAILED);
 			return;
 		}
 		if (result.precheck() != null && !result.precheck().passed()) {
@@ -141,6 +148,7 @@ public class AiBlurPoller {
 				video.getId(), video.getAiJobId(), result.precheck().reason());
 			statusWriter.markBlurFailed(video.getId(), video.getAiJobId(), video.getBlurringStartedAt(),
 				failReasonCode(result.precheck().reason()));
+			videoProcessingMetrics.countAiJob(VideoProcessingMetrics.AI_PRECHECK_REJECTED);
 			return;
 		}
 		if (result.status() == AiJobStatus.DONE) {
@@ -200,6 +208,7 @@ public class AiBlurPoller {
 			deleteQuietly(blurredKey, thumbnailKey);
 			return;
 		}
+		videoProcessingMetrics.countAiJob(VideoProcessingMetrics.AI_DONE);
 		log.info("AI 블러 완료: videoId={} blurredKey={} highlights={}",
 			video.getId(), blurredKey, result.highlights());
 	}
@@ -220,6 +229,8 @@ public class AiBlurPoller {
 		log.warn("AI 처리 타임아웃 초과로 FAILED: videoId={} startedAt={}", video.getId(), video.getBlurringStartedAt());
 		// 사유 null = 시스템 오류 실패 — 프리체크 탈락(D2 분기)만 사유 코드를 남긴다 (MSG-286 FR-4)
 		statusWriter.markBlurFailed(video.getId(), video.getAiJobId(), video.getBlurringStartedAt(), null);
+		// 미제출·poll 불가·DONE 소비 실패·UNKNOWN 전부 이 한 곳을 지난다 — 경로 무관 timeout 1회 (스펙 표)
+		videoProcessingMetrics.countAiJob(VideoProcessingMetrics.AI_TIMEOUT);
 		return true;
 	}
 

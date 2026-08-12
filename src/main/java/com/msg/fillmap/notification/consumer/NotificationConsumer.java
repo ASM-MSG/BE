@@ -5,6 +5,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -46,17 +50,32 @@ public class NotificationConsumer {
 	private final NotificationSender notificationSender;
 	private final NotificationProperties properties;
 	private final TransactionTemplate tx;
+	// 발송 결과 계측 (MSG-343) — 태그는 고정 조합만 선등록 (D1). dead 는 recoverer(NotificationConfig)가 센다.
+	private final Counter sentCounter;
+	private final Map<String, Counter> skippedCounters;
 
 	public NotificationConsumer(NotificationRepository notificationRepository,
 		PushTokenRepository pushTokenRepository, NotificationPreferenceService notificationPreferenceService,
 		NotificationSender notificationSender, NotificationProperties properties,
-		PlatformTransactionManager txManager) {
+		PlatformTransactionManager txManager, MeterRegistry meterRegistry) {
 		this.notificationRepository = notificationRepository;
 		this.pushTokenRepository = pushTokenRepository;
 		this.notificationPreferenceService = notificationPreferenceService;
 		this.notificationSender = notificationSender;
 		this.properties = properties;
 		this.tx = new TransactionTemplate(txManager);
+		this.sentCounter = Counter.builder("notification.outcome")
+			.tag("result", "sent").tag("reason", "none").register(meterRegistry);
+		// skip 사유(D8 대문자 코드) → 소문자 고정 태그값 매핑 (스펙 표) — 미지 사유는 증가 없이 무시한다.
+		this.skippedCounters = Map.of(
+			"PREF_OFF", skippedCounter(meterRegistry, "pref_off"),
+			"RATE_LIMITED", skippedCounter(meterRegistry, "rate_limited"),
+			"NO_TOKEN", skippedCounter(meterRegistry, "no_token"));
+	}
+
+	private static Counter skippedCounter(MeterRegistry meterRegistry, String reason) {
+		return Counter.builder("notification.outcome")
+			.tag("result", "skipped").tag("reason", reason).register(meterRegistry);
 	}
 
 	@KafkaListener(topics = "${fillmap.notification.topic}", groupId = "${fillmap.notification.consumer-group}")
@@ -98,7 +117,12 @@ public class NotificationConsumer {
 			// 전부 실패 → 재시도 경로 (D4). 전부 무효 토큰이었다면 다음 시도가 NO_TOKEN 으로 수렴한다.
 			throw new IllegalStateException("FCM 발송 전부 실패: notificationId=" + id);
 		}
-		tx.executeWithoutResult(status -> notificationRepository.markSent(id));
+		// 전이 UPDATE 커밋 후, 실제 갱신 1행일 때만 증가 (MSG-343 D5·완료 조건 5) — 발송 중 탈퇴
+		// CASCADE 로 행이 지워지면 0행 갱신이라 전이가 없고, 계상도 하지 않는다 (Codex 2R).
+		Integer sentRows = tx.execute(status -> notificationRepository.markSent(id));
+		if (sentRows != null && sentRows == 1) {
+			sentCounter.increment();
+		}
 	}
 
 	/** 전송률 제한 (D8·FR-12) — HOTZONE·REMIND 일 상한, BADGE·VIDEO·WEEKLY 무제한. 카운트는 DB 1문장. */
@@ -120,6 +144,10 @@ public class NotificationConsumer {
 	}
 
 	private void skip(long id, String reason) {
-		tx.executeWithoutResult(status -> notificationRepository.markSkipped(id, reason));
+		Integer updated = tx.execute(status -> notificationRepository.markSkipped(id, reason));
+		Counter counter = skippedCounters.get(reason);
+		if (counter != null && updated != null && updated == 1) {
+			counter.increment();
+		}
 	}
 }

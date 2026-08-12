@@ -45,7 +45,7 @@ class VideoStatusWriterTest {
 		given(videoRepository.findUserIdById(VIDEO_ID)).willReturn(Optional.of(1L));
 		given(userRepository.findIdForKeyShare(1L)).willReturn(Optional.of(1L));
 		statusWriter = new VideoStatusWriter(videoRepository, userRepository,
-			mock(NotificationCommandService.class));
+			mock(NotificationCommandService.class), mock(VideoProcessingMetrics.class));
 	}
 
 	/** BLURRING·ACTIVE 인, 아직 미제출(aiJobId=null) 시도의 영상. */

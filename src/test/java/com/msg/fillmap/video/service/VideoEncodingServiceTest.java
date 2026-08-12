@@ -1,10 +1,12 @@
 package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -15,6 +17,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.Optional;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,6 +52,7 @@ class VideoEncodingServiceTest {
 	private VideoStatusWriter statusWriter;
 	private FfmpegRunner ffmpegRunner;
 	private S3Client s3Client;
+	private SimpleMeterRegistry meterRegistry;
 	private VideoEncodingService encodingService;
 	private Video video;
 
@@ -57,11 +62,13 @@ class VideoEncodingServiceTest {
 		statusWriter = mock(VideoStatusWriter.class);
 		ffmpegRunner = mock(FfmpegRunner.class);
 		s3Client = mock(S3Client.class);
+		meterRegistry = new SimpleMeterRegistry();
 		AwsProperties properties = new AwsProperties(
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 
 		encodingService = new VideoEncodingServiceImpl(
-			videoRepository, statusWriter, ffmpegRunner, s3Client, properties);
+			videoRepository, statusWriter, ffmpegRunner, s3Client, properties,
+			new VideoProcessingMetrics(meterRegistry));
 
 		video = Video.create(1L, "19495_9607", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
@@ -190,6 +197,83 @@ class VideoEncodingServiceTest {
 		verify(ffmpegRunner, never()).extractThumbnail(any(), any(), anyDouble());
 		// thumbnail 키는 폴러가 완료 시 기록(R5)
 		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4");
+	}
+
+	// ── 인코딩 태스크 계측 (MSG-343 모듈 2) ──
+
+	private double taskCount(String result) {
+		return meterRegistry.get("video.encoding.task").tag("result", result).counter().count();
+	}
+
+	@Test
+	void 인코딩_성공은_completed를_한_번_증가시킨다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // aiEnabled=false → markReady 경로
+		assertThat(taskCount("completed")).isEqualTo(1.0);
+
+		ReflectionTestUtils.setField(encodingService, "aiEnabled", true);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // aiEnabled=true → markEncoded 경로도 completed (스펙 표)
+		assertThat(taskCount("completed")).isEqualTo(2.0);
+		assertThat(taskCount("failed_over_duration")).isZero();
+		assertThat(taskCount("failed_error")).isZero();
+	}
+
+	@Test
+	void 실측_길이_초과는_failed_over_duration으로_기록된다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.5);
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		assertThat(taskCount("failed_over_duration")).isEqualTo(1.0);
+		assertThat(taskCount("completed")).isZero();
+		assertThat(taskCount("failed_error")).isZero();
+	}
+
+	@Test
+	void 길이_초과에서_markFailed가_던져도_failed_over_duration_한_번만_계상된다() {
+		// 분류 보존 (Codex 2R) — 전이 기록 실패가 outer catch 로 떨어져도 result 카운트는 태스크당 정확히 1회.
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.5);
+		willThrow(new RuntimeException("전이 기록 실패")).willDoNothing()
+			.given(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		assertThat(taskCount("failed_over_duration")).isEqualTo(1.0);
+		assertThat(taskCount("failed_error")).isZero();
+		assertThat(taskCount("completed")).isZero();
+	}
+
+	@Test
+	void ffmpeg_예외_후_markFailed가_던져도_failed_error가_계상된다() {
+		// 인코더는 재시도하지 않는다 — 전이 기록 실패에 계상까지 딸려 유실되면 그 태스크는 영원히 안 보인다.
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		willThrow(new IllegalStateException("ffmpeg 실패"))
+			.given(ffmpegRunner).encode720p(any(Path.class), any(Path.class));
+		willThrow(new RuntimeException("전이 기록 실패")).given(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+
+		// catch 안에서 던진 예외는 밖으로 나간다(기존 동작 — @Async 라 받을 곳이 없다). 검증 대상은 계상뿐.
+		assertThatThrownBy(() -> encodingService.encode(VIDEO_ID, ORIGINAL_KEY))
+			.hasMessage("전이 기록 실패");
+
+		assertThat(taskCount("failed_error")).isEqualTo(1.0);
+		assertThat(taskCount("failed_over_duration")).isZero();
+		assertThat(taskCount("completed")).isZero();
+	}
+
+	@Test
+	void ffmpeg_예외는_failed_error로_기록된다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		willThrow(new IllegalStateException("ffmpeg 실패"))
+			.given(ffmpegRunner).encode720p(any(Path.class), any(Path.class));
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		assertThat(taskCount("failed_error")).isEqualTo(1.0);
+		assertThat(taskCount("completed")).isZero();
+		assertThat(taskCount("failed_over_duration")).isZero();
 	}
 
 	@Test

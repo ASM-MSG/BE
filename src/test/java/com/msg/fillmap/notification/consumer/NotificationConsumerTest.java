@@ -16,6 +16,9 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.AfterEach;
@@ -39,6 +42,7 @@ import org.springframework.util.backoff.FixedBackOff;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.msg.fillmap.notification.config.NotificationProperties;
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.relay.NotificationBacklogMetrics;
 import com.msg.fillmap.notification.repository.PushTokenRepository;
 import com.msg.fillmap.notification.sender.NotificationSender;
 import com.msg.fillmap.notification.sender.NotificationSender.SendResult;
@@ -93,6 +97,12 @@ class NotificationConsumerTest {
 	@MockitoBean
 	private FirebaseMessaging firebaseMessaging;
 
+	@Autowired
+	private SimpleMeterRegistry simpleMeterRegistry;
+
+	@Autowired
+	private NotificationBacklogMetrics backlogMetrics;
+
 	private TransactionTemplate tx;
 	private long me;
 
@@ -108,6 +118,12 @@ class NotificationConsumerTest {
 			// 운영 핸들러(NotificationConfig)와 동일 분류 미러 — 말폼드 즉시 폐기 경로 검증용.
 			errorHandler.addNotRetryableExceptions(NumberFormatException.class);
 			return errorHandler;
+		}
+
+		/** 계측 단언용 (MSG-343) — Boot 이 오토컨피그 composite 에 합류시켜 컨슈머 증가가 여기에도 반영된다. */
+		@Bean
+		SimpleMeterRegistry simpleMeterRegistry() {
+			return new SimpleMeterRegistry();
 		}
 	}
 
@@ -339,6 +355,150 @@ class NotificationConsumerTest {
 
 		awaitStatus(id, "SENT");
 		assertThat(retryCountOf(id)).isEqualTo(3);   // 실패 2회 뒤 3번째 시도에 성공
+	}
+
+	// ── 발송 결과·백로그 계측 (MSG-343 모듈 4) ──
+
+	@Test
+	@DisplayName("발송 성공은 sent 를 한 번 증가시킨다 — markSent 트랜잭션 반환 후")
+	void 발송_성공은_sent를_한_번_증가시킨다() throws Exception {
+		double before = outcomeCount("sent", "none");
+		registerToken("ok-" + System.nanoTime());
+		long id = newNotification(NotificationCategory.BADGE, "계측제목");
+
+		publish(id);
+
+		awaitStatus(id, "SENT");
+		awaitOutcomeCount("sent", "none", before + 1);
+	}
+
+	@Test
+	@DisplayName("설정 꺼짐·전송률 제한·토큰 없음은 각 reason 의 skipped 로 기록된다 — 소문자 고정값 매핑")
+	void 설정_꺼짐과_전송률_제한과_토큰_없음은_각_reason의_skipped로_기록된다() throws Exception {
+		double prefOffBefore = outcomeCount("skipped", "pref_off");
+		double rateLimitedBefore = outcomeCount("skipped", "rate_limited");
+		double noTokenBefore = outcomeCount("skipped", "no_token");
+
+		// PREF_OFF — BADGE 설정 꺼짐 (토큰 검사 전에 걸러진다)
+		given(notificationPreferenceService.isEnabled(eq(me), eq(NotificationCategory.BADGE))).willReturn(false);
+		long prefOff = newNotification(NotificationCategory.BADGE, "설정꺼짐");
+		publish(prefOff);
+		awaitStatus(prefOff, "SKIPPED");
+		awaitOutcomeCount("skipped", "pref_off", prefOffBefore + 1);
+
+		// RATE_LIMITED — HOTZONE 같은 날 SENT 1건 선재 (토큰 검사 전에 걸러진다)
+		long sentToday = newNotification(NotificationCategory.HOTZONE, "선재");
+		setSent(sentToday, LocalDateTime.now(ZoneOffset.UTC));
+		long rateLimited = newNotification(NotificationCategory.HOTZONE, "초과분");
+		publish(rateLimited);
+		awaitStatus(rateLimited, "SKIPPED");
+		awaitOutcomeCount("skipped", "rate_limited", rateLimitedBefore + 1);
+
+		// NO_TOKEN — 토큰 미등록 사용자
+		long noToken = newNotification(NotificationCategory.VIDEO, "토큰없음");
+		publish(noToken);
+		awaitStatus(noToken, "SKIPPED");
+		awaitOutcomeCount("skipped", "no_token", noTokenBefore + 1);
+	}
+
+	@Test
+	@DisplayName("발송 중 행이 지워지면 markSent 가 0행이라 sent 가 증가하지 않는다 — 전이 적용 시에만 계상 (완료 조건 5)")
+	void 발송_중_행이_지워지면_markSent가_0행이라_sent가_증가하지_않는다() throws Exception {
+		double before = outcomeCount("sent", "none");
+		registerToken("ok-" + System.nanoTime());
+		long vanished = newNotification(NotificationCategory.BADGE, "탈퇴중");
+		given(notificationSender.send(anyList(), anyString(), anyString()))
+			.willAnswer(invocation -> {
+				deleteRow(vanished);   // FCM 발송 중 탈퇴 CASCADE 로 행이 지워지는 창 재현
+				return new SendResult(1, List.of());
+			})
+			.willReturn(new SendResult(1, List.of()));
+		long fresh = newNotification(NotificationCategory.BADGE, "후속");
+
+		publish(vanished);
+		publish(fresh);
+
+		awaitStatus(fresh, "SENT");   // 파티션 1 순서 보장 — fresh 완료 = vanished 소비도 끝났다
+		awaitOutcomeCount("sent", "none", before + 1);   // fresh 1건만 — 0행 갱신은 증가하지 않는다
+	}
+
+	@Test
+	@DisplayName("재시도 상한 소진은 dead 를 증가시킨다 — recoverer 의 markDead 성공 후")
+	void 재시도_상한_소진은_dead를_증가시킨다() throws Exception {
+		double before = outcomeCount("dead", "none");
+		registerToken("ok-" + System.nanoTime());
+		given(notificationSender.send(anyList(), anyString(), anyString()))
+			.willThrow(new IllegalStateException("FCM 다운"));
+		long id = newNotification(NotificationCategory.BADGE, "제목");
+
+		publish(id);
+
+		awaitStatus(id, "DEAD");
+		awaitOutcomeCount("dead", "none", before + 1);
+	}
+
+	@Test
+	@DisplayName("이미 종결된 행의 재전달 소비는 아무것도 증가시키지 않는다 — 종결 상태 가드가 재소비를 거른다")
+	void 이미_종결된_행의_재전달_소비는_아무것도_증가시키지_않는다() throws Exception {
+		double sentBefore = outcomeCount("sent", "none");
+		double deadBefore = outcomeCount("dead", "none");
+		double skippedBefore = outcomeCount("skipped", "pref_off")
+			+ outcomeCount("skipped", "rate_limited") + outcomeCount("skipped", "no_token");
+		registerToken("ok-" + System.nanoTime());
+		long already = newNotification(NotificationCategory.BADGE, "재전달");
+		setStatus(already, "SENT");
+		long fresh = newNotification(NotificationCategory.BADGE, "신규");
+
+		sendMessage(already);   // 재전달 시뮬레이션 — 종결 행의 재소비
+		publish(fresh);
+
+		awaitStatus(fresh, "SENT");   // 파티션 1 순서 보장 — fresh 처리 완료 = already 소비도 끝났다
+		awaitOutcomeCount("sent", "none", sentBefore + 1);   // fresh 1건만 — already 재소비는 0회
+		assertThat(outcomeCount("dead", "none")).isEqualTo(deadBefore);
+		assertThat(outcomeCount("skipped", "pref_off")
+			+ outcomeCount("skipped", "rate_limited") + outcomeCount("skipped", "no_token"))
+			.isEqualTo(skippedBefore);
+	}
+
+	@Test
+	@DisplayName("백로그 폴러가 PENDING 과 PUBLISHED 건수를 gauge 에 반영한다 — 60초 폴링 D3")
+	void 백로그_폴러가_PENDING과_PUBLISHED_건수를_gauge에_반영한다() {
+		backlogMetrics.refresh();
+		double pendingBefore = backlogValue("pending");
+		double publishedBefore = backlogValue("published");
+		newNotification(NotificationCategory.BADGE, "대기1");
+		newNotification(NotificationCategory.BADGE, "대기2");
+		long published = newNotification(NotificationCategory.BADGE, "발행됨");
+		setStatus(published, "PUBLISHED");
+
+		backlogMetrics.refresh();
+
+		assertThat(backlogValue("pending")).isEqualTo(pendingBefore + 2);
+		assertThat(backlogValue("published")).isEqualTo(publishedBefore + 1);
+	}
+
+	private double outcomeCount(String result, String reason) {
+		Counter counter = simpleMeterRegistry.find("notification.outcome")
+			.tags("result", result, "reason", reason).counter();
+		return counter == null ? 0.0 : counter.count();
+	}
+
+	/** 전이 커밋(awaitStatus 관측)과 카운터 증가 사이의 미세 창을 흡수한다 — 증가는 tx 반환 후라 한 발 늦을 수 있다. */
+	private void awaitOutcomeCount(String result, String reason, double expected) throws InterruptedException {
+		long deadline = System.currentTimeMillis() + 10_000;
+		while (System.currentTimeMillis() < deadline && outcomeCount(result, reason) < expected) {
+			Thread.sleep(100);
+		}
+		assertThat(outcomeCount(result, reason)).isEqualTo(expected);
+	}
+
+	private double backlogValue(String status) {
+		return simpleMeterRegistry.get("notification.backlog").tag("status", status).gauge().value();
+	}
+
+	private void deleteRow(long id) {
+		tx.executeWithoutResult(s ->
+			em.createNativeQuery("DELETE FROM notifications WHERE id = :id").setParameter("id", id).executeUpdate());
 	}
 
 	private long newNotification(NotificationCategory category, String title) {

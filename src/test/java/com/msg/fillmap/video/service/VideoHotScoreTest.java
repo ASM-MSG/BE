@@ -79,7 +79,8 @@ class VideoHotScoreTest {
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, hotScoreCommandService,
-			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()));
+			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
+			mock(VideoProcessingMetrics.class));
 	}
 
 	private void givenSavedVideo() {

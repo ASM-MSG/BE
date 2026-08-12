@@ -32,6 +32,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import lombok.extern.slf4j.Slf4j;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
@@ -128,14 +131,20 @@ public class NotificationConfig {
 	 */
 	@Bean
 	ConsumerRecordRecoverer notificationDeadRecoverer(NotificationRepository notificationRepository,
-		PlatformTransactionManager txManager) {
+		PlatformTransactionManager txManager, MeterRegistry meterRegistry) {
 		TransactionTemplate tx = new TransactionTemplate(txManager);
+		// DEAD 전이 계측 (MSG-343) — NumberFormatException 폐기 경로는 전이가 없으므로 계측하지 않는다.
+		Counter deadCounter = Counter.builder("notification.outcome")
+			.tag("result", "dead").tag("reason", "none").register(meterRegistry);
 		return (record, ex) -> {
 			String value = String.valueOf(record.value());
 			Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
 			try {
 				long id = Long.parseLong(value);
-				tx.executeWithoutResult(status -> notificationRepository.markDead(id, cause.toString()));
+				Integer deadRows = tx.execute(status -> notificationRepository.markDead(id, cause.toString()));
+				if (deadRows != null && deadRows == 1) {
+					deadCounter.increment();   // 전이 적용(1행 갱신) 시에만 (MSG-343 완료 조건 5)
+				}
 				log.warn("알림 재시도 상한 소진 — DEAD 격리: notificationId={}", id, cause);
 			} catch (NumberFormatException e) {
 				// outbox id 가 아닌 페이로드 — DEAD 기록할 행이 없다. 로그만 남기고 버린다 (poison 격리).
