@@ -59,6 +59,9 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 		}
 
 		Path workDir = null;
+		// 태스크당 result 카운트 정확히 1회 (Codex 2R) — over_duration 계상 후 markFailed 가 던져
+		// outer catch 로 떨어져도 failed_error 로 이중 계상하지 않는다.
+		boolean resultCounted = false;
 		try {
 			// 큐 대기 중 교체/삭제됐으면 이 태스크의 원본은 더는 현재 시도가 아니다 — ffmpeg 을 돌리지 않는다 (MSG-241).
 			if (!statusWriter.markEncoding(videoId, originalKey)) {
@@ -74,8 +77,10 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			double duration = ffmpegRunner.probeDurationSec(original);
 			if (duration > MAX_DURATION_SEC) {
 				log.warn("영상 길이 초과로 인코딩 중단: videoId={} duration={}s", videoId, duration);
-				statusWriter.markFailed(videoId, originalKey);
+				// 분류 보존 — markFailed(REQUIRES_NEW)가 던져도 over_duration 계상은 이미 끝나 있어야 한다.
 				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_OVER_DURATION);
+				resultCounted = true;
+				statusWriter.markFailed(videoId, originalKey);
 				return;
 			}
 
@@ -115,7 +120,9 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			// 비동기라 던져봐야 받을 곳이 없다. 기록만 남기고 재시도하지 않는다 (MSG-65 D8).
 			log.error("인코딩 실패: videoId={}", videoId, e);
 			statusWriter.markFailed(videoId, originalKey);
-			videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_ERROR);
+			if (!resultCounted) {
+				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_ERROR);
+			}
 		} finally {
 			deleteQuietly(workDir);
 		}

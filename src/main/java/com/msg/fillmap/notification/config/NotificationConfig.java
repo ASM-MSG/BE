@@ -141,8 +141,10 @@ public class NotificationConfig {
 			Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
 			try {
 				long id = Long.parseLong(value);
-				tx.executeWithoutResult(status -> notificationRepository.markDead(id, cause.toString()));
-				deadCounter.increment();   // markDead 트랜잭션 성공 후 (MSG-343)
+				Integer deadRows = tx.execute(status -> notificationRepository.markDead(id, cause.toString()));
+				if (deadRows != null && deadRows == 1) {
+					deadCounter.increment();   // 전이 적용(1행 갱신) 시에만 (MSG-343 완료 조건 5)
+				}
 				log.warn("알림 재시도 상한 소진 — DEAD 격리: notificationId={}", id, cause);
 			} catch (NumberFormatException e) {
 				// outbox id 가 아닌 페이로드 — DEAD 기록할 행이 없다. 로그만 남기고 버린다 (poison 격리).

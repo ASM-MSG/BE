@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -228,6 +229,20 @@ class VideoEncodingServiceTest {
 		assertThat(taskCount("failed_over_duration")).isEqualTo(1.0);
 		assertThat(taskCount("completed")).isZero();
 		assertThat(taskCount("failed_error")).isZero();
+	}
+
+	@Test
+	void 길이_초과에서_markFailed가_던져도_failed_over_duration_한_번만_계상된다() {
+		// 분류 보존 (Codex 2R) — 전이 기록 실패가 outer catch 로 떨어져도 result 카운트는 태스크당 정확히 1회.
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.5);
+		willThrow(new RuntimeException("전이 기록 실패")).willDoNothing()
+			.given(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		assertThat(taskCount("failed_over_duration")).isEqualTo(1.0);
+		assertThat(taskCount("failed_error")).isZero();
+		assertThat(taskCount("completed")).isZero();
 	}
 
 	@Test

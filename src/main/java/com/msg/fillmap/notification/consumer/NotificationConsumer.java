@@ -117,9 +117,12 @@ public class NotificationConsumer {
 			// 전부 실패 → 재시도 경로 (D4). 전부 무효 토큰이었다면 다음 시도가 NO_TOKEN 으로 수렴한다.
 			throw new IllegalStateException("FCM 발송 전부 실패: notificationId=" + id);
 		}
-		tx.executeWithoutResult(status -> notificationRepository.markSent(id));
-		// 전이 UPDATE 커밋 후 증가 (MSG-343 D5) — 전이 실패 시 과대 계상 창이 없다.
-		sentCounter.increment();
+		// 전이 UPDATE 커밋 후, 실제 갱신 1행일 때만 증가 (MSG-343 D5·완료 조건 5) — 발송 중 탈퇴
+		// CASCADE 로 행이 지워지면 0행 갱신이라 전이가 없고, 계상도 하지 않는다 (Codex 2R).
+		Integer sentRows = tx.execute(status -> notificationRepository.markSent(id));
+		if (sentRows != null && sentRows == 1) {
+			sentCounter.increment();
+		}
 	}
 
 	/** 전송률 제한 (D8·FR-12) — HOTZONE·REMIND 일 상한, BADGE·VIDEO·WEEKLY 무제한. 카운트는 DB 1문장. */
@@ -141,9 +144,9 @@ public class NotificationConsumer {
 	}
 
 	private void skip(long id, String reason) {
-		tx.executeWithoutResult(status -> notificationRepository.markSkipped(id, reason));
+		Integer updated = tx.execute(status -> notificationRepository.markSkipped(id, reason));
 		Counter counter = skippedCounters.get(reason);
-		if (counter != null) {
+		if (counter != null && updated != null && updated == 1) {
 			counter.increment();
 		}
 	}

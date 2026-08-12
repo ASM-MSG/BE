@@ -402,6 +402,27 @@ class NotificationConsumerTest {
 	}
 
 	@Test
+	@DisplayName("발송 중 행이 지워지면 markSent 가 0행이라 sent 가 증가하지 않는다 — 전이 적용 시에만 계상 (완료 조건 5)")
+	void 발송_중_행이_지워지면_markSent가_0행이라_sent가_증가하지_않는다() throws Exception {
+		double before = outcomeCount("sent", "none");
+		registerToken("ok-" + System.nanoTime());
+		long vanished = newNotification(NotificationCategory.BADGE, "탈퇴중");
+		given(notificationSender.send(anyList(), anyString(), anyString()))
+			.willAnswer(invocation -> {
+				deleteRow(vanished);   // FCM 발송 중 탈퇴 CASCADE 로 행이 지워지는 창 재현
+				return new SendResult(1, List.of());
+			})
+			.willReturn(new SendResult(1, List.of()));
+		long fresh = newNotification(NotificationCategory.BADGE, "후속");
+
+		publish(vanished);
+		publish(fresh);
+
+		awaitStatus(fresh, "SENT");   // 파티션 1 순서 보장 — fresh 완료 = vanished 소비도 끝났다
+		awaitOutcomeCount("sent", "none", before + 1);   // fresh 1건만 — 0행 갱신은 증가하지 않는다
+	}
+
+	@Test
 	@DisplayName("재시도 상한 소진은 dead 를 증가시킨다 — recoverer 의 markDead 성공 후")
 	void 재시도_상한_소진은_dead를_증가시킨다() throws Exception {
 		double before = outcomeCount("dead", "none");
@@ -473,6 +494,11 @@ class NotificationConsumerTest {
 
 	private double backlogValue(String status) {
 		return simpleMeterRegistry.get("notification.backlog").tag("status", status).gauge().value();
+	}
+
+	private void deleteRow(long id) {
+		tx.executeWithoutResult(s ->
+			em.createNativeQuery("DELETE FROM notifications WHERE id = :id").setParameter("id", id).executeUpdate());
 	}
 
 	private long newNotification(NotificationCategory category, String title) {
