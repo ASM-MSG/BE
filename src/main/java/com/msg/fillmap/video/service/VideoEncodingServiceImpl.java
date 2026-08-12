@@ -119,10 +119,12 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 		} catch (Exception e) {
 			// 비동기라 던져봐야 받을 곳이 없다. 기록만 남기고 재시도하지 않는다 (MSG-65 D8).
 			log.error("인코딩 실패: videoId={}", videoId, e);
-			statusWriter.markFailed(videoId, originalKey);
+			// over_duration 경로와 대칭 — 계상 먼저, 전이 나중 (Codex 3R). markFailed(REQUIRES_NEW)가 DB
+			// 장애로 던지면 인코더는 재시도하지 않으므로, 뒤에 두면 failed_error 가 영구 누락된다.
 			if (!resultCounted) {
 				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_ERROR);
 			}
+			statusWriter.markFailed(videoId, originalKey);
 		} finally {
 			deleteQuietly(workDir);
 		}

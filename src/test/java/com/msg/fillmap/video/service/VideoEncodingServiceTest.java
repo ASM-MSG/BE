@@ -1,6 +1,7 @@
 package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
@@ -242,6 +243,23 @@ class VideoEncodingServiceTest {
 
 		assertThat(taskCount("failed_over_duration")).isEqualTo(1.0);
 		assertThat(taskCount("failed_error")).isZero();
+		assertThat(taskCount("completed")).isZero();
+	}
+
+	@Test
+	void ffmpeg_예외_후_markFailed가_던져도_failed_error가_계상된다() {
+		// 인코더는 재시도하지 않는다 — 전이 기록 실패에 계상까지 딸려 유실되면 그 태스크는 영원히 안 보인다.
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		willThrow(new IllegalStateException("ffmpeg 실패"))
+			.given(ffmpegRunner).encode720p(any(Path.class), any(Path.class));
+		willThrow(new RuntimeException("전이 기록 실패")).given(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+
+		// catch 안에서 던진 예외는 밖으로 나간다(기존 동작 — @Async 라 받을 곳이 없다). 검증 대상은 계상뿐.
+		assertThatThrownBy(() -> encodingService.encode(VIDEO_ID, ORIGINAL_KEY))
+			.hasMessage("전이 기록 실패");
+
+		assertThat(taskCount("failed_error")).isEqualTo(1.0);
+		assertThat(taskCount("failed_over_duration")).isZero();
 		assertThat(taskCount("completed")).isZero();
 	}
 
