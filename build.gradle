@@ -79,6 +79,11 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// 테스트 워커 힙 (MSG-343). Gradle 기본 512m 은 @EmbeddedKafka 통합 테스트에 빠듯해 전체 빌드가
+	// 실행마다 되다 말다 했다 — 2026-08-12 실측으로 워커가 RSS 1GB 에서 GC 스래싱(CPU 400%, 12분간
+	// 산출물 0)에 빠져 멈추는 것을 확인했다. OOM 으로 죽으면 원인이 보이지만 스래싱은 그냥 느린 빌드로
+	// 보여 진단이 늦는다. jacoco 에이전트도 같은 워커에 붙는다.
+	maxHeapSize = '2g'
 	finalizedBy 'jacocoTestReport'
 }
 
