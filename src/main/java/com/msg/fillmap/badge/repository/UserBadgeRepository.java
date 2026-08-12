@@ -25,11 +25,16 @@ public interface UserBadgeRepository extends JpaRepository<UserBadge, UserBadgeI
 	 * 이 중복 row 를 막는다 — 앱 레벨 잠금 없이 DB 가 최후 방어선. notified_at 을 바로 채우는 이유:
 	 * 이 경로는 사용자 행동의 응답에 뱃지가 실려 즉시 보이므로 "미확인" 상태가 없다 (소급 지급 SQL 은
 	 * 반대로 NULL 로 넣어 다음 조회 때 새 뱃지 표시 대상이 된다).
+	 *
+	 * <p>earned_at 을 DDL 기본값(CURRENT_TIMESTAMP)에 맡기지 않고 직접 넣는 이유: 기본값도 세션 TZ 로
+	 * 캐스트돼 KST JVM 에서 +9h 저장되는데, earned_at 은 MyBadgeResponseDto.earnedAt 으로 나가고 전역
+	 * 코덱이 UTC 로 표기한다(MSG-376). statement_timestamp() AT TIME ZONE 'UTC' 는 markSent 선례.
 	 */
 	@Modifying
 	@Query(value = """
-		INSERT INTO user_badges (user_id, badge_id, notified_at)
-		VALUES (:userId, :badgeId, now())
+		INSERT INTO user_badges (user_id, badge_id, earned_at, notified_at)
+		VALUES (:userId, :badgeId,
+			statement_timestamp() AT TIME ZONE 'UTC', statement_timestamp() AT TIME ZONE 'UTC')
 		ON CONFLICT DO NOTHING
 		""", nativeQuery = true)
 	int insertIgnoreConflict(@Param("userId") long userId, @Param("badgeId") long badgeId);
@@ -67,11 +72,13 @@ public interface UserBadgeRepository extends JpaRepository<UserBadge, UserBadgeI
 	 * 미확인(새 뱃지) 확인 스탬프 (docs/spec/MSG-201.md §D3) — 조회 응답에 실제로 실린 미확인 행에만
 	 * notified_at 을 기록한다. IN 리스트로 좁히는 이유: user 전체 NULL UPDATE 면 SELECT 와 UPDATE 사이에
 	 * 소급 시딩(V10+ 류)이 끼워 넣은 행을 노출된 적 없는데 확인 처리할 수 있다. notified_at IS NULL
-	 * 가드는 동기 지급분(이미 now() 기록)·기확인분의 무의미 UPDATE 를 막는다.
+	 * 가드는 동기 지급분(insertIgnoreConflict 가 이미 기록)·기확인분의 무의미 UPDATE 를 막는다.
+	 * 시각 표현식이 맨 now() 가 아닌 이유는 insertIgnoreConflict 주석 참조 — 같은 컬럼을 두 경로가
+	 * 채우므로 축이 어긋나면 안 된다.
 	 */
 	@Modifying
 	@Query(value = """
-		UPDATE user_badges SET notified_at = now()
+		UPDATE user_badges SET notified_at = statement_timestamp() AT TIME ZONE 'UTC'
 		WHERE user_id = :userId AND badge_id IN (:badgeIds) AND notified_at IS NULL
 		""", nativeQuery = true)
 	int markMyBadgesNotified(@Param("userId") long userId, @Param("badgeIds") Collection<Long> badgeIds);

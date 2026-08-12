@@ -1,0 +1,123 @@
+# prod 알림 규칙 8종(MSG-344) + dev 최소 구성 2종(MSG-377). 새 목표를 만들지 않는다 — 지연 임계(p95<300ms, p99<800ms)는 MSG-134
+# ADR 의 뷰포트 SLO 를 그대로 옮긴 것이고, 5xx 1% 는 서비스 전반 오류율의 운영 기본 임계다
+# (티켓 완료 조건의 "5xx 비율 감시" — 뷰포트로 좁히면 인증·업로드 5xx 를 놓친다).
+# 각 알림의 의미와 대응 절차: docs/runbook/monitoring.md
+groups:
+  - name: fillmap-prod
+    rules:
+      - alert: AppDown
+        # up==0 은 앱 중단과 수집 실패(네트워크·보안그룹)를 구분하지 못한다 — 이 규칙이 "수집
+        # 실패" 알림을 겸하고, 구분은 runbook 절차(수집 서버에서 관리 포트 직접 curl)로 가른다.
+        expr: up{job="fillmap-prod"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "prod 앱 수집 불가 (중단 또는 수집 실패)"
+          description: "up==0 이 1분 지속. runbook 의 구분 절차로 앱 생존을 먼저 가른다."
+
+      - alert: High5xxRate
+        expr: >
+          sum(rate(http_server_requests_seconds_count{job="fillmap-prod", status=~"5.."}[5m]))
+          / sum(rate(http_server_requests_seconds_count{job="fillmap-prod"}[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "5xx 비율 1% 초과"
+          description: "전체 요청 대비 5xx 비율이 1%를 넘은 상태가 5분 지속 (서비스 전반 운영 기본 임계)."
+
+      # p95·p99 임계(300ms/800ms)는 MSG-134 D3 의 "뷰포트 SLO"다 — 대상은 지도 뷰포트 조회
+      # (GET /api/grids) 하나뿐이다. uri 는 정확 일치 — 접두 매칭(/api/grids.*)이면
+      # /api/grids/{gridId}·/api/grids/aggregation 등 다른 라우트가 섞여 SLO 판정이 오염된다.
+      # /api/grids 정확 일치에는 GET 매핑 하나뿐이라 method 라벨은 걸지 않는다.
+      - alert: ViewportLatencyP95High
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket{job="fillmap-prod", uri="/api/grids"}[5m])) by (le)) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "뷰포트 조회 p95 300ms 초과"
+          description: "뷰포트 조회(/api/grids) p95 가 0.3s 를 넘은 상태가 10분 지속 (MSG-134 뷰포트 SLO p95<300ms)."
+
+      - alert: ViewportLatencyP99High
+        expr: >
+          histogram_quantile(0.99,
+            sum(rate(http_server_requests_seconds_bucket{job="fillmap-prod", uri="/api/grids"}[5m])) by (le)) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "뷰포트 조회 p99 800ms 초과"
+          description: "뷰포트 조회(/api/grids) p99 가 0.8s 를 넘은 상태가 10분 지속 (MSG-134 뷰포트 SLO p99<800ms)."
+
+      - alert: HikariPending
+        # pending 은 커넥션 풀 고갈로 요청이 대기 중이라는 뜻 — DB 병목의 가장 이른 신호.
+        expr: hikaricp_connections_pending{job="fillmap-prod"} > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Hikari 커넥션 대기 발생"
+          description: "커넥션을 못 받아 대기하는 요청이 2분째 있다. DB 부하나 느린 쿼리를 의심."
+
+      - alert: HikariSaturation
+        expr: >
+          hikaricp_connections_active{job="fillmap-prod"}
+          / hikaricp_connections_max{job="fillmap-prod"} > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Hikari 풀 사용률 90% 초과"
+          description: "active/max 가 0.9 를 넘은 상태가 5분 지속. pending 이 뜨기 전의 전조."
+
+      - alert: JvmHeapHigh
+        expr: >
+          sum(jvm_memory_used_bytes{job="fillmap-prod", area="heap"})
+          / sum(jvm_memory_max_bytes{job="fillmap-prod", area="heap"}) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JVM heap 사용률 90% 초과"
+          description: "heap used/max 가 0.9 를 넘은 상태가 10분 지속. GC 압박·OOM 전조."
+
+      - alert: CpuHigh
+        expr: process_cpu_usage{job="fillmap-prod"} > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "프로세스 CPU 90% 초과"
+          description: "앱 프로세스 CPU 사용률이 0.9 를 넘은 상태가 10분 지속."
+
+  # dev 는 최소 구성 2종만 둔다 (MSG-377). 지연 SLO 와 5xx 비율은 dev 트래픽이 팀원뿐이라
+  # 분모가 작아 소음이 된다 — 필요해지면 그때 추가한다. 알림 이름에 Dev 접두를 붙여
+  # Slack 에서 prod 알림과 즉시 구분되게 한다.
+  - name: fillmap-dev
+    rules:
+      - alert: DevAppDown
+        # for 를 prod(1m)보다 긴 3m 로 두는 이유: develop 푸시마다 CD 가 재시작을 일으켜
+        # 배포 중 짧은 다운은 정상이다. 3분을 넘기면 크래시 루프를 의심한다 — 2026-07-14
+        # dev 가 32시간 크래시 루프를 돌아도 CD 는 초록불이었던 사고의 재발 방지가 이 규칙의 목적.
+        expr: up{job="fillmap-dev"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "dev 앱 수집 불가 (중단 또는 수집 실패)"
+          description: "up==0 이 3분 지속 (배포 재시작보다 긴 시간). runbook 의 구분 절차로 앱 생존을 먼저 가른다."
+
+      - alert: DevJvmHeapHigh
+        expr: >
+          sum(jvm_memory_used_bytes{job="fillmap-dev", area="heap"})
+          / sum(jvm_memory_max_bytes{job="fillmap-dev", area="heap"}) > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "dev JVM heap 사용률 90% 초과"
+          description: "dev 박스(t3.small)는 앱과 DB·Redis·Kafka 컨테이너가 동거해 메모리가 빠듯하다. heap 압박은 OOM 크래시 루프의 전조."

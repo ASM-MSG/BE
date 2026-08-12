@@ -1,6 +1,8 @@
 package com.msg.fillmap.friend.entity;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
@@ -8,8 +10,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
-
-import org.hibernate.annotations.CreationTimestamp;
 
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -33,7 +33,11 @@ public class Friendship {
 	@Column(nullable = false, length = 10)
 	private FriendshipStatus status;
 
-	@CreationTimestamp
+	/**
+	 * 요청 시각. @CreationTimestamp 를 쓰지 않고 생성자에서 UTC 로 직접 넣는다 (MSG-376) —
+	 * 그 애너테이션은 JVM 기본 존의 벽시계를 만들어 KST 개발 머신에서 +9h 가 저장되는데, 이 값은
+	 * 응답에 실려 전역 코덱이 UTC 로 표기하므로 저장 축이 UTC 여야 한다. respondedAt 과 같은 축이다.
+	 */
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
@@ -43,6 +47,8 @@ public class Friendship {
 	private Friendship(Long requesterId, Long addresseeId) {
 		this.id = new FriendshipId(requesterId, addresseeId);
 		this.status = FriendshipStatus.PENDING;
+		// DB TIMESTAMP 정밀도(µs)로 절단 — 리눅스 나노초 시계에서 재조회 값과 어긋나지 않게
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
 	}
 
 	/** 친구 요청 생성 — PENDING (FR-4). */
@@ -53,7 +59,7 @@ public class Friendship {
 	/** 수락 — ACCEPTED 승격 + 응답 시각 기록 (FR-10). 거절은 행 DELETE 라 전이 메서드가 없다 (§D3). */
 	public void accept() {
 		this.status = FriendshipStatus.ACCEPTED;
-		this.respondedAt = LocalDateTime.now();
+		this.respondedAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 
 	public Long getRequesterId() {

@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -225,7 +226,7 @@ public class AiBlurPoller {
 	/** 타임아웃은 행 생성(created_at)이 아니라 이번 BLURRING 시도 시작 기준 (D4 V4). 옛 행 재시도 오탐 방지. */
 	private boolean isTimedOut(Video video) {
 		LocalDateTime start = video.getBlurringStartedAt() != null ? video.getBlurringStartedAt() : video.getCreatedAt();
-		return Duration.between(start, LocalDateTime.now()).compareTo(aiProperties.timeout()) > 0;
+		return Duration.between(start, LocalDateTime.now(ZoneOffset.UTC)).compareTo(aiProperties.timeout()) > 0;
 	}
 
 	/**

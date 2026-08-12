@@ -5,6 +5,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.temporal.IsoFields;
 import java.time.temporal.TemporalAdjusters;
@@ -60,10 +61,11 @@ public class WeeklySummaryScheduler {
 		LocalDate todayKst = LocalDate.ofInstant(clock.instant(), KST);
 		ZonedDateTime weekStartKst = todayKst.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 			.atStartOfDay(KST);
-		// 집계 재료(videos.created_at·user_grids.first_collected_at)는 UTC 가 아니라 JVM 기본 존 벽시계로
-		// 저장된다(D2 표) — UTC 로 바인딩하면 KST JVM 배포에서 창이 9시간 어긋난다. UTC 배포에선 환산이 항등.
-		LocalDateTime weekStart = weekStartKst.withZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
-		LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneId.systemDefault());
+		// 집계 재료(videos.created_at·user_grids.first_collected_at)는 UTC 벽시계로 저장된다 — 두 컬럼의
+		// 쓰기 경로를 UTC 로 고정한 MSG-376 후속 수정 이후의 사실이다(그 전에는 JVM 기본 존이었고 이 환산도
+		// systemDefault 였다). KST JVM 에서 systemDefault 로 바인딩하면 이제 창이 9시간 어긋난다.
+		LocalDateTime weekStart = weekStartKst.withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
+		LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
 		String eventKey = "WEEKLY:%d-W%02d".formatted(
 			todayKst.get(IsoFields.WEEK_BASED_YEAR), todayKst.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));
 

@@ -76,7 +76,7 @@ class GridGlobalVideoControllerTest {
 				.value("https://bucket.s3/thumb.jpg?X-Amz-Signature=abc"))
 			.andExpect(jsonPath("$.data.videos[0].durationSec").value(12))
 			.andExpect(jsonPath("$.data.videos[0].viewCount").value(37))
-			.andExpect(jsonPath("$.data.videos[0].recordedAt").value("2026-07-20T18:03:11"))
+			.andExpect(jsonPath("$.data.videos[0].recordedAt").value("2026-07-20T18:03:11Z"))
 			.andExpect(jsonPath("$.data.videos[0].nickname").value("busan.vlog"))
 			.andExpect(jsonPath("$.data.videos[1].videoId").value(1039))
 			.andExpect(jsonPath("$.data.videos[1].nickname").value("seoul.walk"))

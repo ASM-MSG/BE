@@ -153,6 +153,7 @@ class VideoGlobalCoverServiceTest {
 			.noneMatch(name -> name.toLowerCase().contains("user") || name.toLowerCase().contains("color"));
 	}
 
+	// 검증: FR-VIDEO-18
 	@Test
 	@DisplayName("전역 대표 영상 응답에 작성자 닉네임이 담긴다")
 	void 전역_대표_영상_응답에_작성자_닉네임이_담긴다() {

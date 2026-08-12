@@ -462,6 +462,7 @@ class VideoPlaybackServiceTest {
 
 	// --- 작성자 닉네임 (MSG-371). 접근 제어를 통과한 응답에만 실린다.
 
+	// 검증: FR-VIDEO-18
 	@Test
 	@DisplayName("재생 응답에 작성자 닉네임이 담긴다")
 	void 재생_응답에_작성자_닉네임이_담긴다() {

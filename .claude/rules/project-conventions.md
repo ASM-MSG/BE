@@ -159,6 +159,32 @@ MyBatis 전면 전환 반려 판정·번복 트리거·대안(QueryDSL 포크·J
 [영속 계층 JPA 유지 — MyBatis 전환 반려 (2026-08-03, cf-29917209)](https://soma17-msg.atlassian.net/wiki/spaces/M/pages/29917209)
 — LLM-WIKI `04-decisions/ADR 영속 계층 JPA 유지 MyBatis 반려.md`
 
+## 시각(날짜·시간) 처리 (MSG-376 명문화)
+
+API JSON 경계의 `LocalDateTime`은 전역 코덱(`global/config/UtcLocalDateTimeJsonCodec`,
+`@JacksonComponent`)이 UTC `Z` 표기로 주고받는다. 이 체계의 전제는 **"naive `LocalDateTime` 값 =
+UTC"라는 관례**인데, 코덱은 값이 진짜 UTC인지 검증할 수 없으므로 아래를 코드 리뷰에서 강제한다.
+
+- **인자 없는 `LocalDateTime.now()` 금지 (`src/main` 전체).** 시스템 기본 시간대(로컬 개발
+  머신 KST)의 시각이 만들어져 UTC 표기가 붙는 순간 9시간 어긋난다. 서비스는 주입받은 `Clock`
+  (`BadgeAwardServiceImpl`·`VideoServiceImpl` 선례), DI가 안 되는 엔티티 상태 전이 메서드는
+  `LocalDateTime.now(ZoneOffset.UTC)` (Report·Friendship·Video 선례 — MSG-376 Codex 적발 후
+  일괄 교정). 스케줄러·폴러가 `Clock` 주입 전이라면 같은 형태를 임시 허용한다 (AiBlurPoller —
+  테스트 결정성 확보 겸 후속 교체 대상). 테스트 코드는 값 대조가 존에 민감할 때만 같은 기준을
+  적용한다.
+- **개별 필드 `@JsonFormat` 산발 적용 금지** — 시각 표기 수정은 코덱 한 곳(MSG-376 D-4).
+- **KST 라벨이 필요하면 `LocalDateTime`이 아니라 `LocalDate`를 쓴다**
+  (`UploadHistoryResponseDto.uploadDate` 선례). `LocalDateTime`이면 예외 없이 `Z`가 붙는다.
+  "KST 시각 문자열" 요구는 와이어 계약 변경이라 논의 대상이다.
+- **DTO의 시각 타입은 `LocalDateTime`(시각)·`LocalDate`(날짜 라벨)만** —
+  `DtoTimeTypeGuardTest`가 classpath 스캔으로 강제한다. 가드는 `*Dto` 네이밍만 잡으므로
+  시각 필드를 갖는 응답 타입은 `*Dto` 네이밍을 지킨다. **String에 시각을 담는 우회 금지**
+  (가드가 못 잡는다 — 리뷰 몫).
+- **직렬화가 걸린 테스트는 스프링이 조립한 매퍼로** (`@JsonTest`·`@WebMvcTest`).
+  `new ObjectMapper()` 손조립에는 코덱이 등록되지 않아 코덱 없는 세상을 검증하게 된다.
+- **시각을 쿼리 파라미터로 받지 않는다** — `@RequestParam LocalDateTime`은 Jackson이 아니라
+  스프링 컨버터 경로라 코덱 밖이다. 시각은 요청 본문으로 받는다.
+
 ## Lombok 사용 원칙
 
 - `@RequiredArgsConstructor` 로 DI (`@Autowired` 지양)

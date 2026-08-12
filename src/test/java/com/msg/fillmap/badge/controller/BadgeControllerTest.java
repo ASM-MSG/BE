@@ -74,7 +74,7 @@ class BadgeControllerTest {
 			.andExpect(jsonPath("$.data[0].description").value("첫 격자를 수집했어요"))
 			.andExpect(jsonPath("$.data[0].iconUrl").value(nullValue()))
 			.andExpect(jsonPath("$.data[0].earned").value(true))
-			.andExpect(jsonPath("$.data[0].earnedAt").value("2026-07-29T10:15:00"))
+			.andExpect(jsonPath("$.data[0].earnedAt").value("2026-07-29T10:15:00Z"))
 			.andExpect(jsonPath("$.data[0].isNew").value(true))
 			.andExpect(jsonPath("$.data[0].featuredRank").value(nullValue()))
 			.andExpect(jsonPath("$.data[1].earned").value(false))

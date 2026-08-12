@@ -2,6 +2,8 @@ package com.msg.fillmap.user.entity;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -11,8 +13,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-
-import org.hibernate.annotations.CreationTimestamp;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -72,7 +72,11 @@ public class User {
 	@Column(name = "last_login_at")
 	private LocalDateTime lastLoginAt;
 
-	@CreationTimestamp
+	/**
+	 * 가입 시각. @CreationTimestamp 를 쓰지 않고 생성자에서 UTC 로 직접 넣는다 (MSG-376) —
+	 * 그 애너테이션은 JVM 기본 존의 벽시계를 만들어 KST 개발 머신에서 +9h 가 저장되는데, 이 값은
+	 * 응답에 실려 전역 코덱이 UTC 로 표기하므로 저장 축이 UTC 여야 한다.
+	 */
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
@@ -87,6 +91,8 @@ public class User {
 		this.gridColor = GridColor.BLUE;
 		this.emailVerified = false;
 		this.friendCode = generateFriendCode();
+		// DB TIMESTAMP 정밀도(µs)로 절단 — 리눅스 나노초 시계에서 재조회 값과 어긋나지 않게
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
 	}
 
 	// 생성자 한 곳이 팩토리 2개(LOCAL·OAuth)를 전부 커버한다 — 가입 경로별 생성 코드 불요 (§D2).

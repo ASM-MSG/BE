@@ -31,7 +31,7 @@ public record AdminReportProcessResponseDto(
 	@Schema(description = "처리 후 영상 상태 — 승인의 전이 생략 케이스(FR-5)를 이 값으로 구분한다", example = "BLINDED")
 	VideoStatus videoStatus,
 
-	@Schema(description = "처리 시각", example = "2026-08-06T11:00:00")
+	@Schema(description = "처리 시각", example = "2026-08-06T11:00:00Z")
 	LocalDateTime reviewedAt
 ) {
 

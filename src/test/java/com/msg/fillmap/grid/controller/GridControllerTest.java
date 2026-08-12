@@ -145,6 +145,7 @@ class GridControllerTest {
 			.andExpect(jsonPath("$.developCode").value(4404));
 	}
 
+	// 검증: FR-GRID-13
 	@Test
 	@DisplayName("집계 조회 API 는 200 과 단위별 항목 배열을 반환한다")
 	void 집계_조회_API는_200과_단위별_항목_배열을_반환한다() throws Exception {

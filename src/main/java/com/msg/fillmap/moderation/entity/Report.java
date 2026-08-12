@@ -1,6 +1,8 @@
 package com.msg.fillmap.moderation.entity;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,8 +12,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-
-import org.hibernate.annotations.CreationTimestamp;
 
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -61,7 +61,11 @@ public class Report {
 	@Column(name = "reviewed_at")
 	private LocalDateTime reviewedAt;
 
-	@CreationTimestamp
+	/**
+	 * 접수 시각. @CreationTimestamp 를 쓰지 않고 생성자에서 UTC 로 직접 넣는다 (MSG-376) —
+	 * 그 애너테이션은 JVM 기본 존의 벽시계를 만들어 KST 개발 머신에서 +9h 가 저장되는데, 이 값은
+	 * 응답에 실려 전역 코덱이 UTC 로 표기하므로 저장 축이 UTC 여야 한다. reviewedAt 과 같은 축이다.
+	 */
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
@@ -71,6 +75,8 @@ public class Report {
 		this.reason = reason;
 		this.detail = detail;
 		this.status = ReportStatus.PENDING;
+		// DB TIMESTAMP 정밀도(µs)로 절단 — 리눅스 나노초 시계에서 재조회 값과 어긋나지 않게
+		this.createdAt = LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
 	}
 
 	/** 신고 접수 — 항상 PENDING 으로 시작한다 (FR-1). */
@@ -94,6 +100,6 @@ public class Report {
 	private void markReviewed(ReportStatus status, Long adminId) {
 		this.status = status;
 		this.reviewedBy = adminId;
-		this.reviewedAt = LocalDateTime.now();
+		this.reviewedAt = LocalDateTime.now(ZoneOffset.UTC);
 	}
 }
