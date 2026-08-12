@@ -511,7 +511,7 @@ class AiBlurPollerTest {
 
 	@Test
 	void 제출_성공은_submitted를_증가시킨다() {
-		givenBlurring(blurring(7L, null, LocalDateTime.now()));
+		givenBlurring(blurring(7L, null, LocalDateTime.now(ZoneOffset.UTC)));
 		givenS3Download("encoded".getBytes());
 		given(aiClient.submit(any())).willReturn("job-1");
 
@@ -523,7 +523,7 @@ class AiBlurPollerTest {
 	@Test
 	void 잡ID_기록이_실패해도_submitted는_이미_증가해_있다() {
 		// submitted 는 원격 제출 사실의 계측 — recordAiJob(DB) 일시 실패로 빠지면 재제출 시 과소 계상된다.
-		givenBlurring(blurring(7L, null, LocalDateTime.now()));
+		givenBlurring(blurring(7L, null, LocalDateTime.now(ZoneOffset.UTC)));
 		givenS3Download("encoded".getBytes());
 		given(aiClient.submit(any())).willReturn("job-1");
 		willThrow(new RuntimeException("DB 일시 실패"))
@@ -536,7 +536,7 @@ class AiBlurPollerTest {
 
 	@Test
 	void DONE_적용은_done을_증가시킨다() {
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC)));
 		givenDone("job-1", List.of());
 		given(statusWriter.markBlurReady(anyLong(), anyString(), anyString(), anyString(), any())).willReturn(true);
 
@@ -548,7 +548,7 @@ class AiBlurPollerTest {
 
 	@Test
 	void 명시_FAILED는_failed를_증가시킨다() {
-		givenBlurring(blurring(7L, "job-fail", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-fail", LocalDateTime.now(ZoneOffset.UTC)));
 		given(aiClient.poll("job-fail")).willReturn(new AiJobResult(AiJobStatus.FAILED, null, false));
 
 		poller.reconcile();
@@ -559,7 +559,7 @@ class AiBlurPollerTest {
 
 	@Test
 	void 프리체크_탈락은_precheck_rejected이고_사유_원문이_태그에_없다() {
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC)));
 		given(aiClient.poll("job-1")).willReturn(
 			new AiJobResult(AiJobStatus.DONE, List.of(), false, new Precheck(false, "too_dark: std 3.18 < 10.0")));
 
@@ -575,12 +575,12 @@ class AiBlurPollerTest {
 	@Test
 	void 타임아웃_초과는_경로와_무관하게_timeout_한_번으로_기록된다() {
 		// 경로 1: 미제출 타임아웃
-		givenBlurring(blurring(7L, null, LocalDateTime.now().minusMinutes(40)));
+		givenBlurring(blurring(7L, null, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(40)));
 		poller.reconcile();
 		assertThat(aiCount("timeout")).isEqualTo(1.0);
 
 		// 경로 2: poll 불가(연결 실패) 타임아웃 — 같은 failIfTimedOut 한 곳으로 수렴한다
-		givenBlurring(blurring(7L, "job-1", LocalDateTime.now().minusMinutes(40)));
+		givenBlurring(blurring(7L, "job-1", LocalDateTime.now(ZoneOffset.UTC).minusMinutes(40)));
 		willThrow(new ResourceAccessException("connection refused")).given(aiClient).poll("job-1");
 		poller.reconcile();
 		assertThat(aiCount("timeout")).isEqualTo(2.0);
@@ -590,14 +590,14 @@ class AiBlurPollerTest {
 	@Test
 	void 잡_404_유실은_job_lost를_증가시키고_다음_주기_재제출이_submitted로_잡힌다() {
 		// 1주기: poll 404 → 미제출 복귀 (MSG-283)
-		givenBlurring(blurring(7L, "job-old", LocalDateTime.now()));
+		givenBlurring(blurring(7L, "job-old", LocalDateTime.now(ZoneOffset.UTC)));
 		given(aiClient.poll("job-old")).willReturn(new AiJobResult(null, null, true));
 		poller.reconcile();
 		assertThat(aiCount("job_lost")).isEqualTo(1.0);
 		assertThat(aiCount("submitted")).isZero();
 
 		// 2주기: clear 반영 행(jobId null) → 재제출도 submitted 로 다시 잡힌다 (스펙 표)
-		givenBlurring(blurring(7L, null, LocalDateTime.now()));
+		givenBlurring(blurring(7L, null, LocalDateTime.now(ZoneOffset.UTC)));
 		givenS3Download("encoded".getBytes());
 		given(aiClient.submit(any())).willReturn("job-new");
 		poller.reconcile();

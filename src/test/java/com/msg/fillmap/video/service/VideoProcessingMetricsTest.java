@@ -79,7 +79,7 @@ class VideoProcessingMetricsTest {
 	/** K1 원본으로 ENCODING 중인 시도의 영상 (VideoStatusWriterTest 픽스처 관례). */
 	private Video encoding() {
 		Video video = Video.create(1L, "19495_9607", K1,
-			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
+			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(ZoneOffset.UTC), Visibility.PRIVATE);
 		video.markEncoding();
 		ReflectionTestUtils.setField(video, "id", VIDEO_ID);
 		return video;
@@ -150,7 +150,7 @@ class VideoProcessingMetricsTest {
 	void 스테일_전이_skip은_어떤_Metric도_증가시키지_않는다() {
 		// 큐 대기 중 교체 — 옛 시도의 종결은 가드가 skip 하고 계측도 함께 skip 된다 (D5).
 		Video video = encoding();
-		video.replaceFile(K2, (short) 8, LocalDateTime.now());
+		video.replaceFile(K2, (short) 8, LocalDateTime.now(ZoneOffset.UTC));
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 		metrics.markStart(VIDEO_ID);
 
