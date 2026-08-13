@@ -49,3 +49,9 @@ __pycache__/
 
 ### 관측 스택 시크릿 (MSG-344) — Slack webhook·Grafana 비밀번호. .env.example 복사 후 서버에서만 채운다 ###
 /monitoring/prod/.env
+
+### OMC 런타임 상태 (세션 id·타임스탬프가 실행마다 바뀐다 — 버전 관리 대상 아님)
+.omc/state/
+.omc/logs/
+.omc/notepad.md
+.omc/project-memory.json

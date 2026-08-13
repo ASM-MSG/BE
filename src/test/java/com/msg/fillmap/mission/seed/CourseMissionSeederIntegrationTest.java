@@ -146,6 +146,126 @@ class CourseMissionSeederIntegrationTest {
 		assertThat(countByTitle(title)).isEqualTo(1);
 	}
 
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("코스 미션에 거리와 소요시간과 난이도가 적재된다 — V31 메타데이터 (MSG-383 D3)")
+	void 코스_미션에_거리와_소요시간과_난이도가_적재된다() throws IOException {
+		String title = unique("메타데이터 코스");
+		Path file = writeSeed("meta.json", courseWithMetadata("T_IT_META", title,
+			"바다를 따라 걷는다<br>전망대가 있다", "부산 영도구", "\"14\"", "\"330\"", "\"2\""));
+
+		CourseMissionSeeder.SeedResult result = seeder().seed(file);
+
+		assertThat(result.missingMetadata()).isZero();
+		em.flush();
+		em.clear();
+		Mission mission = findByTitle(title);
+		assertThat(mission.getDistanceMeters()).isEqualTo(14000);
+		assertThat(mission.getDurationMinutes()).isEqualTo(330);
+		assertThat(mission.getDifficulty()).isEqualTo(2);
+		assertThat(mission.getPlaceName()).isEqualTo("부산 영도구");
+		// <br> 이 개행으로 정규화돼 저장된다 — 저장값에 태그 문자열이 남지 않는다 (D5).
+		assertThat(mission.getDescription()).isEqualTo("바다를 따라 걷는다\n전망대가 있다");
+		// 코스에 개념이 없는 값 (D3).
+		assertThat(mission.getSourceUrl()).isNull();
+		assertThat(mission.getOperationTime()).isNull();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("대표 이미지는 어느 시더도 채우지 않는다 — 스팟 사진 수집은 MSG-384 (D7)")
+	void 대표_이미지는_어느_시더도_채우지_않는다() throws IOException {
+		String title = unique("이미지 없는 코스");
+		Path file = writeSeed("image.json", courseWithMetadata("T_IT_IMG", title,
+			"소개", "부산 영도구", "\"14\"", "\"330\"", "\"2\""));
+
+		seeder().seed(file);
+
+		em.flush();
+		em.clear();
+		assertThat(findByTitle(title).getImageUrl()).isNull();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("메타데이터가 없는 산출물로도 적재가 성공한다 — 결측 허용 (D4)")
+	void 메타데이터가_없는_산출물로도_적재가_성공한다() throws IOException {
+		// 파이프라인 수정 전 산출물(신규 키 없음)로 재실행해도 148 코스가 통째로 거부되지 않아야 한다.
+		String title = unique("구 산출물 코스");
+		Path file = writeSeed("legacy.json", course("T_IT_LEGACY", title, 5));
+
+		CourseMissionSeeder.SeedResult result = seeder().seed(file);
+
+		assertThat(result.loaded()).isEqualTo(1);
+		// 산출물이 신규 키를 아직 안 싣고 있다는 신호 — 이게 없으면 백필 재실행이 "적재 0 · 갱신 0" 으로
+		// 끝나 운영자가 "이미 다 돼 있다" 로 읽는다 (D4, Codex 리뷰 파생).
+		assertThat(result.missingMetadata()).isEqualTo(1);
+		em.flush();
+		em.clear();
+		Mission mission = findByTitle(title);
+		assertThat(mission.getDescription()).isNull();
+		assertThat(mission.getDistanceMeters()).isNull();
+		// 판정에 쓰이는 값은 그대로 적재된다.
+		assertThat(mission.getTargetCount()).isEqualTo(3);
+		assertThat(missionGridRepository.findByMissionIds(List.of(mission.getId()))).hasSize(5);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("이미 적재된 미션에 재실행하면 메타데이터만 채워진다 — 재실행이 곧 백필 (D6)")
+	void 이미_적재된_미션에_재실행하면_메타데이터만_채워진다() throws IOException {
+		// Given: 메타데이터 없는 구 산출물로 적재된 코스 (V31 이전 상태 재현).
+		String title = unique("백필 대상 코스");
+		seeder().seed(writeSeed("bare.json", course("T_IT_BF", title, 5)));
+		em.flush();
+		em.clear();
+		Mission before = findByTitle(title);
+		long missionId = before.getId();
+		String pathBefore = before.getPath();
+		assertThat(before.getDistanceMeters()).isNull();
+
+		// When: 같은 제목(dedupe 키)에 메타데이터가 붙은 산출물로 재실행.
+		CourseMissionSeeder.SeedResult result = seeder().seed(writeSeed("filled.json",
+			courseWithMetadata("T_IT_BF", title, "채워진 소개", "부산 영도구", "\"13.4\"", "\"330\"", "\"3\"")));
+
+		assertThat(result.loaded()).isZero();
+		assertThat(result.updated()).isEqualTo(1);
+		em.flush();
+		em.clear();
+		Mission after = missionRepository.findById(missionId).orElseThrow();
+		assertThat(after.getDescription()).isEqualTo("채워진 소개");
+		assertThat(after.getDistanceMeters()).isEqualTo(13400);
+		assertThat(after.getDurationMinutes()).isEqualTo(330);
+		assertThat(after.getDifficulty()).isEqualTo(3);
+		// Then: 제목·무기간·target·path·스팟은 그대로다 (D6).
+		assertThat(after.getTitle()).isEqualTo(title);
+		assertThat(after.getStartAt()).isNull();
+		assertThat(after.getEndAt()).isNull();
+		assertThat(after.getTargetCount()).isEqualTo(3);
+		assertThat(objectMapper.readTree(after.getPath())).isEqualTo(objectMapper.readTree(pathBefore));
+		assertThat(missionGridRepository.findByMissionIds(List.of(missionId))).hasSize(5);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("동명 코스가 둘이면 id가 작은 쪽만 갱신된다 — findBySource ORDER BY m.id (D6)")
+	void 동명_코스가_둘이면_id가_작은_쪽만_갱신된다() throws IOException {
+		// 과거 적재·동시 실행으로 같은 제목의 DURUNUBI 코스가 둘 남아 있는 상태. 정렬이 없으면 실행마다
+		// 다른 행이 갱신돼 메타데이터가 엇갈린다 (Codex 리뷰 파생).
+		String title = unique("중복 제목 코스");
+		long older = insertDurunubiMission(title);
+		long newer = insertDurunubiMission(title);
+		assertThat(older).isLessThan(newer);
+
+		seeder().seed(writeSeed("dup.json",
+			courseWithMetadata("T_IT_DUP", title, "채워진 소개", "부산 영도구", "\"14\"", "\"330\"", "\"2\"")));
+
+		em.flush();
+		em.clear();
+		assertThat(missionRepository.findById(older).orElseThrow().getDescription()).isEqualTo("채워진 소개");
+		assertThat(missionRepository.findById(newer).orElseThrow().getDescription()).isNull();
+	}
+
 	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("파일이 없으면 예외로 조기 실패한다 — 조용한 no-op 금지")
@@ -214,6 +334,30 @@ class CourseMissionSeederIntegrationTest {
 		return """
 			{"crsIdx": "%s", "name": "%s", "path": %s, "spots": [%s]}"""
 			.formatted(crsIdx, name, PATH_JSON, spots);
+	}
+
+	/** 화면용 필드 5종(MSG-383 D4)까지 실린 산출물 형식의 코스 1건 — 숫자는 원문 조각 그대로 받는다. */
+	private static String courseWithMetadata(String crsIdx, String name, String contents, String sigun,
+		String distanceJson, String durationJson, String levelJson) {
+		return course(crsIdx, name, 5).replaceFirst("}$", """
+			, "contents": "%s", "sigun": "%s", "distanceKm": %s, "durationMinutes": %s, "level": %s}"""
+			.formatted(contents, sigun, distanceJson, durationJson, levelJson));
+	}
+
+	/** 코스 러너 산출물 모사 — 같은 제목으로 둘 넣어 dedupe 대상 중복 상태를 만든다 (D6 결정성 검증용). */
+	private long insertDurunubiMission(String title) {
+		em.createNativeQuery("""
+				INSERT INTO missions (type, title, start_at, end_at, target_count, source)
+				VALUES ('COURSE', :title, NULL, NULL, 3, :source)
+				""")
+			.setParameter("title", title)
+			.setParameter("source", CourseMissionSeeder.SOURCE_DURUNUBI)
+			.executeUpdate();
+		return ((Number) em.createNativeQuery(
+			"SELECT max(id) FROM missions WHERE title = :title AND source = :source")
+			.setParameter("title", title)
+			.setParameter("source", CourseMissionSeeder.SOURCE_DURUNUBI)
+			.getSingleResult()).longValue();
 	}
 
 	private void insertManualMission(String title) {

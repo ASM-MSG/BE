@@ -184,4 +184,145 @@ class CourseSeedReaderTest {
 
 		assertThat(records.get(0).title()).hasSize(200);
 	}
+
+	/** 화면용 필드 5종(D4)을 원문 조각 그대로 얹은 코스 1건 — 결측·형식 위반 형태를 그대로 만든다. */
+	private static String withMetadata(String contentsJson, String sigunJson, String distanceJson,
+		String durationJson, String levelJson) {
+		return """
+			{"crsIdx": "T_META", "name": "메타데이터 코스", "path": %s, "spots": [%s], \
+			"contents": %s, "sigun": %s, "distanceKm": %s, "durationMinutes": %s, "level": %s}"""
+			.formatted(PATH, spots(5), contentsJson, sigunJson, distanceJson, durationJson, levelJson);
+	}
+
+	private CourseRecord readMetadata(String contentsJson, String sigunJson, String distanceJson,
+		String durationJson, String levelJson) {
+		return read("[" + withMetadata(contentsJson, sigunJson, distanceJson, durationJson, levelJson) + "]").get(0);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 코스_소개문의_br_태그가_개행으로_바뀐다() {
+		String contents = "\"바다를 따라 걷는다<br>중간에 전망대가 있다<br/>종점은 흰여울마을이다<BR />끝\"";
+
+		CourseRecord record = readMetadata(contents, "\"부산 영도구\"", "\"14\"", "\"330\"", "\"2\"");
+
+		assertThat(record.description())
+			.isEqualTo("바다를 따라 걷는다\n중간에 전망대가 있다\n종점은 흰여울마을이다\n끝")
+			.doesNotContainIgnoringCase("<br");
+		assertThat(record.placeName()).isEqualTo("부산 영도구");
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 코스_거리_문자열_14는_14000미터로_환산된다() {
+		CourseRecord record = readMetadata("\"소개\"", "\"부산 영도구\"", "\"14\"", "\"330\"", "\"2\"");
+
+		assertThat(record.distanceMeters()).isEqualTo(14000);
+		// crsTotlRqrmHour 는 이름과 달리 단위가 분이다 — "330" 이 5시간 30분 (D3).
+		assertThat(record.durationMinutes()).isEqualTo(330);
+		assertThat(record.difficulty()).isEqualTo(2);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 코스_거리에_소수점이_있어도_미터로_보존된다() {
+		// 정수 컬럼에 킬로미터를 그대로 담으면 13 으로 잘린다 — 미터 환산이 그 손실을 막는다 (D2).
+		assertThat(readMetadata("\"소개\"", "\"시군\"", "\"13.4\"", "\"330\"", "\"1\"").distanceMeters())
+			.isEqualTo(13400);
+		assertThat(readMetadata("\"소개\"", "\"시군\"", "13.45", "\"330\"", "\"1\"").distanceMeters())
+			.isEqualTo(13450);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 코스_메타데이터_키가_없으면_null로_읽고_거부하지_않는다() {
+		// 기존 산출물 파일(신규 키 없음)로 재실행해도 148 코스가 통째로 거부되지 않아야 한다 (D4).
+		List<CourseRecord> records = read("[" + valid("T_1", "키 없는 코스") + "]");
+
+		CourseRecord record = records.get(0);
+		assertThat(record.description()).isNull();
+		assertThat(record.placeName()).isNull();
+		assertThat(record.distanceMeters()).isNull();
+		assertThat(record.durationMinutes()).isNull();
+		assertThat(record.difficulty()).isNull();
+		// 판정에 쓰이는 값은 그대로 살아 있다 — 결측 허용은 화면 값에만 적용된다.
+		assertThat(record.spots()).hasSize(5);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 코스_거리가_숫자가_아니면_예외를_던진다() {
+		// 형식 위반은 결측이 아니라 결함이다 — 기존 전량 거부 계약 그대로 (D4).
+		assertThatThrownBy(() -> readMetadata("\"소개\"", "\"시군\"", "\"십사킬로\"", "\"330\"", "\"2\""))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("distanceKm");
+		assertThatThrownBy(() -> readMetadata("\"소개\"", "\"시군\"", "true", "\"330\"", "\"2\""))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("distanceKm");
+		assertThatThrownBy(() -> readMetadata("\"소개\"", "\"시군\"", "\"14\"", "\"330\"", "\"2.5\""))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("정수");
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 코스_거리가_NaN이면_예외를_던진다() {
+		// Double.parseDouble 은 "NaN"·"Infinity" 를 그대로 받는다 — 숫자 노드에만 유한성 검사를 걸면
+		// 거리 0m(NaN 반올림)·소요시간 Integer.MAX_VALUE 로 조용히 적재된다 (Codex 리뷰 파생).
+		for (String notFinite : new String[] {"\"NaN\"", "\"Infinity\"", "\"-Infinity\""}) {
+			assertThatThrownBy(() -> readMetadata("\"소개\"", "\"시군\"", notFinite, "\"330\"", "\"2\""))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("유한 숫자");
+			assertThatThrownBy(() -> readMetadata("\"소개\"", "\"시군\"", "\"14\"", notFinite, "\"2\""))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("유한 숫자");
+		}
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 코스_숫자가_INTEGER_범위를_넘으면_예외를_던진다() {
+		// Double.intValue() 는 범위 초과를 Integer.MAX_VALUE 로 조용히 포화시킨다 — 거리는 미터 환산
+		// 뒤(×1000) 범위를 넘으므로 3,000,000km 가 아니라 3,000,000 로도 터진다.
+		assertThatThrownBy(() -> readMetadata("\"소개\"", "\"시군\"", "\"3000000\"", "\"330\"", "\"2\""))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("INTEGER 범위");
+		assertThatThrownBy(() -> readMetadata("\"소개\"", "\"시군\"", "\"14\"", "\"3000000000\"", "\"2\""))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("INTEGER 범위");
+		// 경계는 통과한다 — 2,147,483km 는 미터로 Integer.MAX_VALUE 미만이다.
+		assertThat(readMetadata("\"소개\"", "\"시군\"", "\"2000000\"", "\"330\"", "\"2\"").distanceMeters())
+			.isEqualTo(2_000_000_000);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 코스_난이도가_범위_밖이면_예외를_던진다() {
+		// V31 이 값 범위 CHECK 를 안 건 근거가 "reader 가 한다"이다 (§D2) — 여기가 비면 양쪽 다 빈 상태가 된다.
+		for (String outside : new String[] {"\"0\"", "\"4\"", "\"7\"", "\"-1\""}) {
+			assertThatThrownBy(() -> readMetadata("\"소개\"", "\"시군\"", "\"14\"", "\"330\"", outside))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("범위 밖");
+		}
+		// 1·2·3 은 통과한다 (148 코스 전수 실측값).
+		for (String grade : new String[] {"\"1\"", "\"2\"", "\"3\""}) {
+			assertThat(readMetadata("\"소개\"", "\"시군\"", "\"14\"", "\"330\"", grade).difficulty()).isNotNull();
+		}
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 코스_거리가_0이하면_예외를_던진다() {
+		// 0 과 음수는 결측이 아니라 결함이다 — 화면에 "0분"·"-5km" 로 나간다 (§D2).
+		for (String notPositive : new String[] {"\"0\"", "\"-5\"", "\"0.0004\""}) {
+			assertThatThrownBy(() -> readMetadata("\"소개\"", "\"시군\"", notPositive, "\"330\"", "\"2\""))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("양수");
+		}
+		for (String notPositive : new String[] {"\"0\"", "\"-30\""}) {
+			assertThatThrownBy(() -> readMetadata("\"소개\"", "\"시군\"", "\"14\"", notPositive, "\"2\""))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("양수");
+		}
+	}
 }

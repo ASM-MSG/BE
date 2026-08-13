@@ -6,7 +6,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionGrid;
+import com.msg.fillmap.mission.entity.MissionMetadata;
 import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
@@ -28,8 +29,9 @@ import com.msg.fillmap.mission.repository.MissionRepository;
 /**
  * 코스 미션 시더 (MSG-225 D7, FestivalMissionSeeder 미러). 기본 off —
  * {@code fillmap.mission.course.seed.enabled=true} 로 앱 1회 기동할 때만 산출물(courses-seed.json)을
- * 검증·적재한다(상시 배치 금지, GPX 파싱·스팟 선정은 레포 밖 파이프라인 몫 — D2). INSERT-only:
- * 코스는 무기간 반영구 데이터라 정리 단계(축제 D4) 자체가 없고, 클럭도 불요(날짜 판정 없음).
+ * 검증·적재한다(상시 배치 금지, GPX 파싱·스팟 선정은 레포 밖 파이프라인 몫 — D2). 정리 단계(축제 D4)는
+ * 없다 — 코스는 무기간 반영구 데이터이고 클럭도 불요(날짜 판정 없음). 기존 미션에 대한 쓰기는 메타데이터
+ * 갱신 하나뿐이다(MSG-383 D6) — 제목·기간·격자·path 는 건드리지 않는다.
  * dedupe 는 제목 × {@code source='DURUNUBI'} 한정(D6). {@code @Order(40)}: Region 10 · Zone 20 ·
  * Festival 30 이후 — 의존은 없지만 결정적 순서.
  */
@@ -43,6 +45,9 @@ public class CourseMissionSeeder implements ApplicationRunner {
 	static final String SOURCE_DURUNUBI = "DURUNUBI";
 	/** "스팟 5~8 중 3곳" 시작안 (D4) — 조정 시 missions UPDATE 만 필요(스키마·코드 무변경). */
 	private static final int TARGET_COUNT = 3;
+	/** 결측 집계 기준 (MSG-383 D4) — 산출물에 신규 키 5개가 하나도 없으면 metadataOf 가 이 값을 낸다. */
+	private static final MissionMetadata NO_METADATA =
+		new MissionMetadata(null, null, null, null, null, null, null, null);
 
 	private final MissionRepository missionRepository;
 	private final MissionGridRepository missionGridRepository;
@@ -61,7 +66,8 @@ public class CourseMissionSeeder implements ApplicationRunner {
 			return;
 		}
 		SeedResult result = seed(Path.of(seedPath));
-		log.info("코스 미션 시드 완료 — 적재 {} 건, dedupe 건너뜀 {} 건", result.loaded(), result.deduped());
+		log.info("코스 미션 시드 완료 — 적재 {} 건, dedupe 건너뜀 {} 건(메타데이터 갱신 {} 건), 메타데이터 결측 {} 건",
+			result.loaded(), result.deduped(), result.updated(), result.missingMetadata());
 	}
 
 	/**
@@ -86,34 +92,62 @@ public class CourseMissionSeeder implements ApplicationRunner {
 				+ " — 파이프라인 산출물 내용을 확인하세요");
 		}
 
-		Set<String> existingTitles = missionRepository.findBySource(SOURCE_DURUNUBI).stream()
-			.map(Mission::getTitle)
-			.collect(Collectors.toSet());
+		// 제목 → 미션 색인 (D6) — 제목만 담지 않는 이유는 skip 경로에서 그 미션의 메타데이터를 갱신하기
+		// 때문이다(MSG-383 D6). 동명 미션은 id 가 가장 작은 쪽으로 갱신 대상을 고정한다 — findBySource 가
+		// ORDER BY m.id 라 첫 원소가 최소 id 이고, 그 정렬이 이 결정성의 근거다.
+		Map<String, Mission> existing = missionRepository.findBySource(SOURCE_DURUNUBI).stream()
+			.collect(Collectors.toMap(Mission::getTitle, mission -> mission, (first, duplicate) -> first));
 		int loaded = 0;
+		int updated = 0;
+		int missingMetadata = 0;
 		for (CourseRecord course : courses) {
-			if (existingTitles.contains(course.title())) {
+			MissionMetadata metadata = metadataOf(course);
+			if (NO_METADATA.equals(metadata)) {
+				missingMetadata++;
+			}
+			Mission existingMission = existing.get(course.title());
+			if (existingMission != null) {
+				if (existingMission.applyMetadata(metadata)) {
+					updated++;
+				}
 				continue;
 			}
-			insertCourse(course);
+			insertCourse(course, metadata);
 			loaded++;
 		}
-		return new SeedResult(loaded, courses.size() - loaded);
+		return new SeedResult(loaded, courses.size() - loaded, updated, missingMetadata);
 	}
 
 	/** 미션 1건(무기간·path 원문) + 스팟 mission_grids(seq 1..N) INSERT — 표시·판정 분리 저장 (FR-6). */
-	private void insertCourse(CourseRecord course) {
+	private void insertCourse(CourseRecord course, MissionMetadata metadata) {
 		Mission mission = missionRepository.save(Mission.builder()
 			.type(MissionType.COURSE)
 			.title(course.title())
 			.targetCount(TARGET_COUNT)
 			.source(SOURCE_DURUNUBI)
 			.path(course.pathJson())
+			.metadata(metadata)
 			.build());
 		missionGridRepository.saveAll(course.spots().stream()
 			.map(spot -> new MissionGrid(mission.getId(), spot.gridId(), spot.seq()))
 			.toList());
 	}
 
-	public record SeedResult(int loaded, int deduped) {
+	/**
+	 * 코스 산출물 → 메타데이터 컬럼 매핑 (MSG-383 D3). 원문 링크·운영시간은 코스에 개념이 없고, 대표
+	 * 이미지는 TourAPI 스팟 사진에서 오므로 MSG-384 몫이다(D7) — 셋 다 null 이다. 거리·소요시간·난이도는
+	 * chk_missions_course_metrics 가 COURSE 에서만 허용하는 값이라 이 시더에서만 채워진다.
+	 */
+	private static MissionMetadata metadataOf(CourseRecord course) {
+		return new MissionMetadata(course.description(), course.placeName(), null, null, null,
+			course.distanceMeters(), course.durationMinutes(), course.difficulty());
+	}
+
+	/**
+	 * updated: 이미 있던 미션의 메타데이터를 채운 건수 (MSG-383 D6).
+	 * missingMetadata: 화면용 값 5종이 <b>전부</b> 없는 코스 수 — 산출물이 신규 키를 아직 안 싣고 있다는
+	 * 신호다(D4). 이게 없으면 백필 재실행이 "적재 0 · 갱신 0"으로 끝나 운영자가 "이미 다 돼 있다"로 읽는다.
+	 */
+	public record SeedResult(int loaded, int deduped, int updated, int missingMetadata) {
 	}
 }

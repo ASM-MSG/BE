@@ -31,7 +31,7 @@ class PopupJsonlReaderTest {
 		return reader.read(in, TODAY_KST);
 	}
 
-	/** 실측 스키마(D1) 형태의 1행 — 미적재 필드(operationTime·address 등)도 원본처럼 포함한다. */
+	/** 실측 스키마(D1) 형태의 1행 — 미적재 필드(periodType)도 원본처럼 포함한다. */
 	private static String row(long id, String name, String periodType, String openDate, String closeDate,
 		String latitude, String longitude) {
 		return """
@@ -56,6 +56,17 @@ class PopupJsonlReaderTest {
 			.formatted(idJson, openJson, closeJson, latJson, lonJson, nameJson);
 	}
 
+	/** 화면용 필드(D3)를 원문 조각 그대로 받는 1행 — 주소 결측·운영시간 배열 형태를 그대로 만든다. */
+	private static String metadataRow(String operationTimeJson, String addressJson, String roadAddressJson,
+		String addressDetailJson) {
+		return """
+			{"id": 9001, "periodType": "IN_PROGRESS", "openDate": "2026-07-10", "closeDate": "2026-07-20", \
+			"latitude": 37.5434, "longitude": 127.0643, "name": "메타데이터 팝업", \
+			"operationTime": %s, "address": %s, "roadAddress": %s, "addressDetail": %s, \
+			"sourceUrl": "https://popga.co.kr/popup/9001"}"""
+			.formatted(operationTimeJson, addressJson, roadAddressJson, addressDetailJson);
+	}
+
 	@Test
 	void 유효_행이_레코드로_매핑된다() {
 		PopupJsonlReader.Result result = read(
@@ -71,6 +82,46 @@ class PopupJsonlReaderTest {
 		assertThat(record.openDate()).isEqualTo(LocalDate.of(2026, 7, 10));
 		assertThat(record.closeDate()).isEqualTo(LocalDate.of(2026, 7, 20));
 		assertThat(result.skippedEnded()).isZero();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 팝업_운영시간_배열을_순서대로_개행으로_이어_붙인다() {
+		String multiline = """
+			["매일 11:00 ~ 20:00", "라스트 오더 19:30", "매주 월요일 휴무"]""";
+
+		PopupRecord record = read(metadataRow(multiline, "\"지번\"", "\"도로명\"", "\"\"")).records().get(0);
+
+		assertThat(record.operationTime()).isEqualTo("매일 11:00 ~ 20:00\n라스트 오더 19:30\n매주 월요일 휴무");
+		assertThat(record.sourceUrl()).isEqualTo("https://popga.co.kr/popup/9001");
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 운영시간이_비면_null이다() {
+		assertThat(read(metadataRow("[]", "\"지번\"", "\"도로명\"", "\"\"")).records().get(0).operationTime()).isNull();
+		assertThat(read(metadataRow("null", "\"지번\"", "\"도로명\"", "\"\"")).records().get(0).operationTime()).isNull();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 팝업_상세주소가_있으면_도로명주소_뒤에_공백으로_붙인다() {
+		PopupRecord record = read(metadataRow("[]", "\"서울 성동구 성수동2가 315-70\"",
+			"\"서울 성동구 동일로 119\"", "\"성수 스테이지\"")).records().get(0);
+
+		assertThat(record.placeName()).isEqualTo("서울 성동구 동일로 119 성수 스테이지");
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 팝업_도로명주소가_비면_지번주소를_위치로_쓴다() {
+		// 실측 결측 0건이라 실행되지 않는 분기지만, 위치 한 줄이 비면 카드가 무너진다 (D3).
+		PopupRecord fallback = read(metadataRow("[]", "\"서울 성동구 성수동2가 315-70\"", "\"\"", "\"\""))
+			.records().get(0);
+		PopupRecord none = read(metadataRow("[]", "\"\"", "\"\"", "\"\"")).records().get(0);
+
+		assertThat(fallback.placeName()).isEqualTo("서울 성동구 성수동2가 315-70");
+		assertThat(none.placeName()).isNull();
 	}
 
 	@Test

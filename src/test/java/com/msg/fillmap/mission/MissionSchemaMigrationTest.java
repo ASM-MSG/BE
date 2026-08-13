@@ -182,6 +182,73 @@ class MissionSchemaMigrationTest {
 	}
 
 	@Nested
+	@DisplayName("missions 메타데이터 컬럼 (V31 · MSG-383 §D2)")
+	class MissionMetadataColumns {
+
+		private static final List<String> METADATA_COLUMNS = List.of(
+			"description", "place_name", "source_url", "operation_time", "image_url",
+			"distance_meters", "duration_minutes", "difficulty");
+
+		// 검증: FR-MISSION-16
+		@Test
+		@DisplayName("V31_적용_후_missions에_메타데이터_컬럼_8개가_있다")
+		void V31_적용_후_missions에_메타데이터_컬럼_8개가_있다() {
+			List<?> columns = em.createNativeQuery(
+				"SELECT column_name FROM information_schema.columns "
+					+ "WHERE table_schema = 'public' AND table_name = 'missions' "
+					+ "AND column_name IN (:names)")
+				.setParameter("names", METADATA_COLUMNS)
+				.getResultList();
+
+			assertThat(columns).hasSize(8);
+		}
+
+		// 검증: FR-MISSION-16
+		@Test
+		@DisplayName("코스가_아닌_미션에_거리를_넣으면_CHECK가_거부한다")
+		void 코스가_아닌_미션에_거리를_넣으면_CHECK가_거부한다() {
+			// chk_missions_path 와 같은 형태 — 축제 행에 "거리 22km" 가 붙는 사고를 스키마가 막는다.
+			assertThatThrownBy(() -> em.createNativeQuery(
+				"INSERT INTO missions (type, title, target_count, distance_meters) "
+					+ "VALUES ('EVENT', '합성미션', 1, 22000)")
+				.executeUpdate())
+				.hasStackTraceContaining("chk_missions_course_metrics");
+		}
+
+		// 검증: FR-MISSION-16
+		@Test
+		@DisplayName("코스_미션에는_거리와_소요시간과_난이도를_저장할_수_있다")
+		void 코스_미션에는_거리와_소요시간과_난이도를_저장할_수_있다() {
+			long id = ((Number) em.createNativeQuery(
+				"INSERT INTO missions (type, title, target_count, distance_meters, duration_minutes, difficulty) "
+					+ "VALUES ('COURSE', '합성코스', 3, 14000, 330, 2) RETURNING id")
+				.getSingleResult()).longValue();
+
+			Object[] metrics = (Object[]) em.createNativeQuery(
+				"SELECT distance_meters, duration_minutes, difficulty FROM missions WHERE id = :id")
+				.setParameter("id", id).getSingleResult();
+
+			assertThat(((Number) metrics[0]).intValue()).isEqualTo(14000);
+			assertThat(((Number) metrics[1]).intValue()).isEqualTo(330);
+			assertThat(((Number) metrics[2]).intValue()).isEqualTo(2);
+		}
+
+		// 검증: FR-MISSION-16
+		@Test
+		@DisplayName("기존_미션_행은_메타데이터가_전부_NULL이다")
+		void 기존_미션_행은_메타데이터가_전부_NULL이다() {
+			// DEFAULT 없는 nullable 추가라 V31 이전 형태로 INSERT 되는 행은 8개가 전부 NULL 로 남는다.
+			long id = insertMinimalMission("EVENT");
+
+			Object[] metadata = (Object[]) em.createNativeQuery(
+				"SELECT " + String.join(", ", METADATA_COLUMNS) + " FROM missions WHERE id = :id")
+				.setParameter("id", id).getSingleResult();
+
+			assertThat(metadata).containsOnlyNulls();
+		}
+	}
+
+	@Nested
 	@DisplayName("mission_grids 제약 (§D2 grids FK 부재)")
 	class MissionGridConstraints {
 
