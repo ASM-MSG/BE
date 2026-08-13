@@ -40,4 +40,12 @@ public interface GridQueryService {
 	 * bbox 상한은 단위별 차등(RegionUnit 보유), 초과 시 VIEWPORT_TOO_LARGE.
 	 */
 	List<RegionAggregateView> getOccupiedAggregatesInViewport(long userId, ViewportBounds bounds, RegionUnit unit);
+
+	/**
+	 * 지도 홈의 뷰포트 묶음 목록과 중심 행정동 요약을 함께 반환한다 (MSG-374).
+	 * 중심 행정동의 수치는 뷰포트가 아니라 행정동 전체의 개인 점령을 센다.
+	 * 중심이 해상 또는 서비스 범위 밖이면 currentRegion 은 null 이다.
+	 */
+	GridAggregationView getOccupiedAggregatesWithCurrentRegion(
+		long userId, ViewportBounds bounds, RegionUnit unit);
 }
