@@ -62,7 +62,10 @@ public class FestivalJsonlReader {
 				row.path("name").asString(),
 				row.path("latitude").asDouble(),
 				row.path("longitude").asDouble(),
-				startDate, endDate));
+				startDate, endDate,
+				SeedText.text(row, "description"),
+				SeedText.truncatePlaceName(SeedText.text(row, "place")),
+				SeedText.text(row, "homepage")));
 		}
 		return new Result(records, invalidDate, ended, malformed);
 	}

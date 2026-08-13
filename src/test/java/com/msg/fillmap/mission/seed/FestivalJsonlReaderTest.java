@@ -29,13 +29,22 @@ class FestivalJsonlReaderTest {
 		return reader.read(in, TODAY_KST);
 	}
 
-	/** 실측 스키마(D1) 형태의 1행 — 미적재 필드(place 등)도 원본처럼 포함한다. */
+	/** 실측 스키마(D1) 형태의 1행 — 미적재 필드(referenceDate·sourceOrg)도 원본처럼 포함한다. */
 	private static String row(String name, String startDate, String endDate) {
 		return """
 			{"name": "%s", "place": "행사장 일원", "startDate": "%s", "endDate": "%s", \
 			"description": "개막행사 등", "latitude": 37.5665, "longitude": 126.978, \
 			"referenceDate": "2026-07-23", "homepage": "", "sourceOrg": "서울특별시_문화축제"}"""
 			.formatted(name, startDate, endDate);
+	}
+
+	/** 화면용 필드(D3)를 임의 값으로 바꾼 1행 — 원문 조각 그대로 받아 결측·타입 위반 형태를 만든다. */
+	private static String metadataRow(String descriptionJson, String placeJson, String homepageJson) {
+		return """
+			{"name": "메타데이터 축제", "startDate": "2026-07-10", "endDate": "2026-07-20", \
+			"latitude": 37.5665, "longitude": 126.978, \
+			"description": %s, "place": %s, "homepage": %s}"""
+			.formatted(descriptionJson, placeJson, homepageJson);
 	}
 
 	@Test
@@ -91,6 +100,43 @@ class FestivalJsonlReaderTest {
 
 		assertThat(result.records()).extracting(FestivalRecord::name).containsExactly("정상");
 		assertThat(result.skippedInvalidDate()).isEqualTo(2);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 축제_행에서_설명과_장소와_홈페이지를_읽는다() {
+		FestivalJsonlReader.Result result = read(
+			metadataRow("\"불꽃놀이와 야시장\"", "\"여의도 한강공원 일원\"", "\"https://festival.example.kr\""));
+
+		FestivalRecord record = result.records().get(0);
+		assertThat(record.description()).isEqualTo("불꽃놀이와 야시장");
+		assertThat(record.place()).isEqualTo("여의도 한강공원 일원");
+		assertThat(record.homepage()).isEqualTo("https://festival.example.kr");
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 홈페이지가_빈_문자열이면_원문_링크가_null이다() {
+		// 실측 채움률 66% — 나머지는 빈 문자열이다. 빈 문자열을 저장하면 FE 가 "값 없음"을 두 갈래로 분기한다.
+		FestivalJsonlReader.Result blank = read(metadataRow("\"설명\"", "\"장소\"", "\"\""));
+		FestivalJsonlReader.Result missing = read("""
+			{"name": "링크 없음", "startDate": "2026-07-10", "endDate": "2026-07-20", \
+			"latitude": 37.5665, "longitude": 126.978}""");
+
+		assertThat(blank.records().get(0).homepage()).isNull();
+		assertThat(missing.records().get(0).homepage()).isNull();
+		assertThat(missing.records().get(0).description()).isNull();
+		assertThat(missing.records().get(0).place()).isNull();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 장소명이_200자를_넘으면_절단된다() {
+		// missions.place_name VARCHAR(200) 방어 — title 과 같은 방어선(D2).
+		FestivalJsonlReader.Result result = read(
+			metadataRow("\"설명\"", "\"" + "가".repeat(250) + "\"", "\"\""));
+
+		assertThat(result.records().get(0).place()).hasSize(200);
 	}
 
 	@Test
