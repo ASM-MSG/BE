@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
+import com.msg.fillmap.video.dto.GridHourlyUploadResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.service.VideoService;
@@ -76,5 +77,20 @@ public class GridVideoController {
 		@Parameter(description = "페이지 크기 (1~50, 기본 20)") @RequestParam(defaultValue = "20") int size
 	) {
 		return SuccessResponse.of(videoService.getGridGlobalVideos(gridId, cursor, size));
+	}
+
+	@Operation(
+		summary = "격자 전역 시간대 분포 조회",
+		description = "그 격자의 공개(PUBLIC)·READY 영상이 업로드된 시간대 분포를 KST 0시부터 23시까지 24구간 개수로 "
+			+ "반환한다. 세는 대상은 전역 영상 목록(/videos)과 같아 카드에 보이는 영상만 세어진다 — 비공개·삭제·"
+			+ "인코딩 미완 영상은 본인 것이라도 빠진다. 집계 구간은 전체 누적이며, 응답의 hours 는 항상 24개·hour "
+			+ "오름차순이라 빈 시간대도 count 0 으로 실린다. 공개 영상이 없는 격자·존재하지 않는 gridId 도 전 구간 0 인 "
+			+ "정상 응답이다."
+	)
+	@GetMapping("/api/grids/{gridId}/hourly-uploads")
+	public SuccessResponse<GridHourlyUploadResponseDto> getGridHourlyUploads(
+		@Parameter(description = "격자 ID", example = "19422_9582") @PathVariable String gridId
+	) {
+		return SuccessResponse.of(videoService.getGridHourlyUploads(gridId));
 	}
 }
