@@ -29,8 +29,7 @@ public record RegionAggregateResponseDto(
 	@Schema(description = "마커 대표 좌표 경도", example = "129.065")
 	double lng,
 
-	@Schema(description = "뷰포트 안에서 이 묶음에 속한 내 점령 격자 수. 더 묶어 합산해도 "
-		+ "같은 뷰포트 개별 조회 총수와 일치한다",
+	@Schema(description = "그 단위 안 점령 격자 수. 항목을 더 묶어 합산해도 같은 뷰포트 개별 조회 총수와 일치한다",
 		example = "31")
 	int count
 ) {
