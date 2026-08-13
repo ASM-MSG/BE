@@ -90,6 +90,20 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 		@Param("nameToken") int nameToken
 	);
 
+	@Query(value = """
+		SELECT
+			COUNT(*)::int                     AS "gridCount",
+			COALESCE(SUM(ug.video_count), 0) AS "videoCount"
+		FROM user_grids ug
+		JOIN grids g ON g.grid_id = ug.grid_id
+		WHERE ug.user_id = :userId
+			AND g.region_code = :regionCode
+		""", nativeQuery = true)
+	RegionGridSummaryProjection summarizeOccupiedByRegion(
+		@Param("userId") long userId,
+		@Param("regionCode") String regionCode
+	);
+
 	/**
 	 * 접근 A 페이지 — 첫 페이지 (MSG-90 keyset). ORDER BY (grid_y, grid_x) 가 uq_grids_yx(btree)
 	 * 정렬과 일치해 추가 정렬 비용이 없다. OFFSET 미사용, LIMIT 은 서비스의 lookahead(size + 1)다.

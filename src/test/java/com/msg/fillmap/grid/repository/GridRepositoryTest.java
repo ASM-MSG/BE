@@ -36,6 +36,8 @@ class GridRepositoryTest {
 	// 실데이터·타 트랙의 ST_Covers 판정에 끼어들지 않는다. 이 테스트는 저장 라벨(region_code)만 equi 로 읽는다.
 	private static final String REGION_CODE = "9996000001";
 	private static final String REGION_NAME = "합성시 합성구 합성349동";
+	private static final String OTHER_REGION_CODE = "9996000002";
+	private static final String OTHER_REGION_NAME = "합성시 합성구 다른동";
 
 	@Autowired
 	private GridRepository gridRepository;
@@ -135,11 +137,15 @@ class GridRepositoryTest {
 
 	/** 합성 행정동 1건을 넣고 지정 격자에 저장 라벨(region_code)을 건다 — 프로덕션 upsertGrid 라벨 상태 재현. */
 	private void label(String gridId) {
-		regionRepository.upsert(REGION_CODE, REGION_NAME, REGION_CODE.substring(0, 5),
+		label(gridId, REGION_CODE, REGION_NAME);
+	}
+
+	private void label(String gridId, String regionCode, String regionName) {
+		regionRepository.upsert(regionCode, regionName, regionCode.substring(0, 5),
 			RegionTestFixtures.rectanglePolygonJson(124.10, 36.10, 124.12, 36.12),
 			RegionTestFixtures.CELL_AREA_M2);
 		em.createNativeQuery("UPDATE grids SET region_code = :code WHERE grid_id = :gridId")
-			.setParameter("code", REGION_CODE)
+			.setParameter("code", regionCode)
 			.setParameter("gridId", gridId)
 			.executeUpdate();
 	}
@@ -203,6 +209,39 @@ class GridRepositoryTest {
 	@DisplayName("점령하지 않은 격자를 단일 조회하면 결과가 비어있다")
 	void 점령하지_않은_격자를_단일_조회하면_결과가_비어있다() {
 		assertThat(gridRepository.findVideoCount(me, g20)).isEmpty();
+	}
+
+	@Test
+	void 동_전체_카운트는_내_점령_격자와_video_count를_합산한다() {
+		label(g00);
+		label(g11);
+		label(gOut);
+		label(g02);
+		label(g22, OTHER_REGION_CODE, OTHER_REGION_NAME);
+		em.createNativeQuery("""
+			UPDATE user_grids SET video_count = 2000000000
+			WHERE user_id = :userId AND grid_id IN (:first, :second)
+			""")
+			.setParameter("userId", me)
+			.setParameter("first", g00)
+			.setParameter("second", g11)
+			.executeUpdate();
+		em.flush();
+
+		RegionGridSummaryProjection summary = gridRepository.summarizeOccupiedByRegion(me, REGION_CODE);
+
+		// gOut 은 뷰포트 밖이어도 같은 동이라 포함되고, 다른 동 g22 와 타인 g02 는 제외된다.
+		assertThat(summary.getGridCount()).isEqualTo(3);
+		assertThat(summary.getVideoCount()).isEqualTo(4_000_000_004L);
+	}
+
+	@Test
+	void 그_동에_내_점령_격자가_없으면_0을_준다() {
+		RegionGridSummaryProjection summary =
+			gridRepository.summarizeOccupiedByRegion(me, "9996000099");
+
+		assertThat(summary.getGridCount()).isZero();
+		assertThat(summary.getVideoCount()).isZero();
 	}
 
 	// 검증: FR-GRID-07
