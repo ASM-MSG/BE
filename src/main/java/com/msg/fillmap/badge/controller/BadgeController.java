@@ -40,9 +40,10 @@ public class BadgeController {
 
 	@Operation(
 		summary = "내 뱃지 전체 목록",
-		description = "시딩된 전체 뱃지를 내 획득 상태와 함께 시딩 순(badges.id 오름차순)으로 반환한다 — "
-			+ "미획득 행은 earned false·earnedAt null·isNew false·featuredRank null. 이번 응답에 노출된 "
-			+ "미확인(새 뱃지) 행은 자동으로 확인 처리되어 다음 조회부터 isNew false 가 된다."
+		description = "시딩된 뱃지를 내 획득 상태와 함께 시딩 순(badges.id 오름차순)으로 반환한다. 은퇴 뱃지"
+			+ "(retired_at 있음)는 획득자에게만 보이고 미획득자 목록에서는 빠진다 — 그래서 사용자마다 행 수가 "
+			+ "다를 수 있다. 미획득 행은 earned false·earnedAt null·isNew false·featuredRank null. 이번 응답에 "
+			+ "노출된 미확인(새 뱃지) 행은 자동으로 확인 처리되어 다음 조회부터 isNew false 가 된다."
 	)
 	@GetMapping
 	public SuccessResponse<List<MyBadgeResponseDto>> findMyBadges(
