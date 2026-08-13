@@ -23,6 +23,7 @@ import tools.jackson.databind.ObjectMapper;
  * 산출물이라 결함 하나 = 재크롤 대상이지 부분 적재 대상이 아니다(FR-6). 종료 필터(closeDate &lt; todayKst)만
  * 검증이 아니라 skip+집계 — 산출물에 종료분이 정상 포함된다(FR-1). periodType 은 읽지도 검증하지도 않는다 —
  * 주 1회 스냅샷이라 최대 7일 낡지만 날짜는 낡지 않고, 안 읽는 필드의 형식 강제는 크롤러 변경마다 적재를 깬다(D6).
+ * MSG-383 이 더한 화면용 필드(주소·운영시간·원문 링크)는 전량 거부 대상이 아니다 — 결측이면 null 이다.
  */
 @Component
 public class PopupJsonlReader {
@@ -83,7 +84,44 @@ public class PopupJsonlReader {
 		if (openDate.isAfter(closeDate)) {
 			throw new IllegalStateException("openDate 가 closeDate 보다 늦습니다 (날짜 역전, FR-6): id " + id);
 		}
-		return new PopupRecord(id, truncateName(name), latitude, longitude, openDate, closeDate);
+		return new PopupRecord(id, truncateName(name), latitude, longitude, openDate, closeDate,
+			placeName(row), SeedText.text(row, "sourceUrl"), operationTime(row));
+	}
+
+	/**
+	 * 위치 한 줄 조립 (MSG-383 D3) — 도로명주소 + 상세주소(있으면 공백으로). 도로명이 비면 지번주소를
+	 * 쓴다. 실측 결측 0건이라 실행되지 않는 분기지만, 크롤 산출물의 결측은 시점에 따라 달라지고 위치
+	 * 한 줄이 비면 카드가 무너진다. 검증이 아니라 방어라 둘 다 없으면 거부하지 않고 null 이다.
+	 */
+	private static String placeName(JsonNode row) {
+		String base = SeedText.text(row, "roadAddress");
+		if (base == null) {
+			base = SeedText.text(row, "address");
+		}
+		if (base == null) {
+			return null;
+		}
+		String detail = SeedText.text(row, "addressDetail");
+		return SeedText.truncatePlaceName(detail == null ? base : base + " " + detail);
+	}
+
+	/** 운영시간 문자열 배열을 원소 순서대로 개행으로 이어 붙인다 (MSG-383 D3). 비면 null. */
+	private static String operationTime(JsonNode row) {
+		JsonNode value = row.path("operationTime");
+		if (!value.isArray()) {
+			return null;
+		}
+		StringBuilder joined = new StringBuilder();
+		for (JsonNode line : value) {
+			if (!line.isTextual() || line.asString().isBlank()) {
+				continue;
+			}
+			if (!joined.isEmpty()) {
+				joined.append("\n");
+			}
+			joined.append(line.asString());
+		}
+		return joined.isEmpty() ? null : joined.toString();
 	}
 
 	/** JSON 정수만 허용 — 문자열 "8151" 등의 관용 변환 차단(코스 requireText 원칙, D6). */

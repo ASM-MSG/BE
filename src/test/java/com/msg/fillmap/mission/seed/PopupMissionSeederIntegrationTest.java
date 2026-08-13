@@ -237,6 +237,72 @@ class PopupMissionSeederIntegrationTest {
 			.hasStackTraceContaining("duplicate key value");
 	}
 
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("팝업 미션에 운영시간과 주소가 적재된다 — V31 메타데이터 (MSG-383 D3)")
+	void 팝업_미션에_운영시간과_주소가_적재된다() throws IOException {
+		long id = uniqueId();
+		Path file = writeJsonl("meta.jsonl", activeRow(id, unique("메타데이터 팝업"), 합성_LAT, 합성_LON));
+
+		seeder().seed(file);
+
+		em.flush();
+		em.clear();
+		Mission mission = findByKey(id);
+		// row() 픽스처의 운영시간 배열 1원소·도로명+상세 조합 그대로.
+		assertThat(mission.getOperationTime()).isEqualTo("매일 11:00 ~ 20:00");
+		assertThat(mission.getPlaceName()).isEqualTo("합성 도로명 합성 상세");
+		assertThat(mission.getSourceUrl()).isEqualTo("https://popga.co.kr/popup/" + id);
+		// 소개문은 현 스냅샷에 필드가 없고, 코스 지표는 팝업에 개념이 없다 (D3).
+		assertThat(mission.getDescription()).isNull();
+		assertThat(mission.getDistanceMeters()).isNull();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("대표 이미지는 어느 시더도 채우지 않는다 — 포스터 수집은 MSG-384 (D7)")
+	void 대표_이미지는_어느_시더도_채우지_않는다() throws IOException {
+		long id = uniqueId();
+		Path file = writeJsonl("image.jsonl", activeRow(id, unique("이미지 없는 팝업"), 합성_LAT, 합성_LON));
+
+		seeder().seed(file);
+
+		em.flush();
+		em.clear();
+		assertThat(findByKey(id).getImageUrl()).isNull();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("이미 적재된 미션에 재실행하면 메타데이터만 채워진다 — 재실행이 곧 백필 (D6)")
+	void 이미_적재된_미션에_재실행하면_메타데이터만_채워진다() throws IOException {
+		// Given: 메타데이터 없이(V31 이전 형태) 적재된 팝업 미션 — source_key 가 멱등 키다.
+		long id = uniqueId();
+		String title = unique("백필 대상 팝업");
+		long missionId = insertPopga(id, title,
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		insertMissionGrid(missionId, "999902_500000");
+		long gridsBefore = gridCountOf(missionId);
+
+		// When: 같은 source_key 로 재실행.
+		PopupMissionSeeder.SeedResult result = seeder()
+			.seed(writeJsonl("backfill.jsonl", activeRow(id, unique("소스 쪽 새 이름"), 합성_LAT, 합성_LON)));
+
+		assertThat(result.loaded()).isZero();
+		assertThat(result.updated()).isEqualTo(1);
+		em.flush();
+		em.clear();
+		Mission after = missionRepository.findById(missionId).orElseThrow();
+		assertThat(after.getOperationTime()).isEqualTo("매일 11:00 ~ 20:00");
+		assertThat(after.getPlaceName()).isEqualTo("합성 도로명 합성 상세");
+		// Then: 제목·기간·source_key·격자는 그대로다 — 소스 쪽 이름이 바뀌어도 미션은 흔들리지 않는다(D6).
+		assertThat(after.getTitle()).isEqualTo(title);
+		assertThat(after.getSourceKey()).isEqualTo(String.valueOf(id));
+		assertThat(after.getStartAt()).isEqualTo(FestivalMissionSeeder.toUtcStart(시작일));
+		assertThat(after.getEndAt()).isEqualTo(FestivalMissionSeeder.toUtcEnd(종료일));
+		assertThat(gridCountOf(missionId)).isEqualTo(gridsBefore);
+	}
+
 	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("파일이 없으면 예외로 조기 실패한다 — 조용한 no-op 금지 (FR-5)")
@@ -321,7 +387,7 @@ class PopupMissionSeederIntegrationTest {
 		return row(id, name, lat, lon, 시작일.toString(), 종료일.toString());
 	}
 
-	/** 실측 스키마(D1) 형태의 jsonl 1행 — 미적재 필드(operationTime·address 등)도 원본처럼 포함한다. */
+	/** 실측 스키마(D1) 형태의 jsonl 1행 — 미적재 필드(periodType)도 원본처럼 포함한다. */
 	private static String row(long id, String name, double lat, double lon, String openDate, String closeDate) {
 		return """
 			{"id": %d, "periodType": "IN_PROGRESS", "openDate": "%s", "closeDate": "%s", \
