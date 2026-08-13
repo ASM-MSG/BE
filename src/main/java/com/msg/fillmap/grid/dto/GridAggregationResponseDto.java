@@ -6,7 +6,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import com.msg.fillmap.grid.service.GridAggregationView;
 
-@Schema(description = "뷰포트 점령 격자 묶음과 현재 동네 집계")
+@Schema(description = "뷰포트 점령 격자 묶음과 현재 동네 집계",
+	requiredProperties = {"currentRegion", "items"})
 public record GridAggregationResponseDto(
 	@Schema(
 		description = "뷰포트 중심이 속한 행정동. 해상이나 서비스 범위 밖이면 null",
