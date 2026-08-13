@@ -1,8 +1,13 @@
 package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,17 +40,19 @@ class VideoStatusWriterTest {
 	private static final String K2 = "videos/original/1/y.mp4";
 
 	private VideoRepository videoRepository;
+	private VideoProcessingMetrics videoProcessingMetrics;
 	private VideoStatusWriter statusWriter;
 
 	@BeforeEach
 	void setUp() {
 		videoRepository = mock(VideoRepository.class);
+		videoProcessingMetrics = mock(VideoProcessingMetrics.class);
 		UserRepository userRepository = mock(UserRepository.class);
 		// 알림 배선 전이의 users 선취(잠금 순서 통일)가 통과하도록 스텁 — 순서 자체는 통합·리뷰 검증 몫.
 		given(videoRepository.findUserIdById(VIDEO_ID)).willReturn(Optional.of(1L));
 		given(userRepository.findIdForKeyShare(1L)).willReturn(Optional.of(1L));
 		statusWriter = new VideoStatusWriter(videoRepository, userRepository,
-			mock(NotificationCommandService.class), mock(VideoProcessingMetrics.class));
+			mock(NotificationCommandService.class), videoProcessingMetrics);
 	}
 
 	/** BLURRING·ACTIVE 인, 아직 미제출(aiJobId=null) 시도의 영상. */
@@ -308,5 +315,74 @@ class VideoStatusWriterTest {
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
 		assertThat(video.getEncodedUrl()).isEqualTo("videos/encoded/1/7.mp4");
 		assertThat(video.getThumbnailUrl()).isEqualTo("videos/thumb/1/7.jpg");
+		verify(videoProcessingMetrics).recordOutcome(VIDEO_ID, true, VideoProcessingMetrics.PATH_ENCODING);
+	}
+
+	// ── 종결 후 중복 종결 가드 (MSG-382, NFR-OPS-08) ──
+	// 같은 시도가 이중 트리거되면 늦게 끝난 태스크의 종결이 키 일치만으로는 통과했다 —
+	// 인코딩 국면(UPLOADED·ENCODING) 조건이 이를 막아 종결 지표가 시도당 1회만 오른다.
+
+	/** K1 시도가 이미 READY 로 끝난 영상. */
+	private Video ready() {
+		Video video = encoding();
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		return video;
+	}
+
+	@Test
+	void 이미_READY_면_중복_완료가_적용되지_않고_종결_지표도_오르지_않는다() {
+		Video video = ready();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
+		verify(videoProcessingMetrics, never()).recordOutcome(anyLong(), anyBoolean(), anyString());
+	}
+
+	@Test
+	void 이미_READY_면_늦게_온_실패가_FAILED_로_밀지_못한다() {
+		Video video = ready();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markFailed(VIDEO_ID, K1);
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
+		verify(videoProcessingMetrics, never()).recordOutcome(anyLong(), anyBoolean(), anyString());
+	}
+
+	@Test
+	void 이미_FAILED_면_중복_실패가_종결_지표를_다시_올리지_않는다() {
+		Video video = encoding();
+		video.markFailed();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markFailed(VIDEO_ID, K1);
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.FAILED);
+		verify(videoProcessingMetrics, never()).recordOutcome(anyLong(), anyBoolean(), anyString());
+	}
+
+	@Test
+	void 이미_READY_면_중복_인코딩_시작이_상태를_되돌리지_못한다() {
+		Video video = ready();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		boolean applied = statusWriter.markEncoding(VIDEO_ID, K1);
+
+		assertThat(applied).isFalse();
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
+	}
+
+	@Test
+	void 블러_국면으로_넘어간_뒤_중복_인코딩_완료가_블러_시도를_다시_시작하지_못한다() {
+		Video video = attempt();   // K1 시도가 markEncoded 로 BLURRING + 넌스가 찍힌 상태
+		LocalDateTime nonce = video.getBlurringStartedAt();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markEncoded(VIDEO_ID, K1, "videos/encoded/1/7.mp4");
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.BLURRING);
+		assertThat(video.getBlurringStartedAt()).isEqualTo(nonce);   // 넌스 재발급 없음 — 폴러 가드가 안 흔들린다
 	}
 }
