@@ -213,7 +213,7 @@
 | FR-USER-02 | 구현됨 | UserProfileControllerTest, UserProfileIntegrationTest |
 | FR-USER-03 | 구현됨 | UserEmaillessPersistenceTest |
 | FR-USER-04 | 구현됨 | AuthControllerTest, AuthServiceTest, OidcLoginServiceTest, UserEmaillessPersistenceTest, UserProfileControllerTest, UserProfileIntegrationTest |
-| FR-USER-05 | 계획 | FriendControllerTest, FriendIntegrationTest, FriendProfileIntegrationTest |
+| FR-USER-05 | 구현됨 | FriendControllerTest, FriendIntegrationTest, FriendProfileIntegrationTest |
 | FR-USER-06 | 구현됨 | UserAccountDeletionIntegrationTest, UserRepositoryDeletionTest |
 | FR-USER-07 | 구현됨 | PushTokenServiceIntegrationTest, UserAccountDeletionIntegrationTest |
 | FR-USER-08 | 구현됨 | UserAccountS3CleanupTest, UserRepositoryDeletionTest |
