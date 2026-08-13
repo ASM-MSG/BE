@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
+import com.msg.fillmap.video.dto.GridHourlyUploadResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
@@ -48,6 +49,13 @@ public interface VideoService {
 	 * 없거나 존재하지 않는 gridId 는 빈 페이지다(예외 아님).
 	 */
 	GridVideoPageResponseDto getGridGlobalVideos(String gridId, String cursor, int size);
+
+	/**
+	 * 격자 전역 시간대 분포 조회 (MSG-372). 그 격자의 전역 공개 게이트(ACTIVE, PUBLIC, READY) 통과
+	 * 영상을 업로드 시각(created_at)의 KST 시(0~23)로 접어 24구간 개수를 돌려준다. 집계 윈도우는
+	 * 전체 누적이다. 공개 영상이 없거나 존재하지 않는 gridId 는 전 구간 0 인 정상 응답이다(예외 아님).
+	 */
+	GridHourlyUploadResponseDto getGridHourlyUploads(String gridId);
 
 	/**
 	 * 단건 영상 재생 조회 (MSG-206). 접근 제어를 존재/DELETED → BLINDED → visibility → processing_status

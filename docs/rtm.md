@@ -2,7 +2,7 @@
 
 `scripts/generate-rtm.sh` 가 생성한다. 손으로 고치지 말 것. 원천은 테스트의 `// 검증: FR-...` 주석과 `docs/srs.md` 다.
 
-요약: FR 227건 중 테스트 연결 193건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 27건, 성격상 테스트 비대상 7건 별도)
+요약: FR 228건 중 테스트 연결 194건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 27건, 성격상 테스트 비대상 7건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -13,6 +13,7 @@
 | FR-MAP-05 | 폐기됨 | (없음) |
 | FR-MAP-06 | 계획 | (없음) |
 | FR-MAP-08 | 계획 | (없음) |
+| FR-MAP-09 | 구현됨 | GridHourlyUploadControllerTest, VideoHourlyUploadQueryTest, VideoHourlyUploadServiceTest |
 | FR-MAP-07 | 계획 | (없음) |
 | FR-MAP-10 | 계획 | (없음) |
 | FR-GRID-01 | 구현됨 | GridEncoderTest |

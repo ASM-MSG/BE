@@ -124,6 +124,36 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	);
 
 	/**
+	 * 격자 전역 시간대 분포 (MSG-372). findGlobalVideos 와 같은 후보 집합을 세어 업로드 시각의 KST 시로
+	 * 접는다 — WHERE 게이트 줄은 findGlobalCover·findGlobalVideos 와 <b>글자 단위로 같은 문자열</b>이라
+	 * 카드에 보이는 영상과 차트에 세어지는 영상이 항상 일치한다(정합 요구). created_at 은 타임존 없는
+	 * 벽시계 저장이라 첫 AT TIME ZONE 이 저장 존(:storedZone, 호출자가 UTC 바인딩 — MSG-376 관례)으로
+	 * 해석하고 둘째가 KST 로 변환한다(getUploadHistory, MSG-362 와 같은 패턴). 촬영 시각(recorded_at)은
+	 * 클라이언트 신고값이라 쓰지 않는다. 집계 윈도우는 전체 누적이라 기간 조건이 없다.
+	 * CTE에서 KST 시 산출과 집계를 분리해 GROUP BY 1 같은 위치 참조를 피한다. GROUP BY 결과라
+	 * 업로드가 있는 시간대만 나오고 24구간 채움은 서비스가 한다 — generate_series 로 SQL 에서
+	 * 채우면 게이트 프래그먼트 대조가 어려워진다.
+	 * 구동은 idx_videos_grid_popular(V1__init.sql:110) — 부분 인덱스의 WHERE 가 이 게이트와 같아
+	 * 그 격자의 통과 행만 몰아 읽는다(신규 인덱스 0).
+	 */
+	@Query(value = """
+		WITH hourly_videos AS (
+			SELECT EXTRACT(HOUR FROM ((created_at AT TIME ZONE :storedZone) AT TIME ZONE 'Asia/Seoul'))::int AS "hour"
+			FROM videos
+			WHERE grid_id = :gridId
+			  AND status = 'ACTIVE' AND visibility = 'PUBLIC' AND processing_status = 'READY'
+		)
+		SELECT "hour", COUNT(*) AS "count"
+		FROM hourly_videos
+		GROUP BY "hour"
+		ORDER BY "hour"
+		""", nativeQuery = true)
+	List<HourlyUploadProjection> countHourlyUploadsByGrid(
+		@Param("gridId") String gridId,
+		@Param("storedZone") String storedZone
+	);
+
+	/**
 	 * 전역 노출 응답의 작성자 닉네임 (MSG-371). 단건 경로(대표·재생)용 — 영상을 고른 뒤 같은 트랜잭션에서
 	 * 1회 더 읽는다. 위 native 조회 3종에 users 조인을 넣지 않는 이유가 여기 있다: 조인은 엔티티 반환을
 	 * 프로젝션으로 바꿔 커서·presign·DTO 팩토리까지 연쇄 재작성을 부르고, idx_videos_grid_popular 부분
