@@ -24,7 +24,8 @@ import lombok.NoArgsConstructor;
  * 더하고 MSG-225 가 빌더에 path 를 확장한다 — path 는 코스 시더 전용(chk_missions_path 가 COURSE 만 허용,
  * 타 시더는 미지정=NULL), region_code(AREA 전용)는 시드에서 NULL 고정이라 빌더에서 제외. path 는 코스
  * 표시용 GeoJSON LineString jsonb 원문을 String 으로 읽어(§D7) FE 로 그대로 passthrough 한다.
- * start_at/end_at NULL = 무기간(상시, 코스).
+ * start_at/end_at NULL = 무기간(상시, 코스). MSG-383 이 화면용 메타데이터 8종(V31)을 더한다 —
+ * 생성은 빌더의 metadata 파라미터, 갱신은 applyMetadata(시더 재실행 백필, §D6).
  */
 @Entity
 @Table(name = "missions")
@@ -78,9 +79,38 @@ public class Mission {
 	@Column(name = "created_at", nullable = false, insertable = false, updatable = false)
 	private LocalDateTime createdAt;
 
+	/** 화면용 메타데이터 8종 (V31, MSG-383 §D2) — 전부 nullable, 값은 시더가 원본에서 읽어 채운다. */
+	@Column(name = "description", columnDefinition = "text")
+	private String description;
+
+	@Column(name = "place_name", length = 200)
+	private String placeName;
+
+	@Column(name = "source_url", columnDefinition = "text")
+	private String sourceUrl;
+
+	@Column(name = "operation_time", columnDefinition = "text")
+	private String operationTime;
+
+	/** 우리 스토리지(S3) URL 만 — 외부 도메인 주소 금지(§D7). 이 티켓 범위에서는 항상 NULL. */
+	@Column(name = "image_url", columnDefinition = "text")
+	private String imageUrl;
+
+	/** 코스 전용 3종 — chk_missions_course_metrics 가 COURSE 외의 값을 거부한다(§D2). */
+	@Column(name = "distance_meters")
+	private Integer distanceMeters;
+
+	@Column(name = "duration_minutes")
+	private Integer durationMinutes;
+
+	/** 두루누비 등급 1(쉬움)·2(보통)·3(어려움). SMALLINT 컬럼이라 jdbc 타입을 명시한다(ddl-auto=validate). */
+	@JdbcTypeCode(SqlTypes.SMALLINT)
+	@Column(name = "difficulty")
+	private Integer difficulty;
+
 	@Builder
 	private Mission(MissionType type, String title, LocalDateTime startAt, LocalDateTime endAt, Integer targetCount,
-		String source, String sourceKey, String path) {
+		String source, String sourceKey, String path, MissionMetadata metadata) {
 		this.type = type;
 		this.title = title;
 		this.startAt = startAt;
@@ -91,5 +121,38 @@ public class Mission {
 		this.sourceKey = sourceKey;
 		// path 는 코스(MSG-225) 전용 — chk_missions_path 가 COURSE 외 path 를 거부하므로 타 시더는 미지정(null).
 		this.path = path;
+		if (metadata != null) {
+			assign(metadata);
+		}
+	}
+
+	/**
+	 * 메타데이터 갱신 (MSG-383 §D6) — 시더 재실행이 곧 백필이라, 이미 적재된 미션에 이 메서드로 값을 넣고
+	 * JPA 더티 체킹이 UPDATE 를 내보낸다. 바뀐 값이 있을 때만 true 를 돌려줘 시더가 갱신 건수를 센다.
+	 * setter 를 열지 않는 상태 전이 메서드다({@code Video.markBlinded()} 선례) — 시각을 만들지 않으므로
+	 * Clock 이 필요 없다.
+	 */
+	public boolean applyMetadata(MissionMetadata metadata) {
+		if (metadata.equals(currentMetadata())) {
+			return false;
+		}
+		assign(metadata);
+		return true;
+	}
+
+	private MissionMetadata currentMetadata() {
+		return new MissionMetadata(description, placeName, sourceUrl, operationTime, imageUrl,
+			distanceMeters, durationMinutes, difficulty);
+	}
+
+	private void assign(MissionMetadata metadata) {
+		this.description = metadata.description();
+		this.placeName = metadata.placeName();
+		this.sourceUrl = metadata.sourceUrl();
+		this.operationTime = metadata.operationTime();
+		this.imageUrl = metadata.imageUrl();
+		this.distanceMeters = metadata.distanceMeters();
+		this.durationMinutes = metadata.durationMinutes();
+		this.difficulty = metadata.difficulty();
 	}
 }
