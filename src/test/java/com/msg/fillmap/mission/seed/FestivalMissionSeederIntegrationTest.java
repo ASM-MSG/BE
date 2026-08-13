@@ -226,6 +226,125 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(missionRepository.findById(ended)).isEmpty();
 	}
 
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("축제 미션에 설명과 장소와 원문 링크가 적재된다 — V31 메타데이터 (MSG-383 D3)")
+	void 축제_미션에_설명과_장소와_원문_링크가_적재된다() throws IOException {
+		String name = unique("메타데이터 축제");
+		Path file = writeJsonl("meta.jsonl", metadataRow(name, 합성_LAT + 0.4, 합성_LON,
+			"불꽃놀이와 야시장", "여의도 한강공원 일원", "https://festival.example.kr"));
+
+		seeder().seed(file);
+
+		em.flush();
+		em.clear();
+		Mission mission = findByTitle(name);
+		assertThat(mission.getDescription()).isEqualTo("불꽃놀이와 야시장");
+		assertThat(mission.getPlaceName()).isEqualTo("여의도 한강공원 일원");
+		assertThat(mission.getSourceUrl()).isEqualTo("https://festival.example.kr");
+		// 축제에 없는 개념 — 운영시간·코스 지표는 null 이다 (D3).
+		assertThat(mission.getOperationTime()).isNull();
+		assertThat(mission.getDistanceMeters()).isNull();
+		assertThat(mission.getDurationMinutes()).isNull();
+		assertThat(mission.getDifficulty()).isNull();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("대표 이미지는 어느 시더도 채우지 않는다 — 수집은 MSG-384 (D7)")
+	void 대표_이미지는_어느_시더도_채우지_않는다() throws IOException {
+		String name = unique("이미지 없는 축제");
+		Path file = writeJsonl("image.jsonl", metadataRow(name, 합성_LAT + 0.5, 합성_LON,
+			"설명", "장소", "https://festival.example.kr"));
+
+		seeder().seed(file);
+
+		em.flush();
+		em.clear();
+		assertThat(findByTitle(name).getImageUrl()).isNull();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("이미 적재된 미션에 재실행하면 메타데이터만 채워진다 — 재실행이 곧 백필 (D6)")
+	void 이미_적재된_미션에_재실행하면_메타데이터만_채워진다() throws IOException {
+		// Given: 메타데이터 없는 파일로 적재된 미션 (V31 이전 상태 재현).
+		String name = unique("백필 대상 축제");
+		double lat = 합성_LAT + 0.6;
+		Path bare = writeJsonl("bare.jsonl", activeRow(name, lat, 합성_LON));
+		seeder().seed(bare);
+		em.flush();
+		em.clear();
+		Mission before = findByTitle(name);
+		long missionId = before.getId();
+		long gridsBefore = gridCountOf(missionId);
+		assertThat(before.getDescription()).isNull();
+
+		// When: 같은 키(중심 격자+기간)에 메타데이터가 붙은 파일로 재실행.
+		Path filled = writeJsonl("filled.jsonl",
+			metadataRow(name, lat, 합성_LON, "채워진 설명", "채워진 장소", "https://filled.example.kr"));
+		FestivalMissionSeeder.SeedResult result = seeder().seed(filled);
+
+		assertThat(result.loaded()).isZero();
+		em.flush();
+		em.clear();
+		Mission after = missionRepository.findById(missionId).orElseThrow();
+		assertThat(after.getDescription()).isEqualTo("채워진 설명");
+		assertThat(after.getPlaceName()).isEqualTo("채워진 장소");
+		assertThat(after.getSourceUrl()).isEqualTo("https://filled.example.kr");
+		// Then: 미션 정체성은 한 글자도 바뀌지 않는다 — 제목·기간·격자 수·source (D6).
+		assertThat(after.getTitle()).isEqualTo(before.getTitle());
+		assertThat(after.getStartAt()).isEqualTo(before.getStartAt());
+		assertThat(after.getEndAt()).isEqualTo(before.getEndAt());
+		assertThat(after.getSource()).isEqualTo(before.getSource());
+		assertThat(gridCountOf(missionId)).isEqualTo(gridsBefore);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("재실행 결과에 갱신 건수가 집계된다 — 적재 0건만 보고 오해하지 않게 (D6)")
+	void 재실행_결과에_갱신_건수가_집계된다() throws IOException {
+		String name = unique("갱신 집계 축제");
+		double lat = 합성_LAT + 0.7;
+		Path bare = writeJsonl("count-bare.jsonl", activeRow(name, lat, 합성_LON));
+		Path filled = writeJsonl("count-filled.jsonl",
+			metadataRow(name, lat, 합성_LON, "설명", "장소", "https://festival.example.kr"));
+		seeder().seed(bare);
+
+		FestivalMissionSeeder.SeedResult filledRun = seeder().seed(filled);
+		FestivalMissionSeeder.SeedResult sameRun = seeder().seed(filled);
+
+		assertThat(filledRun.updated()).isEqualTo(1);
+		// 값이 이미 같으면 갱신으로 세지 않는다 — 재실행이 같은 상태로 수렴한다(NFR-DATA-03).
+		assertThat(sameRun.updated()).isZero();
+		assertThat(sameRun.deduped()).isEqualTo(1);
+	}
+
+	// 검증: FR-MISSION-04, FR-MISSION-16
+	@Test
+	@DisplayName("재실행이 스탬프를 건드리지 않는다 — user_missions 행 수 불변 (D6)")
+	void 재실행이_스탬프를_건드리지_않는다() throws IOException {
+		long userId = userRepository.save(
+			User.createLocalUser("msg383-" + System.nanoTime() + "@example.com", "hash", "백필테스터")).getId();
+		String name = unique("스탬프 걸린 축제");
+		double lat = 합성_LAT + 0.8;
+		Path bare = writeJsonl("stamp-bare.jsonl", activeRow(name, lat, 합성_LON));
+		seeder().seed(bare);
+		em.flush();
+		em.clear();
+		long missionId = findByTitle(name).getId();
+		insertStamp(userId, missionId);
+
+		seeder().seed(writeJsonl("stamp-filled.jsonl",
+			metadataRow(name, lat, 합성_LON, "설명", "장소", "https://festival.example.kr")));
+
+		// 갱신은 missions 만 건드린다 — user_missions 는 mission_id 만 참조하고 그 id 가 바뀌지 않는다.
+		assertThat(userMissionCount(userId)).isEqualTo(1);
+		em.flush();
+		em.clear();
+		assertThat(missionRepository.findById(missionId).orElseThrow().getDescription()).isEqualTo("설명");
+	}
+
 	// 검증: FR-MISSION-11
 	@Test
 	@DisplayName("파일이 없으면 예외로 조기 실패한다 — 조용한 no-op 금지 (FR-5)")
@@ -309,6 +428,21 @@ class FestivalMissionSeederIntegrationTest {
 			{"name": "%s", "place": "행사장 일원", "startDate": "%s", "endDate": "%s", \
 			"latitude": %s, "longitude": %s, "sourceOrg": "합성_문화축제"}"""
 			.formatted(name, startDate, endDate, lat, lon);
+	}
+
+	/** 화면용 필드(MSG-383 D3)까지 채운 진행 중 축제 1행. */
+	private static String metadataRow(String name, double lat, double lon, String description, String place,
+		String homepage) {
+		return """
+			{"name": "%s", "place": "%s", "startDate": "%s", "endDate": "%s", "description": "%s", \
+			"latitude": %s, "longitude": %s, "homepage": "%s", "sourceOrg": "합성_문화축제"}"""
+			.formatted(name, place, 시작일, 종료일, description, lat, lon, homepage);
+	}
+
+	private long userMissionCount(long userId) {
+		return ((Number) em.createNativeQuery("SELECT COUNT(*) FROM user_missions WHERE user_id = :userId")
+			.setParameter("userId", userId)
+			.getSingleResult()).longValue();
 	}
 
 	/** source NULL(수동/타 러너 모사) 미션 — 축제 정리·dedupe 의 불가침 대상 픽스처 (D7). */

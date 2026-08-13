@@ -80,8 +80,13 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 	 * 시더 dedupe DB 대조용 (MSG-224 D3·D7) — 해당 러너 산출물만 기간과 함께 로드해 메모리 대조한다.
 	 * type 조회 금지: EVENT 는 팝업(MSG-235, 1격자)과 공유 타입이라 1격자 미션의 min+4 가 가짜 중심 키를
 	 * 만들어 실축제를 오스킵한다(Codex 리뷰 파생).
+	 *
+	 * ORDER BY m.id 는 시더 3종의 메타데이터 백필이 기대는 계약이다 (MSG-383 D6, Codex 리뷰 파생) —
+	 * 같은 dedupe 키를 가진 행이 둘 이상이면 셋 다 "먼저 읽은 하나"만 갱신하는데, 정렬이 없으면 그
+	 * 하나가 실행 계획에 따라 달라져 실행마다 다른 행이 갱신된다.
 	 */
-	List<Mission> findBySource(String source);
+	@Query("SELECT m FROM Mission m WHERE m.source = :source ORDER BY m.id")
+	List<Mission> findBySource(@Param("source") String source);
 
 	/**
 	 * 종료 미션 정리 — 러너별 :source 한정 (MSG-224 D4 → MSG-235 D4 파라미터화, 동일 SQL 2벌 복제 금지).

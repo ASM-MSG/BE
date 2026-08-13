@@ -7,11 +7,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import com.msg.fillmap.badge.repository.MyBadgeProjection;
 
 /**
- * 내 뱃지 목록 행 (GET /api/badges 응답 — docs/spec/MSG-201.md §D2). 획득+미획득 전체 뱃지가 한 배열로
+ * 내 뱃지 목록 행 (GET /api/badges 응답 — docs/spec/MSG-201.md §D2). 획득+미획득 뱃지가 한 배열로
  * 나가고, 미획득 행은 earned false + earnedAt·featuredRank null + isNew false 다(3값 boolean 금지).
- * 진열장은 FE 가 earned true 를 earnedAt 내림차순 정렬해 파생한다(§D4) — 별도 필드 없음.
+ * 은퇴 뱃지(retired_at 있음, MSG-363)는 획득자에게만 행이 나가고 미획득자 목록에서는 빠진다 —
+ * 그래서 사용자마다 행 수가 다를 수 있다. 진열장은 FE 가 earned true 를 earnedAt 내림차순 정렬해
+ * 파생한다(§D4) — 별도 필드 없음.
  */
-@Schema(description = "내 뱃지 목록 행 — 획득+미획득 전체",
+@Schema(description = "내 뱃지 목록 행 — 획득+미획득 (은퇴 뱃지는 획득자에게만)",
 	requiredProperties = {"badgeId", "code", "name", "earned", "isNew", "description", "iconUrl", "earnedAt",
 		"featuredRank"})
 public record MyBadgeResponseDto(

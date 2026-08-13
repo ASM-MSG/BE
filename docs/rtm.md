@@ -2,7 +2,7 @@
 
 `scripts/generate-rtm.sh` 가 생성한다. 손으로 고치지 말 것. 원천은 테스트의 `// 검증: FR-...` 주석과 `docs/srs.md` 다.
 
-요약: FR 221건 중 테스트 연결 193건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 21건, 성격상 테스트 비대상 7건 별도)
+요약: FR 227건 중 테스트 연결 194건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 26건, 성격상 테스트 비대상 7건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -156,12 +156,18 @@
 | FR-MISSION-05 | 구현됨 | VideoMissionIntegrationTest |
 | FR-MISSION-06 | 구현됨 | MissionAwardServiceTest |
 | FR-MISSION-07 | 폐기됨 | (없음) |
-| FR-MISSION-08 | 구현됨 | FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, FestivalMissionSeederTest |
+| FR-MISSION-08 | 진행 중 | FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, FestivalMissionSeederTest |
 | FR-MISSION-09 | 구현됨 | CourseMissionSeederIntegrationTest, CourseSeedContractTest, CourseSeedReaderTest, MissionSchemaMigrationTest |
-| FR-MISSION-10 | 구현됨 | PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
+| FR-MISSION-10 | 진행 중 | PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
 | FR-MISSION-11 | 구현됨 | CourseMissionSeederIntegrationTest, FestivalMissionSeederIntegrationTest, PopupMissionSeederIntegrationTest |
 | FR-MISSION-12 | 계획 | (없음) |
 | FR-MISSION-13 | 계획 | (없음) |
+| FR-MISSION-14 | 계획 | (없음) |
+| FR-MISSION-15 | 계획 | (없음) |
+| FR-MISSION-16 | 계획 | CourseMissionSeederIntegrationTest, CourseSeedReaderTest, FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, MissionControllerTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
+| FR-MISSION-17 | 계획 | (없음) |
+| FR-MISSION-18 | 계획 | (없음) |
+| FR-MISSION-19 | 계획 | (없음) |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
 | FR-NOTI-02 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest, NotificationRelayTest |
 | FR-NOTI-03 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest |
@@ -250,6 +256,11 @@
 - FR-MISSION-07 (폐기됨)
 - FR-MISSION-12 (계획)
 - FR-MISSION-13 (계획)
+- FR-MISSION-14 (계획)
+- FR-MISSION-15 (계획)
+- FR-MISSION-17 (계획)
+- FR-MISSION-18 (계획)
+- FR-MISSION-19 (계획)
 - FR-NOTI-12 (계획)
 - FR-NOTI-13 (계획)
 - FR-FRIEND-13 (계획)

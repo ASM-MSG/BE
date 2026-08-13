@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.Set;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionGrid;
+import com.msg.fillmap.mission.entity.MissionMetadata;
 import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
@@ -32,7 +33,7 @@ import com.msg.fillmap.mission.repository.MissionRepository;
  * 팝업 미션 시드·주 1회 수동 갱신 러너 (MSG-235, FestivalMissionSeeder/MSG-224 미러). 기본 off —
  * {@code fillmap.mission.popup.seed.enabled=true} 로 앱 1회 기동할 때만 실행한다(상시 스케줄러 금지, FR-4).
  * 시드와 갱신은 같은 코드 경로다: ① 파싱·전량 검증(D6) → ② 종료 팝업 정리 → ③ 기존 source_key 로드(D3)
- * → ④ dedupe 통과분 INSERT(D1·D2). 빈 DB 면 ②가 0건인 시드가 된다.
+ * → ④ dedupe 통과분 INSERT · 기존분 메타데이터 갱신(D1·D2, MSG-383 D6). 빈 DB 면 ②가 0건인 시드가 된다.
  *
  * 축제(적재→정리)와 순서가 반대인 이유(D4): 팝업 키는 팝가 id 뿐이라, DB상 종료(연장 전 closeDate 경과)
  * 인데 소스에서 연장으로 살아있는 팝업이 적재-선행이면 skip(키 잔존) 후 정리돼 다음 주까지 노출 공백이
@@ -89,8 +90,8 @@ public class PopupMissionSeeder implements ApplicationRunner {
 			return;
 		}
 		SeedResult result = seed(Path.of(jsonlPath));
-		log.info("팝업 미션 갱신 완료 — 적재 {} 건, dedupe 건너뜀 {} 건, 종료 제외 {} 건, 정리 {} 건",
-			result.loaded(), result.deduped(), result.skippedEnded(), result.removed());
+		log.info("팝업 미션 갱신 완료 — 적재 {} 건, dedupe 건너뜀 {} 건(메타데이터 갱신 {} 건), 종료 제외 {} 건, 정리 {} 건",
+			result.loaded(), result.deduped(), result.updated(), result.skippedEnded(), result.removed());
 	}
 
 	/**
@@ -121,18 +122,27 @@ public class PopupMissionSeeder implements ApplicationRunner {
 		// 안 남아 같은 실행에서 신 날짜로 재적재된다.
 		int removed = missionRepository.deleteEndedBySourceWithoutStamps(SOURCE_POPGA);
 
-		Set<String> existingKeys = missionRepository.findBySource(SOURCE_POPGA).stream()
-			.map(Mission::getSourceKey)
-			.collect(Collectors.toSet());
+		// source_key → 미션 색인 (D3) — 키만 담지 않는 이유는 skip 경로에서 그 미션의 메타데이터를
+		// 갱신하기 때문이다(MSG-383 D6). source_key NULL 행(수동 적재)은 멱등 키가 없어 제외한다.
+		// 동키 중복은 부분 유니크 인덱스가 막지만, 막히기 전 데이터가 남아 있어도 갱신 대상이 실행마다
+		// 바뀌지 않도록 id 가 가장 작은 쪽으로 고정한다 — findBySource 의 ORDER BY m.id 가 그 근거다.
+		Map<String, Mission> existing = missionRepository.findBySource(SOURCE_POPGA).stream()
+			.filter(mission -> mission.getSourceKey() != null)
+			.collect(Collectors.toMap(Mission::getSourceKey, mission -> mission, (first, duplicate) -> first));
 		int loaded = 0;
+		int updated = 0;
 		for (PopupRecord record : parsed.records()) {
-			if (existingKeys.contains(String.valueOf(record.id()))) {
+			Mission existingMission = existing.get(String.valueOf(record.id()));
+			if (existingMission != null) {
+				if (existingMission.applyMetadata(metadataOf(record))) {
+					updated++;
+				}
 				continue;
 			}
 			insertMission(record);
 			loaded++;
 		}
-		return new SeedResult(loaded, parsed.records().size() - loaded, parsed.skippedEnded(), removed);
+		return new SeedResult(loaded, parsed.records().size() - loaded, updated, parsed.skippedEnded(), removed);
 	}
 
 	/**
@@ -148,6 +158,7 @@ public class PopupMissionSeeder implements ApplicationRunner {
 			.targetCount(1)
 			.source(SOURCE_POPGA)
 			.sourceKey(String.valueOf(record.id()))
+			.metadata(metadataOf(record))
 			.build());
 		missionGridRepository.saveAll(
 			FestivalMissionSeeder.expandGrids(GridEncoder.encode(record.latitude(), record.longitude())).stream()
@@ -155,6 +166,16 @@ public class PopupMissionSeeder implements ApplicationRunner {
 				.toList());
 	}
 
-	public record SeedResult(int loaded, int deduped, int skippedEnded, int removed) {
+	/**
+	 * 팝업 원본 → 메타데이터 컬럼 매핑 (MSG-383 D3). 소개문은 현 스냅샷에 필드 자체가 없고 포스터는
+	 * 상세 페이지 수집이 필요해 둘 다 MSG-384 몫이다 — 코스 지표와 함께 null 이다(D7).
+	 */
+	private static MissionMetadata metadataOf(PopupRecord record) {
+		return new MissionMetadata(null, record.placeName(), record.sourceUrl(), record.operationTime(),
+			null, null, null, null);
+	}
+
+	/** updated: 이미 있던 미션의 메타데이터를 채운 건수 (MSG-383 D6). */
+	public record SeedResult(int loaded, int deduped, int updated, int skippedEnded, int removed) {
 	}
 }

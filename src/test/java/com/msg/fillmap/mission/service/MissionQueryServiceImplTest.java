@@ -317,6 +317,72 @@ class MissionQueryServiceImplTest {
 		assertThat(cell.lng()).isEqualTo(center.lon());
 	}
 
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("활성 미션 응답에 메타데이터 필드가 실린다 — 조회 서비스는 무수정 (MSG-383 §D8)")
+	void 활성_미션_응답에_메타데이터_필드가_실린다() {
+		long mission = insertMission("COURSE", null, null);
+		insertMissionGrid(mission, gid(GY0, GX0), 1);
+		em.createNativeQuery("""
+			UPDATE missions SET description = :description, place_name = :placeName, source_url = :sourceUrl,
+				operation_time = :operationTime, image_url = :imageUrl, distance_meters = 14000,
+				duration_minutes = 330, difficulty = 2
+			WHERE id = :id
+			""")
+			.setParameter("description", "바다를 따라 걷는다\n전망대가 있다")
+			.setParameter("placeName", "부산 영도구")
+			.setParameter("sourceUrl", "https://festival.example.kr")
+			.setParameter("operationTime", "매일 11:00 ~ 20:00")
+			.setParameter("imageUrl", "https://cdn.fillmap.kr/mission/12.webp")
+			.setParameter("id", mission)
+			.executeUpdate();
+		em.flush();
+		em.clear();
+
+		MissionResponseDto dto = findMission(mission);
+
+		assertThat(dto.description()).isEqualTo("바다를 따라 걷는다\n전망대가 있다");
+		assertThat(dto.placeName()).isEqualTo("부산 영도구");
+		assertThat(dto.sourceUrl()).isEqualTo("https://festival.example.kr");
+		assertThat(dto.operationTime()).isEqualTo("매일 11:00 ~ 20:00");
+		assertThat(dto.imageUrl()).isEqualTo("https://cdn.fillmap.kr/mission/12.webp");
+		assertThat(dto.distanceMeters()).isEqualTo(14000);
+		assertThat(dto.durationMinutes()).isEqualTo(330);
+		assertThat(dto.difficulty()).isEqualTo(2);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("메타데이터가 없는 미션은 필드가 null로 내려간다")
+	void 메타데이터가_없는_미션은_필드가_null로_내려간다() {
+		long mission = insertMission("EVENT", null, null);
+		insertMissionGrid(mission, gid(GY0, GX0), null);
+
+		MissionResponseDto dto = findMission(mission);
+
+		assertThat(dto.description()).isNull();
+		assertThat(dto.placeName()).isNull();
+		assertThat(dto.sourceUrl()).isNull();
+		assertThat(dto.operationTime()).isNull();
+		assertThat(dto.imageUrl()).isNull();
+		// 기존 필드는 그대로 채워진다 — 메타데이터 부재가 응답 전체를 무너뜨리지 않는다.
+		assertThat(dto.targetCount()).isEqualTo(1);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("코스가 아닌 미션의 거리와 소요시간과 난이도는 null이다 — chk_missions_course_metrics")
+	void 코스가_아닌_미션의_거리와_소요시간과_난이도는_null이다() {
+		long event = insertMission("EVENT", null, null);
+		insertMissionGrid(event, gid(GY0, GX0), null);
+
+		MissionResponseDto dto = findMission(event);
+
+		assertThat(dto.distanceMeters()).isNull();
+		assertThat(dto.durationMinutes()).isNull();
+		assertThat(dto.difficulty()).isNull();
+	}
+
 	@Test
 	@DisplayName("BOX 경계사각형은 격자집합의 min max bbox와 일치한다")
 	void BOX_경계사각형은_격자집합의_min_max_bbox와_일치한다() {

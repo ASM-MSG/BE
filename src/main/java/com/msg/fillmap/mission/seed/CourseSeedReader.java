@@ -18,6 +18,10 @@ import tools.jackson.databind.ObjectMapper;
  * courses-seed.json 파서·검증 (MSG-225 D6·D7, 순수 로직 · DB 무관 — FestivalJsonlReader 미러).
  * 축제 파서의 행 스킵·사유 집계와 달리 **위반 즉시 예외**다 — 코스는 파이프라인 완성 산출물이라
  * 결함 하나 = 산출물 재생성 대상이지 부분 적재 대상이 아니다(전체 롤백, MSG-224 FR-5 원칙 승계).
+ *
+ * MSG-383 이 더한 화면용 필드 5종(contents·sigun·distanceKm·durationMinutes·level)만 예외 계약이
+ * 다르다: **결측은 허용하고 형식 위반은 거부한다**(D4). 신규 필드에도 전량 거부를 적용하면 기존
+ * 산출물 파일로 재실행하는 순간 148 코스가 통째로 거부돼 운영자가 손댈 수 없기 때문이다.
  */
 @Component
 public class CourseSeedReader {
@@ -28,6 +32,13 @@ public class CourseSeedReader {
 	private static final int TITLE_MAX_LENGTH = 200;
 	/** 논리 식별자 "{grid_y}_{grid_x}" (glossary) — 음수 인덱스 허용. */
 	private static final Pattern GRID_ID = Pattern.compile("-?\\d+_-?\\d+");
+	/**
+	 * 두루누비 난이도 등급 (148 코스 전수 실측: 1·2·3 뿐, 4 이상 0건). V31 이 값 범위 CHECK 를 걸지 않은
+	 * 근거가 "그 검증은 시더의 reader 가 이미 하는 일"이라서다(MSG-383 §D2) — 등급이 하나 늘면 여기
+	 * 상수만 바꾸면 되고 마이그레이션이 필요 없다.
+	 */
+	private static final int DIFFICULTY_MIN = 1;
+	private static final int DIFFICULTY_MAX = 3;
 
 	private final ObjectMapper objectMapper;
 
@@ -67,7 +78,107 @@ public class CourseSeedReader {
 			throw new IllegalStateException("crsIdx/name 이 비어 있습니다: " + course);
 		}
 		validatePath(course.path("path"), crsIdx);
-		return new CourseRecord(crsIdx, truncateTitle(name), course.path("path").toString(), toSpots(course, crsIdx));
+		return new CourseRecord(crsIdx, truncateTitle(name), course.path("path").toString(), toSpots(course, crsIdx),
+			SeedText.normalizeBreaks(SeedText.text(course, "contents")),
+			SeedText.truncatePlaceName(SeedText.text(course, "sigun")),
+			distanceMeters(course, crsIdx),
+			positive(integer(course, "durationMinutes", crsIdx), "durationMinutes", crsIdx),
+			difficulty(course, crsIdx));
+	}
+
+	/**
+	 * 두루누비 등급 1~3 밖은 거부한다 (MSG-383 §D2) — DB CHECK 를 안 건 근거가 "reader 가 한다"이므로
+	 * 여기가 비면 {@code level: 7} 이 그대로 적재돼 화면에 정의 없는 난이도로 나간다.
+	 */
+	private static Integer difficulty(JsonNode course, String crsIdx) {
+		Integer level = integer(course, "level", crsIdx);
+		if (level != null && (level < DIFFICULTY_MIN || level > DIFFICULTY_MAX)) {
+			throw new IllegalStateException("level 이 " + DIFFICULTY_MIN + "~" + DIFFICULTY_MAX
+				+ " 범위 밖입니다 (D2): " + crsIdx + " = " + level);
+		}
+		return level;
+	}
+
+	/**
+	 * 거리·소요시간은 값이 있으면 양수여야 한다 (MSG-383 §D2). 0 과 음수는 결측이 아니라 결함이다 —
+	 * 화면에 "0분"·"-5km" 로 나가고, 거리 0 은 "아직 안 잰 코스"와 구분되지 않는다. 소요시간에도 같은
+	 * 기준을 적용한 이유는 두루누비 148 코스 실측이 전건 양수이고, 둘 다 같은 화면 줄에 나란히 표시돼
+	 * 한쪽만 방어하면 다른 쪽이 그대로 새기 때문이다.
+	 */
+	private static Integer positive(Integer value, String field, String crsIdx) {
+		if (value != null && value <= 0) {
+			throw new IllegalStateException(field + " 가 양수가 아닙니다 (D2): " + crsIdx + " = " + value);
+		}
+		return value;
+	}
+
+	/**
+	 * 킬로미터 값을 미터로 환산한다 (MSG-383 D3) — 원본이 {@code "14"} 같은 문자열 정수라 지금은
+	 * 소수점이 없지만, 재수집에서 {@code "13.4"} 가 들어오면 정수 컬럼이 조용히 13 으로 잘라낸다.
+	 * 미터로 담으면 13,400 으로 보존된다. 표기 단위 변환은 화면 몫이다.
+	 */
+	private static Integer distanceMeters(JsonNode course, String crsIdx) {
+		Double kilometers = decimal(course, "distanceKm", crsIdx);
+		if (kilometers == null) {
+			return null;
+		}
+		// 양수 판정은 환산 뒤 미터 값으로 한다 — 0.0004km 처럼 반올림하면 0m 가 되는 값도 같이 잡힌다.
+		return positive(requireIntRange(Math.round(kilometers * 1000), "distanceKm", crsIdx), "distanceKm", crsIdx);
+	}
+
+	/**
+	 * 화면용 숫자 추출 (MSG-383 D4) — 키가 없으면 null(결측 허용), 키가 있는데 숫자가 아니면 예외다.
+	 * 결측을 전량 거부로 다루면 기존 산출물 파일로 재실행하는 순간 148 코스가 통째로 거부돼 운영자가
+	 * 손댈 수 없다. 반대로 형식 위반은 결측이 아니라 결함이라 기존 계약(전량 거부) 그대로다.
+	 *
+	 * 유한성 검사는 숫자 노드와 문자열 노드 <b>양쪽</b>에 건다. {@code Double.parseDouble} 이 "NaN" ·
+	 * "Infinity" 를 그대로 받아들여서, 문자열만 빠지면 {@code "distanceKm": "NaN"} 이 거리 0m 로,
+	 * {@code "durationMinutes": "Infinity"} 가 Integer.MAX_VALUE 로 조용히 적재된다 (Codex 리뷰 파생).
+	 */
+	private static Double decimal(JsonNode course, String field, String crsIdx) {
+		JsonNode value = course.path(field);
+		if (value.isMissingNode() || value.isNull()) {
+			return null;
+		}
+		double parsed;
+		if (value.isNumber()) {
+			parsed = value.asDouble();
+		} else if (value.isTextual()) {
+			try {
+				parsed = Double.parseDouble(value.asString().trim());
+			} catch (NumberFormatException e) {
+				throw new IllegalStateException(field + " 가 숫자가 아닙니다 (D4): " + crsIdx + " = " + value, e);
+			}
+		} else {
+			throw new IllegalStateException(field + " 가 숫자가 아닙니다 (D4): " + crsIdx + " = " + value);
+		}
+		if (!Double.isFinite(parsed)) {
+			throw new IllegalStateException(field + " 가 유한 숫자가 아닙니다 (D4): " + crsIdx + " = " + value);
+		}
+		return parsed;
+	}
+
+	/**
+	 * INTEGER 컬럼 범위 방어 — {@code Double.intValue()} 는 범위를 넘으면 Integer.MAX_VALUE 로 조용히
+	 * 포화하고 {@code Math.toIntExact} 는 어느 코스의 어느 필드인지 모르는 ArithmeticException 을 던진다.
+	 */
+	private static int requireIntRange(double value, String field, String crsIdx) {
+		if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
+			throw new IllegalStateException(field + " 가 INTEGER 범위를 벗어납니다 (D4): " + crsIdx + " = " + value);
+		}
+		return (int)value;
+	}
+
+	/** 정수 전용 — 소요시간(분)·난이도 등급은 소수점이 들어오면 결함이다 (D4). */
+	private static Integer integer(JsonNode course, String field, String crsIdx) {
+		Double value = decimal(course, field, crsIdx);
+		if (value == null) {
+			return null;
+		}
+		if (value != Math.rint(value)) {
+			throw new IllegalStateException(field + " 가 정수가 아닙니다 (D4): " + crsIdx + " = " + value);
+		}
+		return requireIntRange(value, field, crsIdx);
 	}
 
 	private static void validatePath(JsonNode path, String crsIdx) {
