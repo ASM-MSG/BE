@@ -19,7 +19,8 @@ import com.msg.fillmap.response.ErrorCodeIfs;
 public enum NotificationErrorCode implements ErrorCodeIfs {
 
 	INVALID_PLATFORM(10400, HttpStatus.BAD_REQUEST, "platform 은 IOS, ANDROID, WEB 중 하나여야 합니다"),
-	INVALID_CATEGORY(10420, HttpStatus.BAD_REQUEST, "category 는 BADGE, HOTZONE, REMIND 중 하나여야 합니다"),
+	INVALID_CATEGORY(10420, HttpStatus.BAD_REQUEST,
+		"category 는 BADGE, HOTZONE, REMIND, VIDEO, WEEKLY 중 하나여야 합니다"),
 	;
 
 	private final Integer errorCode;
