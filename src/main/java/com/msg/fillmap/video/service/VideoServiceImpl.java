@@ -3,6 +3,7 @@ package com.msg.fillmap.video.service;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,8 +58,10 @@ import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
+import com.msg.fillmap.video.dto.GridHourlyUploadResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
+import com.msg.fillmap.video.dto.HourlyUploadCountResponseDto;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.PresignedUrlResponseDto;
 import com.msg.fillmap.video.dto.VideoPlaybackResponseDto;
@@ -73,6 +77,7 @@ import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.AuthorNicknameProjection;
+import com.msg.fillmap.video.repository.HourlyUploadProjection;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
@@ -100,6 +105,9 @@ public class VideoServiceImpl implements VideoService {
 	// 한 prefix 를 쓰면 고아와 정상 영상이 섞여 만료 규칙을 걸 수 없다.
 	private static final String PENDING_PREFIX = "videos/pending/";
 	private static final String ORIGINAL_PREFIX = "videos/original/";
+
+	// 시간대 차트 구간 수 (MSG-372) — 하루 24시간 고정, 빈 구간도 응답에 실린다.
+	private static final int HOURS_PER_DAY = 24;
 
 	// 전역 목록 페이지 크기 (MSG-237 §D5). 범위 밖은 에러가 아니라 클램프한다 — MSG-156 LEAST clamp 선례.
 	private static final int GLOBAL_PAGE_DEFAULT_SIZE = 20;
@@ -526,6 +534,25 @@ public class VideoServiceImpl implements VideoService {
 			nextCursor = VideoCursor.encode(gridId, last.getViewCount(), last.getCreatedAt(), last.getId());
 		}
 		return new GridVideoPageResponseDto(videos, hasNext, nextCursor);
+	}
+
+	/**
+	 * 격자 전역 시간대 분포 조회 (MSG-372). 게이트·KST 변환은 repository 쿼리가 정본이고, 여기서는
+	 * 업로드가 있는 시간대만 오는 GROUP BY 결과를 24구간에 얹는 채움만 한다 — 어떤 격자든(공개 영상 0건·
+	 * 존재하지 않는 gridId 포함) 0시부터 23시까지 24개가 전부 실린다. 저장 존은 호출자 바인딩 관례라
+	 * 여기서 UTC 를 넘긴다(MSG-376). 시각을 새로 만들지 않아 Clock 은 쓰지 않는다.
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public GridHourlyUploadResponseDto getGridHourlyUploads(String gridId) {
+		long[] counts = new long[HOURS_PER_DAY];
+		for (HourlyUploadProjection row : videoRepository.countHourlyUploadsByGrid(gridId, ZoneOffset.UTC.getId())) {
+			counts[row.getHour()] = row.getCount();
+		}
+		List<HourlyUploadCountResponseDto> hours = IntStream.range(0, HOURS_PER_DAY)
+			.mapToObj(hour -> new HourlyUploadCountResponseDto(hour, counts[hour]))
+			.toList();
+		return new GridHourlyUploadResponseDto(gridId, hours);
 	}
 
 	/**
