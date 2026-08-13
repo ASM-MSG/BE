@@ -1,5 +1,6 @@
 package com.msg.fillmap.friend.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -10,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDateTime;
 import java.util.List;
+
+import io.swagger.v3.oas.annotations.Operation;
 
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
@@ -280,6 +283,21 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data[1].regionCode").value(Matchers.nullValue()))
 			.andExpect(jsonPath("$.data[1].name").value(Matchers.nullValue()))
 			.andExpect(jsonPath("$.data[1].count").value(2));
+	}
+
+	@Test
+	@DisplayName("친구 집계 설명은 공통 항목과 배열 응답의 차이를 구분한다 (MSG-374 FR-7)")
+	void 친구_집계_설명은_공통_항목과_배열_응답의_차이를_구분한다() {
+		Operation operation = List.of(FriendController.class.getDeclaredMethods()).stream()
+			.filter(method -> method.getName().equals("getFriendGridAggregates"))
+			.findFirst()
+			.orElseThrow()
+			.getAnnotation(Operation.class);
+
+		assertThat(operation.description())
+			.contains("묶음 항목의 공통 필드는 내 집계 조회와 같다")
+			.contains("currentRegion/items 겉면 없이 기존 배열로 반환한다")
+			.doesNotContain("파라미터·응답·에러가 내 집계 조회(GET /api/grids/aggregation)와 완전히 같다");
 	}
 
 	@Test

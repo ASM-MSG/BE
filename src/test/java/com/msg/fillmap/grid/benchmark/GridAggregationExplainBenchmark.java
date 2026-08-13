@@ -1,5 +1,7 @@
 package com.msg.fillmap.grid.benchmark;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.List;
 
 import jakarta.persistence.EntityManager;
@@ -14,9 +16,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.region.RegionTestFixtures;
+import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 
@@ -42,6 +47,10 @@ class GridAggregationExplainBenchmark {
 
 	// 1만 행 목표: 100 × 100 블록을 modulo 1(전부 점령)로 채운다.
 	private static final int BLOCK_SIDE = 100;
+	private static final int REGION_SIDE = 10;
+	private static final int OTHER_USER_COUNT = 9;
+	private static final String REGION_CODE = "9995000001";
+	private static final String REGION_NAME = "벤치광역시 벤치구 벤치동";
 
 	// 전국 시야 — 시도 단위 상한(10도) 안이면서 남한 전역을 덮는다.
 	private static final ViewportBounds KOREA = new ViewportBounds(33.0, 124.0, 38.7, 131.0);
@@ -52,7 +61,12 @@ class GridAggregationExplainBenchmark {
 	@Autowired
 	private UserRepository userRepository;
 
+	@Autowired
+	private RegionRepository regionRepository;
+
 	private long userId;
+	private double regionCenterLat;
+	private double regionCenterLon;
 
 	@BeforeEach
 	void seed() {
@@ -66,10 +80,34 @@ class GridAggregationExplainBenchmark {
 
 		int grids = GridFixtures.seedGridBlock(em, minY, maxY, minX, maxX);
 		int mine = GridFixtures.seedUserGridBlock(em, userId, minY, maxY, minX, maxX, 1);
+		for (int i = 0; i < OTHER_USER_COUNT; i++) {
+			long otherUserId = userRepository.save(User.createLocalUser(
+				"grid-agg-bench-other-" + i + "@example.com", "hash", "타인" + i)).getId();
+			GridFixtures.seedUserGridBlock(em, otherUserId, minY, maxY, minX, maxX, 1);
+		}
+		long regionMaxY = minY + REGION_SIDE - 1;
+		long regionMaxX = minX + REGION_SIDE - 1;
+		regionRepository.upsert(REGION_CODE, REGION_NAME, REGION_CODE.substring(0, 5),
+			RegionTestFixtures.cellBlockPolygonJson(minY, regionMaxY + 1, minX, regionMaxX + 1),
+			RegionTestFixtures.CELL_AREA_M2);
+		em.createNativeQuery("""
+			UPDATE grids SET region_code = :regionCode
+			WHERE grid_y BETWEEN :minY AND :maxY AND grid_x BETWEEN :minX AND :maxX
+			""")
+			.setParameter("regionCode", REGION_CODE)
+			.setParameter("minY", minY)
+			.setParameter("maxY", regionMaxY)
+			.setParameter("minX", minX)
+			.setParameter("maxX", regionMaxX)
+			.executeUpdate();
+		GridPoint center = GridFixtures.pointAt(minY + REGION_SIDE / 2.0, minX + REGION_SIDE / 2.0);
+		regionCenterLat = center.lat();
+		regionCenterLon = center.lon();
 		em.flush();
 		// EXPLAIN 계획이 현실 통계를 쓰도록 방금 삽입한 대량 데이터를 ANALYZE 한다.
 		em.createNativeQuery("ANALYZE grids").executeUpdate();
 		em.createNativeQuery("ANALYZE user_grids").executeUpdate();
+		em.createNativeQuery("ANALYZE regions").executeUpdate();
 
 		System.out.printf("%n[seed] grids=%d, user_grids(mine)=%d, block=[y %d..%d, x %d..%d]%n",
 			grids, mine, minY, maxY, minX, maxX);
@@ -101,6 +139,48 @@ class GridAggregationExplainBenchmark {
 
 		System.out.println("\n================= 전국 시야 시도 집계 (사용자 1인 1만 행) =================");
 		System.out.println(plan);
+		동_전체_카운트_실행계획을_출력하고_검증한다();
+		중심점_행정동_판정_실행계획을_출력하고_검증한다();
+	}
+
+	private void 동_전체_카운트_실행계획을_출력하고_검증한다() {
+		String plan = explain("""
+			SELECT
+				COUNT(*)::int,
+				COALESCE(SUM(ug.video_count), 0)
+			FROM user_grids ug
+			JOIN grids g ON g.grid_id = ug.grid_id
+			WHERE ug.user_id = %d
+				AND g.region_code = '%s'
+			""".formatted(userId, REGION_CODE));
+
+		System.out.println("\n================= 동 전체 개인 점령·영상 카운트 =================");
+		System.out.println(plan);
+		assertIndexedPlan(plan, "grids", "user_grids");
+	}
+
+	private void 중심점_행정동_판정_실행계획을_출력하고_검증한다() {
+		String plan = explain("""
+			SELECT region_code, region_name, parent_code
+			FROM regions
+			WHERE ST_Covers(
+				boundary_geom,
+				ST_SetSRID(ST_MakePoint(%f, %f), 4326)::geography
+			)
+			ORDER BY region_code
+			LIMIT 1
+			""".formatted(regionCenterLon, regionCenterLat));
+
+		System.out.println("\n================= 뷰포트 중심점 행정동 판정 =================");
+		System.out.println(plan);
+		assertIndexedPlan(plan, "regions");
+	}
+
+	private void assertIndexedPlan(String plan, String... tables) {
+		assertThat(plan).contains("Execution Time:");
+		for (String table : tables) {
+			assertThat(plan).doesNotContain("Seq Scan on public." + table);
+		}
 	}
 
 	@SuppressWarnings("unchecked")
