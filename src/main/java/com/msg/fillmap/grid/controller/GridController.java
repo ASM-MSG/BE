@@ -1,6 +1,5 @@
 package com.msg.fillmap.grid.controller;
 
-import java.util.List;
 import java.util.Locale;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,16 +17,16 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.dto.GridAggregationResponseDto;
 import com.msg.fillmap.grid.dto.GridCellResponseDto;
 import com.msg.fillmap.grid.dto.OccupiedGridPageResponseDto;
-import com.msg.fillmap.grid.dto.RegionAggregateResponseDto;
 import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
+import com.msg.fillmap.grid.service.GridAggregationView;
 import com.msg.fillmap.grid.service.GridCellView;
 import com.msg.fillmap.grid.service.GridQueryService;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
-import com.msg.fillmap.grid.service.RegionAggregateView;
 import com.msg.fillmap.response.SuccessResponse;
 
 /**
@@ -106,11 +105,20 @@ public class GridController {
 
 	@Operation(
 		summary = "뷰포트 내 색칠 격자 행정 단위 집계 조회 (줌아웃)",
-		description = "지도를 축소한 시야에서 개별 격자 대신, bbox 안에서 내가 점령한 격자를 행정 단위로 묶어 센 "
-			+ "목록을 페이지 없이 한 번에 반환한다. 단위 전환 시점은 서버가 정하지 않는다 — 화면 축척에 맞춰 "
-			+ "클라이언트가 unit 만 바꿔 부른다.\n\n"
-			+ "항목마다 마커 식별 키(regionCode), 표시 이름, 대표 좌표, 격자 수가 온다. 대표 좌표는 그 묶음에 "
-			+ "속한 점령 격자 중심의 평균이라 마커가 실제 데이터 위에 선다. 어느 단위로 묶어도, 항목을 더 묶어 "
+		description = "응답 data는 {currentRegion, items} 객체다. "
+			+ "currentRegion은 뷰포트 중심이 속한 행정동의 이름과 "
+			+ "그 동 전체에서 내가 점령한 격자 수·영상 수를 "
+			+ "담는다. 화면 범위나 unit과 무관하며, 중심이 "
+			+ "해상 또는 서비스 범위 밖일 때만 null이다.\n\n"
+			+ "items는 bbox 안에서 내가 점령한 격자를 행정 단위로 묶어 센 목록이다. "
+			+ "단위 전환 시점은 서버가 정하지 않으며 "
+			+ "클라이언트가 화면 축척에 맞춰 unit만 바꿔 부른다. "
+			+ "items가 비어 있어도 한국 내 "
+			+ "중심점의 currentRegion은 이름과 0 집계를 독립적으로 담는다.\n\n"
+			+ "항목마다 마커 식별 키(regionCode), 표시 이름, 대표 좌표, 격자 수가 온다. "
+			+ "대표 좌표는 그 묶음에 속한 점령 격자 중심의 평균이라 "
+			+ "마커가 실제 데이터 위에 선다. "
+			+ "어느 단위로 묶어도, 항목을 더 묶어 "
 			+ "합산해도 같은 bbox 개별 격자 조회의 총 개수와 일치한다.\n\n"
 			+ "행정동이 판정되지 않은 격자(해상 등)는 제외가 아니라 regionCode·name 이 null 인 항목 하나로 "
 			+ "묶여 온다. 점령 격자가 없으면 빈 배열이다.\n\n"
@@ -119,7 +127,7 @@ public class GridController {
 			+ "unit 이 없거나 미지원 값이면 4405 다."
 	)
 	@GetMapping("/aggregation")
-	public SuccessResponse<List<RegionAggregateResponseDto>> getOccupiedAggregatesInViewport(
+	public SuccessResponse<GridAggregationResponseDto> getOccupiedAggregatesInViewport(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "남서 모서리 위도", required = true, example = "35.10")
 		@RequestParam(required = false) Double swLat,
@@ -134,9 +142,9 @@ public class GridController {
 		@RequestParam(required = false) String unit
 	) {
 		ViewportBounds bounds = toBounds(swLat, swLng, neLat, neLng);
-		List<RegionAggregateView> items =
-			gridQueryService.getOccupiedAggregatesInViewport(principal.userId(), bounds, toUnit(unit));
-		return SuccessResponse.of(items.stream().map(RegionAggregateResponseDto::from).toList());
+		GridAggregationView view = gridQueryService.getOccupiedAggregatesWithCurrentRegion(
+			principal.userId(), bounds, toUnit(unit));
+		return SuccessResponse.of(GridAggregationResponseDto.from(view));
 	}
 
 	private ViewportBounds toBounds(Double swLat, Double swLng, Double neLat, Double neLng) {
