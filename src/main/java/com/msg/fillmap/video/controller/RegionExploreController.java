@@ -36,9 +36,10 @@ public class RegionExploreController {
 	@Operation(
 		summary = "행정동 격자 카드 리스트 + 헤더 카운트 조회",
 		description = "그 행정동 격자들 중 전역 공개 콘텐츠(공개·인코딩 완료·타인 영상 포함)가 있는 격자를 카드로 "
-			+ "반환한다. 헤더 카운트(gridCount·videoCount)는 limit 무관 전체 기준이라 지도 홈 패널(sort=LATEST&limit=20, "
-			+ "SRS FR-MAP-10)과 "
-			+ "전체 보기(limit 생략)가 같은 숫자를 본다. 카드 커버는 격자 대표(cover)와 같은 영상이고 썸네일은 "
+			+ "반환한다. 카운트(gridCount·videoCount)는 limit 무관 전체 기준이라 지도 홈 패널(sort=LATEST&limit=20, "
+			+ "SRS FR-MAP-10)과 전체 보기(limit 생략)가 같은 값을 받지만, **전역 공개 콘텐츠를 센 값이라 패널 "
+			+ "헤더(\"이 지역 격자 N개 · 영상 M개\")에 쓰면 안 된다** — 헤더는 내 도감 집계 응답의 currentRegion"
+			+ "(중심 동 전체의 내 것, MSG-374)이 채운다. 카드 커버는 격자 대표(cover)와 같은 영상이고 썸네일은 "
 			+ "presigned GET URL 이다. 미존재·무콘텐츠 regionCode 는 404 가 아니라 200 + 카운트 0·빈 배열이다."
 	)
 	@GetMapping("/api/regions/{regionCode}/grids")
@@ -47,7 +48,8 @@ public class RegionExploreController {
 			example = "2644056000")
 		@PathVariable String regionCode,
 		@Parameter(description = "정렬 — POPULAR(조회수 합)·LATEST(최신 공개 영상). 대문자 전용이며 "
-			+ "소문자 포함 무효 값은 400 이다", example = "POPULAR")
+			+ "소문자 포함 무효 값은 400 이다. 지도 홈 패널은 LATEST (SRS FR-MAP-10, 생략 기본값은 POPULAR 유지)",
+			example = "LATEST")
 		@RequestParam(defaultValue = "POPULAR") ExploreSort sort,
 		@Parameter(description = "카드 수 상한 — 지도 홈 패널은 20 (SRS FR-MAP-10). 생략하면 전부, 1 미만은 1 로 보정한다",
 			example = "20")
