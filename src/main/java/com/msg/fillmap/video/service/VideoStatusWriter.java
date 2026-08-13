@@ -234,10 +234,18 @@ public class VideoStatusWriter {
 		}
 	}
 
-	/** 이 태스크가 인코딩한 원본과 현재 DB 행이 같은 시도인가 — 교체(키 갱신)/삭제(ACTIVE 이탈)로 벌어진 창을 닫는다. */
+	/**
+	 * 이 태스크가 인코딩한 원본과 현재 DB 행이 같은 시도인가 — 교체(키 갱신)/삭제(ACTIVE 이탈)로 벌어진 창을 닫는다.
+	 * 처리 상태가 인코딩 국면(UPLOADED·ENCODING)일 것도 요구한다 (MSG-382) — 키가 같아도 이미 READY·FAILED·
+	 * BLURRING 으로 넘어갔으면 "다른 시도"가 아니라 "끝난 시도"다. 같은 시도가 이중 트리거되면(확정 재요청 등)
+	 * 늦게 끝난 쪽의 완료/실패가 이 조건 없이는 통과해 종결 지표가 한 번 더 오르고(NFR-OPS-08), markEncoding
+	 * 재진입은 READY 를 ENCODING 으로 되돌리며, markEncoded 재적용은 블러 시도 넌스를 새로 찍는다.
+	 */
 	private boolean isCurrentEncodingAttempt(Video video, String expectedOriginalKey) {
 		return video != null
 			&& video.getStatus() == VideoStatus.ACTIVE
+			&& (video.getProcessingStatus() == ProcessingStatus.UPLOADED
+				|| video.getProcessingStatus() == ProcessingStatus.ENCODING)
 			&& Objects.equals(video.getOriginalS3Key(), expectedOriginalKey);
 	}
 
