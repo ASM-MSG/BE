@@ -53,7 +53,7 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
 		return currentPreferences(userId);
 	}
 
-	/** off 행 조회 후 3종 합성 — 행 부재 카테고리는 on, 순서는 enum 선언 순(BADGE·HOTZONE·REMIND) 고정. */
+	/** off 행 조회 후 전 카테고리 합성 — 행 부재 카테고리는 on, 순서는 NotificationCategory enum 선언 순 고정. */
 	private NotificationPreferenceResponseDto currentPreferences(Long userId) {
 		Set<NotificationCategory> optOuts = notificationOptOutRepository.findAllByIdUserId(userId).stream()
 			.map(optOut -> optOut.getId().getCategory())

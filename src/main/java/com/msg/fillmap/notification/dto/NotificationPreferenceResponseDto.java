@@ -7,14 +7,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import com.msg.fillmap.notification.entity.NotificationCategory;
 
 /**
- * 알림 설정 응답 (GET/PATCH /api/notifications/preferences — MSG-180 FR-7). 항상 카테고리 3종
- * 전부를 enum 선언 순(BADGE·HOTZONE·REMIND)으로 반환한다 — 저장 행 없는 카테고리는 true 합성이라
+ * 알림 설정 응답 (GET/PATCH /api/notifications/preferences — MSG-180 FR-7). 항상 전 카테고리
+ * (NotificationCategory 5종)를 enum 선언 순으로 반환한다 — 저장 행 없는 카테고리는 true 합성이라
  * FE 는 부재 처리가 필요 없다. 응답의 category 는 enum 직렬화(출력엔 파싱 실패가 없다).
  */
-@Schema(description = "알림 설정 — 카테고리 3종 전부의 수신 상태 (저장 행 없는 카테고리는 true)",
+@Schema(description = "알림 설정 — 전 카테고리(5종)의 수신 상태 (저장 행 없는 카테고리는 true)",
 	requiredProperties = {"preferences"})
 public record NotificationPreferenceResponseDto(
-	@Schema(description = "카테고리별 수신 상태 (BADGE·HOTZONE·REMIND 고정 3종)")
+	@Schema(description = "카테고리별 수신 상태 (BADGE·HOTZONE·REMIND·VIDEO·WEEKLY 고정 5종)")
 	List<CategoryPreferenceDto> preferences
 ) {
 

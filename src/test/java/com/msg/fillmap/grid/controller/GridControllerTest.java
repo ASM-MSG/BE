@@ -27,6 +27,8 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
+import com.msg.fillmap.grid.service.CurrentRegionView;
+import com.msg.fillmap.grid.service.GridAggregationView;
 import com.msg.fillmap.grid.service.GridCellView;
 import com.msg.fillmap.grid.service.GridQueryService;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
@@ -147,39 +149,54 @@ class GridControllerTest {
 
 	// 검증: FR-GRID-13
 	@Test
-	@DisplayName("집계 조회 API 는 200 과 단위별 항목 배열을 반환한다")
-	void 집계_조회_API는_200과_단위별_항목_배열을_반환한다() throws Exception {
-		given(gridQueryService.getOccupiedAggregatesInViewport(
+	@DisplayName("집계 응답은 현재 동네와 묶음 목록을 담은 객체다")
+	void 집계_응답은_현재_동네와_묶음_목록을_담은_객체다() throws Exception {
+		given(gridQueryService.getOccupiedAggregatesWithCurrentRegion(
 			anyLong(), any(ViewportBounds.class), eq(RegionUnit.DONG)))
-			.willReturn(List.of(
-				new RegionAggregateView("2623058000", "부전2동", 35.162, 129.065, 31),
-				new RegionAggregateView(null, null, 35.101, 129.032, 2)));
+			.willReturn(new GridAggregationView(
+				new CurrentRegionView("2623058000", "부전2동", 5, 4_000_000_000L),
+				List.of(new RegionAggregateView("2623058000", "부전2동", 35.162, 129.065, 31))));
 
 		mockMvc.perform(aggregationRequest().param("unit", "DONG"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.data[0].regionCode").value("2623058000"))
-			.andExpect(jsonPath("$.data[0].name").value("부전2동"))
-			.andExpect(jsonPath("$.data[0].lat").value(35.162))
-			.andExpect(jsonPath("$.data[0].lng").value(129.065))
-			.andExpect(jsonPath("$.data[0].count").value(31))
-			// 미판정 묶음도 항목으로 온다 — 키와 이름만 null 이고 좌표·개수는 같은 규칙이다 (FR-7)
-			.andExpect(jsonPath("$.data[1].regionCode").value(nullValue()))
-			.andExpect(jsonPath("$.data[1].name").value(nullValue()))
-			.andExpect(jsonPath("$.data[1].count").value(2));
+			.andExpect(jsonPath("$.data.currentRegion.regionCode").value("2623058000"))
+			.andExpect(jsonPath("$.data.currentRegion.name").value("부전2동"))
+			.andExpect(jsonPath("$.data.currentRegion.gridCount").value(5))
+			.andExpect(jsonPath("$.data.currentRegion.videoCount").value(4_000_000_000L))
+			.andExpect(jsonPath("$.data.items[0].regionCode").value("2623058000"))
+			.andExpect(jsonPath("$.data.items[0].count").value(31))
+			.andExpect(jsonPath("$.data.items[0].videoCount").doesNotExist());
 	}
 
 	@Test
-	@DisplayName("점령 격자가 없는 뷰포트는 빈 배열로 200 응답한다 (FR-5)")
-	void 점령_격자가_없는_뷰포트는_빈_배열로_200_응답한다() throws Exception {
-		given(gridQueryService.getOccupiedAggregatesInViewport(anyLong(), any(ViewportBounds.class), any()))
-			.willReturn(List.of());
+	@DisplayName("점령 격자가 없는 뷰포트도 현재 동네와 0 집계를 담아 200 응답한다")
+	void 점령_격자가_없는_뷰포트도_현재_동네와_0_집계를_담아_200_응답한다() throws Exception {
+		given(gridQueryService.getOccupiedAggregatesWithCurrentRegion(anyLong(), any(ViewportBounds.class), any()))
+			.willReturn(new GridAggregationView(
+				new CurrentRegionView("2623058000", "부전2동", 0, 0L), List.of()));
 
 		mockMvc.perform(aggregationRequest().param("unit", "SIDO"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.data").isArray())
-			.andExpect(jsonPath("$.data").isEmpty());
+			.andExpect(jsonPath("$.data.currentRegion.name").value("부전2동"))
+			.andExpect(jsonPath("$.data.currentRegion.gridCount").value(0))
+			.andExpect(jsonPath("$.data.currentRegion.videoCount").value(0))
+			.andExpect(jsonPath("$.data.items").isArray())
+			.andExpect(jsonPath("$.data.items").isEmpty());
+	}
+
+	@Test
+	@DisplayName("중심이 서비스 범위 밖이면 현재 동네 없이 200 응답한다")
+	void 중심이_서비스_범위_밖이면_현재_동네_없이_200_응답한다() throws Exception {
+		given(gridQueryService.getOccupiedAggregatesWithCurrentRegion(anyLong(), any(ViewportBounds.class), any()))
+			.willReturn(new GridAggregationView(null, List.of()));
+
+		mockMvc.perform(aggregationRequest().param("unit", "DONG"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.currentRegion").value(nullValue()))
+			.andExpect(jsonPath("$.data.items").isEmpty());
 	}
 
 	@Test
@@ -197,13 +214,14 @@ class GridControllerTest {
 	@Test
 	@DisplayName("소문자 unit 값도 허용된다")
 	void 소문자_unit_값도_허용된다() throws Exception {
-		given(gridQueryService.getOccupiedAggregatesInViewport(
+		given(gridQueryService.getOccupiedAggregatesWithCurrentRegion(
 			anyLong(), any(ViewportBounds.class), eq(RegionUnit.SIGUNGU)))
-			.willReturn(List.of(new RegionAggregateView("26230", "부산진구", 35.16, 129.06, 43)));
+			.willReturn(new GridAggregationView(null,
+				List.of(new RegionAggregateView("26230", "부산진구", 35.16, 129.06, 43))));
 
 		mockMvc.perform(aggregationRequest().param("unit", "sigungu"))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data[0].regionCode").value("26230"));
+			.andExpect(jsonPath("$.data.items[0].regionCode").value("26230"));
 	}
 
 	@Test
@@ -220,7 +238,7 @@ class GridControllerTest {
 	@Test
 	@DisplayName("단위별 상한을 넘으면 400 과 4402 를 반환한다")
 	void 단위별_상한을_넘으면_400과_4402를_반환한다() throws Exception {
-		given(gridQueryService.getOccupiedAggregatesInViewport(anyLong(), any(ViewportBounds.class), any()))
+		given(gridQueryService.getOccupiedAggregatesWithCurrentRegion(anyLong(), any(ViewportBounds.class), any()))
 			.willThrow(new ApiException(GridErrorCode.VIEWPORT_TOO_LARGE));
 
 		mockMvc.perform(aggregationRequest().param("unit", "DONG"))

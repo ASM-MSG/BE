@@ -73,8 +73,21 @@ jobs:
             for i in $(seq 1 30); do
               code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:8080/actuator/health || true)
               if [ "$code" = "200" ]; then
-                echo "기동 확인 — HTTP 200 ($((i * 5))초)"
-                exit 0
+                # 200 만으로는 부족하다 (MSG-382) — 그 응답을 방금 재시작한 유닛이 줬는지는 별개 사실이다.
+                # 고아 프로세스나 다른 앱이 8080 을 물고 있으면 재시작이 실패해도 초록불이 된다.
+                # 8080 리스너의 PID 가 fillmap-dev 유닛의 MainPID 와 같을 때만 성공으로 친다.
+                # 리스너 PID 는 전부 모아 유일값으로 비교한다 — v4/v6 두 소켓이 각 행으로 나오고,
+                # 첫 행만 보면(head -1) 다른 프로세스가 섞여 있어도 우연히 통과할 수 있다 (Codex 리뷰).
+                main_pid=$(systemctl show -p MainPID --value fillmap-dev)
+                listen_pids=$(sudo ss -ltnpH 'sport = :8080' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
+                if [ -n "$main_pid" ] && [ "$main_pid" != "0" ] && [ "$listen_pids" = "$main_pid" ]; then
+                  echo "기동 확인 — HTTP 200, 8080 리스너(pid=$listen_pids) = fillmap-dev MainPID ($((i * 5))초)"
+                  exit 0
+                fi
+                echo "::error::200 응답을 재시작한 유닛이 아닌 프로세스가 줬다 — MainPID=$main_pid, 8080 리스너 pid=[$listen_pids]"
+                sudo ss -ltnp 'sport = :8080' || true
+                journalctl -u fillmap-dev -n 50 --no-pager
+                exit 1
               fi
               sleep 5
             done

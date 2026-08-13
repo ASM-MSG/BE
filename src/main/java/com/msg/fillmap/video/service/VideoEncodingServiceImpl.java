@@ -20,6 +20,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.video.config.AsyncConfig;
+import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.repository.VideoRepository;
@@ -130,10 +131,17 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 		}
 	}
 
-	/** 업로드 직전 fresh 재확인 — VideoStatusWriter.isCurrentEncodingAttempt 와 같은 술어다 (MSG-241). */
+	/**
+	 * 업로드 직전 fresh 재확인 — VideoStatusWriter.isCurrentEncodingAttempt 와 같은 술어다 (MSG-241).
+	 * 인코딩 국면(UPLOADED·ENCODING) 조건도 라이터와 함께 유지한다 (MSG-382) — 이중 트리거로 다른 태스크가
+	 * 먼저 종결시켰으면 이 태스크의 결과 업로드도 의미가 없다.
+	 */
 	private boolean isCurrentEncodingAttempt(Long videoId, String originalKey) {
 		return videoRepository.findById(videoId)
-			.map(fresh -> fresh.getStatus() == VideoStatus.ACTIVE && originalKey.equals(fresh.getOriginalS3Key()))
+			.map(fresh -> fresh.getStatus() == VideoStatus.ACTIVE
+				&& (fresh.getProcessingStatus() == ProcessingStatus.UPLOADED
+					|| fresh.getProcessingStatus() == ProcessingStatus.ENCODING)
+				&& originalKey.equals(fresh.getOriginalS3Key()))
 			.orElse(false);
 	}
 

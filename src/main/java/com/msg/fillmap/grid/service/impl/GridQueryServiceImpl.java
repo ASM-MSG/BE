@@ -19,6 +19,9 @@ import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
 import com.msg.fillmap.grid.repository.GridRepository;
 import com.msg.fillmap.grid.repository.OccupiedGridProjection;
+import com.msg.fillmap.grid.repository.RegionGridSummaryProjection;
+import com.msg.fillmap.grid.service.CurrentRegionView;
+import com.msg.fillmap.grid.service.GridAggregationView;
 import com.msg.fillmap.grid.service.GridCellView;
 import com.msg.fillmap.grid.service.GridQueryService;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
@@ -120,6 +123,32 @@ public class GridQueryServiceImpl implements GridQueryService {
 			.map(p -> new RegionAggregateView(
 				p.getRegionCode(), p.getName(), p.getLat(), p.getLng(), p.getCount().intValue()))
 			.toList();
+	}
+
+	@Override
+	public GridAggregationView getOccupiedAggregatesWithCurrentRegion(
+		long userId, ViewportBounds bounds, RegionUnit unit) {
+		List<RegionAggregateView> items = getOccupiedAggregatesInViewport(userId, bounds, unit);
+		return new GridAggregationView(resolveCurrentRegion(userId, bounds), items);
+	}
+
+	private CurrentRegionView resolveCurrentRegion(long userId, ViewportBounds bounds) {
+		double lat = (bounds.swLat() + bounds.neLat()) / 2;
+		double lng = (bounds.swLng() + bounds.neLng()) / 2;
+		if (KoreaCoordinates.isOutOfService(lat, lng)) {
+			return null;
+		}
+		return regionQueryService.resolveByPoint(lat, lng)
+			.map(region -> toCurrentRegion(userId, region))
+			.orElse(null);
+	}
+
+	private CurrentRegionView toCurrentRegion(long userId, RegionView region) {
+		RegionGridSummaryProjection summary =
+			gridRepository.summarizeOccupiedByRegion(userId, region.regionCode());
+		String[] nameTokens = region.regionName().split(" ");
+		return new CurrentRegionView(region.regionCode(), nameTokens[nameTokens.length - 1],
+			summary.getGridCount(), summary.getVideoCount());
 	}
 
 	private List<OccupiedGridProjection> queryPage(long userId, ViewportBounds bounds, String cursor, int limit) {
