@@ -73,7 +73,12 @@ class VideoEncodingServiceTest {
 		video = Video.create(1L, "19495_9607", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 		given(videoRepository.findById(VIDEO_ID)).willReturn(Optional.of(video));
-		given(statusWriter.markEncoding(VIDEO_ID, ORIGINAL_KEY)).willReturn(true);
+		// 실제 라이터처럼 엔티티 상태도 전이시킨다 (MSG-382 Codex 리뷰) — 업로드 직전 fresh 재확인(쌍둥이 술어)이
+		// 정상 흐름에서 ENCODING 을 실제로 지나게 해서, 술어에서 ENCODING 허용이 빠지면 아래 정상 테스트가 깨진다.
+		given(statusWriter.markEncoding(VIDEO_ID, ORIGINAL_KEY)).willAnswer(invocation -> {
+			video.markEncoding();
+			return true;
+		});
 	}
 
 	// 검증: FR-MEDIA-01, FR-MEDIA-02
