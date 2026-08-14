@@ -129,6 +129,26 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    ```
 
    200이 아니면 시더를 돌리지 않는다. 403인 채로 적재하면 전량을 나중에 다시 손봐야 한다.
+4. **`missions/*` 쓰기 IAM 권한** (MSG-384) — 위 3번이 "읽기"라면 이건 **올리는 쪽**이다. 이미지를
+   버킷에 넣는 주체(로컬 수집 스크립트라면 `fillmap-local-dev`)에 접두사 권한을 준다. 2026-08-14 실측으로
+   그 사용자는 `missions/`에 `PutObject`가 **거부**된다 — IAM 정책이 접두사별로 묶여 있고
+   `videos/*`·`profiles/*`만 열려 있다.
+
+   ```json
+   {
+     "Effect": "Allow",
+     "Action": "s3:PutObject",
+     "Resource": "arn:aws:s3:::{버킷명}/missions/*"
+   }
+   ```
+
+   3번과 4번은 **다른 층이라 둘 다 필요하다.** 4번이 없으면 이미지를 올리지 못하고, 3번이 없으면
+   올라간 이미지가 브라우저에서 403이다. 확인은 올려 보고 받아 보는 두 단계다:
+
+   ```bash
+   aws s3 cp x.jpg s3://{버킷명}/missions/festival/_healthcheck.jpg   # 4번 확인
+   curl -s -o /dev/null -w '%{http_code}\n' "https://{버킷명}.s3.{리전}.amazonaws.com/missions/festival/_healthcheck.jpg"   # 3번 확인
+   ```
 
 ## DB 마이그레이션 (Flyway)
 
