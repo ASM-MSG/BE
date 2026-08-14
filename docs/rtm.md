@@ -2,7 +2,10 @@
 
 `scripts/generate-rtm.sh` 가 생성한다. 손으로 고치지 말 것. 원천은 테스트의 `// 검증: FR-...` 주석과 `docs/srs.md` 다.
 
-요약: FR 227건 중 테스트 연결 194건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 26건, 성격상 테스트 비대상 7건 별도)
+**병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(`git checkout --ours docs/rtm.md` 등)
+스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다.
+
+요약: FR 227건 중 테스트 연결 195건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 25건, 성격상 테스트 비대상 7건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -165,7 +168,7 @@
 | FR-MISSION-14 | 계획 | (없음) |
 | FR-MISSION-15 | 계획 | (없음) |
 | FR-MISSION-16 | 계획 | CourseMissionSeederIntegrationTest, CourseSeedReaderTest, FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, MissionControllerTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
-| FR-MISSION-17 | 계획 | (없음) |
+| FR-MISSION-17 | 진행 중 | MissionVideoControllerTest, MissionVideoListQueryTest, MissionVideoListServiceTest |
 | FR-MISSION-18 | 계획 | (없음) |
 | FR-MISSION-19 | 계획 | (없음) |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
@@ -258,7 +261,6 @@
 - FR-MISSION-13 (계획)
 - FR-MISSION-14 (계획)
 - FR-MISSION-15 (계획)
-- FR-MISSION-17 (계획)
 - FR-MISSION-18 (계획)
 - FR-MISSION-19 (계획)
 - FR-NOTI-12 (계획)
