@@ -22,6 +22,7 @@ import tools.jackson.databind.ObjectMapper;
  * MSG-383 이 더한 화면용 필드 5종(contents·sigun·distanceKm·durationMinutes·level)만 예외 계약이
  * 다르다: **결측은 허용하고 형식 위반은 거부한다**(D4). 신규 필드에도 전량 거부를 적용하면 기존
  * 산출물 파일로 재실행하는 순간 148 코스가 통째로 거부돼 운영자가 손댈 수 없기 때문이다.
+ * MSG-394 가 더한 imageKey 도 같은 계약이다 — 사진 있는 스팟이 없는 코스는 키가 아예 없다.
  */
 @Component
 public class CourseSeedReader {
@@ -30,6 +31,8 @@ public class CourseSeedReader {
 	private static final int SPOTS_MAX = 8;
 	/** missions.title VARCHAR(200) 방어 절단 (MSG-224 미러) — dedupe 키도 절단값으로 일관. */
 	private static final int TITLE_MAX_LENGTH = 200;
+	/** 대표 이미지 키가 놓이는 버킷 경로 (MSG-394 D3 산출물 계약). 형식 검증은 SeedText 공용. */
+	private static final String IMAGE_KEY_PREFIX = "missions/course/";
 	/** 논리 식별자 "{grid_y}_{grid_x}" (glossary) — 음수 인덱스 허용. */
 	private static final Pattern GRID_ID = Pattern.compile("-?\\d+_-?\\d+");
 	/**
@@ -83,7 +86,8 @@ public class CourseSeedReader {
 			SeedText.truncatePlaceName(SeedText.text(course, "sigun")),
 			distanceMeters(course, crsIdx),
 			positive(integer(course, "durationMinutes", crsIdx), "durationMinutes", crsIdx),
-			difficulty(course, crsIdx));
+			difficulty(course, crsIdx),
+			SeedText.imageKey(course, IMAGE_KEY_PREFIX));
 	}
 
 	/**

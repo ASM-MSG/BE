@@ -8,8 +8,6 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
@@ -32,17 +30,8 @@ import com.msg.fillmap.global.geo.KoreaCoordinates;
 @Component
 public class FestivalJsonlReader {
 
-	/** 대표 이미지 키가 놓이는 버킷 경로 (MSG-384 D2 산출물 계약). */
+	/** 대표 이미지 키가 놓이는 버킷 경로 (MSG-384 D2 산출물 계약). 형식 검증은 SeedText 공용(MSG-394 D3). */
 	private static final String IMAGE_KEY_PREFIX = "missions/festival/";
-	/**
-	 * 래스터 이미지 확장자 허용목록 — 목적은 형식 통일이 아니라 <b>보안</b>이다(MSG-384 D2). 공개 읽기인
-	 * missions/ 접두사에 {@code .svg}·{@code .html} 이 올라가면 우리 S3 도메인에서 스크립트가 실행된다.
-	 * 스크립트가 JPEG 로 변환해 올리므로 실제로는 .jpg 만 오지만 리더가 그것을 믿지 않는다.
-	 * jpg 하나로 좁히지 않는 것은 변환 대상이 바뀔 때 리더가 곧바로 막지 않게 하기 위해서다 —
-	 * 래스터 안에서는 무엇이 오든 위험이 같다. UserServiceImpl.validatePendingKey 와 같은 이유·같은
-	 * 방식이되, 그쪽 상수는 private 이고 업로드 Content-Type 짝 검증용이라 재사용하지 않는다.
-	 */
-	private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "bmp", "gif");
 
 	private final ObjectMapper objectMapper;
 
@@ -96,7 +85,7 @@ public class FestivalJsonlReader {
 				SeedText.normalizeBreaks(SeedText.text(row, "description")),
 				SeedText.truncatePlaceName(SeedText.text(row, "place")),
 				SeedText.text(row, "homepage"),
-				imageKey(row)));
+				SeedText.imageKey(row, IMAGE_KEY_PREFIX)));
 		}
 		return new Result(records, invalidDate, ended, malformed, requiredField);
 	}
@@ -109,41 +98,6 @@ public class FestivalJsonlReader {
 	private static double coordinate(JsonNode row, String field) {
 		JsonNode value = row.path(field);
 		return value.isNumber() ? value.doubleValue() : Double.NaN;
-	}
-
-	/**
-	 * 대표 이미지 키 검증 (MSG-384 D2) — 결측은 허용하고(실측 461건 중 5건) 형식 위반은 전량 거부한다.
-	 * 셋을 함께 보는 것이 검증의 요점이다: 접두사만 보면 {@code missions/festival/x.svg} 가 통과하고,
-	 * 확장자만 보면 다른 공개 경로에 키를 심을 수 있으며, 둘만 보면
-	 * {@code missions/festival/../course/other.jpg} 가 양쪽을 통과한다. 마지막 키는 저장되는 URL 을
-	 * 클라이언트가 정규화하는 순간 축제 접두사 밖의 객체를 가리킨다.
-	 *
-	 * 그래서 접두사 뒤는 <b>슬래시 없는 단일 객체 이름</b>이어야 한다 — 스펙의 키 형식이
-	 * {@code missions/festival/{contentid}-{해시}.jpg} 라 하위 경로가 애초에 없고, {@code ..} 만 막는 것보다
-	 * 단순하면서 강하다.
-	 */
-	private static String imageKey(JsonNode row) {
-		String key = SeedText.text(row, "imageKey");
-		if (key == null) {
-			return null;
-		}
-		if (!key.startsWith(IMAGE_KEY_PREFIX)) {
-			throw new IllegalStateException("imageKey 가 " + IMAGE_KEY_PREFIX + " 아래가 아닙니다 (D2): " + key);
-		}
-		String objectName = key.substring(IMAGE_KEY_PREFIX.length());
-		if (objectName.contains("/")) {
-			throw new IllegalStateException(
-				"imageKey 의 " + IMAGE_KEY_PREFIX + " 뒤가 단일 객체 이름이 아닙니다 (D2 경로 탈출 방어): " + key);
-		}
-		// extensionAt == 0 은 이름이 비어 확장자만 남은 키(".jpg") — 확장자 부재(-1)와 같이 거부한다.
-		// Locale.ROOT: 터키어 로케일에서 "GIF".toLowerCase() 가 "gıf"(점 없는 ı)가 돼 허용목록을 빗나간다.
-		int extensionAt = objectName.lastIndexOf('.');
-		if (extensionAt <= 0
-			|| !ALLOWED_IMAGE_EXTENSIONS.contains(objectName.substring(extensionAt + 1).toLowerCase(Locale.ROOT))) {
-			throw new IllegalStateException(
-				"imageKey 가 허용된 래스터 확장자를 가진 파일 이름이 아닙니다 (D2): " + key);
-		}
-		return key;
 	}
 
 	/** YYYY-MM-DD 파싱 — 누락·빈 문자열·파싱 실패는 null(행 제외 사유). EVENT 를 무기간으로 만들지 않는다(D1). */

@@ -160,7 +160,7 @@
 | FR-MISSION-05 | 구현됨 | VideoMissionIntegrationTest |
 | FR-MISSION-06 | 구현됨 | MissionAwardServiceTest |
 | FR-MISSION-07 | 폐기됨 | (없음) |
-| FR-MISSION-08 | 진행 중 | FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, FestivalMissionSeederTest |
+| FR-MISSION-08 | 진행 중 | CourseMissionSeederIntegrationTest, CourseSeedReaderTest, FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, FestivalMissionSeederTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
 | FR-MISSION-09 | 구현됨 | CourseMissionSeederIntegrationTest, CourseSeedContractTest, CourseSeedReaderTest, MissionSchemaMigrationTest |
 | FR-MISSION-10 | 진행 중 | PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
 | FR-MISSION-11 | 구현됨 | CourseMissionSeederIntegrationTest, FestivalMissionSeederIntegrationTest, PopupMissionSeederIntegrationTest |

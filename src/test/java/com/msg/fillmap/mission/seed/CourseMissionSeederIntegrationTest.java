@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.ObjectMapper;
 
+import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionGrid;
 import com.msg.fillmap.mission.entity.MissionType;
@@ -54,6 +55,9 @@ class CourseMissionSeederIntegrationTest {
 	private CourseSeedReader reader;
 
 	@Autowired
+	private AwsProperties awsProperties;
+
+	@Autowired
 	private ObjectMapper objectMapper;
 
 	@Autowired
@@ -63,7 +67,8 @@ class CourseMissionSeederIntegrationTest {
 	private Path tempDir;
 
 	private CourseMissionSeeder newSeeder(boolean enabled, String path) {
-		CourseMissionSeeder seeder = new CourseMissionSeeder(missionRepository, missionGridRepository, reader);
+		CourseMissionSeeder seeder = new CourseMissionSeeder(missionRepository, missionGridRepository, reader,
+			awsProperties);
 		ReflectionTestUtils.setField(seeder, "enabled", enabled);
 		ReflectionTestUtils.setField(seeder, "seedPath", path);
 		return seeder;
@@ -171,19 +176,104 @@ class CourseMissionSeederIntegrationTest {
 		assertThat(mission.getOperationTime()).isNull();
 	}
 
-	// 검증: FR-MISSION-16
+	// 검증: FR-MISSION-08 (이미지 미러링은 SRS 등재로 NFR DATA 07)
 	@Test
-	@DisplayName("대표 이미지는 어느 시더도 채우지 않는다 — 스팟 사진 수집은 MSG-384 (D7)")
-	void 대표_이미지는_어느_시더도_채우지_않는다() throws IOException {
-		String title = unique("이미지 없는 코스");
-		Path file = writeSeed("image.json", courseWithMetadata("T_IT_IMG", title,
-			"소개", "부산 영도구", "\"14\"", "\"330\"", "\"2\""));
+	@DisplayName("코스 미션에 대표 이미지 주소가 적재된다 — 버킷 상대 키를 공개 주소로 조립 (MSG-394 D3)")
+	void 코스_미션에_대표_이미지_주소가_적재된다() throws IOException {
+		String title = unique("이미지 있는 코스");
+		String imageKey = "missions/course/1018702-745a845a9048.jpg";
+		Path file = writeSeed("image-url.json", courseWithImageKey("T_IT_IMG_URL", title, imageKey));
 
 		seeder().seed(file);
 
 		em.flush();
 		em.clear();
+		// 파일은 키만 담고 주소는 시더가 자기 환경의 버킷·리전으로 조립한다 — 외부 도메인이 저장될 경로가 없다.
+		assertThat(findByTitle(title).getImageUrl())
+			.isEqualTo("https://%s.s3.%s.amazonaws.com/%s"
+				.formatted(awsProperties.s3().bucket(), awsProperties.region(), imageKey))
+			.endsWith("/" + imageKey);
+	}
+
+	// 검증: FR-MISSION-08
+	@Test
+	@DisplayName("대표 이미지가 없는 코스도 정상 적재된다 — 사진 있는 스팟이 없으면 image_url NULL")
+	void 대표_이미지가_없는_코스도_정상_적재된다() throws IOException {
+		String title = unique("이미지 없는 코스");
+		Path file = writeSeed("image.json", courseWithMetadata("T_IT_IMG", title,
+			"소개", "부산 영도구", "\"14\"", "\"330\"", "\"2\""));
+
+		CourseMissionSeeder.SeedResult result = seeder().seed(file);
+
+		assertThat(result.loaded()).isEqualTo(1);
+		em.flush();
+		em.clear();
 		assertThat(findByTitle(title).getImageUrl()).isNull();
+	}
+
+	// 검증: FR-MISSION-08 (이미지 미러링은 SRS 등재로 NFR DATA 07)
+	@Test
+	@DisplayName("새 스냅샷에 이미지가 없어도 이미 채운 코스 이미지는 유지된다 — 이미지 한 필드 예외 (MSG-394 D4)")
+	void 새_스냅샷에_이미지가_없어도_이미_채운_코스_이미지는_유지된다() throws IOException {
+		// Given: 대표 이미지가 채워진 코스. 후보 스팟이 억제되거나 조인이 비어도 우리 버킷 사본은 살아 있다.
+		String title = unique("이미지 보존 코스");
+		seeder().seed(writeSeed("keep-first.json",
+			courseWithImageKey("T_IT_KEEP", title, "missions/course/1018702-cafebabe.jpg")));
+		em.flush();
+		em.clear();
+		String imageUrlBefore = findByTitle(title).getImageUrl();
+		assertThat(imageUrlBefore).isNotNull();
+
+		// When: 같은 제목(dedupe 키)에 imageKey 만 빠지고 소개문이 붙은 파일로 갱신.
+		CourseMissionSeeder.SeedResult result = seeder().seed(writeSeed("keep-second.json",
+			courseWithMetadata("T_IT_KEEP", title, "바뀐 소개", "부산 영도구", "\"14\"", "\"330\"", "\"2\"")));
+
+		assertThat(result.updated()).isEqualTo(1);
+		em.flush();
+		em.clear();
+		Mission after = findByTitle(title);
+		assertThat(after.getImageUrl()).isEqualTo(imageUrlBefore);
+		// 예외는 이미지에만 걸린다 — 소개문은 외부 원본을 비추는 값이라 새 스냅샷으로 덮인다.
+		assertThat(after.getDescription()).isEqualTo("바뀐 소개");
+	}
+
+	// 검증: FR-MISSION-09
+	@Test
+	@DisplayName("기존 코스의 판정 격자는 갱신에서 바뀌지 않는다 — 재양자화한 파일을 적재해도 판정 무흔들림 (MSG-394 D5)")
+	void 기존_코스의_판정_격자는_갱신에서_바뀌지_않는다() throws IOException {
+		// 산출물의 스팟 격자가 EPSG:5179 로 재양자화됐어도 기존 코스는 메타데이터만 갱신된다 — 판정 범위
+		// 변경은 이 티켓 밖이고 DB 이행을 동반해야 한다.
+		String title = unique("격자 불변 코스");
+		seeder().seed(writeSeed("grids-before.json", course("T_IT_GRID", title, 5)));
+		em.flush();
+		em.clear();
+		long missionId = findByTitle(title).getId();
+		List<String> gridsBefore = gridIdsOf(missionId);
+
+		CourseMissionSeeder.SeedResult result = seeder()
+			.seed(writeSeed("grids-after.json", course("T_IT_GRID", title, 5, -39500)));
+
+		assertThat(result.loaded()).isZero();
+		em.flush();
+		em.clear();
+		assertThat(gridIdsOf(missionId)).isEqualTo(gridsBefore);
+	}
+
+	// 검증: FR-MISSION-08
+	@Test
+	@DisplayName("같은 파일로 재실행하면 적재 0건이고 갱신 0건이다 — 이미지가 실려도 멱등")
+	void 같은_파일로_재실행하면_적재_0건이고_갱신_0건이다() throws IOException {
+		String title = unique("멱등 이미지 코스");
+		Path file = writeSeed("idem-image.json",
+			courseWithImageKey("T_IT_IDEM_IMG", title, "missions/course/1018702-0badf00d.jpg"));
+
+		seeder().seed(file);
+		em.flush();
+		em.clear();
+		CourseMissionSeeder.SeedResult second = seeder().seed(file);
+
+		assertThat(second.loaded()).isZero();
+		assertThat(second.updated()).isZero();
 	}
 
 	// 검증: FR-MISSION-16
@@ -308,6 +398,14 @@ class CourseMissionSeederIntegrationTest {
 			.orElseThrow();
 	}
 
+	/** 판정 격자 seq 순 목록 — 갱신 전후 비교용 (D5). */
+	private List<String> gridIdsOf(long missionId) {
+		return missionGridRepository.findByMissionIds(List.of(missionId)).stream()
+			.sorted(Comparator.comparing(MissionGrid::getSeq))
+			.map(MissionGrid::getGridId)
+			.toList();
+	}
+
 	private long countByTitle(String title) {
 		return missionRepository.findBySource(CourseMissionSeeder.SOURCE_DURUNUBI).stream()
 			.filter(mission -> mission.getTitle().equals(title))
@@ -322,6 +420,11 @@ class CourseMissionSeederIntegrationTest {
 
 	/** 산출물 형식(D6)의 코스 1건 — 남반구 합성 격자 인덱스(-39001..)로 실데이터와 못 겹치게 한다. */
 	private static String course(String crsIdx, String name, int spotCount) {
+		return course(crsIdx, name, spotCount, -39000);
+	}
+
+	/** 스팟 격자 대역을 옮긴 같은 형식의 코스 1건 — 재양자화된 파일로 재실행하는 상황을 만든다 (D5). */
+	private static String course(String crsIdx, String name, int spotCount, long baseY) {
 		StringBuilder spots = new StringBuilder();
 		for (int seq = 1; seq <= spotCount; seq++) {
 			if (seq > 1) {
@@ -329,11 +432,20 @@ class CourseMissionSeederIntegrationTest {
 			}
 			spots.append("""
 				{"seq": %d, "gridId": "%d_112198", "name": "스팟%d", "method": "tourapi"}"""
-				.formatted(seq, -39000 - seq, seq));
+				.formatted(seq, baseY - seq, seq));
 		}
 		return """
 			{"crsIdx": "%s", "name": "%s", "path": %s, "spots": [%s]}"""
 			.formatted(crsIdx, name, PATH_JSON, spots);
+	}
+
+	/** 대표 이미지 키(MSG-394 D3)만 얹은 코스 1건 — 키가 null 이면 넣지 않는다(산출물 계약). */
+	private static String courseWithImageKey(String crsIdx, String name, String imageKey) {
+		if (imageKey == null) {
+			return course(crsIdx, name, 5);
+		}
+		return course(crsIdx, name, 5).replaceFirst("}$", """
+			, "imageKey": "%s"}""".formatted(imageKey));
 	}
 
 	/** 화면용 필드 5종(MSG-383 D4)까지 실린 산출물 형식의 코스 1건 — 숫자는 원문 조각 그대로 받는다. */

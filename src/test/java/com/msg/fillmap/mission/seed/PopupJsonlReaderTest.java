@@ -67,6 +67,16 @@ class PopupJsonlReaderTest {
 			.formatted(operationTimeJson, addressJson, roadAddressJson, addressDetailJson);
 	}
 
+	/** 보강 수집(MSG-394 D1)이 더한 두 키만 원문 조각 그대로 받는 1행. */
+	private static String enrichedRow(String descriptionJson, String imageKeyJson) {
+		return """
+			{"id": 9002, "periodType": "IN_PROGRESS", "openDate": "2026-07-10", "closeDate": "2026-07-20", \
+			"latitude": 37.5434, "longitude": 127.0643, "name": "보강된 팝업", "operationTime": [], \
+			"roadAddress": "서울 성동구 동일로 119", "sourceUrl": "https://popga.co.kr/popup/9002", \
+			"description": %s, "imageKey": %s}"""
+			.formatted(descriptionJson, imageKeyJson);
+	}
+
 	@Test
 	void 유효_행이_레코드로_매핑된다() {
 		PopupJsonlReader.Result result = read(
@@ -229,6 +239,108 @@ class PopupJsonlReaderTest {
 				rawRow("1", badName, "36.5", "127.5", "\"2026-07-10\"", "\"2026-07-20\"")))
 				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("name");
+		}
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 팝업_소개문을_읽는다() {
+		// 팝가 상세 페이지 본문 원문 그대로다 — 잘린 og:description 은 어느 경우에도 쓰지 않는다 (D1).
+		PopupRecord record = read(enrichedRow("\"한여름 밤의 세일\"", "\"missions/popup/8151-a1b2c3d4.jpg\""))
+			.records().get(0);
+
+		assertThat(record.description()).isEqualTo("한여름 밤의 세일");
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 팝업_소개문이_없으면_null이다() {
+		// 소개문 결측은 정상 결과다 — 못 얻었을 때 안전한 실패는 잘린 값이 아니라 값 없음이다 (D1).
+		PopupRecord missing = read(row(8151, "소개문 없음", "2026-07-10", "2026-07-20")).records().get(0);
+		PopupRecord blank = read(enrichedRow("\"   \"", "null")).records().get(0);
+
+		assertThat(missing.description()).isNull();
+		assertThat(blank.description()).isNull();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	void 팝업_소개문의_br_태그가_개행으로_바뀐다() {
+		String description = "\"오픈 기념 이벤트<br>선착순 100명<br/>매장 방문 필수<BR />끝\"";
+
+		PopupRecord record = read(enrichedRow(description, "null")).records().get(0);
+
+		assertThat(record.description())
+			.isEqualTo("오픈 기념 이벤트\n선착순 100명\n매장 방문 필수\n끝")
+			.doesNotContainIgnoringCase("<br");
+	}
+
+	// 검증: FR-MISSION-08 (이미지 미러링은 SRS 등재로 NFR DATA 07)
+	@Test
+	void 팝업_대표_이미지_키를_읽는다() {
+		PopupRecord record = read(enrichedRow("null", "\"missions/popup/8151-a1b2c3d4.jpg\"")).records().get(0);
+
+		assertThat(record.imageKey()).isEqualTo("missions/popup/8151-a1b2c3d4.jpg");
+	}
+
+	// 검증: FR-MISSION-08
+	@Test
+	void 팝업_대표_이미지_키가_없으면_null이다() {
+		// 포스터를 못 얻은 팝업은 이미지 없는 미션으로 정상 적재된다 (D1 필드 단위 판정).
+		PopupRecord missing = read(row(8151, "이미지 없음", "2026-07-10", "2026-07-20")).records().get(0);
+		PopupRecord blank = read(enrichedRow("null", "\"\"")).records().get(0);
+
+		assertThat(missing.imageKey()).isNull();
+		assertThat(blank.imageKey()).isNull();
+	}
+
+	@Test
+	void 팝업_대표_이미지_키가_팝업_경로_밖이면_예외를_던진다() {
+		// 축제 경로 키도 거부한다 — 종류별 접두사가 검증의 일부다 (D3).
+		for (String outside : new String[] {
+			"\"profiles/original/1/stolen.jpg\"", "\"missions/festival/2732106-a1b2c3d4.jpg\""}) {
+			assertThatThrownBy(() -> read(enrichedRow("null", outside)))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("missions/popup/");
+		}
+	}
+
+	@Test
+	void 팝업_대표_이미지_키에_하위_경로가_있으면_예외를_던진다() {
+		// 접두사와 확장자만 보면 통과하지만, 저장된 URL 을 클라이언트가 정규화하면 팝업 접두사 밖의 객체를
+		// 가리킨다 (D3 경로 탈출 방어).
+		assertThatThrownBy(() -> read(enrichedRow("null", "\"missions/popup/../festival/other.jpg\"")))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("단일 객체 이름");
+		assertThatThrownBy(() -> read(enrichedRow("null", "\"missions/popup/2026/a.jpg\"")))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("단일 객체 이름");
+	}
+
+	@Test
+	void 팝업_대표_이미지_키에_URL_구분자가_있으면_예외를_던진다() {
+		// 확장자 허용목록만으로는 그 확장자가 실제로 요청되는 자원인지를 보장하지 못한다 — 저장 값이
+		// 이스케이프 없이 이어 붙인 URL 이라 "payload.html#x.jpg" 는 클라이언트가 payload.html 을
+		// 요청한다(? 는 쿼리로 같은 결과). 셋 다 지금 확장자 검사를 통과하는 형태다 (Codex 리뷰 파생).
+		for (String bypass : new String[] {"\"missions/popup/payload.html#x.jpg\"",
+			"\"missions/popup/payload.html?x.jpg\"", "\"missions/popup/payload.html%23x.jpg\"",
+			"\"missions/popup/a b.jpg\""}) {
+			assertThatThrownBy(() -> read(enrichedRow("null", bypass)))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("허용되지 않는 문자");
+		}
+	}
+
+	@Test
+	void 팝업_대표_이미지_키는_래스터_확장자만_허용한다() {
+		// 목적은 형식 통일이 아니라 보안이다 — 공개 읽기인 missions/ 접두사에 실행 가능한 콘텐츠가
+		// 올라가면 우리 S3 도메인에서 스크립트가 돈다 (D3).
+		assertThat(read(enrichedRow("null", "\"missions/popup/a.webp\"")).records()).hasSize(1);
+		for (String executable : new String[] {"\"missions/popup/a.svg\"", "\"missions/popup/a.html\"",
+			"\"missions/popup/a\""}) {
+			assertThatThrownBy(() -> read(enrichedRow("null", executable)))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("확장자");
 		}
 	}
 

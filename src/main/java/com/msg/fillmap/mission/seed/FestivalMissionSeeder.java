@@ -153,7 +153,9 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 			if (existingMission != null) {
 				// 재실행이 곧 백필 (MSG-383 D6) — 메타데이터만 더티 체킹으로 갱신하고 제목·기간·격자는 둔다.
 				updatedIds.add(existingMission.getId());
-				if (existingMission.applyMetadata(preserveImage(metadataOf(record), existingMission))) {
+				// 이미지 보존은 갱신 경로에서만 명시적으로 고른다 (MSG-384 D2 · MSG-394 D4).
+				if (existingMission.applyMetadata(
+					metadataOf(record).withImageFallback(existingMission.getImageUrl()))) {
 					updated++;
 				}
 				continue;
@@ -165,26 +167,6 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 		return new SeedResult(loaded, parsed.records().size() - loaded, updated, List.copyOf(updatedIds),
 			parsed.skippedInvalidDate(), parsed.skippedEnded(), parsed.skippedMalformed(),
 			parsed.skippedRequiredField(), removed);
-	}
-
-	/**
-	 * 새 스냅샷에 이미지가 없으면 이미 채운 대표 이미지를 그대로 둔다 (MSG-384 D2). {@code applyMetadata} 가
-	 * 8개 필드를 통째로 대입하는 부분 갱신 아닌 메서드라, 원본이 내려가 imageKey 가 빈 스냅샷이 오면 우리
-	 * 버킷에 사본이 멀쩡히 있는데 그 주소를 아는 곳이 없어진다 — 원본이 사라진 바로 그 상황에서 사본까지
-	 * 잃는 셈이다.
-	 *
-	 * <b>갱신 경로의 이미지 한 필드만의 예외다.</b> 소개문·장소·원문 링크는 외부 원본을 비추는 값이라
-	 * 새 스냅샷으로 덮는 것이 맞고, 신규 INSERT 는 이미지가 없으면 NULL 그대로다. 병합을 호출부에서 하는
-	 * 것은 {@code applyMetadata} 를 팝업·코스 시더가 함께 써서, 의미를 바꾸면 세 시더의 갱신 동작이 한꺼번에
-	 * 달라지기 때문이다.
-	 */
-	private static MissionMetadata preserveImage(MissionMetadata metadata, Mission existing) {
-		if (metadata.imageUrl() != null) {
-			return metadata;
-		}
-		return new MissionMetadata(metadata.description(), metadata.placeName(), metadata.sourceUrl(),
-			metadata.operationTime(), existing.getImageUrl(),
-			metadata.distanceMeters(), metadata.durationMinutes(), metadata.difficulty());
 	}
 
 	/**
@@ -236,25 +218,11 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 
 	/**
 	 * 축제 원본 → 메타데이터 컬럼 매핑 (MSG-383 D3 · MSG-384 D2). 축제에는 운영시간·코스 지표 개념이
-	 * 없어 그 4종은 null 이다. 대표 이미지는 버킷 상대 키를 받아 여기서 공개 주소로 조립한다.
+	 * 없어 그 4종은 null 이다. 대표 이미지는 버킷 상대 키를 받아 자기 환경의 공개 주소로 조립한다.
 	 */
 	private MissionMetadata metadataOf(FestivalRecord record) {
 		return new MissionMetadata(record.description(), record.place(), record.homepage(),
-			null, toPublicUrl(record.imageKey()), null, null, null);
-	}
-
-	/**
-	 * 버킷 상대 키 → 공개 주소 (MSG-384 D2). 앱이 주소가 아니라 키를 입력으로 받으므로 외부 도메인이
-	 * image_url 에 저장되는 상태 자체가 표현 불가능하고, 같은 스냅샷 파일을 버킷이 서로 다른 dev·prod
-	 * 양쪽에 그대로 쓸 수 있다. {@code UserServiceImpl.toPublicUrl} 과 같은 한 줄이되 공용 컴포넌트로
-	 * 빼지 않는 것은, 그 클래스가 스스로 적어 둔 "세 번째 사용처가 생기면 그때 추출한다" 규칙을 따른 것이다.
-	 */
-	private String toPublicUrl(String imageKey) {
-		if (imageKey == null) {
-			return null;
-		}
-		return "https://%s.s3.%s.amazonaws.com/%s".formatted(
-			awsProperties.s3().bucket(), awsProperties.region(), imageKey);
+			null, awsProperties.publicUrl(record.imageKey()), null, null, null);
 	}
 
 	private static String truncateTitle(String name) {

@@ -24,6 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionGrid;
@@ -66,6 +67,9 @@ class PopupMissionSeederIntegrationTest {
 	private PopupJsonlReader reader;
 
 	@Autowired
+	private AwsProperties awsProperties;
+
+	@Autowired
 	private UserRepository userRepository;
 
 	@Autowired
@@ -76,7 +80,8 @@ class PopupMissionSeederIntegrationTest {
 
 	private PopupMissionSeeder newSeeder(boolean enabled, String path) {
 		// 프로덕션 기본 생성자(KST 시스템 클럭) 그대로 — 종료 필터와 정리 SQL 이 같은 실시간을 본다.
-		PopupMissionSeeder seeder = new PopupMissionSeeder(missionRepository, missionGridRepository, reader);
+		PopupMissionSeeder seeder = new PopupMissionSeeder(missionRepository, missionGridRepository, reader,
+			awsProperties);
 		ReflectionTestUtils.setField(seeder, "enabled", enabled);
 		ReflectionTestUtils.setField(seeder, "jsonlPath", path);
 		return seeder;
@@ -253,23 +258,146 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(mission.getOperationTime()).isEqualTo("매일 11:00 ~ 20:00");
 		assertThat(mission.getPlaceName()).isEqualTo("합성 도로명 합성 상세");
 		assertThat(mission.getSourceUrl()).isEqualTo("https://popga.co.kr/popup/" + id);
-		// 소개문은 현 스냅샷에 필드가 없고, 코스 지표는 팝업에 개념이 없다 (D3).
+		// 보강 전 스냅샷 행이라 소개문이 없고, 코스 지표는 팝업에 개념이 없다 (D3).
 		assertThat(mission.getDescription()).isNull();
 		assertThat(mission.getDistanceMeters()).isNull();
 	}
 
-	// 검증: FR-MISSION-16
+	// 검증: FR-MISSION-08 (이미지 미러링은 SRS 등재로 NFR DATA 07), FR-MISSION-16
 	@Test
-	@DisplayName("대표 이미지는 어느 시더도 채우지 않는다 — 포스터 수집은 MSG-384 (D7)")
-	void 대표_이미지는_어느_시더도_채우지_않는다() throws IOException {
+	@DisplayName("팝업 미션에 대표 이미지 주소와 소개문이 적재된다 — 버킷 상대 키를 공개 주소로 조립 (MSG-394 D3)")
+	void 팝업_미션에_대표_이미지_주소와_소개문이_적재된다() throws IOException {
 		long id = uniqueId();
-		Path file = writeJsonl("image.jsonl", activeRow(id, unique("이미지 없는 팝업"), 합성_LAT, 합성_LON));
+		String imageKey = "missions/popup/" + id + "-a1b2c3d4.jpg";
+		Path file = writeJsonl("image-url.jsonl",
+			enrichedRow(id, unique("포스터 있는 팝업"), "한여름 밤의 세일", imageKey));
 
 		seeder().seed(file);
 
 		em.flush();
 		em.clear();
+		Mission mission = findByKey(id);
+		// 파일은 키만 담고 주소는 시더가 자기 환경의 버킷·리전으로 조립한다 — 외부 도메인이 저장될 경로가 없다.
+		assertThat(mission.getImageUrl())
+			.isEqualTo("https://%s.s3.%s.amazonaws.com/%s"
+				.formatted(awsProperties.s3().bucket(), awsProperties.region(), imageKey))
+			.endsWith("/" + imageKey);
+		assertThat(mission.getDescription()).isEqualTo("한여름 밤의 세일");
+	}
+
+	// 검증: FR-MISSION-08
+	@Test
+	@DisplayName("대표 이미지가 없는 팝업도 정상 적재된다 — image_url NULL")
+	void 대표_이미지가_없는_팝업도_정상_적재된다() throws IOException {
+		long id = uniqueId();
+		Path file = writeJsonl("image.jsonl", activeRow(id, unique("이미지 없는 팝업"), 합성_LAT, 합성_LON));
+
+		PopupMissionSeeder.SeedResult result = seeder().seed(file);
+
+		assertThat(result.loaded()).isEqualTo(1);
+		em.flush();
+		em.clear();
 		assertThat(findByKey(id).getImageUrl()).isNull();
+	}
+
+	// 검증: FR-MISSION-08
+	@Test
+	@DisplayName("소개문이 없고 이미지만 있는 팝업이 정상 적재된다 — 필드 단위 판정의 DB 쪽 귀결 (MSG-394 D1)")
+	void 소개문이_없고_이미지만_있는_팝업이_정상_적재된다() throws IOException {
+		// 포스터는 대개 있고 소개문은 못 얻는 것이 정상이라, 둘을 한 덩어리로 묶으면 멀쩡히 받은 포스터가
+		// 소개문 결측 때문에 버려진다. 수집이 필드 단위로 판정한 결과가 여기까지 살아 와야 한다.
+		long id = uniqueId();
+		String imageKey = "missions/popup/" + id + "-deadbeef.jpg";
+		Path file = writeJsonl("image-only.jsonl",
+			enrichedRow(id, unique("소개문 없는 팝업"), null, imageKey));
+
+		PopupMissionSeeder.SeedResult result = seeder().seed(file);
+
+		assertThat(result.loaded()).isEqualTo(1);
+		em.flush();
+		em.clear();
+		Mission mission = findByKey(id);
+		assertThat(mission.getImageUrl()).endsWith("/" + imageKey);
+		assertThat(mission.getDescription()).isNull();
+	}
+
+	// 검증: FR-MISSION-08 (이미지 미러링은 SRS 등재로 NFR DATA 07)
+	@Test
+	@DisplayName("새 스냅샷에 이미지가 없어도 이미 채운 팝업 이미지는 유지된다 — 이미지 한 필드 예외 (MSG-394 D4)")
+	void 새_스냅샷에_이미지가_없어도_이미_채운_팝업_이미지는_유지된다() throws IOException {
+		// Given: 포스터가 채워진 미션. 팝업이 끝나면 상세 페이지가 사라져 다음 스냅샷에 키가 없어도
+		// 우리 버킷 사본은 살아 있다.
+		long id = uniqueId();
+		String name = unique("이미지 보존 팝업");
+		seeder().seed(writeJsonl("keep-first.jsonl",
+			enrichedRow(id, name, "첫 소개문", "missions/popup/" + id + "-cafebabe.jpg")));
+		em.flush();
+		em.clear();
+		String imageUrlBefore = findByKey(id).getImageUrl();
+		assertThat(imageUrlBefore).isNotNull();
+
+		// When: 같은 팝가 id 에 imageKey 만 빠지고 소개문이 바뀐 파일로 갱신.
+		PopupMissionSeeder.SeedResult result = seeder()
+			.seed(writeJsonl("keep-second.jsonl", enrichedRow(id, name, "바뀐 소개문", null)));
+
+		assertThat(result.updated()).isEqualTo(1);
+		em.flush();
+		em.clear();
+		Mission after = findByKey(id);
+		assertThat(after.getImageUrl()).isEqualTo(imageUrlBefore);
+		// 예외는 이미지에만 걸린다 — 소개문은 외부 원본을 비추는 값이라 새 스냅샷으로 덮인다.
+		assertThat(after.getDescription()).isEqualTo("바뀐 소개문");
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("팝업 판정 격자는 여전히 81행이고 목표는 1칸이다 — 이 티켓은 판정 범위를 바꾸지 않는다 (MSG-394 D8)")
+	void 팝업_판정_격자는_여전히_81행이고_목표는_1칸이다() throws IOException {
+		// 반경 40m 축소는 별도 티켓이다 — 이미지 작업과 섞으면 격자가 바뀐 원인을 가릴 수 없다.
+		long id = uniqueId();
+		Path file = writeJsonl("radius.jsonl",
+			enrichedRow(id, unique("이미지 있는 팝업"), "소개문", "missions/popup/" + id + "-feedface.jpg"));
+
+		seeder().seed(file);
+
+		em.flush();
+		em.clear();
+		Mission mission = findByKey(id);
+		assertThat(mission.getTargetCount()).isEqualTo(1);
+		assertThat(missionGridRepository.findByMissionIds(List.of(mission.getId()))).hasSize(81);
+	}
+
+	// 검증: FR-MISSION-08
+	@Test
+	@DisplayName("같은 파일로 재실행하면 적재 0건이고 갱신 0건이다 — 이미지·소개문이 실려도 멱등")
+	void 같은_파일로_재실행하면_적재_0건이고_갱신_0건이다() throws IOException {
+		long id = uniqueId();
+		Path file = writeJsonl("idem-image.jsonl",
+			enrichedRow(id, unique("멱등 이미지 팝업"), "소개문", "missions/popup/" + id + "-0badf00d.jpg"));
+
+		seeder().seed(file);
+		em.flush();
+		em.clear();
+		PopupMissionSeeder.SeedResult second = seeder().seed(file);
+
+		assertThat(second.loaded()).isZero();
+		assertThat(second.updated()).isZero();
+	}
+
+	// 검증: FR-MISSION-08
+	@Test
+	@DisplayName("잘못된 이미지 키가 한 행이라도 있으면 전체가 롤백된다 — 형식 위반은 결측이 아니라 보안 결함")
+	void 잘못된_이미지_키가_한_행이라도_있으면_전체가_롤백된다() throws IOException {
+		long survivorId = uniqueId();
+		Path file = writeJsonl("bad-image.jsonl",
+			enrichedRow(survivorId, unique("정상 행"), "소개문", "missions/popup/" + survivorId + "-a1b2c3d4.jpg"),
+			enrichedRow(uniqueId(), unique("경로 밖 행"), "소개문", "profiles/original/1/stolen.jpg"));
+
+		assertThatThrownBy(() -> seeder().seed(file))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("missions/popup/");
+
+		assertThat(countByKey(survivorId)).isZero();
 	}
 
 	// 검증: FR-MISSION-16
@@ -385,6 +513,22 @@ class PopupMissionSeederIntegrationTest {
 	/** 진행 중(오늘 ±5일) 팝업 1행. */
 	private static String activeRow(long id, String name, double lat, double lon) {
 		return row(id, name, lat, lon, 시작일.toString(), 종료일.toString());
+	}
+
+	/**
+	 * 보강 수집(MSG-394 D1) 뒤 형태의 진행 중 1행 — 소개문·포스터 키는 null 이면 키 자체를 넣지 않는다
+	 * (산출물 계약: 못 얻은 필드는 키가 없다).
+	 */
+	private static String enrichedRow(long id, String name, String description, String imageKey) {
+		StringBuilder row = new StringBuilder(activeRow(id, name, 합성_LAT, 합성_LON));
+		row.setLength(row.length() - 1);
+		if (description != null) {
+			row.append(", \"description\": \"").append(description).append("\"");
+		}
+		if (imageKey != null) {
+			row.append(", \"imageKey\": \"").append(imageKey).append("\"");
+		}
+		return row.append("}").toString();
 	}
 
 	/** 실측 스키마(D1) 형태의 jsonl 1행 — 미적재 필드(periodType)도 원본처럼 포함한다. */

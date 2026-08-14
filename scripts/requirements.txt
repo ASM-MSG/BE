@@ -1,0 +1,6 @@
+# scripts/ 이행 스크립트 의존성 (표준 라이브러리로 안 되는 것만)
+# 설치: pip install -r scripts/requirements.txt
+#
+# pyproj 버전을 zones-draft/requirements.txt 와 같게 핀한 이유: 두 스크립트가 같은 proj4 계약
+# 문자열로 같은 격자 번호를 내야 하고, 픽스처 자가검증이 PROJ 출력 일치를 전제한다.
+pyproj==3.6.1
