@@ -176,6 +176,7 @@ class MissionVideoListServiceTest {
 		assertThat(result.nextCursor()).isNull();
 	}
 
+	// 검증: FR-MISSION-17
 	@Test
 	@DisplayName("커서로 이어받은 페이지에 중복도 누락도 없다")
 	void 커서로_이어받은_페이지에_중복도_누락도_없다() {

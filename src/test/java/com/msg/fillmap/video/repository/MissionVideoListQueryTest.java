@@ -133,6 +133,7 @@ class MissionVideoListQueryTest {
 		return LocalDateTime.of(2026, 7, day, hour, 0, 0);
 	}
 
+	// 검증: FR-MISSION-17
 	@Test
 	@DisplayName("미션 격자에서 촬영된 공개 영상만 최신순으로 나온다")
 	void 미션_격자에서_촬영된_공개_영상만_최신순으로_나온다() {

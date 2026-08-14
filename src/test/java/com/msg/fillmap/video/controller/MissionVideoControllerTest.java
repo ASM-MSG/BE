@@ -53,6 +53,7 @@ class MissionVideoControllerTest {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
 	}
 
+	// 검증: FR-MISSION-17
 	@Test
 	@DisplayName("응답 항목은 격자 전역 목록과 같은 여섯 필드다")
 	void 응답_항목은_격자_전역_목록과_같은_여섯_필드다() throws Exception {
