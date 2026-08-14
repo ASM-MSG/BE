@@ -591,6 +591,7 @@ class AuthControllerTest {
 				.willReturn(new ReissueResult("new-access", "new-refresh", "device-1"));
 
 			mockMvc.perform(post(REISSUE_URL)
+					.header(CLIENT_TYPE_HEADER, "web")
 					.cookie(new Cookie(RefreshTokenCookies.COOKIE_NAME, "refresh-cookie")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.accessToken").value("new-access"))
@@ -639,6 +640,7 @@ class AuthControllerTest {
 				.willThrow(new ApiException(AuthErrorCode.REFRESH_TOKEN_REUSE_DETECTED));
 
 			mockMvc.perform(post(REISSUE_URL)
+					.header(CLIENT_TYPE_HEADER, "web")
 					.cookie(new Cookie(RefreshTokenCookies.COOKIE_NAME, "reused-refresh")))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.developCode").value(2433));
@@ -651,9 +653,41 @@ class AuthControllerTest {
 				.willThrow(new ApiException(AuthErrorCode.EXPIRED_REFRESH_TOKEN));
 
 			mockMvc.perform(post(REISSUE_URL)
+					.header(CLIENT_TYPE_HEADER, "web")
 					.cookie(new Cookie(RefreshTokenCookies.COOKIE_NAME, "expired-refresh")))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.developCode").value(2432));
+		}
+
+		@Test
+		@DisplayName("실패: 쿠키로 리프레시가 왔는데 X-Client-Type 이 없으면 400 MISSING_CLIENT_TYPE_HEADER(2434) 를 반환한다")
+		void reissue_cookieWithoutClientTypeHeader() throws Exception {
+			// 커스텀 헤더가 없으면 크로스사이트 폼 POST 도 통과한다 — CSRF 방어의 전제인 preflight 가 안 걸린다 (MSG-135)
+			mockMvc.perform(post(REISSUE_URL)
+					.cookie(new Cookie(RefreshTokenCookies.COOKIE_NAME, "refresh-cookie")))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.developCode").value(2434));
+
+			verify(refreshTokenService, never()).reissue(any());
+		}
+
+		@Test
+		@DisplayName("body 로 리프레시를 보내는 경로는 X-Client-Type 없이도 재발급된다 (헤더 요구는 쿠키 경로 한정)")
+		void reissue_bodyWithoutClientTypeHeader() throws Exception {
+			ReissueRequestDto request = new ReissueRequestDto("refresh-body");
+			given(refreshTokenService.reissue("refresh-body"))
+				.willReturn(new ReissueResult("new-access", "new-refresh", "device-3"));
+
+			mockMvc.perform(post(REISSUE_URL)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.accessToken").value("new-access"))
+				// 헤더가 없으면 종전대로 web 취급 — 새 리프레시는 쿠키로 내려간다
+				.andExpect(jsonPath("$.data.refreshToken").isEmpty())
+				.andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("refreshToken=")));
+
+			verify(refreshTokenService).reissue("refresh-body");
 		}
 	}
 

@@ -23,6 +23,7 @@ public enum AuthErrorCode implements ErrorCodeIfs {
 	INVALID_REFRESH_TOKEN(2431, HttpStatus.UNAUTHORIZED, "유효하지 않은 리프레시 토큰입니다"),
 	EXPIRED_REFRESH_TOKEN(2432, HttpStatus.UNAUTHORIZED, "만료된 리프레시 토큰입니다"),
 	REFRESH_TOKEN_REUSE_DETECTED(2433, HttpStatus.UNAUTHORIZED, "재사용이 감지되어 세션이 폐기되었습니다. 다시 로그인해주세요"),
+	MISSING_CLIENT_TYPE_HEADER(2434, HttpStatus.BAD_REQUEST, "X-Client-Type 헤더가 필요합니다"),
 	;
 
 	private final Integer errorCode;
