@@ -124,6 +124,60 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	);
 
 	/**
+	 * 미션 영상 목록 첫 페이지 (MSG-390). "이 미션의 영상" = 그 미션의 대상 격자(mission_grids)에서 미션
+	 * 기간에 촬영된, 전역 공개 게이트(ACTIVE·PUBLIC·READY)를 통과한 영상이다. videos 에 mission_id 가 없어
+	 * 미션과 영상을 잇는 것은 격자뿐이라, 판정 쿼리(MissionRepository.findCompleted)가 쓰는 조인
+	 * (mission_grids 를 grid_id 로 잇고 미션 기간을 거는 형태)을 그대로 물려받는다. 다른 점은 의도된 것이다 —
+	 * 판정은 내 영상만·DELETED 만 제외이고, 목록은 사용자 조건이 없고 게이트가 셋이라 화면에 보이는 수가
+	 * 판정 근거보다 작을 수 있다. 게이트 3종은 findGlobalCover·findGlobalVideos·countHourlyUploadsByGrid 와
+	 * <b>술어 동등</b>이다(조인이 있어 v. 별칭을 붙이므로 문자열은 다르다 — 판정은 조건 집합으로 한다).
+	 * mission_grids PK 가 (mission_id, grid_id)이고 영상은 격자를 하나만 가리켜 조인 팬아웃이 없다 —
+	 * DISTINCT 불요. 기간은 IS NULL OR 형태라 무기간 미션(코스·지속형)이 코드 분기 없이 흡수되고 경계는
+	 * 양끝 포함이다. 활성 여부는 보지 않는다 — 끝난 미션도 목록은 열린다.
+	 * 정렬은 촬영 시각 내림차순, 동률은 id 내림차순(PK 라 전순서가 완성된다). limit 은 서비스가
+	 * size+1 lookahead 로 넘기고 hasNext 판정도 서비스 소관이다(findGlobalVideos 와 같은 분담).
+	 * 신규 인덱스 없음 — mission_grids PK 선두 등치로 그 미션의 격자만 훑고 격자마다
+	 * idx_videos_grid_popular(V1__init.sql:110)를 grid_id 선두로 프로브한다(부분 인덱스 술어 함의 매칭).
+	 */
+	@Query(value = """
+		SELECT v.* FROM videos v
+		JOIN mission_grids mg ON mg.grid_id = v.grid_id
+		JOIN missions m ON m.id = mg.mission_id
+		WHERE mg.mission_id = :missionId
+		  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
+		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
+		ORDER BY v.recorded_at DESC, v.id DESC
+		LIMIT :limit
+		""", nativeQuery = true)
+	List<Video> findMissionVideos(@Param("missionId") long missionId, @Param("limit") int limit);
+
+	/**
+	 * 미션 목록 커서 이후 페이지 (MSG-390). 첫 페이지 쿼리에 경계 조건 한 줄만 더한 것이다 — 직전 페이지
+	 * 마지막 항목의 (recorded_at, id) 보다 정렬상 뒤인 행만 PostgreSQL row-value 비교로 이어서 반환한다
+	 * (정렬이 둘 다 DESC 라 "뒤"가 &lt; 하나로 표현된다 — findGlobalVideosAfter 와 같은 형태).
+	 * 커서 유무로 메서드를 나눈 것도 같은 이유다(null 파라미터의 native 타입 추론 문제 회피, MSG-90 선례).
+	 */
+	@Query(value = """
+		SELECT v.* FROM videos v
+		JOIN mission_grids mg ON mg.grid_id = v.grid_id
+		JOIN missions m ON m.id = mg.mission_id
+		WHERE mg.mission_id = :missionId
+		  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
+		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
+		  AND (v.recorded_at, v.id) < (:cursorRecordedAt, :cursorId)
+		ORDER BY v.recorded_at DESC, v.id DESC
+		LIMIT :limit
+		""", nativeQuery = true)
+	List<Video> findMissionVideosAfter(
+		@Param("missionId") long missionId,
+		@Param("cursorRecordedAt") LocalDateTime cursorRecordedAt,
+		@Param("cursorId") long cursorId,
+		@Param("limit") int limit
+	);
+
+	/**
 	 * 격자 전역 시간대 분포 (MSG-372). findGlobalVideos 와 같은 후보 집합을 세어 업로드 시각의 KST 시로
 	 * 접는다 — WHERE 게이트 줄은 findGlobalCover·findGlobalVideos 와 <b>글자 단위로 같은 문자열</b>이라
 	 * 카드에 보이는 영상과 차트에 세어지는 영상이 항상 일치한다(정합 요구). created_at 은 타임존 없는

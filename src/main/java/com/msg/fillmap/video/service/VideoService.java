@@ -51,6 +51,14 @@ public interface VideoService {
 	GridVideoPageResponseDto getGridGlobalVideos(String gridId, String cursor, int size);
 
 	/**
+	 * 미션 영상 목록 조회 (MSG-390). 그 미션의 대상 격자(mission_grids)에서 미션 기간에 촬영된
+	 * 전역 공개 게이트(ACTIVE, PUBLIC, READY) 통과 영상을 촬영 시각(recorded_at) 내림차순으로
+	 * 페이지 조회한다. 무기간 미션은 기간 조건을 타지 않는다. userId 없음 - 결과가 호출자와 무관하다.
+	 * 조건에 맞는 영상이 없거나 존재하지 않는 missionId 는 빈 페이지다(예외 아님).
+	 */
+	GridVideoPageResponseDto getMissionVideos(long missionId, String cursor, int size);
+
+	/**
 	 * 격자 전역 시간대 분포 조회 (MSG-372). 그 격자의 전역 공개 게이트(ACTIVE, PUBLIC, READY) 통과
 	 * 영상을 업로드 시각(created_at)의 KST 시(0~23)로 접어 24구간 개수를 돌려준다. 집계 윈도우는
 	 * 전체 누적이다. 공개 영상이 없거나 존재하지 않는 gridId 는 전 구간 0 인 정상 응답이다(예외 아님).
