@@ -25,8 +25,8 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 - `@.claude/docs/deploy.md` — 프로파일 · 환경변수 · 배포 설정
 - `@.claude/docs/architecture.md` — 서비스 아키텍처(SysA v2 정본) · 9개 서비스 · Worker·Cache 계층
 - `@.claude/docs/ia.md` — 화면 구조(IA) · User Journey · 구현 갭
-- **피그마 디자인 정본** — fileKey `CpqOlgayviFOG0WXTBUfpp`, 최신 정본 2개 (2026-08-06 성민 확인)
-  - 웹 `14062:10362` "필맵 웹 디자인 ver 9_마지막버전" (1440×900)
+- **피그마 디자인 정본** — fileKey `CpqOlgayviFOG0WXTBUfpp`, 최신 정본 2개 (2026-08-14 성민 확인)
+  - 웹 `14599:3501` "필맵 웹 디자인 ver 13_통합 버전" (1440×900)
   - 앱 `14176:6312` "필맵 앱 디자인 MVP ver 5" (390×844)
 
   화면이 있는 작업에서 Figma MCP로 **해당 화면 노드만** 조회한다. 페이지를 통째로 열면 응답이
