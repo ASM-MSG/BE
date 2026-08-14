@@ -1,0 +1,8 @@
+{
+  "_readme": "MSG-394 D7 — 저작권 문제 제기가 온 미션 이미지의 억제 목록. 수집 스크립트 둘만 읽고 앱은 읽지 않는다.",
+  "_readme_popup": "팝가 팝업 id 문자열. crawl_popga.py --enrich 가 그 팝업의 포스터를 받지 않고, 산출물에 남아 있던 imageKey 를 지운다.",
+  "_readme_course": "TourAPI contentid 문자열. attach_course_images.py 가 그 사진을 후보에서 빼므로, 그 코스는 다음 사진 있는 스팟으로 넘어간다. 억제 단위가 코스가 아니라 사진인 이유는 한 사진이 여러 코스의 대표가 될 수 있어서다 (실측: 137 코스가 132 사진 공유).",
+  "_readme_order": "등재·커밋을 먼저 하고 그 다음에 DB 의 image_url 을 비우고 마지막에 S3 객체를 지운다. 등재가 먼저라야 그 사이에 수집이 돌아도 되살아나지 않는다.",
+  "popup": [],
+  "course": []
+}
