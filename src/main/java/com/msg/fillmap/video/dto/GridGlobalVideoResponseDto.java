@@ -7,13 +7,15 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import com.msg.fillmap.video.entity.Video;
 
 /**
- * 격자 전역 영상 목록 항목 (MSG-237). 그 격자에 쌓인 공개·READY 영상 하나를 브라우징 피드 행으로 표현한다.
+ * 전역 공개 영상 목록 항목 (MSG-237). 공개·READY 영상 하나를 브라우징 피드 행으로 표현한다 — 격자 전역
+ * 목록과 미션 영상 목록(MSG-390)이 이 항목을 공유한다. 목록마다 달라지는 사실(정렬 축·커서 형식)은 여기
+ * 두지 않고 각 엔드포인트의 @Operation 이 갖는다.
  * 대표 1건(GridCoverVideoResponseDto)·내 영상(GridVideoResponseDto)과 축이 달라 별도 DTO 로 둔다(§D3) —
  * 전역 목록은 항상 READY 라 processingStatus 가 무의미하고, 작성자는 닉네임만 담으며(전역 카드에 작성자를
  * 표시하기로 2026-08-04 확정 — MSG-371, 도감 색상은 여전히 비노출), title 은 videos.title 컬럼
  * 신설(MSG-240) 후 additive 로 붙는다.
  */
-@Schema(description = "격자 전역 영상 목록 항목",
+@Schema(description = "전역 공개 영상 목록 항목",
 	requiredProperties = {"videoId", "thumbnailUrl", "durationSec", "viewCount", "recordedAt", "nickname"})
 public record GridGlobalVideoResponseDto(
 	@Schema(description = "영상 ID. 항목 탭 → 단건 재생(GET /api/videos/{videoId}) 진입 키", example = "1042")
@@ -25,10 +27,10 @@ public record GridGlobalVideoResponseDto(
 	@Schema(description = "영상 길이(초, 최대 30)", example = "12")
 	Short durationSec,
 
-	@Schema(description = "조회수 — 인기순 정렬 근거", example = "37")
+	@Schema(description = "조회수", example = "37")
 	Long viewCount,
 
-	@Schema(description = "촬영 시각 (표시용). 정렬 tie-break 키는 createdAt 이다", example = "2026-07-20T18:03:11Z")
+	@Schema(description = "촬영 시각", example = "2026-07-20T18:03:11Z")
 	LocalDateTime recordedAt,
 
 	@Schema(description = "작성자 닉네임 원문. @ 등 화면 표기는 FE 가 붙인다", example = "busan.vlog")
