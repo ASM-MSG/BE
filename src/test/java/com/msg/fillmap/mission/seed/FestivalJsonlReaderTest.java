@@ -183,6 +183,22 @@ class FestivalJsonlReaderTest {
 	}
 
 	@Test
+	void 대표_이미지_키는_접두사_바로_아래_단일_객체여야_한다() {
+		// 접두사와 확장자만 보면 통과하지만, 저장된 URL 을 클라이언트가 정규화하면 축제 접두사 밖의 객체를
+		// 가리킨다 (Codex 리뷰 파생 — missions/course/other.jpg 로 정규화된다).
+		assertThatThrownBy(() -> read(imageRow("\"missions/festival/../course/other.jpg\"")))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("단일 객체 이름");
+		assertThatThrownBy(() -> read(imageRow("\"missions/festival/2026/a.jpg\"")))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("단일 객체 이름");
+		// 이름이 비고 확장자만 남은 키도 같은 규칙에서 걸린다.
+		assertThatThrownBy(() -> read(imageRow("\"missions/festival/.jpg\"")))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("확장자");
+	}
+
+	@Test
 	void 대표_이미지_키에_확장자가_없으면_예외를_던진다() {
 		assertThatThrownBy(() -> read(imageRow("\"missions/festival/2732106-a1b2c3d4\"")))
 			.isInstanceOf(IllegalStateException.class)

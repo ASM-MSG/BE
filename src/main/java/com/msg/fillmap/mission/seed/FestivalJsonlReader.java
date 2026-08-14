@@ -113,8 +113,14 @@ public class FestivalJsonlReader {
 
 	/**
 	 * 대표 이미지 키 검증 (MSG-384 D2) — 결측은 허용하고(실측 461건 중 5건) 형식 위반은 전량 거부한다.
-	 * 접두사와 확장자를 함께 보는 것이 검증의 요점이다: 접두사만 보면 {@code missions/festival/x.svg} 가
-	 * 통과하고, 확장자만 보면 다른 공개 경로에 키를 심을 수 있다.
+	 * 셋을 함께 보는 것이 검증의 요점이다: 접두사만 보면 {@code missions/festival/x.svg} 가 통과하고,
+	 * 확장자만 보면 다른 공개 경로에 키를 심을 수 있으며, 둘만 보면
+	 * {@code missions/festival/../course/other.jpg} 가 양쪽을 통과한다. 마지막 키는 저장되는 URL 을
+	 * 클라이언트가 정규화하는 순간 축제 접두사 밖의 객체를 가리킨다.
+	 *
+	 * 그래서 접두사 뒤는 <b>슬래시 없는 단일 객체 이름</b>이어야 한다 — 스펙의 키 형식이
+	 * {@code missions/festival/{contentid}-{해시}.jpg} 라 하위 경로가 애초에 없고, {@code ..} 만 막는 것보다
+	 * 단순하면서 강하다.
 	 */
 	private static String imageKey(JsonNode row) {
 		String key = SeedText.text(row, "imageKey");
@@ -124,11 +130,18 @@ public class FestivalJsonlReader {
 		if (!key.startsWith(IMAGE_KEY_PREFIX)) {
 			throw new IllegalStateException("imageKey 가 " + IMAGE_KEY_PREFIX + " 아래가 아닙니다 (D2): " + key);
 		}
-		int extensionAt = key.lastIndexOf('.');
+		String objectName = key.substring(IMAGE_KEY_PREFIX.length());
+		if (objectName.contains("/")) {
+			throw new IllegalStateException(
+				"imageKey 의 " + IMAGE_KEY_PREFIX + " 뒤가 단일 객체 이름이 아닙니다 (D2 경로 탈출 방어): " + key);
+		}
+		// extensionAt == 0 은 이름이 비어 확장자만 남은 키(".jpg") — 확장자 부재(-1)와 같이 거부한다.
 		// Locale.ROOT: 터키어 로케일에서 "GIF".toLowerCase() 가 "gıf"(점 없는 ı)가 돼 허용목록을 빗나간다.
-		if (extensionAt < 0
-			|| !ALLOWED_IMAGE_EXTENSIONS.contains(key.substring(extensionAt + 1).toLowerCase(Locale.ROOT))) {
-			throw new IllegalStateException("imageKey 확장자가 허용된 래스터 이미지가 아닙니다 (D2): " + key);
+		int extensionAt = objectName.lastIndexOf('.');
+		if (extensionAt <= 0
+			|| !ALLOWED_IMAGE_EXTENSIONS.contains(objectName.substring(extensionAt + 1).toLowerCase(Locale.ROOT))) {
+			throw new IllegalStateException(
+				"imageKey 가 허용된 래스터 확장자를 가진 파일 이름이 아닙니다 (D2): " + key);
 		}
 		return key;
 	}
