@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionGrid;
 import com.msg.fillmap.mission.entity.MissionMetadata;
@@ -45,13 +46,14 @@ public class CourseMissionSeeder implements ApplicationRunner {
 	static final String SOURCE_DURUNUBI = "DURUNUBI";
 	/** "스팟 5~8 중 3곳" 시작안 (D4) — 조정 시 missions UPDATE 만 필요(스키마·코드 무변경). */
 	private static final int TARGET_COUNT = 3;
-	/** 결측 집계 기준 (MSG-383 D4) — 산출물에 신규 키 5개가 하나도 없으면 metadataOf 가 이 값을 낸다. */
+	/** 결측 집계 기준 (MSG-383 D4) — 산출물에 화면용 키가 하나도 없으면 metadataOf 가 이 값을 낸다. */
 	private static final MissionMetadata NO_METADATA =
 		new MissionMetadata(null, null, null, null, null, null, null, null);
 
 	private final MissionRepository missionRepository;
 	private final MissionGridRepository missionGridRepository;
 	private final CourseSeedReader reader;
+	private final AwsProperties awsProperties;
 
 	@Value("${fillmap.mission.course.seed.enabled:false}")
 	private boolean enabled;
@@ -107,7 +109,9 @@ public class CourseMissionSeeder implements ApplicationRunner {
 			}
 			Mission existingMission = existing.get(course.title());
 			if (existingMission != null) {
-				if (existingMission.applyMetadata(metadata)) {
+				// 이미지 보존은 갱신 경로에서만 명시적으로 고른다 (MSG-394 D4) — 억제나 후보 소멸로 새
+				// 산출물에 키가 없어도 이미 채운 사본 주소를 잃지 않는다.
+				if (existingMission.applyMetadata(metadata.withImageFallback(existingMission.getImageUrl()))) {
 					updated++;
 				}
 				continue;
@@ -134,19 +138,22 @@ public class CourseMissionSeeder implements ApplicationRunner {
 	}
 
 	/**
-	 * 코스 산출물 → 메타데이터 컬럼 매핑 (MSG-383 D3). 원문 링크·운영시간은 코스에 개념이 없고, 대표
-	 * 이미지는 TourAPI 스팟 사진에서 오므로 MSG-384 몫이다(D7) — 셋 다 null 이다. 거리·소요시간·난이도는
-	 * chk_missions_course_metrics 가 COURSE 에서만 허용하는 값이라 이 시더에서만 채워진다.
+	 * 코스 산출물 → 메타데이터 컬럼 매핑 (MSG-383 D3 · MSG-394 D3). 원문 링크·운영시간은 코스에 개념이
+	 * 없어 계속 null 이다. 대표 이미지는 코스 위 포토스팟의 TourAPI 사진에서 오고, 버킷 상대 키를 받아
+	 * 자기 환경의 공개 주소로 조립한다. 거리·소요시간·난이도는 chk_missions_course_metrics 가 COURSE
+	 * 에서만 허용하는 값이라 이 시더에서만 채워진다.
 	 */
-	private static MissionMetadata metadataOf(CourseRecord course) {
-		return new MissionMetadata(course.description(), course.placeName(), null, null, null,
+	private MissionMetadata metadataOf(CourseRecord course) {
+		return new MissionMetadata(course.description(), course.placeName(), null, null,
+			awsProperties.publicUrl(course.imageKey()),
 			course.distanceMeters(), course.durationMinutes(), course.difficulty());
 	}
 
 	/**
 	 * updated: 이미 있던 미션의 메타데이터를 채운 건수 (MSG-383 D6).
-	 * missingMetadata: 화면용 값 5종이 <b>전부</b> 없는 코스 수 — 산출물이 신규 키를 아직 안 싣고 있다는
-	 * 신호다(D4). 이게 없으면 백필 재실행이 "적재 0 · 갱신 0"으로 끝나 운영자가 "이미 다 돼 있다"로 읽는다.
+	 * missingMetadata: 화면용 값(소개·시군·거리·소요시간·난이도·대표 이미지)이 <b>전부</b> 없는 코스 수 —
+	 * 산출물이 신규 키를 아직 안 싣고 있다는 신호다(D4). 이게 없으면 백필 재실행이 "적재 0 · 갱신 0"으로
+	 * 끝나 운영자가 "이미 다 돼 있다"로 읽는다.
 	 */
 	public record SeedResult(int loaded, int deduped, int updated, int missingMetadata) {
 	}

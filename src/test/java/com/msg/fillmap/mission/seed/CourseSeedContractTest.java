@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.ObjectMapper;
 
+import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.mission.dto.CompletedMissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionAwardResult;
@@ -67,6 +68,9 @@ class CourseSeedContractTest {
 
 	@Autowired
 	private CourseSeedReader reader;
+
+	@Autowired
+	private AwsProperties awsProperties;
 
 	@Autowired
 	private MissionAwardService missionAwardService;
@@ -155,7 +159,8 @@ class CourseSeedContractTest {
 			[{"crsIdx": "%s", "name": "%s", "path": %s, "spots": [%s]}]"""
 			.formatted(crsIdx, title, PATH_JSON, spots));
 
-		CourseMissionSeeder seeder = new CourseMissionSeeder(missionRepository, missionGridRepository, reader);
+		CourseMissionSeeder seeder = new CourseMissionSeeder(missionRepository, missionGridRepository, reader,
+			awsProperties);
 		ReflectionTestUtils.setField(seeder, "enabled", true);
 		ReflectionTestUtils.setField(seeder, "seedPath", file.toString());
 		seeder.seed(file);

@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.extern.slf4j.Slf4j;
 
+import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionGrid;
@@ -52,6 +53,7 @@ public class PopupMissionSeeder implements ApplicationRunner {
 	private final MissionRepository missionRepository;
 	private final MissionGridRepository missionGridRepository;
 	private final PopupJsonlReader reader;
+	private final AwsProperties awsProperties;
 	private final Clock clock;
 
 	@Value("${fillmap.mission.popup.seed.enabled:false}")
@@ -64,10 +66,11 @@ public class PopupMissionSeeder implements ApplicationRunner {
 	public PopupMissionSeeder(
 		MissionRepository missionRepository,
 		MissionGridRepository missionGridRepository,
-		PopupJsonlReader reader
+		PopupJsonlReader reader,
+		AwsProperties awsProperties
 	) {
 		// KST 클럭: 종료 필터(D6)가 KST 달력 날짜 기준이라서다 — UTC 저장 경계는 toUtcStart/End 가 변환한다.
-		this(missionRepository, missionGridRepository, reader, Clock.system(KST));
+		this(missionRepository, missionGridRepository, reader, awsProperties, Clock.system(KST));
 	}
 
 	/** 클럭 주입 (테스트용 — FestivalMissionSeeder 이중 생성자 미러). */
@@ -75,11 +78,13 @@ public class PopupMissionSeeder implements ApplicationRunner {
 		MissionRepository missionRepository,
 		MissionGridRepository missionGridRepository,
 		PopupJsonlReader reader,
+		AwsProperties awsProperties,
 		Clock clock
 	) {
 		this.missionRepository = missionRepository;
 		this.missionGridRepository = missionGridRepository;
 		this.reader = reader;
+		this.awsProperties = awsProperties;
 		this.clock = clock;
 	}
 
@@ -134,7 +139,10 @@ public class PopupMissionSeeder implements ApplicationRunner {
 		for (PopupRecord record : parsed.records()) {
 			Mission existingMission = existing.get(String.valueOf(record.id()));
 			if (existingMission != null) {
-				if (existingMission.applyMetadata(metadataOf(record))) {
+				// 이미지 보존은 갱신 경로에서만 명시적으로 고른다 (MSG-394 D4) — 팝업은 기간이 끝나면 상세
+				// 페이지가 사라져, 새 스냅샷에 포스터가 없다는 이유로 우리 사본 주소를 잃으면 안 된다.
+				if (existingMission.applyMetadata(
+					metadataOf(record).withImageFallback(existingMission.getImageUrl()))) {
 					updated++;
 				}
 				continue;
@@ -167,12 +175,13 @@ public class PopupMissionSeeder implements ApplicationRunner {
 	}
 
 	/**
-	 * 팝업 원본 → 메타데이터 컬럼 매핑 (MSG-383 D3). 소개문은 현 스냅샷에 필드 자체가 없고 포스터는
-	 * 상세 페이지 수집이 필요해 둘 다 MSG-384 몫이다 — 코스 지표와 함께 null 이다(D7).
+	 * 팝업 원본 → 메타데이터 컬럼 매핑 (MSG-383 D3 · MSG-394 D3). 소개문과 포스터는 상세 페이지 보강
+	 * 수집 산출이라 MSG-394 부터 실린다 — 코스 지표만 팝업에 개념이 없어 계속 null 이다.
+	 * 포스터는 버킷 상대 키를 받아 자기 환경의 공개 주소로 조립한다.
 	 */
-	private static MissionMetadata metadataOf(PopupRecord record) {
-		return new MissionMetadata(null, record.placeName(), record.sourceUrl(), record.operationTime(),
-			null, null, null, null);
+	private MissionMetadata metadataOf(PopupRecord record) {
+		return new MissionMetadata(record.description(), record.placeName(), record.sourceUrl(),
+			record.operationTime(), awsProperties.publicUrl(record.imageKey()), null, null, null);
 	}
 
 	/** updated: 이미 있던 미션의 메타데이터를 채운 건수 (MSG-383 D6). */

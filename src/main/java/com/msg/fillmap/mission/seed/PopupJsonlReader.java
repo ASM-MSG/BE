@@ -24,6 +24,8 @@ import tools.jackson.databind.ObjectMapper;
  * 검증이 아니라 skip+집계 — 산출물에 종료분이 정상 포함된다(FR-1). periodType 은 읽지도 검증하지도 않는다 —
  * 주 1회 스냅샷이라 최대 7일 낡지만 날짜는 낡지 않고, 안 읽는 필드의 형식 강제는 크롤러 변경마다 적재를 깬다(D6).
  * MSG-383 이 더한 화면용 필드(주소·운영시간·원문 링크)는 전량 거부 대상이 아니다 — 결측이면 null 이다.
+ * MSG-394 가 더한 소개문도 같다. 반면 <b>포스터 키만은 결측이 관대하고 형식 위반이 전량 거부</b>인데,
+ * 형식 위반은 결측이 아니라 보안 결함이라서다(D3, 축제 리더와 같은 판단).
  */
 @Component
 public class PopupJsonlReader {
@@ -35,6 +37,8 @@ public class PopupJsonlReader {
 	private static final double LON_MAX = 132.0;
 	/** missions.title VARCHAR(200) 방어 절단 (MSG-224 미러) — 검증이 아니라 방어다(D6). */
 	private static final int NAME_MAX_LENGTH = 200;
+	/** 포스터 키가 놓이는 버킷 경로 (MSG-394 D3 산출물 계약). 형식 검증은 SeedText 공용. */
+	private static final String IMAGE_KEY_PREFIX = "missions/popup/";
 
 	private final ObjectMapper objectMapper;
 
@@ -85,7 +89,9 @@ public class PopupJsonlReader {
 			throw new IllegalStateException("openDate 가 closeDate 보다 늦습니다 (날짜 역전, FR-6): id " + id);
 		}
 		return new PopupRecord(id, truncateName(name), latitude, longitude, openDate, closeDate,
-			placeName(row), SeedText.text(row, "sourceUrl"), operationTime(row));
+			SeedText.normalizeBreaks(SeedText.text(row, "description")),
+			placeName(row), SeedText.text(row, "sourceUrl"), operationTime(row),
+			SeedText.imageKey(row, IMAGE_KEY_PREFIX));
 	}
 
 	/**

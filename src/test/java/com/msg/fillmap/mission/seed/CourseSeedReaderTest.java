@@ -325,4 +325,74 @@ class CourseSeedReaderTest {
 				.hasMessageContaining("양수");
 		}
 	}
+
+	/** 대표 이미지 키(MSG-394 D3)만 원문 조각 그대로 얹은 코스 1건. */
+	private static String withImageKey(String imageKeyJson) {
+		return """
+			{"crsIdx": "T_IMG", "name": "이미지 코스", "path": %s, "spots": [%s], "imageKey": %s}"""
+			.formatted(PATH, spots(5), imageKeyJson);
+	}
+
+	private List<CourseRecord> readImageKey(String imageKeyJson) {
+		return read("[" + withImageKey(imageKeyJson) + "]");
+	}
+
+	// 검증: FR-MISSION-08 (이미지 미러링은 SRS 등재로 NFR DATA 07)
+	@Test
+	void 코스_대표_이미지_키를_읽는다() {
+		// 스팟이 아니라 코스에 붙는 값이다 — 어느 스팟 사진인지는 수집 스크립트 로그에만 남는다 (D2).
+		List<CourseRecord> records = readImageKey("\"missions/course/1018702-745a845a9048.jpg\"");
+
+		assertThat(records.get(0).imageKey()).isEqualTo("missions/course/1018702-745a845a9048.jpg");
+	}
+
+	// 검증: FR-MISSION-08
+	@Test
+	void 코스_대표_이미지_키가_없으면_null이다() {
+		// 기존 산출물 파일로도 파싱된다는 증거 — 결측은 허용하고 형식 위반만 거부한다 (MSG-383 D4 계약 유지).
+		List<CourseRecord> legacy = read("[" + valid("T_1", "키 없는 코스") + "]");
+		List<CourseRecord> blank = readImageKey("\"\"");
+
+		assertThat(legacy.get(0).imageKey()).isNull();
+		assertThat(blank.get(0).imageKey()).isNull();
+	}
+
+	@Test
+	void 코스_대표_이미지_키가_코스_경로_밖이면_예외를_던진다() {
+		for (String outside : new String[] {
+			"\"profiles/original/1/stolen.jpg\"", "\"missions/popup/8151-a1b2c3d4.jpg\""}) {
+			assertThatThrownBy(() -> readImageKey(outside))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("missions/course/");
+		}
+		// 하위 경로는 저장된 URL 을 정규화하면 코스 접두사 밖을 가리킨다 (D3 경로 탈출 방어).
+		assertThatThrownBy(() -> readImageKey("\"missions/course/../popup/other.jpg\""))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("단일 객체 이름");
+	}
+
+	@Test
+	void 코스_대표_이미지_키에_URL_구분자가_있으면_예외를_던진다() {
+		// 저장 값은 키를 이스케이프 없이 이어 붙인 URL 이라 # 뒤는 프래그먼트, ? 뒤는 쿼리로 잘린다 —
+		// 확장자 검사를 통과하고도 클라이언트가 payload.html 을 요청한다 (Codex 리뷰 파생).
+		for (String bypass : new String[] {"\"missions/course/payload.html#x.jpg\"",
+			"\"missions/course/payload.html?x.jpg\""}) {
+			assertThatThrownBy(() -> readImageKey(bypass))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("허용되지 않는 문자");
+		}
+	}
+
+	@Test
+	void 코스_대표_이미지_키는_래스터_확장자만_허용한다() {
+		// 목적은 형식 통일이 아니라 보안이다 — 공개 읽기인 missions/ 접두사에 실행 가능한 콘텐츠가
+		// 올라가면 우리 S3 도메인에서 스크립트가 돈다 (D3).
+		assertThat(readImageKey("\"missions/course/a.PNG\"")).hasSize(1);
+		for (String executable : new String[] {"\"missions/course/a.svg\"", "\"missions/course/a.html\"",
+			"\"missions/course/a\""}) {
+			assertThatThrownBy(() -> readImageKey(executable))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("확장자");
+		}
+	}
 }
