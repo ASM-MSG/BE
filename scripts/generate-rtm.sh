@@ -115,6 +115,9 @@ gap_nt_count=$(printf '%s' "$gap_nt" | grep -c '^-' || true)
 	echo
 	echo "\`scripts/generate-rtm.sh\` 가 생성한다. 손으로 고치지 말 것. 원천은 테스트의 \`// 검증: FR-...\` 주석과 \`docs/srs.md\` 다."
 	echo
+	echo "**병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(\`git checkout --ours docs/rtm.md\` 등)"
+	echo "스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다."
+	echo
 	echo "요약: FR ${total}건 중 테스트 연결 ${mapped}건, 검증 공백 ${gap_impl_count}건 (계획·폐기라 테스트 부재가 정상인 ${gap_plan_count}건, 성격상 테스트 비대상 ${gap_nt_count}건 별도)"
 	echo
 	echo "| 요구사항 ID | SRS 상태 | 검증 테스트 |"
