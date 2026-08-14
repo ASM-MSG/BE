@@ -80,6 +80,7 @@ import com.msg.fillmap.video.repository.AuthorNicknameProjection;
 import com.msg.fillmap.video.repository.HourlyUploadProjection;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
+import com.msg.fillmap.video.support.MissionVideoCursor;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.video.support.VideoCursor;
 import com.msg.fillmap.zone.service.ZoneCellName;
@@ -537,6 +538,38 @@ public class VideoServiceImpl implements VideoService {
 	}
 
 	/**
+	 * 미션 영상 목록 조회 (MSG-390). userId 없음 — 후보가 미션·격자·기간으로만 정해져 결과가 호출자와
+	 * 무관하다(내 PRIVATE·FRIENDS 영상도 나오지 않는다). 후보 술어·정렬은 repository 가 정본이고, 여기서는
+	 * getGridGlobalVideos 와 같은 순서로 size 클램프 → lookahead(size+1) 조회 → hasNext 판정·트림 →
+	 * 닉네임 배치 → 항목 presign → nextCursor 발급만 한다. 클램프 상수를 격자 목록과 공유하는 것은
+	 * 두 목록의 페이지 규격이 같아서다(§API 명세).
+	 */
+	@Override
+	@Transactional(readOnly = true)
+	public GridVideoPageResponseDto getMissionVideos(long missionId, String cursor, int size) {
+		int pageSize = size < 1 ? GLOBAL_PAGE_DEFAULT_SIZE : Math.min(size, GLOBAL_PAGE_MAX_SIZE);
+		List<Video> rows = queryMissionPage(missionId, cursor, pageSize + 1);
+		boolean hasNext = rows.size() > pageSize;
+		List<Video> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
+		Map<Long, String> nicknames = authorNicknames(pageRows);
+		// 배치 맵에 작성자가 없다 = 그 영상이 두 문장 사이(READ COMMITTED)에 탈퇴로 연쇄 삭제됐다 —
+		// 항목을 빼서 숨긴다(MSG-371 규칙 그대로). nickname 이 null 로 실리는 경로가 없다.
+		List<GridGlobalVideoResponseDto> videos = pageRows.stream()
+			.filter(video -> nicknames.containsKey(video.getUserId()))
+			.map(video -> GridGlobalVideoResponseDto.of(video, thumbnailUrlPresigner.presign(video.getThumbnailUrl()),
+				nicknames.get(video.getUserId())))
+			.toList();
+		String nextCursor = null;
+		if (hasNext) {
+			// 커서는 걸러내기 전 pageRows 의 마지막 행 기준이다 — 숨긴 항목이 페이지 끝일 때 커서가 그
+			// 자리에 멈춰 같은 페이지를 무한히 다시 읽는 걸 막는다(격자 목록과 같은 규칙).
+			Video last = pageRows.get(pageRows.size() - 1);
+			nextCursor = MissionVideoCursor.encode(missionId, last.getRecordedAt(), last.getId());
+		}
+		return new GridVideoPageResponseDto(videos, hasNext, nextCursor);
+	}
+
+	/**
 	 * 격자 전역 시간대 분포 조회 (MSG-372). 게이트·KST 변환은 repository 쿼리가 정본이고, 여기서는
 	 * 업로드가 있는 시간대만 오는 GROUP BY 결과를 24구간에 얹는 채움만 한다 — 어떤 격자든(공개 영상 0건·
 	 * 존재하지 않는 gridId 포함) 0시부터 23시까지 24개가 전부 실린다. 저장 존은 호출자 바인딩 관례라
@@ -587,6 +620,33 @@ public class VideoServiceImpl implements VideoService {
 	private VideoCursor decodeGlobalCursor(String cursor) {
 		try {
 			return VideoCursor.decode(cursor);
+		} catch (RuntimeException e) {
+			throw new ApiException(VideoErrorCode.INVALID_CURSOR, e);
+		}
+	}
+
+	private List<Video> queryMissionPage(long missionId, String cursor, int limit) {
+		if (cursor == null) {
+			return videoRepository.findMissionVideos(missionId, limit);
+		}
+		MissionVideoCursor decoded = decodeMissionCursor(cursor);
+		if (decoded.missionId() != missionId) {
+			// 다른 미션에서 발급된 커서 — 경계값이 이 미션의 keyset 으로 오적용돼 결과가 조용히 잘리는 걸
+			// 막는다(격자 커서의 gridId 바인딩과 같은 규칙). 형식 위반과 같은 무효 커서로 취급한다.
+			throw new ApiException(VideoErrorCode.INVALID_CURSOR);
+		}
+		return videoRepository.findMissionVideosAfter(missionId, decoded.recordedAt(), decoded.id(), limit);
+	}
+
+	/**
+	 * 무효 커서는 400 으로 거른다 — 형식 위반과 저장 가능 범위 밖 시각(IllegalArgumentException), 시각 복원
+	 * 자체가 실패하는 극단값(DateTimeException)이 전부 RuntimeException 이라 한 번에 잡힌다. 범위 검증이
+	 * 디코드 안에 있어야 하는 이유는, 그 시각이 쿼리까지 흘러가면 바인딩 단계에서 깨져 이 try 밖의 공통
+	 * 500 이 되기 때문이다.
+	 */
+	private MissionVideoCursor decodeMissionCursor(String cursor) {
+		try {
+			return MissionVideoCursor.decode(cursor);
 		} catch (RuntimeException e) {
 			throw new ApiException(VideoErrorCode.INVALID_CURSOR, e);
 		}
