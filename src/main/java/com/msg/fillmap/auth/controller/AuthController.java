@@ -184,17 +184,20 @@ public class AuthController {
 	@Operation(
 		summary = "토큰 재발급",
 		description = "리프레시 토큰(웹=쿠키, 앱=body)으로 새 액세스 토큰과 회전된 새 리프레시 토큰을 발급받는다. "
-			+ "직전 리프레시 토큰은 즉시 무효화되며, 회전된 옛 토큰 재사용 시 세션 체인이 폐기된다."
+			+ "직전 리프레시 토큰은 즉시 무효화되며, 회전된 옛 토큰 재사용 시 세션 체인이 폐기된다. "
+			+ "쿠키로 리프레시를 보내는 웹은 CSRF 방어를 위해 X-Client-Type 헤더가 필수다(없으면 400). "
+			+ "body 로 보내는 앱은 생략할 수 있다."
 	)
 	@PostMapping("/reissue")
 	public SuccessResponse<ReissueResponseDto> reissue(
 		@CookieValue(value = RefreshTokenCookies.COOKIE_NAME, required = false) String cookieRefreshToken,
 		@RequestBody(required = false) ReissueRequestDto request,
-		@Parameter(description = "클라이언트 유형 (web|app, 기본 web)")
-		@RequestHeader(value = CLIENT_TYPE_HEADER, defaultValue = CLIENT_TYPE_WEB) String clientType,
+		@Parameter(description = "클라이언트 유형 (web|app). 리프레시를 쿠키로 보내면 필수, "
+			+ "body 로 보내면 생략 가능(생략 시 web 취급).")
+		@RequestHeader(value = CLIENT_TYPE_HEADER, required = false) String clientType,
 		HttpServletResponse response
 	) {
-		String refreshToken = resolveRefreshToken(cookieRefreshToken, request);
+		String refreshToken = resolveRefreshToken(cookieRefreshToken, request, clientType);
 		ReissueResult result = refreshTokenService.reissue(refreshToken);
 		response.setHeader(DEVICE_ID_HEADER, result.deviceId());
 		if (isApp(clientType)) {
@@ -256,9 +259,15 @@ public class AuthController {
 		return deviceIdHeader;
 	}
 
-	private String resolveRefreshToken(String cookieRefreshToken, ReissueRequestDto request) {
+	private String resolveRefreshToken(String cookieRefreshToken, ReissueRequestDto request, String clientType) {
 		// 쿠키에 있으면 쿠키에서, 없으면 body 에서 읽는다 (MSG-135 API 명세 3)
 		if (cookieRefreshToken != null && !cookieRefreshToken.isBlank()) {
+			if (clientType == null || clientType.isBlank()) {
+				// 리프레시 쿠키는 SameSite=None 이라 크로스사이트 폼 POST 에도 실려온다. 커스텀 헤더를 요구해야
+				// 브라우저가 preflight 를 강제하고 CORS 를 통과한 오리진만 남는다 (MSG-135 CSRF 노트).
+				// 기본값을 두면 "안 보냈다"를 판정할 수 없어 방어가 성립하지 않는다.
+				throw new ApiException(AuthErrorCode.MISSING_CLIENT_TYPE_HEADER);
+			}
 			return cookieRefreshToken;
 		}
 		if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {

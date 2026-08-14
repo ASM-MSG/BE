@@ -108,6 +108,51 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    저장·동작한다. ACL 관련 2항목은 켜둔 채 무관(정책 기반 공개라 ACL을 안 쓴다).
 2. **`profiles/pending/` 라이프사이클 만료 규칙** — 확정되지 않은 업로드 자동 청소.
    `videos/pending/` 규칙과 같은 방식으로 프리픽스 필터만 다르게 추가한다(만료 기간도 동일하게).
+3. **`missions/*` 공개 읽기 버킷 정책** (MSG-384) — 미션 대표 이미지도 `missions.image_url`에
+   완성 공개 URL을 저장한다. 열어 두지 않으면 축제 461건에 **열리지 않는 주소를 채워 넣게 된다**(403).
+
+   ```json
+   {
+     "Sid": "PublicReadMissionImages",
+     "Effect": "Allow",
+     "Principal": "*",
+     "Action": "s3:GetObject",
+     "Resource": "arn:aws:s3:::{버킷명}/missions/*"
+   }
+   ```
+
+   전제는 1번과 같고 **MSG-373에서 이미 해제**돼 있다. dev와 prod가 서로 다른 버킷을 쓰므로
+   **환경마다 따로 적용한다.** 적재 전에 객체 하나를 올려 실제로 열리는지 확인한다:
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' "https://{버킷명}.s3.{리전}.amazonaws.com/missions/festival/{테스트키}"
+   ```
+
+   200이 아니면 시더를 돌리지 않는다. 403인 채로 적재하면 전량을 나중에 다시 손봐야 한다.
+   dev 버킷은 2026-08-14 적용을 마쳤다(`PublicReadProfileOriginal`과 나란히 두 번째 Statement).
+   prod 버킷은 아직이다.
+
+### ⚠️ AWS 프로파일 — 로컬에 계정이 둘이고 기본값이 남의 계정이다
+
+`~/.aws/credentials`에 프로파일이 둘 있는데 **기본값(`default`)이 FillMap 계정이 아니다.**
+
+| 프로파일 | 계정 | 주체 | 이 레포와의 관계 |
+|---|---|---|---|
+| `default` | 438750401565 | `fillmap-local-dev` | **무관한 계정.** `fillmap-video-dev`에 아무 권한도 없다 |
+| `soma` | 951142447485 | `fillmap-admin` | **이쪽이 FillMap이다.** 버킷·정책 모두 여기 있다 |
+
+`AWS_PROFILE`을 안 주면 `default`가 잡혀 S3 호출이 전부 `AccessDenied`로 떨어진다. **그 실패는
+권한 부족이 아니라 계정을 잘못 짚은 것**인데 오류 메시지가 똑같아서 IAM 정책을 고치러 가기 쉽다
+(MSG-384에서 실제로 그렇게 오진했다). S3를 건드리는 스크립트·명령은 전부 `AWS_PROFILE=soma`로 돈다.
+
+```bash
+aws sts get-caller-identity --profile soma   # Account 951142447485 가 나와야 한다
+AWS_PROFILE=soma aws s3 cp x.jpg s3://fillmap-video-dev/missions/festival/_healthcheck.jpg
+curl -s -o /dev/null -w '%{http_code}\n' "https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/missions/festival/_healthcheck.jpg"
+```
+
+앞의 것이 올려지고 뒤의 것이 200이면 쓰기와 읽기가 둘 다 열린 것이다. `fillmap-admin`은 관리자라
+접두사별 IAM 권한을 따로 줄 필요가 없다.
 
 ## DB 마이그레이션 (Flyway)
 

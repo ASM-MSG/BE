@@ -24,9 +24,9 @@ class FestivalMissionSeederTest {
 	private static final double 시청_LAT = 37.5665;
 	private static final double 시청_LON = 126.978;
 
-	/** dedupe 키는 좌표와 기간만 보므로 화면용 메타데이터(MSG-383 D3)는 픽스처에서 비워 둔다. */
+	/** dedupe 키는 좌표와 기간만 보므로 화면용 메타데이터(MSG-383 D3)와 대표 이미지 키는 비워 둔다. */
 	private static FestivalRecord record(String name, double lat, double lon, LocalDate start, LocalDate end) {
-		return new FestivalRecord(name, lat, lon, start, end, null, null, null);
+		return new FestivalRecord(name, lat, lon, start, end, null, null, null, null);
 	}
 
 	@Test
