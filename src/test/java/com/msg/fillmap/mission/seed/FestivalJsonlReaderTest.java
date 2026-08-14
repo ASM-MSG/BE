@@ -156,7 +156,7 @@ class FestivalJsonlReaderTest {
 		assertThat(result.records().get(0).place()).hasSize(200);
 	}
 
-	// 검증: FR-MISSION-08, NFR-DATA-07
+	// 검증: FR-MISSION-08 (이미지 미러링은 SRS 등재로 NFR DATA 07)
 	@Test
 	void 대표_이미지_키를_읽는다() {
 		FestivalJsonlReader.Result result = read(imageRow("\"missions/festival/2732106-a1b2c3d4.jpg\""));

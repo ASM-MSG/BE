@@ -257,7 +257,7 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(mission.getDifficulty()).isNull();
 	}
 
-	// 검증: FR-MISSION-08, NFR-DATA-07
+	// 검증: FR-MISSION-08 (이미지 미러링은 SRS 등재로 NFR DATA 07)
 	@Test
 	@DisplayName("축제 미션에 대표 이미지 주소가 적재된다 — 버킷 상대 키를 공개 주소로 조립 (MSG-384 D2)")
 	void 축제_미션에_대표_이미지_주소가_적재된다() throws IOException {
@@ -290,7 +290,7 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(findByTitle(name).getImageUrl()).isNull();
 	}
 
-	// 검증: FR-MISSION-08, NFR-DATA-07
+	// 검증: FR-MISSION-08 (이미지 미러링은 SRS 등재로 NFR DATA 07)
 	@Test
 	@DisplayName("새 스냅샷에 이미지가 없어도 이미 채운 이미지는 유지된다 — 이미지 한 필드 예외 (MSG-384 D2)")
 	void 새_스냅샷에_이미지가_없어도_이미_채운_이미지는_유지된다() throws IOException {
