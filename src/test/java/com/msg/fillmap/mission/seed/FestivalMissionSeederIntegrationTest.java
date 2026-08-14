@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionGrid;
@@ -40,7 +41,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  * 축제 시더 러너 통합 (MSG-224 모듈 3, 실 PostgreSQL — RegionSeederTest 선례). 플래그 게이트 · 적재
  * shape(FR-1·2) · 재실행 멱등(FR-3) · 종료 정리와 보호 술어 3종(FR-4, D4) · 조기 실패와 원자성(FR-5)을 본다.
  *
- * 격리(공유 로컬 DB): 합성 이름(MSG224-it-*)·남반구 합성 좌표만 쓰고 @Transactional 롤백. 롤백 검증만
+ * 격리(공유 로컬 DB): 합성 이름(MSG224-it-*)·서해 먼바다 합성 좌표만 쓰고 @Transactional 롤백. 롤백 검증만
  * NOT_SUPPORTED + TransactionTemplate 로 실제 트랜잭션 경계를 돌린다 — 예외 시 전체 롤백이라 잔재가 없다.
  */
 @SpringBootTest
@@ -54,9 +55,12 @@ class FestivalMissionSeederIntegrationTest {
 	// 모듈 1·2 순수 테스트(주입 todayKst·고정 값) 담당.
 	private static final LocalDate 시작일 = LocalDate.now(KST).minusDays(5);
 	private static final LocalDate 종료일 = LocalDate.now(KST).plusDays(5);
-	// 남반구 합성 좌표 — 원본이 한국 범위(33~39N)만 보장하므로 실데이터·타 테스트와 못 겹친다.
-	private static final double 합성_LAT = -37.5665;
-	private static final double 합성_LON = 126.978;
+	// 서해 먼바다 합성 좌표 (MSG-384 D6) — 남반구 좌표를 쓰던 자리다. 리더가 KoreaCoordinates 범위 밖 행을
+	// 건너뛰게 되면서 남반구 픽스처가 전부 스킵돼, 프로덕션 입력 검증을 포기하는 대신 좌표를 옮겼다.
+	// 오프셋(+0.1~+1.5)을 더해도 35.5라 범위(33~39N) 안이고, 축제·팝업·코스 데이터가 전부 육상이라
+	// 바다 셀과 격자를 공유하지 않는다 (팝업 합성 좌표는 36.35/127.38).
+	private static final double 합성_LAT = 34.0;
+	private static final double 합성_LON = 125.0;
 
 	@Autowired
 	private MissionRepository missionRepository;
@@ -66,6 +70,9 @@ class FestivalMissionSeederIntegrationTest {
 
 	@Autowired
 	private FestivalJsonlReader reader;
+
+	@Autowired
+	private AwsProperties awsProperties;
 
 	@Autowired
 	private UserRepository userRepository;
@@ -81,7 +88,8 @@ class FestivalMissionSeederIntegrationTest {
 
 	private FestivalMissionSeeder newSeeder(boolean enabled, String path) {
 		// 프로덕션 기본 생성자(KST 시스템 클럭) 그대로 — "오늘" 필터와 정리 SQL 이 같은 실시간을 본다.
-		FestivalMissionSeeder seeder = new FestivalMissionSeeder(missionRepository, missionGridRepository, reader);
+		FestivalMissionSeeder seeder = new FestivalMissionSeeder(missionRepository, missionGridRepository, reader,
+			awsProperties);
 		ReflectionTestUtils.setField(seeder, "enabled", enabled);
 		ReflectionTestUtils.setField(seeder, "jsonlPath", path);
 		return seeder;
@@ -249,19 +257,62 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(mission.getDifficulty()).isNull();
 	}
 
-	// 검증: FR-MISSION-16
+	// 검증: FR-MISSION-08, NFR-DATA-07
 	@Test
-	@DisplayName("대표 이미지는 어느 시더도 채우지 않는다 — 수집은 MSG-384 (D7)")
-	void 대표_이미지는_어느_시더도_채우지_않는다() throws IOException {
-		String name = unique("이미지 없는 축제");
-		Path file = writeJsonl("image.jsonl", metadataRow(name, 합성_LAT + 0.5, 합성_LON,
-			"설명", "장소", "https://festival.example.kr"));
+	@DisplayName("축제 미션에 대표 이미지 주소가 적재된다 — 버킷 상대 키를 공개 주소로 조립 (MSG-384 D2)")
+	void 축제_미션에_대표_이미지_주소가_적재된다() throws IOException {
+		String name = unique("이미지 있는 축제");
+		String imageKey = "missions/festival/2732106-a1b2c3d4.jpg";
+		Path file = writeJsonl("image-url.jsonl", imageRow(name, 합성_LAT + 1.0, 합성_LON, "설명", imageKey));
 
 		seeder().seed(file);
 
 		em.flush();
 		em.clear();
+		// 파일은 키만 담고 주소는 시더가 자기 환경의 버킷·리전으로 조립한다 — 외부 도메인이 저장될 경로가 없다.
+		assertThat(findByTitle(name).getImageUrl()).isEqualTo("https://%s.s3.%s.amazonaws.com/%s"
+			.formatted(awsProperties.s3().bucket(), awsProperties.region(), imageKey));
+	}
+
+	// 검증: FR-MISSION-08
+	@Test
+	@DisplayName("대표 이미지가 없는 축제도 정상 적재된다 — image_url NULL (실측 461건 중 5건)")
+	void 대표_이미지가_없는_축제도_정상_적재된다() throws IOException {
+		String name = unique("이미지 없는 축제");
+		Path file = writeJsonl("image.jsonl", metadataRow(name, 합성_LAT + 0.5, 합성_LON,
+			"설명", "장소", "https://festival.example.kr"));
+
+		FestivalMissionSeeder.SeedResult result = seeder().seed(file);
+
+		assertThat(result.loaded()).isEqualTo(1);
+		em.flush();
+		em.clear();
 		assertThat(findByTitle(name).getImageUrl()).isNull();
+	}
+
+	// 검증: FR-MISSION-08, NFR-DATA-07
+	@Test
+	@DisplayName("새 스냅샷에 이미지가 없어도 이미 채운 이미지는 유지된다 — 이미지 한 필드 예외 (MSG-384 D2)")
+	void 새_스냅샷에_이미지가_없어도_이미_채운_이미지는_유지된다() throws IOException {
+		// Given: 이미지가 채워진 미션. 원본이 내려가 imageKey 가 빈 스냅샷이 와도 우리 버킷 사본은 살아 있다.
+		String name = unique("이미지 보존 축제");
+		double lat = 합성_LAT + 1.1;
+		String imageKey = "missions/festival/2732107-deadbeef.jpg";
+		seeder().seed(writeJsonl("keep-first.jsonl", imageRow(name, lat, 합성_LON, "첫 설명", imageKey)));
+		em.flush();
+		em.clear();
+		String imageUrlBefore = findByTitle(name).getImageUrl();
+		assertThat(imageUrlBefore).isNotNull();
+
+		// When: 같은 키(중심 격자+기간)에 imageKey 만 빠지고 소개문이 바뀐 파일로 갱신.
+		seeder().seed(writeJsonl("keep-second.jsonl", imageRow(name, lat, 합성_LON, "바뀐 설명", null)));
+
+		em.flush();
+		em.clear();
+		Mission after = findByTitle(name);
+		assertThat(after.getImageUrl()).isEqualTo(imageUrlBefore);
+		// 예외는 이미지에만 걸린다 — 소개문은 외부 원본을 비추는 값이라 새 스냅샷으로 덮인다.
+		assertThat(after.getDescription()).isEqualTo("바뀐 설명");
 	}
 
 	// 검증: FR-MISSION-16
@@ -320,6 +371,61 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(sameRun.deduped()).isEqualTo(1);
 	}
 
+	// 검증: FR-MISSION-08, FR-MISSION-11
+	@Test
+	@DisplayName("실행 결과에 갱신된 미션 id 가 담긴다 — 전환 삭제 제외 목록 (MSG-384 D1)")
+	void 실행_결과에_갱신된_미션_id가_담긴다() throws IOException {
+		String name = unique("전환 갱신 축제");
+		double lat = 합성_LAT + 1.2;
+		Path bare = writeJsonl("kept-bare.jsonl", activeRow(name, lat, 합성_LON));
+		Path filled = writeJsonl("kept-filled.jsonl",
+			metadataRow(name, lat, 합성_LON, "설명", "장소", "https://festival.example.kr"));
+		seeder().seed(bare);
+		em.flush();
+		em.clear();
+		long missionId = findByTitle(name).getId();
+
+		FestivalMissionSeeder.SeedResult filledRun = seeder().seed(filled);
+		FestivalMissionSeeder.SeedResult sameRun = seeder().seed(filled);
+
+		// 운영자가 이 id 를 삭제 조건의 NOT IN 으로 옮겨 적는다 — 제자리 갱신된 행은 대체 INSERT 가 없어서
+		// 빠뜨리면 그 축제가 통째로 사라진다.
+		assertThat(filledRun.updatedIds()).contains(missionId);
+		// 값이 하나도 안 바뀐 실행에서도 목록에는 남는다 — 삭제 제외 기준은 "값 변화"가 아니라 "키가 맞았나"다.
+		assertThat(sameRun.updated()).isZero();
+		assertThat(sameRun.updatedIds()).contains(missionId);
+	}
+
+	// 검증: FR-MISSION-11
+	@Test
+	@DisplayName("필수 필드 오류 행이 있어도 나머지는 적재된다 — 관대한 skip (MSG-384 D6)")
+	void 필수_필드_오류_행이_있어도_나머지는_적재된다() throws IOException {
+		String name = unique("멀쩡한 축제");
+		Path file = writeJsonl("required.jsonl",
+			row("", 합성_LAT + 1.3, 합성_LON, 시작일.toString(), 종료일.toString()),
+			row(unique("좌표 밖 축제"), 0, 0, 시작일.toString(), 종료일.toString()),
+			activeRow(name, 합성_LAT + 1.3, 합성_LON));
+
+		FestivalMissionSeeder.SeedResult result = seeder().seed(file);
+
+		assertThat(result.loaded()).isEqualTo(1);
+		assertThat(countByTitle(name)).isEqualTo(1);
+	}
+
+	// 검증: FR-MISSION-11
+	@Test
+	@DisplayName("실행 결과에 필수 필드 오류 건수가 집계된다 — 오적재 대신 건너뛴 행을 운영자가 센다")
+	void 실행_결과에_필수_필드_오류_건수가_집계된다() throws IOException {
+		Path file = writeJsonl("required-count.jsonl",
+			row("", 합성_LAT + 1.4, 합성_LON, 시작일.toString(), 종료일.toString()),
+			row(unique("좌표 밖 축제"), 0, 0, 시작일.toString(), 종료일.toString()),
+			activeRow(unique("멀쩡한 축제"), 합성_LAT + 1.4, 합성_LON));
+
+		FestivalMissionSeeder.SeedResult result = seeder().seed(file);
+
+		assertThat(result.skippedRequiredField()).isEqualTo(2);
+	}
+
 	// 검증: FR-MISSION-04, FR-MISSION-16
 	@Test
 	@DisplayName("재실행이 스탬프를 건드리지 않는다 — user_missions 행 수 불변 (D6)")
@@ -373,10 +479,12 @@ class FestivalMissionSeederIntegrationTest {
 	@DisplayName("중간 실패 시 전체 롤백으로 기존 데이터가 유지된다 — INSERT·DELETE 단일 트랜잭션 (FR-5)")
 	void 중간_실패_시_전체_롤백으로_기존_데이터가_유지된다() throws IOException {
 		String survivor = unique("먼저 적재됨");
-		// 독약 행: 위도가 비정상적으로 커서 grid_id 가 VARCHAR(20) 을 넘는다 → 두 번째 미션의 격자 INSERT 실패.
+		// 독약 행: 제목에 NUL 문자가 있어 PostgreSQL 이 INSERT 를 거부한다 → 두 번째 미션의 영속화 실패.
+		// 위도 4.5e14(grid_id 길이 초과)를 쓰던 자리다 — 그 행은 이제 좌표 범위 검증에 걸려 파싱 단계에서
+		// 건너뛰어지므로 예외를 못 만든다. 예외가 나는 자리를 예전과 같은 영속화 단계로 유지한다 (MSG-384 D6).
 		Path file = writeJsonl("poison.jsonl",
 			activeRow(survivor, 합성_LAT, 합성_LON),
-			activeRow(unique("독약 행"), 4.5e14, 합성_LON));
+			activeRow(unique("독약 행") + "\\u0000", 합성_LAT + 1.5, 합성_LON));
 		TransactionTemplate tx = new TransactionTemplate(transactionManager);
 
 		assertThatThrownBy(() -> tx.executeWithoutResult(status -> seeder().seed(file)))
@@ -428,6 +536,14 @@ class FestivalMissionSeederIntegrationTest {
 			{"name": "%s", "place": "행사장 일원", "startDate": "%s", "endDate": "%s", \
 			"latitude": %s, "longitude": %s, "sourceOrg": "합성_문화축제"}"""
 			.formatted(name, startDate, endDate, lat, lon);
+	}
+
+	/** 대표 이미지 키(MSG-384 D2)까지 채운 진행 중 축제 1행 — imageKey null 은 빈 문자열(= 결측)로 쓴다. */
+	private static String imageRow(String name, double lat, double lon, String description, String imageKey) {
+		return """
+			{"name": "%s", "place": "행사장 일원", "startDate": "%s", "endDate": "%s", "description": "%s", \
+			"latitude": %s, "longitude": %s, "imageKey": "%s"}"""
+			.formatted(name, 시작일, 종료일, description, lat, lon, imageKey == null ? "" : imageKey);
 	}
 
 	/** 화면용 필드(MSG-383 D3)까지 채운 진행 중 축제 1행. */

@@ -92,7 +92,10 @@ public class Mission {
 	@Column(name = "operation_time", columnDefinition = "text")
 	private String operationTime;
 
-	/** 우리 스토리지(S3) URL 만 — 외부 도메인 주소 금지(§D7). 이 티켓 범위에서는 항상 NULL. */
+	/**
+	 * 우리 스토리지(S3) URL 만 — 외부 도메인 주소 금지(MSG-383 §D7). 축제는 MSG-384 가 채운다(시더가
+	 * 버킷 상대 키를 받아 공개 주소를 조립). 팝업 포스터·코스 스팟 사진은 아직 NULL 이고 후속 티켓 몫이다.
+	 */
 	@Column(name = "image_url", columnDefinition = "text")
 	private String imageUrl;
 

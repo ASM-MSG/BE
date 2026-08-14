@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.extern.slf4j.Slf4j;
 
+import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.mission.entity.Mission;
@@ -41,6 +42,9 @@ import com.msg.fillmap.mission.repository.MissionRepository;
  * {@code fillmap.mission.festival.seed.enabled=true} 로 앱 1회 기동할 때만 실행한다(상시 스케줄러 금지).
  * 시드와 갱신은 같은 코드 경로다: 파싱·필터(D1) → dedupe 통과분 INSERT · 기존분 메타데이터 갱신
  * (D2·D3, MSG-383 D6) → 종료 축제 정리(D4).
+ * MSG-384 가 더한 것은 셋이다: 대표 이미지 공개 주소 조립, 갱신 시 이미지 보존 병합, 소스 전환 삭제에서
+ * 제외할 미션 id 목록(운영 절차 7번). <b>옛 소스 축제 삭제는 앱 코드에 없다</b> — 전환 당일 운영자가
+ * SQL 한 번으로 하고, 그 순서가 적재 → 확인 → 삭제라 적재가 실패해도 옛 미션이 남는다(FR-MISSION-11).
  * 빈 DB 에서 돌리면 정리 0건인 시드가 된다. {@code @Order(30)}: RegionSeeder(10)·ZoneSeeder(20) 이후 —
  * 의존은 없지만 결정적 순서.
  */
@@ -60,6 +64,7 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 	private final MissionRepository missionRepository;
 	private final MissionGridRepository missionGridRepository;
 	private final FestivalJsonlReader reader;
+	private final AwsProperties awsProperties;
 	private final Clock clock;
 
 	@Value("${fillmap.mission.festival.seed.enabled:false}")
@@ -72,10 +77,11 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 	public FestivalMissionSeeder(
 		MissionRepository missionRepository,
 		MissionGridRepository missionGridRepository,
-		FestivalJsonlReader reader
+		FestivalJsonlReader reader,
+		AwsProperties awsProperties
 	) {
 		// KST 클럭: "오늘" 판정(D1)이 KST 달력 날짜 기준이라서다 — UTC 저장 경계는 toUtcStart/End 가 변환한다.
-		this(missionRepository, missionGridRepository, reader, Clock.system(KST));
+		this(missionRepository, missionGridRepository, reader, awsProperties, Clock.system(KST));
 	}
 
 	/** 클럭 주입 (테스트용 — MissionQueryServiceImpl 이중 생성자 선례). */
@@ -83,11 +89,13 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 		MissionRepository missionRepository,
 		MissionGridRepository missionGridRepository,
 		FestivalJsonlReader reader,
+		AwsProperties awsProperties,
 		Clock clock
 	) {
 		this.missionRepository = missionRepository;
 		this.missionGridRepository = missionGridRepository;
 		this.reader = reader;
+		this.awsProperties = awsProperties;
 		this.clock = clock;
 	}
 
@@ -99,9 +107,14 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 		}
 		SeedResult result = seed(Path.of(jsonlPath));
 		log.info("축제 미션 갱신 완료 — 적재 {} 건, dedupe 건너뜀 {} 건(메타데이터 갱신 {} 건), "
-				+ "행 제외(날짜 {} · 종료 {} · 파싱 {}) 건, 정리 {} 건",
-			result.loaded(), result.deduped(), result.updated(),
-			result.skippedInvalidDate(), result.skippedEnded(), result.skippedMalformed(), result.removed());
+				+ "행 제외(날짜 {} · 종료 {} · 파싱 {} · 필수 필드 {}) 건, 정리 {} 건",
+			result.loaded(), result.deduped(), result.updated(), result.skippedInvalidDate(), result.skippedEnded(),
+			result.skippedMalformed(), result.skippedRequiredField(), result.removed());
+		// 소스 전환(MSG-384 D1) 운영 절차 7번이 이 목록을 삭제 조건의 NOT IN 으로 옮겨 적는다 — 제자리에서
+		// 갱신된 옛 행은 대체 INSERT 가 없어서, 빠뜨리면 그 축제가 통째로 사라진다. 줄을 나눈 것은 목록이
+		// 길어질 수 있어서다(수백 건이면 임시 테이블에 넣어 쓴다).
+		log.info("제자리 갱신된 축제 미션 id {} 건 (전환 삭제 제외 목록) — {}",
+			result.updatedIds().size(), result.updatedIds());
 	}
 
 	/**
@@ -125,19 +138,22 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 		if (parsed.records().isEmpty()) {
 			throw new IllegalStateException("축제 jsonl 에서 유효한 행을 0건 파싱했습니다 (제외: 날짜 "
 				+ parsed.skippedInvalidDate() + " · 종료 " + parsed.skippedEnded() + " · 파싱 "
-				+ parsed.skippedMalformed() + " 건): " + path.toAbsolutePath()
+				+ parsed.skippedMalformed() + " · 필수 필드 " + parsed.skippedRequiredField() + " 건): "
+				+ path.toAbsolutePath()
 				+ " — 파일 내용과 수집 스냅샷(전부 종료된 축제인지)을 확인하세요");
 		}
 
 		Map<DedupeKey, Mission> existing = existingFestivals();
 		int loaded = 0;
 		int updated = 0;
+		List<Long> updatedIds = new ArrayList<>();
 		for (FestivalRecord record : dedupeSource(parsed.records())) {
 			DedupeKey key = keyOf(record);
 			Mission existingMission = existing.get(key);
 			if (existingMission != null) {
 				// 재실행이 곧 백필 (MSG-383 D6) — 메타데이터만 더티 체킹으로 갱신하고 제목·기간·격자는 둔다.
-				if (existingMission.applyMetadata(metadataOf(record))) {
+				updatedIds.add(existingMission.getId());
+				if (existingMission.applyMetadata(preserveImage(metadataOf(record), existingMission))) {
 					updated++;
 				}
 				continue;
@@ -146,8 +162,29 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 			loaded++;
 		}
 		int removed = missionRepository.deleteEndedBySourceWithoutStamps(SOURCE_FESTIVAL);
-		return new SeedResult(loaded, parsed.records().size() - loaded, updated,
-			parsed.skippedInvalidDate(), parsed.skippedEnded(), parsed.skippedMalformed(), removed);
+		return new SeedResult(loaded, parsed.records().size() - loaded, updated, List.copyOf(updatedIds),
+			parsed.skippedInvalidDate(), parsed.skippedEnded(), parsed.skippedMalformed(),
+			parsed.skippedRequiredField(), removed);
+	}
+
+	/**
+	 * 새 스냅샷에 이미지가 없으면 이미 채운 대표 이미지를 그대로 둔다 (MSG-384 D2). {@code applyMetadata} 가
+	 * 8개 필드를 통째로 대입하는 부분 갱신 아닌 메서드라, 원본이 내려가 imageKey 가 빈 스냅샷이 오면 우리
+	 * 버킷에 사본이 멀쩡히 있는데 그 주소를 아는 곳이 없어진다 — 원본이 사라진 바로 그 상황에서 사본까지
+	 * 잃는 셈이다.
+	 *
+	 * <b>갱신 경로의 이미지 한 필드만의 예외다.</b> 소개문·장소·원문 링크는 외부 원본을 비추는 값이라
+	 * 새 스냅샷으로 덮는 것이 맞고, 신규 INSERT 는 이미지가 없으면 NULL 그대로다. 병합을 호출부에서 하는
+	 * 것은 {@code applyMetadata} 를 팝업·코스 시더가 함께 써서, 의미를 바꾸면 세 시더의 갱신 동작이 한꺼번에
+	 * 달라지기 때문이다.
+	 */
+	private static MissionMetadata preserveImage(MissionMetadata metadata, Mission existing) {
+		if (metadata.imageUrl() != null) {
+			return metadata;
+		}
+		return new MissionMetadata(metadata.description(), metadata.placeName(), metadata.sourceUrl(),
+			metadata.operationTime(), existing.getImageUrl(),
+			metadata.distanceMeters(), metadata.durationMinutes(), metadata.difficulty());
 	}
 
 	/**
@@ -198,12 +235,26 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 	}
 
 	/**
-	 * 축제 원본 → 메타데이터 컬럼 매핑 (MSG-383 D3). 축제에는 운영시간·코스 지표 개념이 없고, 대표
-	 * 이미지는 현 소스에 주소 필드 자체가 없어 MSG-384 가 채운다(D7) — 전부 null 이다.
+	 * 축제 원본 → 메타데이터 컬럼 매핑 (MSG-383 D3 · MSG-384 D2). 축제에는 운영시간·코스 지표 개념이
+	 * 없어 그 4종은 null 이다. 대표 이미지는 버킷 상대 키를 받아 여기서 공개 주소로 조립한다.
 	 */
-	private static MissionMetadata metadataOf(FestivalRecord record) {
+	private MissionMetadata metadataOf(FestivalRecord record) {
 		return new MissionMetadata(record.description(), record.place(), record.homepage(),
-			null, null, null, null, null);
+			null, toPublicUrl(record.imageKey()), null, null, null);
+	}
+
+	/**
+	 * 버킷 상대 키 → 공개 주소 (MSG-384 D2). 앱이 주소가 아니라 키를 입력으로 받으므로 외부 도메인이
+	 * image_url 에 저장되는 상태 자체가 표현 불가능하고, 같은 스냅샷 파일을 버킷이 서로 다른 dev·prod
+	 * 양쪽에 그대로 쓸 수 있다. {@code UserServiceImpl.toPublicUrl} 과 같은 한 줄이되 공용 컴포넌트로
+	 * 빼지 않는 것은, 그 클래스가 스스로 적어 둔 "세 번째 사용처가 생기면 그때 추출한다" 규칙을 따른 것이다.
+	 */
+	private String toPublicUrl(String imageKey) {
+		if (imageKey == null) {
+			return null;
+		}
+		return "https://%s.s3.%s.amazonaws.com/%s".formatted(
+			awsProperties.s3().bucket(), awsProperties.region(), imageKey);
 	}
 
 	private static String truncateTitle(String name) {
@@ -272,8 +323,15 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 	record DedupeKey(String centerGridId, LocalDateTime startAt, LocalDateTime endAt) {
 	}
 
-	/** updated: 이미 있던 미션의 메타데이터를 채운 건수 (MSG-383 D6) — "적재 0건" 만 보고 오해하지 않게. */
-	public record SeedResult(int loaded, int deduped, int updated, int skippedInvalidDate, int skippedEnded,
-		int skippedMalformed, int removed) {
+	/**
+	 * updated: 이미 있던 미션의 메타데이터를 채운 건수 (MSG-383 D6) — "적재 0건" 만 보고 오해하지 않게.
+	 *
+	 * updatedIds: 소스 전환 삭제(MSG-384 D1)에서 제외할 미션 id — <b>값이 안 바뀐 미션도 담는다.</b>
+	 * 이 목록의 쓰임은 "무엇이 달라졌나"가 아니라 "새 소스와 키가 맞아 제자리에 남은 행이 무엇인가"라서,
+	 * 갱신 경로를 지난 미션이면 값 변화와 무관하게 전부 들어가야 한다. 그래서 updated 건수와 목록 크기가
+	 * 다를 수 있다 — 재실행이면 updated 0 에 목록은 그대로다.
+	 */
+	public record SeedResult(int loaded, int deduped, int updated, List<Long> updatedIds, int skippedInvalidDate,
+		int skippedEnded, int skippedMalformed, int skippedRequiredField, int removed) {
 	}
 }
