@@ -39,6 +39,11 @@ out/
 
 ### 행정동 경계 GeoJSON (MSG-154) — 수십 MB, 커밋하지 않고 scripts/download-region-geojson.sh 로 확보 ###
 /data/region/*.geojson
+
+### 미션 시드 스냅샷 (MSG-224·225·235·384) — 레포 밖 수집 산출물을 복사해 쓰는 자리다.
+### 축제 918행처럼 크고 수집 시점마다 달라져 커밋 대상이 아니다. 원본은 ~/fillmap-data/ 에 있다. ###
+/data/mission/*.jsonl
+/data/mission/*.json
 .DS_Store
 
 ### FCM 서비스 계정 키 (MSG-179 D9) — 레포 커밋 절대 금지, FCM_CREDENTIALS_PATH 로 경로만 주입 ###
