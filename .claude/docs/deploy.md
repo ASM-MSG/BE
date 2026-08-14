@@ -129,26 +129,30 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    ```
 
    200이 아니면 시더를 돌리지 않는다. 403인 채로 적재하면 전량을 나중에 다시 손봐야 한다.
-4. **`missions/*` 쓰기 IAM 권한** (MSG-384) — 위 3번이 "읽기"라면 이건 **올리는 쪽**이다. 이미지를
-   버킷에 넣는 주체(로컬 수집 스크립트라면 `fillmap-local-dev`)에 접두사 권한을 준다. 2026-08-14 실측으로
-   그 사용자는 `missions/`에 `PutObject`가 **거부**된다 — IAM 정책이 접두사별로 묶여 있고
-   `videos/*`·`profiles/*`만 열려 있다.
+   dev 버킷은 2026-08-14 적용을 마쳤다(`PublicReadProfileOriginal`과 나란히 두 번째 Statement).
+   prod 버킷은 아직이다.
 
-   ```json
-   {
-     "Effect": "Allow",
-     "Action": "s3:PutObject",
-     "Resource": "arn:aws:s3:::{버킷명}/missions/*"
-   }
-   ```
+### ⚠️ AWS 프로파일 — 로컬에 계정이 둘이고 기본값이 남의 계정이다
 
-   3번과 4번은 **다른 층이라 둘 다 필요하다.** 4번이 없으면 이미지를 올리지 못하고, 3번이 없으면
-   올라간 이미지가 브라우저에서 403이다. 확인은 올려 보고 받아 보는 두 단계다:
+`~/.aws/credentials`에 프로파일이 둘 있는데 **기본값(`default`)이 FillMap 계정이 아니다.**
 
-   ```bash
-   aws s3 cp x.jpg s3://{버킷명}/missions/festival/_healthcheck.jpg   # 4번 확인
-   curl -s -o /dev/null -w '%{http_code}\n' "https://{버킷명}.s3.{리전}.amazonaws.com/missions/festival/_healthcheck.jpg"   # 3번 확인
-   ```
+| 프로파일 | 계정 | 주체 | 이 레포와의 관계 |
+|---|---|---|---|
+| `default` | 438750401565 | `fillmap-local-dev` | **무관한 계정.** `fillmap-video-dev`에 아무 권한도 없다 |
+| `soma` | 951142447485 | `fillmap-admin` | **이쪽이 FillMap이다.** 버킷·정책 모두 여기 있다 |
+
+`AWS_PROFILE`을 안 주면 `default`가 잡혀 S3 호출이 전부 `AccessDenied`로 떨어진다. **그 실패는
+권한 부족이 아니라 계정을 잘못 짚은 것**인데 오류 메시지가 똑같아서 IAM 정책을 고치러 가기 쉽다
+(MSG-384에서 실제로 그렇게 오진했다). S3를 건드리는 스크립트·명령은 전부 `AWS_PROFILE=soma`로 돈다.
+
+```bash
+aws sts get-caller-identity --profile soma   # Account 951142447485 가 나와야 한다
+AWS_PROFILE=soma aws s3 cp x.jpg s3://fillmap-video-dev/missions/festival/_healthcheck.jpg
+curl -s -o /dev/null -w '%{http_code}\n' "https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/missions/festival/_healthcheck.jpg"
+```
+
+앞의 것이 올려지고 뒤의 것이 200이면 쓰기와 읽기가 둘 다 열린 것이다. `fillmap-admin`은 관리자라
+접두사별 IAM 권한을 따로 줄 필요가 없다.
 
 ## DB 마이그레이션 (Flyway)
 
