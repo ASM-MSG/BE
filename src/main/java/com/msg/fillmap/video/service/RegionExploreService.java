@@ -14,7 +14,8 @@ import com.msg.fillmap.video.dto.RegionGridCountResponseDto;
 public interface RegionExploreService {
 
 	/**
-	 * 행정동 격자 카드 리스트 + 헤더 카운트 (§D2 — 패널은 limit=3, 전체 보기는 limit 생략 + sort 칩).
+	 * 행정동 격자 카드 리스트 + 전체 기준 카운트 (§D2 기반 — 패널은 sort=LATEST&limit=20 으로 §D2 의
+	 * 3장을 대체(MSG-387, SRS FR-MAP-10), 전체 보기는 limit 생략 + sort 칩).
 	 * limit null = 전부, 1 미만은 1 로 보정. 미존재/무콘텐츠 regionCode 는 regionName null(실존 시 이름)·
 	 * 카운트 0·빈 배열 — 예외가 아니다.
 	 */

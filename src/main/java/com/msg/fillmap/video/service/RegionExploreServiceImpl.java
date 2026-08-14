@@ -30,8 +30,9 @@ public class RegionExploreServiceImpl implements RegionExploreService {
 
 	/**
 	 * limit 보정(§D2: null=전부, 1 미만=1) → sort 분기(native ORDER BY 분기 불가라 메서드 2개 — 90 선례) →
-	 * 커버 key presign(null→null 통과) → 헤더 카운트와 합성. 카운트는 limit 무관 전체 기준(§D1)이라 패널이
-	 * 카드 3장과 "격자 N·영상 M"을 같은 응답에서 얻는다. summary 0행(미존재 regionCode)이면 regionName null·
+	 * 커버 key presign(null→null 통과) → 전체 기준 카운트와 합성. 카운트는 limit 무관 전체 기준(§D1)이라
+	 * 패널(최신순 20장 — MSG-387)과 전체 보기가 같은 값을 받는다(패널 헤더 숫자는 MSG-374 의
+	 * currentRegion 몫이라 이 값을 쓰지 않는다). summary 0행(미존재 regionCode)이면 regionName null·
 	 * 0·빈 배열로 합성한다(§D2 — 6404 재사용 안 함, 행정동 "없음"은 빈 결과이지 예외가 아니다 §D8).
 	 * REPEATABLE_READ: 카드·summary가 별도 스테이트먼트라 READ COMMITTED에선 스냅샷이 갈려
 	 * §D1의 "카운트 = 카드 집합" 일치가 동시 업로드/삭제/전환 중 깨질 수 있다 — PG는 이 레벨에서
