@@ -1,5 +1,6 @@
 package com.msg.fillmap.user.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -62,6 +63,28 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Modifying
 	@Query("DELETE FROM User u WHERE u.id = :userId")
 	int deleteUser(@Param("userId") Long userId);
+
+	/**
+	 * 위치정보 사용 동의 갱신 (MSG-402 §D-4) — 읽기·비교·쓰기를 UPDATE 한 문장에 담는다. 조회 후 값을
+	 * 비교하는 방식은 동시 PUT 에서 두 요청이 같은 이전 값을 읽어 변경 시각이 두 번 갱신되거나 상태가
+	 * 역전될 수 있는데, 한 문장이면 DB 행 잠금이 두 요청을 직렬화한다. CASE 가 같은 값 재저장 시 기존
+	 * 시각을 그대로 두므로 멱등(FR-4)이 문장 수준에서 성립한다 — 서비스에 분기 코드가 없다.
+	 * NULL 비교가 성립해야 하므로 `=` 가 아니라 PostgreSQL 의 IS DISTINCT FROM 을 쓴다.
+	 * 반환은 영향 행 수 — 0 이면 이미 없는 사용자라 호출자가 1404 로 바꾼다.
+	 * clearAutomatically 는 이 UPDATE 를 못 본 1차 캐시 스냅숏을 비워 뒤이은 재조회가 DB 를 읽게 한다.
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query(value = """
+		UPDATE users
+		SET location_consent = :consented,
+		    location_consent_changed_at = CASE
+		        WHEN location_consent IS DISTINCT FROM :consented THEN :changedAt
+		        ELSE location_consent_changed_at
+		    END
+		WHERE id = :userId
+		""", nativeQuery = true)
+	int updateLocationConsent(@Param("userId") Long userId, @Param("consented") boolean consented,
+		@Param("changedAt") LocalDateTime changedAt);
 
 	/**
 	 * users 행 KEY SHARE 선취 (MSG-313 Codex 2R) — notifications FK 검사가 나중에 잡을 잠금을 videos 행

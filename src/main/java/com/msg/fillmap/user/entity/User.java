@@ -80,6 +80,19 @@ public class User {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private LocalDateTime createdAt;
 
+	/**
+	 * 위치기반서비스 이용 동의 여부 (MSG-402). 신규 가입은 미동의로 시작한다 — 생성자에서 넣지 않아도
+	 * boolean 기본값 false 와 DB DEFAULT FALSE 가 같은 결과를 만든다. 상태 전이 메서드를 두지 않는
+	 * 이유는 갱신 경로가 리포지토리의 원자 UPDATE 한 곳이기 때문이다 (§D-4) — 더티 체킹으로 바꾸면
+	 * 동시 요청이 같은 이전 값을 읽어 변경 시각이 이중 갱신된다.
+	 */
+	@Column(name = "location_consent", nullable = false)
+	private boolean locationConsent;
+
+	/** 마지막 동의·철회 시각(UTC). 한 번도 바꾼 적 없으면 null 이고, 값이 실제로 달라질 때만 갱신된다 (FR-3·4). */
+	@Column(name = "location_consent_changed_at")
+	private LocalDateTime locationConsentChangedAt;
+
 	@Builder(access = AccessLevel.PRIVATE)
 	private User(AuthProvider provider, String oid, String email, String passwordHash, String nickname, UserRole role) {
 		this.provider = provider;
