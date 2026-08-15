@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +19,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import tools.jackson.databind.ObjectMapper;
+
+import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.mission.config.MissionViewportProperties;
+import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
@@ -48,7 +54,9 @@ class MissionQueryServiceClockTest {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"));
 			// 운영 배선과 같은 기본 생성자 — 주입 생성자로는 이 결함(기본 클럭 선택)이 재현되지 않는다.
-			new MissionQueryServiceImpl(missionRepository, missionGridRepository).getActiveMissions();
+			new MissionQueryServiceImpl(missionRepository, missionGridRepository,
+				new ObjectMapper(), new MissionViewportProperties(Map.of()))
+				.getMissionsInViewport(new ViewportBounds(37.50, 127.00, 37.55, 127.05), MissionType.EVENT);
 		} finally {
 			TimeZone.setDefault(original);
 		}
