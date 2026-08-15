@@ -7,8 +7,6 @@ import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 
-import org.hibernate.annotations.CreationTimestamp;
-
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -27,11 +25,9 @@ public class UserGrid {
 	@EmbeddedId
 	private UserGridId id;
 
-	@CreationTimestamp
 	@Column(name = "first_collected_at", nullable = false, updatable = false)
 	private LocalDateTime firstCollectedAt;
 
-	@CreationTimestamp
 	@Column(name = "last_uploaded_at", nullable = false)
 	private LocalDateTime lastUploadedAt;
 
