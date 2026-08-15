@@ -77,6 +77,15 @@ dependencies {
 	testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
+// 로컬 실행 JVM 존 고정 (MSG-379 D3). naive LocalDateTime = UTC 규약(MSG-376)에서, KST 맥의 기본 존으로
+// 뜬 앱이 만드는 시각은 9시간 앞선 값이 된다. 저장식 자체는 V33 이 존 무관으로 바꿔 뒀으니 이건 방어선
+// 중첩이다 — 컨벤션을 어긴 코드나 V33 이전 마이그레이션 재실행 같은 잔여 경로를 덮는다.
+// IDE 로 메인 클래스를 직접 실행하면 이 설정을 안 타므로 실행 구성 VM 옵션에 같은 값을 넣는다.
+// 테스트에는 걸지 않는다 — 존 의존 버그를 로컬에서 재현해 잡는 창을 남긴다.
+tasks.named('bootRun') {
+	jvmArgs '-Duser.timezone=UTC'
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
 	// 테스트 워커 힙 (MSG-343). Gradle 기본 512m 은 @EmbeddedKafka 통합 테스트에 빠듯해 전체 빌드가
