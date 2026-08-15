@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.persistence.EntityManager;
 
@@ -18,9 +19,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import tools.jackson.databind.ObjectMapper;
+
 import com.msg.fillmap.grid.GridConstants;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
+import com.msg.fillmap.grid.GridFixtures;
+import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.mission.config.MissionViewportProperties;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionShape.BoxShape;
 import com.msg.fillmap.mission.dto.MissionShape.Cell;
@@ -29,6 +35,7 @@ import com.msg.fillmap.mission.dto.MissionShape.LatLng;
 import com.msg.fillmap.mission.dto.MissionShape.PathShape;
 import com.msg.fillmap.mission.dto.MissionShape.RegionShape;
 import com.msg.fillmap.mission.dto.MissionShape.Spot;
+import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
@@ -41,6 +48,8 @@ import com.msg.fillmap.region.repository.RegionRepository;
  *
  * 격리(공유 로컬 DB): missions 는 시드가 없어 @Transactional 롤백으로 충분. 각 테스트는 새 서비스 인스턴스를 만들어
  * 캐시를 비운 채 이 tx 에서 삽입한 미션(무기간 → 항상 활성)만 조회하고, 그 미션 id 로 DTO 를 스코프한다.
+ * MSG-398 이 조회를 뷰포트 필수로 바꿔, 조회는 테스트 격자 블록(GY0 기준 ±수 칸)을 덮는 고정 뷰포트로 한다 —
+ * 뷰포트 필터 자체의 검증은 MissionViewportFilterTest 담당이고 여기는 shape 합성만 본다.
  */
 // 검증: FR-MISSION-01
 @SpringBootTest
@@ -66,10 +75,20 @@ class MissionQueryServiceImplTest {
 	@Autowired
 	private EntityManager em;
 
+	@Autowired
+	private ObjectMapper objectMapper;
+
 	/** 캐시를 비운 새 서비스 인스턴스 — 테스트마다 방금 삽입한 미션만 재계산해 조회하게 한다. */
 	private MissionQueryService newService() {
-		return new MissionQueryServiceImpl(
-			missionRepository, missionGridRepository, Clock.systemDefaultZone(), Duration.ofHours(1).toMillis());
+		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, objectMapper,
+			new MissionViewportProperties(Map.of()), Clock.systemDefaultZone(), Duration.ofHours(1).toMillis());
+	}
+
+	/** 테스트 격자 블록(GY0-2 ~ GY0+13)을 덮는 뷰포트 — 셀 코너를 위경도로 되돌려 만든다(span 약 1.5km ≪ 0.5도). */
+	private static ViewportBounds testViewport() {
+		GridPoint sw = GridFixtures.pointAt(GY0 - 2, GX0 - 2);
+		GridPoint ne = GridFixtures.pointAt(GY0 + 13, GX0 + 13);
+		return new ViewportBounds(sw.lat(), sw.lon(), ne.lat(), ne.lon());
 	}
 
 	/**
@@ -156,8 +175,8 @@ class MissionQueryServiceImplTest {
 			.executeUpdate();
 	}
 
-	private MissionResponseDto findMission(long missionId) {
-		return newService().getActiveMissions().stream()
+	private MissionResponseDto findMission(long missionId, MissionType type) {
+		return newService().getMissionsInViewport(testViewport(), type).stream()
 			.filter(dto -> dto.missionId() == missionId)
 			.findFirst()
 			.orElseThrow();
@@ -166,7 +185,12 @@ class MissionQueryServiceImplTest {
 	@Test
 	@DisplayName("COURSE는 PATH shape로 path 원문과 스팟마커를 seq순으로 반환한다")
 	void COURSE는_PATH_shape로_path_원문과_스팟마커를_seq순으로_반환한다() {
-		String pathJson = "{\"type\":\"LineString\",\"coordinates\":[[129.04,35.10],[129.05,35.11]]}";
+		// path 좌표를 테스트 격자 블록 위에 만든다 — MSG-398 부터 코스 뷰포트 판정은 path 기준이라(D3)
+		// 경로가 다른 지역에 있으면 testViewport 조회에서 코스가 빠진다.
+		GridPoint pathStart = GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5);
+		GridPoint pathEnd = GridFixtures.pointAt(GY0 + 1.5, GX0 + 1.5);
+		String pathJson = "{\"type\":\"LineString\",\"coordinates\":[[%s,%s],[%s,%s]]}"
+			.formatted(pathStart.lon(), pathStart.lat(), pathEnd.lon(), pathEnd.lat());
 		long mission = insertMission("COURSE", null, pathJson);
 		String first = gid(GY0, GX0);
 		String second = gid(GY0 + 1, GX0 + 1);
@@ -174,7 +198,7 @@ class MissionQueryServiceImplTest {
 		insertMissionGrid(mission, second, 2);
 		insertMissionGrid(mission, first, 1);
 
-		PathShape shape = (PathShape) findMission(mission).shape();
+		PathShape shape = (PathShape) findMission(mission, MissionType.COURSE).shape();
 
 		assertThat(shape.line()).contains("LineString").contains("coordinates");
 		assertThat(shape.spots()).extracting(Spot::seq).containsExactly(1, 2);
@@ -193,7 +217,7 @@ class MissionQueryServiceImplTest {
 		String only = gid(GY0, GX0);
 		insertMissionGrid(mission, only, 1);
 
-		PathShape shape = (PathShape) findMission(mission).shape();
+		PathShape shape = (PathShape) findMission(mission, MissionType.COURSE).shape();
 
 		assertThat(shape.line()).isNull();
 		assertThat(shape.spots()).extracting(Spot::gridId).containsExactly(only);
@@ -206,7 +230,7 @@ class MissionQueryServiceImplTest {
 		insertMissionGrid(mission, gid(GY0, GX0), null);
 		insertMissionGrid(mission, gid(GY0 + 1, GX0 + 1), null);
 
-		BoxShape shape = (BoxShape) findMission(mission).shape();
+		BoxShape shape = (BoxShape) findMission(mission, MissionType.EVENT).shape();
 
 		// 남서→남동→북동→북서→남서 닫힌 링. 경계는 두 셀 bbox 의 전역 min/max.
 		assertBoxEnvelope(shape, gid(GY0, GX0), gid(GY0 + 1, GX0 + 1));
@@ -219,7 +243,7 @@ class MissionQueryServiceImplTest {
 		String grid = gid(GY0, GX0);
 		insertMissionGrid(mission, grid, null);
 
-		BoxShape shape = (BoxShape) findMission(mission).shape();
+		BoxShape shape = (BoxShape) findMission(mission, MissionType.EVENT).shape();
 
 		// 한 격자면 경계 사각형 = 그 셀 하나를 감싸는 축정렬 사각형(≈마커). 5179 셀은 기울어져 있어
 		// 셀 bbox 링 자체와는 다르다 — 네 꼭짓점을 감싸는 최소 사각형이다 (MSG-347).
@@ -237,9 +261,9 @@ class MissionQueryServiceImplTest {
 			}
 		}
 
-		BoxShape shape = (BoxShape) findMission(mission).shape();
+		BoxShape shape = (BoxShape) findMission(mission, MissionType.POPUP).shape();
 
-		assertThat(findMission(mission).type()).isEqualTo("POPUP");
+		assertThat(findMission(mission, MissionType.POPUP).type()).isEqualTo("POPUP");
 		// 오라클이 DB 쪽이라 81셀 전량을 그대로 넘긴다 — 모서리 셀만 추리는 지름길이 필요 없다.
 		assertBoxEnvelope(shape, allCells(4).toArray(String[]::new));
 	}
@@ -253,7 +277,7 @@ class MissionQueryServiceImplTest {
 		insertMissionGrid(mission, a, null);
 		insertMissionGrid(mission, b, null);
 
-		CellsShape shape = (CellsShape) findMission(mission).shape();
+		CellsShape shape = (CellsShape) findMission(mission, MissionType.THEME).shape();
 
 		assertThat(shape.cells()).extracting(Cell::gridId).containsExactlyInAnyOrder(a, b);
 		Cell cellA = shape.cells().stream().filter(c -> c.gridId().equals(a)).findFirst().orElseThrow();
@@ -269,7 +293,7 @@ class MissionQueryServiceImplTest {
 		String grid = gid(GY0, GX0);
 		insertMissionGrid(mission, grid, null);
 
-		CellsShape shape = (CellsShape) findMission(mission).shape();
+		CellsShape shape = (CellsShape) findMission(mission, MissionType.CONTINUOUS).shape();
 
 		assertThat(shape.cells()).extracting(Cell::gridId).containsExactly(grid);
 	}
@@ -281,21 +305,18 @@ class MissionQueryServiceImplTest {
 		String polygon = rectanglePolygonJson(127.0, 37.0, 127.01, 37.01);
 		regionRepository.upsert(regionCode, "MSG222합성동", regionCode.substring(0, 5), polygon, CELL_AREA_M2);
 		long mission = insertMission("AREA", regionCode, null);
+		// MSG-398 부터 격자도 경로도 없는 미션은 어떤 뷰포트에도 실리지 않는다 — shape 합성을 관찰하려면
+		// 판정 격자 한 칸이 필요하다(실 AREA 적재는 0건이라 이 조합은 합성 전용이다).
+		insertMissionGrid(mission, gid(GY0, GX0), null);
 
-		RegionShape shape = (RegionShape) findMission(mission).shape();
+		RegionShape shape = (RegionShape) findMission(mission, MissionType.AREA).shape();
 
 		assertThat(shape.regionCode()).isEqualTo(regionCode);
 	}
 
-	@Test
-	@DisplayName("mission_grids가 비어도 방어적으로 빈 shape를 반환한다")
-	void mission_grids가_비어도_방어적으로_빈_shape를_반환한다() {
-		long box = insertMission("EVENT", null, null);
-		long cells = insertMission("THEME", null, null);
-
-		assertThat(((BoxShape) findMission(box).shape()).polygon()).isEmpty();
-		assertThat(((CellsShape) findMission(cells).shape()).cells()).isEmpty();
-	}
+	// (구) "mission_grids가 비어도 방어적으로 빈 shape를 반환한다"는 MSG-398 로 관찰 불가가 됐다 —
+	// 격자도 경로도 없는 미션은 뷰포트 응답에 실리지 않는다. 그 동작 자체는
+	// MissionViewportFilterTest.격자도_경로도_없는_미션은_어떤_뷰포트에도_없다 가 검증한다.
 
 	@Test
 	@DisplayName("PATH 스팟과 CELLS 중심점은 GridEncoder center와 일치한다")
@@ -308,8 +329,8 @@ class MissionQueryServiceImplTest {
 		long theme = insertMission("THEME", null, null);
 		insertMissionGrid(theme, grid, null);
 
-		Spot spot = ((PathShape) findMission(course).shape()).spots().get(0);
-		Cell cell = ((CellsShape) findMission(theme).shape()).cells().get(0);
+		Spot spot = ((PathShape) findMission(course, MissionType.COURSE).shape()).spots().get(0);
+		Cell cell = ((CellsShape) findMission(theme, MissionType.THEME).shape()).cells().get(0);
 
 		assertThat(spot.lat()).isEqualTo(center.lat());
 		assertThat(spot.lng()).isEqualTo(center.lon());
@@ -339,7 +360,7 @@ class MissionQueryServiceImplTest {
 		em.flush();
 		em.clear();
 
-		MissionResponseDto dto = findMission(mission);
+		MissionResponseDto dto = findMission(mission, MissionType.COURSE);
 
 		assertThat(dto.description()).isEqualTo("바다를 따라 걷는다\n전망대가 있다");
 		assertThat(dto.placeName()).isEqualTo("부산 영도구");
@@ -358,7 +379,7 @@ class MissionQueryServiceImplTest {
 		long mission = insertMission("EVENT", null, null);
 		insertMissionGrid(mission, gid(GY0, GX0), null);
 
-		MissionResponseDto dto = findMission(mission);
+		MissionResponseDto dto = findMission(mission, MissionType.EVENT);
 
 		assertThat(dto.description()).isNull();
 		assertThat(dto.placeName()).isNull();
@@ -376,7 +397,7 @@ class MissionQueryServiceImplTest {
 		long event = insertMission("EVENT", null, null);
 		insertMissionGrid(event, gid(GY0, GX0), null);
 
-		MissionResponseDto dto = findMission(event);
+		MissionResponseDto dto = findMission(event, MissionType.EVENT);
 
 		assertThat(dto.distanceMeters()).isNull();
 		assertThat(dto.durationMinutes()).isNull();
@@ -390,7 +411,7 @@ class MissionQueryServiceImplTest {
 		List<String> grids = List.of(gid(GY0, GX0), gid(GY0 + 3, GX0 + 1), gid(GY0 + 1, GX0 + 4));
 		grids.forEach(grid -> insertMissionGrid(mission, grid, null));
 
-		BoxShape shape = (BoxShape) findMission(mission).shape();
+		BoxShape shape = (BoxShape) findMission(mission, MissionType.EVENT).shape();
 
 		double minLat = Double.POSITIVE_INFINITY;
 		double minLon = Double.POSITIVE_INFINITY;
