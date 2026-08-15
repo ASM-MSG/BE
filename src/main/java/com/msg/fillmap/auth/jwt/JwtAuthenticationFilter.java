@@ -12,6 +12,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
@@ -24,6 +27,14 @@ import com.msg.fillmap.global.exception.ApiException;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
 	private static final String BEARER_PREFIX = "Bearer ";
+	// SecurityConfig 의 permitAll 인증 경로와 반드시 함께 갱신한다.
+	private static final RequestMatcher PUBLIC_AUTH_PATHS = new OrRequestMatcher(
+		PathPatternRequestMatcher.pathPattern("/api/auth/signup"),
+		PathPatternRequestMatcher.pathPattern("/api/auth/login"),
+		PathPatternRequestMatcher.pathPattern("/api/auth/oauth/**"),
+		PathPatternRequestMatcher.pathPattern("/api/auth/reissue"),
+		PathPatternRequestMatcher.pathPattern("/api/auth/dev/**")
+	);
 
 	private final TokenProvider tokenProvider;
 	private final HandlerExceptionResolver resolver;
@@ -31,6 +42,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 	public JwtAuthenticationFilter(TokenProvider tokenProvider, HandlerExceptionResolver resolver) {
 		this.tokenProvider = tokenProvider;
 		this.resolver = resolver;
+	}
+
+	@Override
+	protected boolean shouldNotFilter(HttpServletRequest request) {
+		return PUBLIC_AUTH_PATHS.matches(request);
 	}
 
 	@Override
