@@ -58,16 +58,28 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 	CollectionSummaryProjection getCollectionSummary(@Param("userId") long userId);
 
 	/**
-	 * 갤러리 격자 목록 — 내 점령 격자를 최근 수집순(first_collected_at DESC, 타이브레이크 grid_id DESC)
-	 * 최대 30개 (MSG-153 D3). coverVideoId 는 스펙 §API 정본대로 user_grids.cover_video_id 그대로(cover 없으면 null,
-	 * readiness 무관), 썸네일 key 만 READY 게이트를 건 LEFT JOIN 에서 가져온다 — "READY 이전이면 썸네일 null"(§D4)을
-	 * 조인 조건으로 강제해 교체·재인코딩 경계에서 pre-READY 행에 남은 stale 썸네일이 새지 않는다. READY 여도 썸네일이
-	 * null 일 수 있어(markReady 가 null thumbnailKey 허용) "id·썸네일 둘 다 null 쌍"은 계약이 아니다 —
-	 * 인코딩 중 cover 는 id 만 있고 key 가 null 인 게 정상 상태.
+	 * 갤러리 격자 목록 — 내 점령 격자를 정렬·행정동·개수 상한을 받아 반환한다 (MSG-153 D3, MSG-388 확장).
+	 * coverVideoId 는 스펙 §API 정본대로 user_grids.cover_video_id 그대로(cover 없으면 null, readiness 무관),
+	 * 썸네일 key 만 READY 게이트를 지난다 — "READY 이전이면 썸네일 null"(MSG-153 §D4)을 강제해 교체·재인코딩
+	 * 경계에서 pre-READY 행에 남은 stale 썸네일이 새지 않는다. 게이트는 조인 조건이 아니라 SELECT 표현식에
+	 * 있다(MSG-388): duration 은 게이트 밖이라 같은 cover 행을 게이트 없이 읽어야 하기 때문이며, 썸네일 결과는
+	 * 기존과 동일하다. coverDurationSec 은 업로드 확정 시점부터 non-null 이라 인코딩 완료 전 카드에도 뱃지 재료가
+	 * 남고, null 인 경우는 cover 자체가 없을 때뿐이다. READY 여도 썸네일이 null 일 수 있어(markReady 가 null
+	 * thumbnailKey 허용) "id·썸네일 둘 다 null 쌍"은 계약이 아니다 — 인코딩 중 cover 는 id 만 있고 key 가 null 인
+	 * 게 정상 상태.
 	 * regionName 은 격자 중심점 행정동 이름 — grids·regions LEFT JOIN(PK/equi)으로 붙인다(MSG-167 §D4).
 	 * 저장된 라벨(grids.region_code)을 equi 로 소비하므로 조인이 늘어도 여전히 geospatial 0(성공 기준 8) —
 	 * point-in-polygon 판정은 쓰기 경로(upsertGrid)·백필에서만 돈다. region_code NULL(해안/미판정)이면 regionName null.
 	 * gridY/gridX 는 서비스가 GridEncoder.decode(gridId) 로 산출하고, coverThumbnailKey 는 서비스가 presign 한다.
+	 *
+	 * 파라미터 3종은 전부 nullable 이라 CAST 가 필수다 — Hibernate 네이티브 쿼리에 null 을 바인딩하면 PostgreSQL
+	 * 이 파라미터 타입을 추론하지 못해 문장이 실패한다(RegionRepository.findStats 선례). regionCode 는 격자 축
+	 * (grids.region_code)으로 거르고(MSG-388 FR-5, getRegionVideos 와 같은 기준), limit 은 null 이면
+	 * PostgreSQL 이 LIMIT NULL 을 무제한으로 읽어 그 동네 전부가 나간다. sort 는 enum 이 아니라 String 이다 —
+	 * enum 을 직접 바인딩하면 Hibernate 6 가 ordinal 로 넘겨 텍스트 비교가 항상 실패한다. 선택되지 않은
+	 * CASE 키는 전 행 NULL 이라 동률로 취급돼 다음 키로 넘어가고, 마지막 grid_id DESC 타이브레이크가 페이지
+	 * 없는 목록의 순서를 결정적으로 만든다. 구동은 user_grids PK 선두(user_id)로 사용자 행만 몰아 읽은 뒤
+	 * grids PK 조인·region_code 필터로 좁히는 구조라 신규 인덱스가 불요하다(MSG-167 §D5 와 같은 논리).
 	 */
 	@Query(value = """
 		SELECT
@@ -76,17 +88,27 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 			ug.last_uploaded_at   AS "lastUploadedAt",
 			ug.video_count        AS "videoCount",
 			ug.cover_video_id     AS "coverVideoId",
-			v.thumbnail_url       AS "coverThumbnailKey",
+			CASE WHEN v.processing_status = 'READY' THEN v.thumbnail_url END AS "coverThumbnailKey",
+			v.duration_sec        AS "coverDurationSec",
 			r.region_name         AS "regionName"
 		FROM user_grids ug
-		LEFT JOIN videos v ON v.id = ug.cover_video_id AND v.processing_status = 'READY'
+		LEFT JOIN videos v ON v.id = ug.cover_video_id
 		LEFT JOIN grids g ON g.grid_id = ug.grid_id
 		LEFT JOIN regions r ON r.region_code = g.region_code
 		WHERE ug.user_id = :userId
-		ORDER BY ug.first_collected_at DESC, ug.grid_id DESC
-		LIMIT 30
+			AND (CAST(:regionCode AS varchar) IS NULL OR g.region_code = CAST(:regionCode AS varchar))
+		ORDER BY
+			CASE WHEN :sort = 'UPLOADED' THEN ug.last_uploaded_at END DESC,
+			CASE WHEN :sort = 'COLLECTED' THEN ug.first_collected_at END DESC,
+			ug.grid_id DESC
+		LIMIT CAST(:limit AS bigint)
 		""", nativeQuery = true)
-	List<CollectionGridProjection> getCollectionGrids(@Param("userId") long userId);
+	List<CollectionGridProjection> getCollectionGrids(
+		@Param("userId") long userId,
+		@Param("regionCode") String regionCode,
+		@Param("sort") String sort,
+		@Param("limit") Integer limit
+	);
 
 	/**
 	 * 동 단위 내 영상 — 그 행정동(grids.region_code) 격자들에 올린 내 ACTIVE 영상을 created_at 내림차순으로

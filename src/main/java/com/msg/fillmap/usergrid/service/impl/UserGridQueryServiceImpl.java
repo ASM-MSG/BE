@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.usergrid.dto.CollectionGridSort;
 import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
 import com.msg.fillmap.usergrid.repository.FriendCollectionGridProjection;
@@ -32,6 +33,9 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 @Transactional(readOnly = true)
 public class UserGridQueryServiceImpl implements UserGridQueryService {
 
+	/** 전국 갤러리 기본 상한 — 파라미터 없는 기존 호출의 계약값(MSG-153 D3). */
+	private static final int DEFAULT_GRID_LIMIT = 30;
+
 	private final UserGridRepository userGridRepository;
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
 	private final ZoneNameQueryService zoneNameQueryService;
@@ -53,13 +57,35 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 	 * 구역 이름 리졸버는 항목 매핑 진입 전에 1회만 받는다 (MSG-341 D-1) — 세 목록 조회가 공유하는 규칙이다.
 	 * 항목마다 받으면 격자 수만큼 zones 를 다시 읽는 N+1 이 된다(FR-8). 리졸버 생성이 이 readOnly 트랜잭션
 	 * 안이라 zones 도 격자 목록과 같은 스냅샷이고, 페이지 중간에 zones 가 바뀌어 항목끼리 기준이 갈리지 않는다.
+	 *
+	 * limit 결정(MSG-388): 지정하면 그 값(1 미만은 1 로 보정 — 전역 탐색 선례), 생략하면 regionCode 유무로
+	 * 갈린다. 전국 조회는 기존 갤러리 계약 그대로 30이고(FR-7), 행정동 조회는 null 을 넘겨 그 동네 전부를
+	 * 받는다(PostgreSQL 이 LIMIT NULL 을 무제한으로 읽는다 — 한 동네의 내 격자 수는 개인 활동량에 비례하는
+	 * 작은 수라 조용한 절단보다 전부가 맞다). sort 는 리포지토리 경계에서 String 으로 좁힌다 — enum 을
+	 * 네이티브 쿼리에 직접 바인딩하면 Hibernate 6 가 ordinal 로 넘겨 텍스트 비교가 항상 실패한다.
 	 */
 	@Override
-	public List<CollectionGridView> getCollectionGrids(long userId) {
+	public List<CollectionGridView> getCollectionGrids(
+		long userId, String regionCode, CollectionGridSort sort, Integer limit) {
+		Integer effectiveLimit = resolveLimit(regionCode, limit);
 		ZoneNameResolver resolver = zoneNameQueryService.resolver();
-		return userGridRepository.getCollectionGrids(userId).stream()
+		return userGridRepository.getCollectionGrids(userId, regionCode, sort.name(), effectiveLimit).stream()
 			.map(projection -> toView(projection, resolver))
 			.toList();
+	}
+
+	/**
+	 * null 이 곧 "상한 없음"이라 삼항 연산자를 쓰지 않는다 — int 와 Integer 를 섞으면 자바가 양쪽을 int 로
+	 * 맞추려 null 을 언박싱해 NPE 가 난다(MSG-388 테스트 적발).
+	 */
+	private static Integer resolveLimit(String regionCode, Integer limit) {
+		if (limit != null) {
+			return Math.max(limit, 1);
+		}
+		if (regionCode != null) {
+			return null;
+		}
+		return DEFAULT_GRID_LIMIT;
 	}
 
 	/**
@@ -81,6 +107,7 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 			projection.getVideoCount(),
 			projection.getCoverVideoId(),
 			thumbnailUrlPresigner.presign(projection.getCoverThumbnailKey()),
+			projection.getCoverDurationSec(),
 			projection.getRegionName(),
 			name.zoneName(),
 			name.zoneCell()

@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.usergrid.dto.CollectionGridResponseDto;
+import com.msg.fillmap.usergrid.dto.CollectionGridSort;
 import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
 import com.msg.fillmap.usergrid.dto.RegionVideoResponseDto;
 import com.msg.fillmap.usergrid.dto.UploadHistoryResponseDto;
@@ -54,15 +55,26 @@ public class CollectionController {
 
 	@Operation(
 		summary = "갤러리 격자 목록 조회",
-		description = "로그인 사용자가 최근 수집한 격자를 first_collected_at 내림차순 최대 30개로 반환한다(무커서). "
-			+ "각 항목은 gridId·gridY/gridX·수집/방문 시각·영상 수·cover 영상 ID·cover 썸네일 URL 을 담는다. "
-			+ "점령 0건 사용자는 에러 없이 빈 배열을 받는다."
+		description = "로그인 사용자가 수집한 격자를 카드로 반환한다(무커서). 파라미터를 모두 생략하면 전국을 "
+			+ "first_collected_at 내림차순 최대 30개로 준다(기존 계약). regionCode 를 주면 그 행정동에 속한 내 격자만 "
+			+ "나가며, 귀속은 격자 축이라 영상 좌표가 옆 동이어도 격자 소속 행정동 기준으로 잡힌다. "
+			+ "각 항목은 gridId·gridY/gridX·수집/방문 시각·영상 수·cover 영상 ID·cover 썸네일 URL·cover 길이(초)를 담는다. "
+			+ "내 격자가 없거나 미존재 regionCode 면 에러 없이 빈 배열을 받는다."
 	)
 	@GetMapping("/grids")
 	public SuccessResponse<List<CollectionGridResponseDto>> getCollectionGrids(
-		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "행정동 코드 — 생략하면 전국. by-grid 응답의 regionCode 를 그대로 전달",
+			example = "1168051500")
+		@RequestParam(required = false) String regionCode,
+		@Parameter(description = "정렬 축 — COLLECTED(수집 시각순, 기본) 또는 UPLOADED(최신 업로드순)")
+		@RequestParam(defaultValue = "COLLECTED") CollectionGridSort sort,
+		@Parameter(description = "카드 수 상한 — 지도 홈 패널은 20 (SRS FR-MAP-10). 생략하면 regionCode 없을 때 30, "
+			+ "regionCode 있을 때 그 동네 전부. 1 미만은 1 로 보정한다", example = "20")
+		@RequestParam(required = false) Integer limit
 	) {
-		List<CollectionGridView> views = userGridQueryService.getCollectionGrids(principal.userId());
+		List<CollectionGridView> views =
+			userGridQueryService.getCollectionGrids(principal.userId(), regionCode, sort, limit);
 		return SuccessResponse.of(views.stream().map(CollectionGridResponseDto::from).toList());
 	}
 
