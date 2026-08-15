@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.msg.fillmap.auth.jwt.InMemoryInvalidatedTokenStore;
+import com.msg.fillmap.auth.jwt.JwtProperties;
+import com.msg.fillmap.auth.jwt.JwtTokenProvider;
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.user.dto.ProfileImagePresignRequestDto;
 import com.msg.fillmap.user.dto.ProfileImagePresignResponseDto;
@@ -46,6 +50,7 @@ class UserProfileControllerTest {
 	private static final String NICKNAME_URL = "/api/users/me/nickname";
 	private static final String PROFILE_IMAGE_URL = "/api/users/me/profile-image";
 	private static final String PROFILE_IMAGE_PRESIGN_URL = "/api/users/me/profile-image/presigned-url";
+	private static final String LOCATION_CONSENT_URL = "/api/users/me/location-consent";
 	private static final LocalDateTime CREATED_AT = LocalDateTime.of(2026, 1, 12, 3, 24, 11);
 
 	@Autowired
@@ -53,6 +58,10 @@ class UserProfileControllerTest {
 
 	@Autowired
 	private TokenProvider tokenProvider;
+
+	/** 무효·만료 토큰을 실제로 만들어 쓰기 위한 서명 재료 (JwtFilterIntegrationTest 패턴). */
+	@Autowired
+	private JwtProperties jwtProperties;
 
 	@MockitoBean
 	private UserService userService;
@@ -67,7 +76,7 @@ class UserProfileControllerTest {
 	void 내_프로필을_조회한다() throws Exception {
 		// 정확값 스텁 — principal userId(토큰의 USER_ID)가 서비스에 그대로 전달돼야만 매치된다(사용자 격리).
 		given(userService.getMyProfile(USER_ID))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false));
 
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
@@ -81,7 +90,7 @@ class UserProfileControllerTest {
 	@DisplayName("카카오 가입 사용자는 email 필드가 존재하되 값이 null 이다 (MSG-310, required+nullable)")
 	void 카카오_가입_사용자는_email_필드가_존재하되_값이_null_이다() throws Exception {
 		given(userService.getMyProfile(USER_ID))
-			.willReturn(new UserProfileResponseDto(null, "카카오유저", null, CREATED_AT));
+			.willReturn(new UserProfileResponseDto(null, "카카오유저", null, CREATED_AT, false));
 
 		// OpenAPI 계약(required + nullable) 그대로의 와이어 검증 — 필드 존재(hasKey)와 값 null 을 구분해 단언한다.
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -96,7 +105,7 @@ class UserProfileControllerTest {
 	@DisplayName("닉네임을 수정하면 변경 후 프로필을 반환한다 (FR-2·D2)")
 	void 닉네임을_수정하면_변경_후_프로필을_반환한다() throws Exception {
 		given(userService.updateNickname(USER_ID, "새닉네임"))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "새닉네임", null, CREATED_AT));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "새닉네임", null, CREATED_AT, false));
 
 		mockMvc.perform(put(NICKNAME_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
@@ -145,7 +154,7 @@ class UserProfileControllerTest {
 	@DisplayName("두 글자·스무 글자 닉네임은 통과한다 (FR-2, @Size 경계 안)")
 	void 두_글자와_스무_글자_닉네임은_통과한다() throws Exception {
 		given(userService.updateNickname(eq(USER_ID), anyString()))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "무관", null, CREATED_AT));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "무관", null, CREATED_AT, false));
 
 		mockMvc.perform(put(NICKNAME_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
@@ -200,7 +209,7 @@ class UserProfileControllerTest {
 	@DisplayName("프로필 응답에 이미지 URL 과 가입 시각이 실린다 — 미설정이면 필드 존재 + null (MSG-373 FR-2·3)")
 	void 프로필_응답에_이미지_URL과_가입_시각이_실린다() throws Exception {
 		given(userService.getMyProfile(USER_ID))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false));
 
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
@@ -243,7 +252,7 @@ class UserProfileControllerTest {
 	@DisplayName("프로필 이미지를 변경하면 갱신된 프로필을 반환한다 (MSG-373 FR-1)")
 	void 프로필_이미지를_변경하면_갱신된_프로필을_반환한다() throws Exception {
 		given(userService.updateProfileImage(USER_ID, "profiles/pending/42/uuid.jpg"))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", "https://cdn/img.jpg", CREATED_AT));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", "https://cdn/img.jpg", CREATED_AT, false));
 
 		mockMvc.perform(put(PROFILE_IMAGE_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
@@ -269,11 +278,110 @@ class UserProfileControllerTest {
 	@DisplayName("프로필 이미지를 제거하면 이미지 URL 이 null 인 프로필을 반환한다 (MSG-373 FR-6)")
 	void 프로필_이미지를_제거하면_null인_프로필을_반환한다() throws Exception {
 		given(userService.removeProfileImage(USER_ID))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false));
 
 		mockMvc.perform(delete(PROFILE_IMAGE_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.profileImageUrl").value(nullValue()));
+	}
+
+	// 검증: FR-USER-14
+	@Test
+	@DisplayName("위치정보 사용 동의를 켜면 변경 후 프로필을 반환한다 (MSG-402 FR-2·D-1)")
+	void 위치정보_사용_동의를_켜면_변경_후_프로필을_반환한다() throws Exception {
+		given(userService.updateLocationConsent(USER_ID, true))
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, true));
+
+		mockMvc.perform(put(LOCATION_CONSENT_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"consented\":true}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.locationConsent").value(true));
+	}
+
+	// 검증: FR-USER-14
+	@Test
+	@DisplayName("위치정보 사용 동의를 끄면 false 인 프로필을 반환한다 (MSG-402 FR-2, 양방향)")
+	void 위치정보_사용_동의를_끄면_false인_프로필을_반환한다() throws Exception {
+		given(userService.updateLocationConsent(USER_ID, false))
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false));
+
+		mockMvc.perform(put(LOCATION_CONSENT_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"consented\":false}"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.locationConsent").value(false));
+	}
+
+	// 검증: FR-USER-14
+	@Test
+	@DisplayName("consented 없는 동의 변경 요청은 400 이다 (@NotNull — 누락이 false 로 둔갑하지 않는다)")
+	void consented_없는_요청은_400이다() throws Exception {
+		mockMvc.perform(put(LOCATION_CONSENT_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{}"))
+			.andExpect(status().isBadRequest());
+	}
+
+	// 검증: FR-USER-14
+	@Test
+	@DisplayName("프로필 응답 JSON 에 locationConsent 키가 항상 존재한다 (required 계약)")
+	void 프로필_응답_JSON에_locationConsent_키가_항상_존재한다() throws Exception {
+		given(userService.getMyProfile(USER_ID))
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false));
+
+		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data", hasKey("locationConsent")))
+			.andExpect(jsonPath("$.data.locationConsent").value(false));
+	}
+
+	@Test
+	@DisplayName("토큰 없는 동의 변경은 401 UNAUTHENTICATED (2403) 다")
+	void 토큰_없는_동의_변경_요청은_2403이다() throws Exception {
+		mockMvc.perform(put(LOCATION_CONSENT_URL)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"consented\":true}"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.developCode").value(2403));
+	}
+
+	@Test
+	@DisplayName("변조된 토큰의 동의 변경은 401 INVALID_TOKEN (2401) 이다")
+	void 무효_토큰_동의_변경_요청은_2401이다() throws Exception {
+		JwtProperties otherProps = new JwtProperties(
+			"another-completely-different-secret-32-bytes-plus-long", Duration.ofHours(1),
+			jwtProperties.refreshSecret(), jwtProperties.refreshTokenTtl());
+		String forged = new JwtTokenProvider(otherProps, new InMemoryInvalidatedTokenStore())
+			.issueAccessToken(USER_ID, UserRole.USER);
+
+		mockMvc.perform(put(LOCATION_CONSENT_URL)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + forged)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"consented\":true}"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.developCode").value(2401));
+	}
+
+	@Test
+	@DisplayName("만료된 토큰의 동의 변경은 401 EXPIRED_TOKEN (2402) 이다")
+	void 만료_토큰_동의_변경_요청은_2402이다() throws Exception {
+		JwtProperties expiredProps = new JwtProperties(
+			jwtProperties.secret(), Duration.ofSeconds(-1),
+			jwtProperties.refreshSecret(), jwtProperties.refreshTokenTtl());
+		String expired = new JwtTokenProvider(expiredProps, new InMemoryInvalidatedTokenStore())
+			.issueAccessToken(USER_ID, UserRole.USER);
+
+		mockMvc.perform(put(LOCATION_CONSENT_URL)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + expired)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"consented\":true}"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.developCode").value(2402));
 	}
 
 	@Test
