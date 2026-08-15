@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.auth.support.RefreshTokenCookies;
 import com.msg.fillmap.response.SuccessResponse;
+import com.msg.fillmap.user.dto.LocationConsentUpdateRequestDto;
 import com.msg.fillmap.user.dto.NicknameUpdateRequestDto;
 import com.msg.fillmap.user.dto.ProfileImagePresignRequestDto;
 import com.msg.fillmap.user.dto.ProfileImagePresignResponseDto;
@@ -62,6 +63,21 @@ public class UserController {
 		@Valid @RequestBody NicknameUpdateRequestDto request
 	) {
 		return SuccessResponse.of(userService.updateNickname(principal.userId(), request.nickname()));
+	}
+
+	@Operation(
+		summary = "위치정보 사용 동의 변경",
+		description = "위치기반서비스 이용 동의를 켜거나 끄고 변경 후 프로필을 반환한다. 첫 로그인 온보딩의 "
+			+ "동의 제출과 프로필 편집의 토글이 이 엔드포인트 하나를 공용으로 쓴다.\n\n"
+			+ "이미 저장된 값과 같은 값을 다시 보내도 성공하며, 이때 서버가 보관하는 마지막 변경 시각은 "
+			+ "갱신되지 않는다(멱등). 동의를 꺼도 서버가 막는 API 는 없다 — 위치 기능 노출 제어는 클라이언트 몫이다."
+	)
+	@PutMapping("/me/location-consent")
+	public SuccessResponse<UserProfileResponseDto> updateLocationConsent(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Valid @RequestBody LocationConsentUpdateRequestDto request
+	) {
+		return SuccessResponse.of(userService.updateLocationConsent(principal.userId(), request.consented()));
 	}
 
 	@Operation(

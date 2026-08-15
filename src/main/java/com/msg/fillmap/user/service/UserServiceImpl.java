@@ -1,6 +1,9 @@
 package com.msg.fillmap.user.service;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -8,6 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -85,6 +89,19 @@ public class UserServiceImpl implements UserService {
 	private final S3Presigner s3Presigner;
 	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
+	private final Clock clock;
+
+	/**
+	 * 프로덕션 생성자 — 마지막 인자 clock 을 Clock.systemUTC() 로 고정해 Lombok 전체 생성자로 위임한다
+	 * (BadgeAwardServiceImpl 선례). 위치정보 동의 변경 시각 산출에만 쓰며, 전체 생성자는 테스트 고정
+	 * 클럭 주입용이다.
+	 */
+	@Autowired
+	public UserServiceImpl(UserRepository userRepository, RefreshTokenService refreshTokenService,
+		TokenProvider tokenProvider, S3Presigner s3Presigner, S3Client s3Client, AwsProperties awsProperties) {
+		this(userRepository, refreshTokenService, tokenProvider, s3Presigner, s3Client, awsProperties,
+			Clock.systemUTC());
+	}
 
 	@Override
 	@Transactional
@@ -192,6 +209,25 @@ public class UserServiceImpl implements UserService {
 		// 이미 기본 상태면 replacedUrl 이 null 이라 삭제 호출 자체가 없다 (멱등 성공).
 		afterCommit(() -> deleteProfileImageObject(replacedUrl));
 		return UserProfileResponseDto.from(user);
+	}
+
+	/**
+	 * 위치정보 사용 동의 변경 (MSG-402 §도메인 로직). 갱신은 원자 UPDATE 한 문장이고(§D-4) 값 비교도
+	 * 그 안에서 끝나므로 여기에 "지금 값이 뭐냐"를 읽는 코드가 없다. @Transactional 은 필수다 —
+	 * @Modifying 쿼리는 트랜잭션 없이 실행이 거부된다.
+	 *
+	 * 시각은 주입된 Clock 으로 UTC 에서 만들고 DB 정밀도(µs)로 절단한다 (§D-5, User.createdAt 선례).
+	 * 같은 값 재저장이면 이 값이 쓰이지 않고 기존 시각이 남는다.
+	 */
+	@Override
+	@Transactional
+	public UserProfileResponseDto updateLocationConsent(Long userId, boolean consented) {
+		LocalDateTime changedAt = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+		if (userRepository.updateLocationConsent(userId, consented, changedAt) == 0) {
+			throw new ApiException(UserErrorCode.USER_NOT_FOUND);
+		}
+		// clearAutomatically 가 갱신 전 스냅숏을 비운 뒤라 이 재조회는 DB 의 저장 값을 읽는다.
+		return UserProfileResponseDto.from(findUser(userId));
 	}
 
 	/**

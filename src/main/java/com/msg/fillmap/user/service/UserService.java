@@ -36,4 +36,11 @@ public interface UserService {
 
 	/** 프로필 이미지 제거 (MSG-373 FR-6). 기본 상태(null)로 되돌린다 — 이미 기본 상태여도 성공(멱등). */
 	UserProfileResponseDto removeProfileImage(Long userId);
+
+	/**
+	 * 위치정보 사용 동의 변경 (MSG-402 FR-2·3·4). 온보딩 동의 제출과 프로필 편집 토글이 공용으로 쓴다.
+	 * 값이 실제로 달라질 때만 변경 시각이 갱신되고, 같은 값 재저장은 성공하되 시각이 그대로다(멱등).
+	 * 변경 후 프로필을 반환한다 — 닉네임 수정과 같은 형태라 FE 가 재조회 없이 토글 상태를 확정한다(§D-1).
+	 */
+	UserProfileResponseDto updateLocationConsent(Long userId, boolean consented);
 }
