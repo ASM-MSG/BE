@@ -19,7 +19,7 @@ import com.msg.fillmap.mission.entity.Mission;
  * 목록·상세로 나누지 않은 이유는 상세 전용 DTO 가 아직 없어서다 — 지금 나누면 상세 티켓이 들어올 때
  * 소비처가 두 번 바뀐다(§D8).
  */
-@Schema(description = "활성 미션 하나 — 공통 필드 + 유형별 렌더 shape",
+@Schema(description = "미션 하나 — 공통 필드 + 유형별 렌더 shape",
 	requiredProperties = {"missionId", "type", "title", "targetCount", "shape", "startAt", "endAt",
 		"description", "placeName", "sourceUrl", "operationTime", "imageUrl",
 		"distanceMeters", "durationMinutes", "difficulty"})
