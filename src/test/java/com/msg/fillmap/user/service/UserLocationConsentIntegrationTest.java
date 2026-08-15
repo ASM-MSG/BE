@@ -88,6 +88,15 @@ class UserLocationConsentIntegrationTest {
 		return (LocalDateTime) storedConsent(id)[1];
 	}
 
+	/**
+	 * 고정 시각 클럭을 문 서비스. 동의 경로가 쓰는 협력자는 리포지토리 하나뿐이라 나머지는 넘기지 않는다.
+	 * 트랜잭션은 이 테스트 클래스가 이미 열어 뒀으므로 프록시 없는 직접 호출로도 @Modifying 쿼리가 실행된다.
+	 */
+	private UserService serviceAt(LocalDateTime utc) {
+		return new UserServiceImpl(userRepository, null, null, null, null, null,
+			Clock.fixed(utc.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+	}
+
 	@Nested
 	@DisplayName("기본값")
 	class Defaults {
@@ -104,10 +113,11 @@ class UserLocationConsentIntegrationTest {
 
 		// 검증: FR-USER-14
 		@Test
-		@DisplayName("V32 적용 후 기존 사용자 행은 동의 false 에 변경 시각 NULL 이다 (FR-8, 백필 없음)")
-		void V32_적용_후_기존_사용자_행은_동의_false에_변경_시각_NULL이다() {
-			// 동의 컬럼을 지정하지 않는 INSERT — V32 이전 코드가 만들던 행과 같은 모양이라
-			// 기존 사용자에게 실제로 적용되는 값이 DB DEFAULT 뿐임을 드러낸다.
+		@DisplayName("동의 컬럼 없이 INSERT 한 행은 V32 DEFAULT 로 false · NULL 이 된다 (FR-8)")
+		void 동의_컬럼_없이_INSERT_한_행은_V32_DEFAULT로_false에_NULL이_된다() {
+			// 검증 대상은 DEFAULT 절이다 — V31 시점 행에 ALTER 가 어떤 값을 채웠는지가 아니다(그 하네스는
+			// 과하다). 동의 컬럼을 지정하지 않는 INSERT 는 V32 이전 코드가 내보내던 문장과 같은 모양이라,
+			// 애플리케이션이 값을 안 넣어도 미동의로 시작한다는 성질을 같은 DEFAULT 절로 확인한다.
 			long legacyId = ((Number) em.createNativeQuery("""
 				INSERT INTO users (provider, oid, email, nickname, friend_code)
 				VALUES ('KAKAO', :oid, NULL, '기존유저', :code)
@@ -156,15 +166,25 @@ class UserLocationConsentIntegrationTest {
 		@DisplayName("동의를 켜면 변경 시각이 UTC 로 저장된다 (FR-3·D-5, 고정 클럭)")
 		void 동의를_켜면_변경_시각이_UTC로_저장된다() {
 			LocalDateTime fixedUtc = LocalDateTime.of(2026, 8, 15, 3, 24, 11);
-			// 동의 경로가 쓰는 협력자는 리포지토리 하나뿐이라 나머지는 넘기지 않는다. 트랜잭션은 이 테스트
-			// 클래스가 이미 열어 뒀으므로 프록시 없는 직접 호출로도 @Modifying 쿼리가 실행된다.
-			UserService fixedClockService = new UserServiceImpl(userRepository, null, null, null, null, null,
-				Clock.fixed(fixedUtc.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 
-			fixedClockService.updateLocationConsent(userId, true);
+			serviceAt(fixedUtc).updateLocationConsent(userId, true);
 
 			// KST 벽시계가 새어 들어오면 9시간 어긋나 이 단언이 깨진다 (시각 처리 컨벤션, MSG-376).
 			assertThat(storedChangedAt(userId)).isEqualTo(fixedUtc);
+		}
+
+		// 검증: FR-USER-14
+		@Test
+		@DisplayName("철회하면 변경 시각이 동의 시각에서 새 값으로 교체된다 (FR-3, 고정 클럭 2개)")
+		void 철회하면_변경_시각이_동의_시각에서_새_값으로_교체된다() {
+			LocalDateTime consentedAt = LocalDateTime.of(2026, 8, 15, 3, 24, 11);
+			LocalDateTime revokedAt = LocalDateTime.of(2026, 8, 16, 9, 0, 0);
+			serviceAt(consentedAt).updateLocationConsent(userId, true);
+
+			serviceAt(revokedAt).updateLocationConsent(userId, false);
+
+			// 값이 남아 있기만 한 게 아니라 철회 시각으로 바뀌어야 한다 — 갱신 누락이면 동의 시각이 그대로 남는다.
+			assertThat(storedChangedAt(userId)).isEqualTo(revokedAt).isNotEqualTo(consentedAt);
 		}
 
 		// 검증: FR-USER-14
