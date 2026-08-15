@@ -168,9 +168,9 @@
 | FR-MISSION-13 | 진행 중 | MissionViewportFilterTest |
 | FR-MISSION-14 | 진행 중 | MissionViewportFilterTest |
 | FR-MISSION-15 | 계획 | (없음) |
-| FR-MISSION-16 | 계획 | CourseMissionSeederIntegrationTest, CourseSeedReaderTest, FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, MissionControllerTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
-| FR-MISSION-17 | 진행 중 | MissionVideoControllerTest, MissionVideoListQueryTest, MissionVideoListServiceTest |
-| FR-MISSION-18 | 진행 중 | MissionProgressQueryTest, MissionProgressServiceTest |
+| FR-MISSION-16 | 진행 중 | CourseMissionSeederIntegrationTest, CourseSeedReaderTest, FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, MissionControllerTest, MissionDetailServiceTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
+| FR-MISSION-17 | 진행 중 | MissionControllerTest, MissionDetailConsistencyTest, MissionDetailServiceTest, MissionVideoControllerTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVideoListServiceTest, MissionVisitedGridQueryTest |
+| FR-MISSION-18 | 진행 중 | MissionDetailConsistencyTest, MissionDetailServiceTest, MissionProgressQueryTest, MissionProgressServiceTest, MissionVisitedGridQueryTest |
 | FR-MISSION-19 | 계획 | (없음) |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
 | FR-NOTI-02 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest, NotificationRelayTest |
