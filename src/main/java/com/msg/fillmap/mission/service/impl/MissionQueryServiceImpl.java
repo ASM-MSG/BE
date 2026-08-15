@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,8 @@ import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridEncoder.GridRange;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.mission.config.MissionViewportProperties;
+import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
+import com.msg.fillmap.mission.dto.MissionDetailResponseDto.SpotStats;
 import com.msg.fillmap.mission.dto.MissionProgressResponseDto;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionShape;
@@ -40,8 +43,11 @@ import com.msg.fillmap.mission.entity.MissionGrid;
 import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.exception.MissionErrorCode;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
+import com.msg.fillmap.mission.repository.MissionProgressProjection;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.MissionQueryService;
+import com.msg.fillmap.video.repository.MissionVideoCountProjection;
+import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
  * 미션 조회 구현 (MSG-222 → MSG-398). 목록은 active 판정 → 유형별 shape 단일 분기 합성 → 1h 전역 캐시
@@ -95,6 +101,7 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 
 	private final MissionRepository missionRepository;
 	private final MissionGridRepository missionGridRepository;
+	private final VideoRepository videoRepository;
 	private final ObjectMapper objectMapper;
 	private final MissionViewportProperties viewportProperties;
 	private final Clock clock;
@@ -110,11 +117,12 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	public MissionQueryServiceImpl(
 		MissionRepository missionRepository,
 		MissionGridRepository missionGridRepository,
+		VideoRepository videoRepository,
 		ObjectMapper objectMapper,
 		MissionViewportProperties viewportProperties
 	) {
 		// systemUTC: findActive 의 :now 는 UTC 저장 start_at/end_at 과 비교된다 — 기본존(로컬 KST)이면 +9h 스큐.
-		this(missionRepository, missionGridRepository, objectMapper, viewportProperties,
+		this(missionRepository, missionGridRepository, videoRepository, objectMapper, viewportProperties,
 			Clock.systemUTC(), CACHE_TTL.toMillis());
 	}
 
@@ -122,6 +130,7 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	public MissionQueryServiceImpl(
 		MissionRepository missionRepository,
 		MissionGridRepository missionGridRepository,
+		VideoRepository videoRepository,
 		ObjectMapper objectMapper,
 		MissionViewportProperties viewportProperties,
 		Clock clock,
@@ -129,6 +138,7 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	) {
 		this.missionRepository = missionRepository;
 		this.missionGridRepository = missionGridRepository;
+		this.videoRepository = videoRepository;
 		this.objectMapper = objectMapper;
 		this.viewportProperties = viewportProperties;
 		this.clock = clock;
@@ -159,9 +169,57 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 			throw new ApiException(MissionErrorCode.TOO_MANY_MISSION_IDS);
 		}
 		return missionRepository.findProgress(userId, missionIds).stream()
-			.map(row -> new MissionProgressResponseDto(
-				row.getMissionId(), row.getTargetCount(), row.getFilledCount(), Boolean.TRUE.equals(row.getCompleted())))
+			.map(MissionQueryServiceImpl::toProgressDto)
 			.toList();
+	}
+
+	/**
+	 * 미션 상세 조립 (MSG-399 §도메인 로직). DB 조회는 최대 다섯 번 고정이고 미션 격자 수가 늘어도
+	 * 횟수가 늘지 않는다 — 스팟마다 DB 를 다시 읽지 않는다. 진행도는 findProgress 재사용(같은 교집합
+	 * 계산을 상세용 SQL 로 복제하지 않는다), 방문 여부는 진행도와 같은 술어(findVisitedGridIds),
+	 * 영상 개수는 MSG-390 후보 술어의 격자별 COUNT 합이다. 사용자별 값이라 전역 캐시를 타지 않는다.
+	 */
+	@Override
+	public MissionDetailResponseDto getMissionDetail(long missionId, long userId) {
+		// 기간 판정은 하지 않는다 — 기간이 끝난 미션도 행이 남아 있으면 상세를 연다(§API 명세).
+		Mission mission = missionRepository.findById(missionId)
+			.orElseThrow(() -> new ApiException(MissionErrorCode.MISSION_NOT_FOUND));
+		List<MissionGrid> grids = missionGridRepository.findByMissionIds(List.of(missionId));
+		// findById 직후라 진행도 행은 사실상 하나다. READ_COMMITTED 는 문장 사이 스냅샷이 갱신되므로
+		// 그 사이 시더 정리가 커밋되는 극소 경합(부팅 시·스탬프 없는 종료 미션 한정)은 감수한다.
+		MissionProgressResponseDto progress =
+			toProgressDto(missionRepository.findProgress(userId, List.of(missionId)).get(0));
+		Set<String> visitedGridIds = Set.copyOf(missionGridRepository.findVisitedGridIds(missionId, userId));
+		Map<String, Long> videoCountByGrid = videoRepository.countMissionVideosByGrid(missionId).stream()
+			.collect(Collectors.toMap(
+				MissionVideoCountProjection::getGridId, MissionVideoCountProjection::getVideoCount));
+		long videoCount = videoCountByGrid.values().stream().mapToLong(Long::longValue).sum();
+
+		MissionResponseDto missionDto = MissionResponseDto.of(mission, buildShape(mission, grids));
+		return new MissionDetailResponseDto(missionDto, progress, videoCount,
+			spotStats(mission, grids, visitedGridIds, videoCountByGrid));
+	}
+
+	/**
+	 * COURSE 만 스팟별 통계를 조립한다 — 정렬은 shape.spots 와 같은 SPOT_ORDER(seq ASC NULLS LAST,
+	 * gridId ASC)라 두 배열이 항목 단위로 대응한다. 영상이 없는 스팟은 COUNT 결과에 행이 없으므로 0 으로
+	 * 채워 빠뜨리지 않는다. 코스가 아니면 null 대신 빈 배열이다(§응답 DTO).
+	 */
+	private List<SpotStats> spotStats(Mission mission, List<MissionGrid> grids,
+		Set<String> visitedGridIds, Map<String, Long> videoCountByGrid) {
+		if (mission.getType() != MissionType.COURSE) {
+			return List.of();
+		}
+		return grids.stream()
+			.sorted(SPOT_ORDER)
+			.map(grid -> new SpotStats(grid.getGridId(), visitedGridIds.contains(grid.getGridId()),
+				videoCountByGrid.getOrDefault(grid.getGridId(), 0L)))
+			.toList();
+	}
+
+	private static MissionProgressResponseDto toProgressDto(MissionProgressProjection row) {
+		return new MissionProgressResponseDto(
+			row.getMissionId(), row.getTargetCount(), row.getFilledCount(), Boolean.TRUE.equals(row.getCompleted()));
 	}
 
 	/**

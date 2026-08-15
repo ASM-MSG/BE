@@ -40,6 +40,7 @@ import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
 import com.msg.fillmap.region.repository.RegionRepository;
+import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
  * 유형별 shape 합성 검증 (MissionQueryServiceImpl, 실 PostGIS · MSG-222 §도메인 3 · Owner B). 활성 미션을 유형에
@@ -73,6 +74,9 @@ class MissionQueryServiceImplTest {
 	private RegionRepository regionRepository;
 
 	@Autowired
+	private VideoRepository videoRepository;
+
+	@Autowired
 	private EntityManager em;
 
 	@Autowired
@@ -80,7 +84,7 @@ class MissionQueryServiceImplTest {
 
 	/** 캐시를 비운 새 서비스 인스턴스 — 테스트마다 방금 삽입한 미션만 재계산해 조회하게 한다. */
 	private MissionQueryService newService() {
-		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, objectMapper,
+		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository, objectMapper,
 			new MissionViewportProperties(Map.of()), Clock.systemDefaultZone(), Duration.ofHours(1).toMillis());
 	}
 

@@ -24,6 +24,7 @@ import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionProgressProjection;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
+import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
  * 진행도 조회의 서비스 몫 검증 (순수 단위 · MSG-398 D7 · Owner B) — 벌크 id 가 DB 왕복 한 번으로
@@ -40,8 +41,11 @@ class MissionProgressServiceTest {
 	@Mock
 	private MissionGridRepository missionGridRepository;
 
+	@Mock
+	private VideoRepository videoRepository;
+
 	private MissionQueryService newService() {
-		return new MissionQueryServiceImpl(missionRepository, missionGridRepository,
+		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository,
 			new ObjectMapper(), new MissionViewportProperties(Map.of()),
 			Clock.systemUTC(), Duration.ofHours(1).toMillis());
 	}
