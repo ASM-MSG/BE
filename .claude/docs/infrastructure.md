@@ -113,6 +113,10 @@ docker compose ps             # 상태 확인
 ./gradlew bootRun             # 앱 실행 (Flyway 자동 마이그레이션)
 ```
 
+`bootRun`은 `-Duser.timezone=UTC`로 뜬다 (MSG-379 D3 — naive `LocalDateTime` = UTC 규약).
+**IDE에서 메인 클래스를 직접 실행하면 이 설정을 안 타므로** 실행 구성 VM 옵션에
+`-Duser.timezone=UTC`를 직접 넣는다.
+
 ### 리셋 (스키마 다시 만들기)
 
 ```bash
