@@ -3,6 +3,7 @@ package com.msg.fillmap.video.service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -73,6 +75,21 @@ public class AiBlurPoller {
 	private final ThreadPoolTaskExecutor encodingExecutor;
 	// AI 잡 이벤트 계측 (MSG-343) — submitted·done·failed·precheck_rejected·timeout·job_lost 고정 6종.
 	private final VideoProcessingMetrics videoProcessingMetrics;
+	private final Clock clock;
+
+	/**
+	 * 프로덕션 생성자 — 마지막 인자 clock 을 Clock.systemUTC() 로 고정해 Lombok 전체 생성자로 위임한다
+	 * (VideoServiceImpl 선례, MSG-379 D7). systemUTC 인 이유: 타임아웃 판정이 UTC 로 저장된
+	 * blurringStartedAt 과 "지금"의 차이라, 기본존(KST JVM)이면 경과가 9시간 부풀어 멀쩡한 잡이
+	 * 즉시 FAILED 로 떨어진다. 전체 생성자(@RequiredArgsConstructor 생성)는 테스트 고정 시계 주입용이다.
+	 */
+	@Autowired
+	public AiBlurPoller(VideoRepository videoRepository, VideoStatusWriter statusWriter, AiClient aiClient,
+		S3Client s3Client, AwsProperties awsProperties, AiProperties aiProperties, FfmpegRunner ffmpegRunner,
+		ThreadPoolTaskExecutor encodingExecutor, VideoProcessingMetrics videoProcessingMetrics) {
+		this(videoRepository, statusWriter, aiClient, s3Client, awsProperties, aiProperties, ffmpegRunner,
+			encodingExecutor, videoProcessingMetrics, Clock.systemUTC());
+	}
 
 	@Scheduled(fixedDelayString = "${ai.poll-interval-ms:30000}")
 	public void reconcile() {
@@ -237,7 +254,9 @@ public class AiBlurPoller {
 	/** 타임아웃은 행 생성(created_at)이 아니라 이번 BLURRING 시도 시작 기준 (D4 V4). 옛 행 재시도 오탐 방지. */
 	private boolean isTimedOut(Video video) {
 		LocalDateTime start = video.getBlurringStartedAt() != null ? video.getBlurringStartedAt() : video.getCreatedAt();
-		return Duration.between(start, LocalDateTime.now(ZoneOffset.UTC)).compareTo(aiProperties.timeout()) > 0;
+		LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+		// 경과가 상한과 정확히 같으면 아직 초과가 아니다 (> 0) — 상한을 "이 시간까지는 기다린다"로 읽는다.
+		return Duration.between(start, now).compareTo(aiProperties.timeout()) > 0;
 	}
 
 	/**
