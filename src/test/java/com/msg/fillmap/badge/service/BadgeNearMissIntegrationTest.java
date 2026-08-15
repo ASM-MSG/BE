@@ -192,9 +192,10 @@ class BadgeNearMissIntegrationTest {
 		// 통과해 findNearMiss 까지 내려가므로 쿼리의 retired_at 필터가 없으면 기록돼 버린다. 실 티어
 		// (1·3·10)와 값이 겹치지 않게 7 을 쓴다. 공유 DB 라 finally 로 반드시 걷어낸다.
 		tx.executeWithoutResult(status -> em.createNativeQuery("""
-				INSERT INTO badges (code, name, description, condition_type, condition_value, retired_at)
+				INSERT INTO badges (code, name, description, condition_type, condition_value, retired_at, icon_url)
 				VALUES ('EVENT_M363_TEST', '은퇴합성', '테스트 전용', 'EVENT_COUNT', '{"value": 7}',
-					now() AT TIME ZONE 'UTC')
+					now() AT TIME ZONE 'UTC',
+					'https://fillmap-static.s3.ap-northeast-2.amazonaws.com/badges/test_fixture.png')
 				ON CONFLICT (code) DO NOTHING
 				""").executeUpdate());
 		try {
@@ -237,8 +238,9 @@ class BadgeNearMissIntegrationTest {
 		// 등식(9 + 1 = 10)이 성립하는 합성 SPECIAL 뱃지를 심는다 — REGION_PERCENT 만 막는 blocklist
 		// 구현이면 숫자 임박 쿼리에 흘러들어 기록돼 버린다. 공유 DB 라 finally 로 반드시 걷어낸다.
 		tx.executeWithoutResult(status -> em.createNativeQuery("""
-				INSERT INTO badges (code, name, description, condition_type, condition_value)
-				VALUES ('SPECIAL_M314_TEST', '임박합성', '테스트 전용', 'SPECIAL', '{"value": 10}')
+				INSERT INTO badges (code, name, description, condition_type, condition_value, icon_url)
+				VALUES ('SPECIAL_M314_TEST', '임박합성', '테스트 전용', 'SPECIAL', '{"value": 10}',
+					'https://fillmap-static.s3.ap-northeast-2.amazonaws.com/badges/test_fixture.png')
 				ON CONFLICT (code) DO NOTHING
 				""").executeUpdate());
 		try {

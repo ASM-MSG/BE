@@ -120,8 +120,9 @@ class MissionTypeBadgeSeedTest {
 
 		private int insertSynthetic(String conditionType) {
 			return em.createNativeQuery("""
-					INSERT INTO badges (code, name, condition_type, condition_value)
-					VALUES (:code, '테스트', :type, '{"value": 1}')
+					INSERT INTO badges (code, name, condition_type, condition_value, icon_url)
+					VALUES (:code, '테스트', :type, '{"value": 1}',
+						'https://fillmap-static.s3.ap-northeast-2.amazonaws.com/badges/test_fixture.png')
 					""")
 				.setParameter("code", "TEST_" + conditionType + "_" + System.nanoTime())
 				.setParameter("type", conditionType)

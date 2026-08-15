@@ -150,8 +150,9 @@ class BadgeSchemaSeedTest {
 		void condition_type_CHECK가_MISSION_COUNT를_허용한다() {
 			// 합성 row — 트랜잭션 롤백으로 사라진다. 마스터(V9 시딩분)는 건드리지 않는다.
 			int inserted = em.createNativeQuery("""
-					INSERT INTO badges (code, name, condition_type, condition_value)
-					VALUES (:code, '테스트', 'MISSION_COUNT', '{"value": 1}')
+					INSERT INTO badges (code, name, condition_type, condition_value, icon_url)
+					VALUES (:code, '테스트', 'MISSION_COUNT', '{"value": 1}',
+						'https://fillmap-static.s3.ap-northeast-2.amazonaws.com/badges/test_fixture.png')
 					""")
 				.setParameter("code", "TEST_MISSION_" + System.nanoTime())
 				.executeUpdate();
