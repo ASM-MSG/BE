@@ -95,6 +95,25 @@ public final class GridEncoder {
 			cellIndex(max(southWest.x, southEast.x, northEast.x, northWest.x)));
 	}
 
+	/**
+	 * 점 (lat, lon) 사방 radiusMeters 의 열린 정사각형이 걸치는 셀 인덱스 범위 (radiusMeters > 0).
+	 * 반열림 셀 규칙과 정합: 정확히 닿기만 하는 셀은 제외 (상한이 ceil - 1 인 이유).
+	 */
+	public static GridRange radiusRange(double lat, double lon, double radiusMeters) {
+		ProjCoordinate meters = toMeters(lat, lon);
+		return new GridRange(
+			lowerIndex(meters.y, radiusMeters), upperIndex(meters.y, radiusMeters),
+			lowerIndex(meters.x, radiusMeters), upperIndex(meters.x, radiusMeters));
+	}
+
+	private static long lowerIndex(double meters, double radius) {
+		return (long) Math.floor((meters - radius) / CELL_SIZE_METERS);
+	}
+
+	private static long upperIndex(double meters, double radius) {
+		return (long) Math.ceil((meters + radius) / CELL_SIZE_METERS) - 1;
+	}
+
 	private static double min(double a, double b, double c, double d) {
 		return Math.min(Math.min(a, b), Math.min(c, d));
 	}

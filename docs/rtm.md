@@ -156,13 +156,13 @@
 | FR-MISSION-01 | 구현됨 | CourseSeedContractTest, MissionControllerTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest |
 | FR-MISSION-02 | 구현됨 | MissionControllerTest, MissionQueryServiceClockTest, MissionRepositoryTest, MissionValidationHttpTest, MissionViewportFilterTest |
 | FR-MISSION-03 | 구현됨 | CourseSeedContractTest, MissionAwardQueryTest, MissionAwardServiceTest |
-| FR-MISSION-04 | 구현됨 | FestivalMissionSeederIntegrationTest, MissionAwardQueryTest, MissionAwardServiceTest, MissionProgressQueryTest, MissionSchemaMigrationTest, PopupMissionSeederIntegrationTest, UserMissionRepositoryTest |
+| FR-MISSION-04 | 구현됨 | FestivalMissionSeederIntegrationTest, MissionAwardQueryTest, MissionAwardServiceTest, MissionProgressQueryTest, MissionRepositoryTest, MissionSchemaMigrationTest, PopupMissionSeederIntegrationTest, UserMissionRepositoryTest |
 | FR-MISSION-05 | 구현됨 | VideoMissionIntegrationTest |
 | FR-MISSION-06 | 구현됨 | MissionAwardServiceTest |
 | FR-MISSION-07 | 폐기됨 | (없음) |
 | FR-MISSION-08 | 진행 중 | CourseMissionSeederIntegrationTest, CourseSeedReaderTest, FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, FestivalMissionSeederTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
 | FR-MISSION-09 | 구현됨 | CourseMissionSeederIntegrationTest, CourseSeedContractTest, CourseSeedReaderTest, MissionSchemaMigrationTest |
-| FR-MISSION-10 | 진행 중 | PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
+| FR-MISSION-10 | 구현됨 | MissionRepositoryTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
 | FR-MISSION-11 | 구현됨 | CourseMissionSeederIntegrationTest, FestivalMissionSeederIntegrationTest, PopupMissionSeederIntegrationTest |
 | FR-MISSION-12 | 계획 | (없음) |
 | FR-MISSION-13 | 진행 중 | MissionViewportFilterTest |
