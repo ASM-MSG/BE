@@ -1,5 +1,6 @@
 package com.msg.fillmap.usergrid.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -22,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.user.entity.UserRole;
+import com.msg.fillmap.usergrid.dto.CollectionGridSort;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
 import com.msg.fillmap.usergrid.service.RegionVideoView;
@@ -46,6 +48,14 @@ class CollectionControllerTest {
 
 	private String bearer() {
 		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
+	}
+
+	private CollectionGridView view() {
+		return new CollectionGridView(
+			"19422_9582", 19422, 9582,
+			LocalDateTime.of(2026, 7, 20, 18, 3, 11), LocalDateTime.of(2026, 7, 21, 9, 12, 0),
+			3, 1042L, "https://s3.example/thumb.jpg?X-Amz-Signature=abc", 12, "서울특별시 강남구 역삼1동",
+			"서면", "I-9");
 	}
 
 	// 검증: FR-COLLECT-07, FR-STREAK-08
@@ -96,14 +106,11 @@ class CollectionControllerTest {
 
 	// 검증: FR-COLLECT-08, FR-COLLECT-09
 	@Test
-	@DisplayName("인증된 요청은 200 과 갤러리 격자 리스트를 반환한다")
-	void 인증된_요청은_200과_갤러리_격자_리스트를_반환한다() throws Exception {
-		CollectionGridView view = new CollectionGridView(
-			"19422_9582", 19422, 9582,
-			LocalDateTime.of(2026, 7, 20, 18, 3, 11), LocalDateTime.of(2026, 7, 21, 9, 12, 0),
-			3, 1042L, "https://s3.example/thumb.jpg?X-Amz-Signature=abc", "서울특별시 강남구 역삼1동",
-			"서면", "I-9");
-		given(userGridQueryService.getCollectionGrids(anyLong())).willReturn(List.of(view));
+	@DisplayName("파라미터 없는 호출은 기존 계약대로 동작한다")
+	void 파라미터_없는_호출은_기존_계약대로_동작한다() throws Exception {
+		// FR-7: 전국·수집 시각순·상한 기본값 조합이 그대로 서비스에 전달되고, 기존 필드도 불변이다.
+		given(userGridQueryService.getCollectionGrids(USER_ID, null, CollectionGridSort.COLLECTED, null))
+			.willReturn(List.of(view()));
 
 		mockMvc.perform(get("/api/collections/grids")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -117,16 +124,47 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.data[0].coverVideoId").value(1042))
 			.andExpect(jsonPath("$.data[0].coverThumbnailUrl")
 				.value("https://s3.example/thumb.jpg?X-Amz-Signature=abc"))
+			.andExpect(jsonPath("$.data[0].coverDurationSec").value(12))   // additive 추가 필드
 			.andExpect(jsonPath("$.data[0].regionName").value("서울특별시 강남구 역삼1동"))
 			.andExpect(jsonPath("$.data[0].zoneName").value("서면"))
 			.andExpect(jsonPath("$.data[0].zoneCell").value("I-9"));
+	}
+
+	// 검증: FR-MAP-10
+	@Test
+	@DisplayName("패널 조합 호출이 정상 응답한다")
+	void 패널_조합_호출이_정상_응답한다() throws Exception {
+		given(userGridQueryService.getCollectionGrids(USER_ID, "2623051000", CollectionGridSort.UPLOADED, 20))
+			.willReturn(List.of(view()));
+
+		mockMvc.perform(get("/api/collections/grids")
+				.param("regionCode", "2623051000")
+				.param("sort", "UPLOADED")
+				.param("limit", "20")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.length()").value(1))
+			.andExpect(jsonPath("$.data[0].gridId").value("19422_9582"));
+	}
+
+	// 검증: FR-MAP-10
+	@Test
+	@DisplayName("sort 소문자 무효 값은 400 이다")
+	void sort_소문자_무효_값은_400이다() throws Exception {
+		// enum 바인딩은 대소문자 민감 — 조용한 기본값 폴백 없이 400 으로 떨어져야 FE 버그가 숨지 않는다.
+		mockMvc.perform(get("/api/collections/grids")
+				.param("sort", "uploaded")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(400));
 	}
 
 	// 검증: FR-COLLECT-08
 	@Test
 	@DisplayName("점령 0건 사용자는 200 과 빈 배열을 받는다")
 	void 점령0건_사용자는_200과_빈_배열을_받는다() throws Exception {
-		given(userGridQueryService.getCollectionGrids(anyLong())).willReturn(List.of());
+		given(userGridQueryService.getCollectionGrids(anyLong(), any(), any(), any())).willReturn(List.of());
 
 		mockMvc.perform(get("/api/collections/grids")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))

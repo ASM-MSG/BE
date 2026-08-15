@@ -105,7 +105,7 @@ class CollectionGridsRegionNameTest {
 		label(grid);
 		occupy(me, grid);
 
-		CollectionGridProjection row = userGridRepository.getCollectionGrids(me).get(0);
+		CollectionGridProjection row = userGridRepository.getCollectionGrids(me, null, "COLLECTED", 30).get(0);
 
 		assertThat(row.getRegionName()).isEqualTo("m167b합성동");
 	}
@@ -118,7 +118,7 @@ class CollectionGridsRegionNameTest {
 		String grid = GridFixtures.seedGrid(em, GY0, GX0);
 		occupy(me, grid);
 
-		CollectionGridProjection row = userGridRepository.getCollectionGrids(me).get(0);
+		CollectionGridProjection row = userGridRepository.getCollectionGrids(me, null, "COLLECTED", 30).get(0);
 
 		assertThat(row.getGridId()).isEqualTo(grid);
 		assertThat(row.getRegionName()).isNull();
@@ -133,7 +133,7 @@ class CollectionGridsRegionNameTest {
 		label(grid);
 		occupy(me, grid);
 
-		CollectionGridProjection row = userGridRepository.getCollectionGrids(me).get(0);
+		CollectionGridProjection row = userGridRepository.getCollectionGrids(me, null, "COLLECTED", 30).get(0);
 
 		assertThat(row.getRegionName()).isEqualTo(byGridName(GY0, GX0)).isEqualTo("m167b합성동");
 	}

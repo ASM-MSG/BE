@@ -69,7 +69,7 @@ class CollectionGridsRepositoryTest {
 		occupy(me, newer, BASE, BASE, 1, null);
 		occupy(me, middle, BASE.minusHours(1), BASE.minusHours(1), 1, null);
 
-		List<CollectionGridProjection> result = userGridRepository.getCollectionGrids(me);
+		List<CollectionGridProjection> result = userGridRepository.getCollectionGrids(me, null, "COLLECTED", 30);
 
 		assertThat(result).extracting(CollectionGridProjection::getGridId)
 			.containsExactly(newer, middle, older);
@@ -94,7 +94,7 @@ class CollectionGridsRepositoryTest {
 			}
 		}
 
-		List<CollectionGridProjection> result = userGridRepository.getCollectionGrids(me);
+		List<CollectionGridProjection> result = userGridRepository.getCollectionGrids(me, null, "COLLECTED", 30);
 
 		assertThat(result).hasSize(30);
 		assertThat(result.get(0).getGridId()).isEqualTo(newest);
@@ -108,7 +108,7 @@ class CollectionGridsRepositoryTest {
 		long me = newUser();
 		occupy(me, grid(0, 0), BASE, BASE, 1, null);
 
-		CollectionGridProjection row = userGridRepository.getCollectionGrids(me).get(0);
+		CollectionGridProjection row = userGridRepository.getCollectionGrids(me, null, "COLLECTED", 30).get(0);
 
 		assertThat(row.getCoverVideoId()).isNull();
 		assertThat(row.getCoverThumbnailKey()).isNull();
@@ -124,7 +124,7 @@ class CollectionGridsRepositoryTest {
 		long coverId = seedVideo(me, gridId, "thumbs/m153b-stale.jpg", "ENCODING");
 		occupy(me, gridId, BASE, BASE, 1, coverId);
 
-		CollectionGridProjection row = userGridRepository.getCollectionGrids(me).get(0);
+		CollectionGridProjection row = userGridRepository.getCollectionGrids(me, null, "COLLECTED", 30).get(0);
 
 		assertThat(row.getCoverVideoId()).isEqualTo(coverId);   // 스펙 §API — id 는 readiness 무관
 		assertThat(row.getCoverThumbnailKey()).isNull();        // §D4 — READY 이전 썸네일 미노출
@@ -136,7 +136,7 @@ class CollectionGridsRepositoryTest {
 	void 점령이_없으면_빈_리스트를_반환한다() {
 		long me = newUser();
 
-		List<CollectionGridProjection> result = userGridRepository.getCollectionGrids(me);
+		List<CollectionGridProjection> result = userGridRepository.getCollectionGrids(me, null, "COLLECTED", 30);
 
 		assertThat(result).isEmpty();
 	}
@@ -153,7 +153,7 @@ class CollectionGridsRepositoryTest {
 		occupy(other, mine, BASE, BASE, 9, null);
 		occupy(other, theirs, BASE, BASE, 9, null);
 
-		List<CollectionGridProjection> result = userGridRepository.getCollectionGrids(me);
+		List<CollectionGridProjection> result = userGridRepository.getCollectionGrids(me, null, "COLLECTED", 30);
 
 		assertThat(result).extracting(CollectionGridProjection::getGridId).containsExactly(mine);
 	}
@@ -166,7 +166,7 @@ class CollectionGridsRepositoryTest {
 		LocalDateTime lastUploaded = BASE.plusDays(1);
 		occupy(me, grid(0, 0), BASE, lastUploaded, 7, null);
 
-		CollectionGridProjection row = userGridRepository.getCollectionGrids(me).get(0);
+		CollectionGridProjection row = userGridRepository.getCollectionGrids(me, null, "COLLECTED", 30).get(0);
 
 		assertThat(row.getVideoCount()).isEqualTo(7);
 		assertThat(row.getLastUploadedAt()).isEqualTo(lastUploaded);
@@ -175,7 +175,8 @@ class CollectionGridsRepositoryTest {
 	@Test
 	@DisplayName("목록 조회에 geospatial 연산이 없다")
 	void 목록_조회에_geospatial_연산이_없다() throws Exception {
-		Method method = UserGridRepository.class.getMethod("getCollectionGrids", long.class);
+		Method method = UserGridRepository.class.getMethod(
+			"getCollectionGrids", long.class, String.class, String.class, Integer.class);
 		String sql = method.getAnnotation(Query.class).value();
 
 		// grids 미조인·point-in-polygon 없음(성공 기준 8) — ST_* 함수도 geom 컬럼도 쓰지 않는다.
