@@ -16,7 +16,10 @@ services:
       POSTGRES_DB: fillmap
       POSTGRES_USER: ${DEV_DB_USER:-dev}
       POSTGRES_PASSWORD: ${DEV_DB_PASSWORD:-dev1234}
-      TZ: Asia/Seoul
+      # psql 직접 세션·DB 로그의 기본 존 (MSG-379 D1) — 앱 세션 존은 앱 JVM 이 정한다.
+      # CD 는 이 파일을 배포하지 않으므로 EC2 에서 `docker compose ... up -d` 로 컨테이너를
+      # 재생성해야 반영된다 (단순 restart 는 기존 env 유지).
+      TZ: UTC
     ports:
       - "5432:5432"
     volumes:
@@ -35,7 +38,9 @@ services:
       POSTGRES_DB: fillmap
       POSTGRES_USER: ${PROD_DB_USER:-prod}
       POSTGRES_PASSWORD: ${PROD_DB_PASSWORD:?PROD_DB_PASSWORD 필수}
-      TZ: Asia/Seoul
+      # postgres-dev 와 같은 이유 (MSG-379 D1). 반영은 컨테이너 재생성이라 prod 순단이 생긴다 —
+      # 반영 시점은 합의 후.
+      TZ: UTC
     ports:
       - "5433:5432"
     volumes:

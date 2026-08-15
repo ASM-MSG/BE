@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.persistence.EntityManager;
 
@@ -25,12 +26,15 @@ import tools.jackson.databind.ObjectMapper;
 
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.grid.GridFixtures;
+import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.mission.config.MissionViewportProperties;
 import com.msg.fillmap.mission.dto.CompletedMissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionAwardResult;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionShape.PathShape;
 import com.msg.fillmap.mission.dto.MissionShape.Spot;
 import com.msg.fillmap.mission.entity.Mission;
+import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.MissionAwardService;
@@ -38,6 +42,7 @@ import com.msg.fillmap.mission.service.MissionQueryService;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
  * 코스 시드 계약 라운드트립 (MSG-225 모듈 4, 실 PostgreSQL). 이 티켓이 조회(MSG-222)·판정(MSG-223)
@@ -79,6 +84,9 @@ class CourseSeedContractTest {
 	private UserRepository userRepository;
 
 	@Autowired
+	private VideoRepository videoRepository;
+
+	@Autowired
 	private ObjectMapper objectMapper;
 
 	@Autowired
@@ -94,7 +102,9 @@ class CourseSeedContractTest {
 		String title = unique("라운드트립 코스");
 		seedCourse("T_RT_1", title, BASE_Y);
 
-		MissionResponseDto dto = newQueryService().getActiveMissions().stream()
+		// MSG-398 부터 조회는 뷰포트 필수 — 코스 사각형은 path 좌표(부산 영도) 기준이라 그 일대 뷰포트로 찾는다.
+		MissionResponseDto dto = newQueryService()
+			.getMissionsInViewport(new ViewportBounds(35.05, 129.00, 35.15, 129.10), MissionType.COURSE).stream()
 			.filter(mission -> title.equals(mission.title()))
 			.findFirst()
 			.orElseThrow();
@@ -139,8 +149,8 @@ class CourseSeedContractTest {
 
 	/** 전역 1h 캐시를 피한 새 조회 인스턴스 — 이 tx 의 시드만 재계산한다 (선례: MissionQueryServiceImplTest). */
 	private MissionQueryService newQueryService() {
-		return new MissionQueryServiceImpl(
-			missionRepository, missionGridRepository, Clock.systemUTC(), Duration.ofHours(1).toMillis());
+		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository, objectMapper,
+			new MissionViewportProperties(Map.of()), Clock.systemUTC(), Duration.ofHours(1).toMillis());
 	}
 
 	/** 산출물 파일을 만들어 시더로 적재하고 미션을 돌려준다 — 스팟 5곳 = (baseY..baseY+4, BASE_X), seq 1..5. */

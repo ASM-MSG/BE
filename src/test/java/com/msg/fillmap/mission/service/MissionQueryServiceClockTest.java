@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 
 import org.junit.jupiter.api.DisplayName;
@@ -18,9 +19,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import tools.jackson.databind.ObjectMapper;
+
+import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.mission.config.MissionViewportProperties;
+import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
+import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
  * 운영 기본 클럭의 존 계약 회귀 검증 (MSG-223 후속 결함 수정). findActive 의 :now 는 UTC 저장
@@ -38,6 +45,9 @@ class MissionQueryServiceClockTest {
 	@Mock
 	private MissionGridRepository missionGridRepository;
 
+	@Mock
+	private VideoRepository videoRepository;
+
 	// 검증: FR-MISSION-02
 	@Test
 	@DisplayName("기본 클럭은 JVM 기본존과 무관하게 UTC 벽시계로 활성 판정한다")
@@ -48,7 +58,9 @@ class MissionQueryServiceClockTest {
 		try {
 			TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"));
 			// 운영 배선과 같은 기본 생성자 — 주입 생성자로는 이 결함(기본 클럭 선택)이 재현되지 않는다.
-			new MissionQueryServiceImpl(missionRepository, missionGridRepository).getActiveMissions();
+			new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository,
+				new ObjectMapper(), new MissionViewportProperties(Map.of()))
+				.getMissionsInViewport(new ViewportBounds(37.50, 127.00, 37.55, 127.05), MissionType.EVENT);
 		} finally {
 			TimeZone.setDefault(original);
 		}

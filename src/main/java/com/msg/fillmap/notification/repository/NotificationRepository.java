@@ -82,8 +82,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 	/**
 	 * 발송 성공 종결 (D4). sent_at 은 statement_timestamp() AT TIME ZONE 'UTC'
 	 * (StreakRepository.upsertOnUpload updated_at 선례) — now()(timestamptz)는 timestamp 컬럼 대입 시
-	 * 세션 TZ 로 캐스트돼 KST JVM 에서 +9h 저장된다. push_tokens last_used_at 의 now() 는 60일 스테일
-	 * 판정이라 그 오차가 무해했지만, sent_at 은 D8 자정 경계 판정(countSentSince) 입력이라 UTC 축자여야 한다.
+	 * 세션 TZ 로 캐스트돼 KST JVM 에서 +9h 저장된다. sent_at 은 D8 자정 경계 판정(countSentSince)
+	 * 입력이라 특히 UTC 축자여야 한다. 오차가 무해해 예외로 남겨 뒀던 push_tokens last_used_at 의
+	 * now() 도 MSG-379 D4 에서 같은 식으로 바꿔, 이제 이 도메인의 시각 기록은 전부 존 무관이다.
 	 *
 	 * 원본 상태 술어(PENDING·PUBLISHED)는 DB 레벨 compare-and-set 이다 (MSG-343 Codex 4R, markPublished 선례) —
 	 * 리밸런스·max.poll 만료로 두 소비자가 같은 행을 겹쳐 읽으면 consume 초입 가드는 둘 다 통과시키므로,

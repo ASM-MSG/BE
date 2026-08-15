@@ -19,11 +19,15 @@ public interface PushTokenRepository extends JpaRepository<PushToken, String> {
 	/**
 	 * 토큰 등록/갱신 UPSERT (FR-1). 같은 fcm_token 재등록 시 user_id 포함 전 필드를 EXCLUDED 로
 	 * 갱신한다 — 같은 디바이스 토큰이 항상 마지막 등록 계정 소유가 되는 게 의도된 시맨틱(계정 전환 이관).
+	 *
+	 * last_used_at 은 statement_timestamp() AT TIME ZONE 'UTC' (MSG-379 D4) — now()(timestamptz)를
+	 * naive timestamp 컬럼에 넣으면 세션 TZ 로 캐스트돼 KST 세션에서 +9h 로 저장된다. 60일 스테일
+	 * 판정 입력이라 그 오차 자체는 무해했지만, 환경에 따라 저장값이 달라지는 경로를 남기지 않는다.
 	 */
 	@Modifying
 	@Query(value = """
 		INSERT INTO push_tokens (fcm_token, user_id, platform, app_version, last_used_at)
-		VALUES (:fcmToken, :userId, :platform, :appVersion, now())
+		VALUES (:fcmToken, :userId, :platform, :appVersion, statement_timestamp() AT TIME ZONE 'UTC')
 		ON CONFLICT (fcm_token) DO UPDATE SET
 			user_id      = EXCLUDED.user_id,
 			platform     = EXCLUDED.platform,

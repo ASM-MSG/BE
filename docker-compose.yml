@@ -8,7 +8,10 @@ services:
       POSTGRES_DB: fillmap
       POSTGRES_USER: user
       POSTGRES_PASSWORD: user1234
-      TZ: Asia/Seoul
+      # psql 직접 세션·DB 로그의 기본 존 (MSG-379 D1). naive TIMESTAMP 컬럼에는 UTC 벽시계만
+      # 저장한다는 규약(MSG-376)과 맞추려면 손으로 SQL 을 칠 때의 now() 도 UTC 여야 한다.
+      # 앱 세션 존은 이 값이 아니라 앱 JVM 존을 따른다 (pgJDBC).
+      TZ: UTC
     ports:
       - "5432:5432"
     volumes:

@@ -178,6 +178,28 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	);
 
 	/**
+	 * 미션 격자별 영상 개수 (MSG-399 — 상세의 전체·스팟별 영상 개수). findMissionVideos(MSG-390)의 후보
+	 * 술어에 GROUP BY v.grid_id 만 붙인 것이다 — 목록과 개수의 행 집합이 같아야 화면 숫자와 실제 목록이
+	 * 맞는다(술어 동등, 정합 테스트가 고정). 영상이 없는 격자는 결과 행이 없고 0 채움은 서비스 몫이다.
+	 * 전체 videoCount 는 이 프로젝션의 합으로 계산해 별도 COUNT 쿼리를 한 벌 더 만들지 않는다.
+	 * 기간이 끝난 미션도 집계는 열려 있되 영상 후보 기간은 그대로라 활성 당시 촬영분만 센다.
+	 */
+	@Query(value = """
+		SELECT v.grid_id AS "gridId", COUNT(*) AS "videoCount"
+		FROM videos v
+		JOIN mission_grids mg ON mg.grid_id = v.grid_id
+		JOIN missions m ON m.id = mg.mission_id
+		WHERE mg.mission_id = :missionId
+		  AND v.status = 'ACTIVE'
+		  AND v.visibility = 'PUBLIC'
+		  AND v.processing_status = 'READY'
+		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
+		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
+		GROUP BY v.grid_id
+		""", nativeQuery = true)
+	List<MissionVideoCountProjection> countMissionVideosByGrid(@Param("missionId") long missionId);
+
+	/**
 	 * 격자 전역 시간대 분포 (MSG-372). findGlobalVideos 와 같은 후보 집합을 세어 업로드 시각의 KST 시로
 	 * 접는다 — WHERE 게이트 줄은 findGlobalCover·findGlobalVideos 와 <b>글자 단위로 같은 문자열</b>이라
 	 * 카드에 보이는 영상과 차트에 세어지는 영상이 항상 일치한다(정합 요구). created_at 은 타임존 없는

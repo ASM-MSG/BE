@@ -13,8 +13,8 @@ import com.msg.fillmap.user.entity.User;
  * 조회(GET /me)와 닉네임 수정(PUT /me/nickname), 프로필 이미지 변경·제거(MSG-373)가 공유해
  * 응답 형태가 어긋날 수 없다 (§D2).
  */
-@Schema(description = "내 프로필 응답. 조회·닉네임 수정·프로필 이미지 변경이 같은 형태를 반환한다.",
-	requiredProperties = {"email", "nickname", "profileImageUrl", "createdAt"})
+@Schema(description = "내 프로필 응답. 조회·닉네임 수정·프로필 이미지 변경·위치정보 동의 변경이 같은 형태를 반환한다.",
+	requiredProperties = {"email", "nickname", "profileImageUrl", "createdAt", "locationConsent"})
 public record UserProfileResponseDto(
 	@Schema(description = "가입 이메일 — 이메일 가입 시 저장된 값. 카카오 가입은 이메일을 수집하지 않아 null (MSG-310)",
 		example = "user@fillmap.dev", nullable = true)
@@ -30,11 +30,16 @@ public record UserProfileResponseDto(
 
 	@Schema(description = "가입 시각 — DB 저장값(UTC) 그대로다. \"2026.01.12\" 같은 표기는 FE 몫 (MSG-373)",
 		example = "2026-01-12T03:24:11Z")
-	LocalDateTime createdAt
+	LocalDateTime createdAt,
+
+	@Schema(description = "위치기반서비스 이용 동의 여부 — 가입 직후는 false 다. 마지막 변경 시각은 서버에만 두고 "
+		+ "응답에 싣지 않는다 (MSG-402 §D-6)", example = "false")
+	Boolean locationConsent
 ) {
 
 	public static UserProfileResponseDto from(User user) {
 		return new UserProfileResponseDto(
-			user.getEmail(), user.getNickname(), user.getProfileImageUrl(), user.getCreatedAt());
+			user.getEmail(), user.getNickname(), user.getProfileImageUrl(), user.getCreatedAt(),
+			user.isLocationConsent());
 	}
 }
