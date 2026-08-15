@@ -199,6 +199,9 @@ classDiagram
 
 Owner는 전부 B다. `com.msg.fillmap.mission`과 `com.msg.fillmap.video`가 콘텐츠 도메인이다.
 격자 표시명이 필요한 부분은 `ZoneNameQueryService`를 통해 받는다. Owner A 코드는 고치지 않는다.
+예외 하나(2026-08-15 확정): 팝업 판정 반경 산출은 좌표를 격자로 옮기는 계산이라 그 단일 진실
+원천인 `grid/GridEncoder`에 정책 없는 기하 메서드 하나를 순수 추가한다. 변환 산술을 시더로
+복제하지 않기 위해서이고, 반경 값과 정책은 여전히 Owner B(시더)가 가진다.
 
 ## 8. 확정 사항 (2026-08-13 성민, 2026-08-14, 2026-08-15 추가)
 
