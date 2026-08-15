@@ -38,7 +38,7 @@ public class Badge {
 	@Column(name = "description")
 	private String description;
 
-	@Column(name = "icon_url")
+	@Column(name = "icon_url", nullable = false)
 	private String iconUrl;
 
 	@Enumerated(EnumType.STRING)

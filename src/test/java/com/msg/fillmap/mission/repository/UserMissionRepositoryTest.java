@@ -1,6 +1,7 @@
 package com.msg.fillmap.mission.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -8,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceException;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -80,13 +82,21 @@ class UserMissionRepositoryTest {
 	}
 
 	@Test
-	@DisplayName("V12 MISSION_COUNT 뱃지 3종이 임계값 1·5·10 으로 시딩된다 — 재실행 멱등(ON CONFLICT)")
-	void V12_MISSION_COUNT_뱃지_3종이_임계값_1_5_10으로_시딩된다() throws IOException {
-		// 같은 시딩 SQL 재실행이 0행이면 멱등이 실증된다 (BadgeSchemaSeedTest 소급 재실행 선례).
-		int reseeded = em.createNativeQuery(readV12()).executeUpdate();
-
-		assertThat(reseeded).isZero();
+	@DisplayName("V12 MISSION_COUNT 뱃지 3종이 임계값 1·5·10 으로 시딩돼 있다")
+	void V12_MISSION_COUNT_뱃지_3종이_임계값_1_5_10으로_시딩된다() {
+		// 마이그레이션이 이미 적용된 DB 상태만 단언한다. 원문 재실행 멱등 검증은 아래 테스트 참조 —
+		// V34 이후로는 재실행 자체가 NOT NULL 에 거부되는 것이 올바른 동작이다.
 		assertThat(missionBadgeRows()).containsExactly("MISSION_1:1", "MISSION_5:5", "MISSION_10:10");
+	}
+
+	@Test
+	@DisplayName("그림 없는 V12 원문 재실행은 NOT NULL 이 거부한다 — V34 이후 불변식(MSG-405)")
+	void 그림_없는_V12_원문_재실행은_NOT_NULL이_거부한다() {
+		// V34 가 icon_url NOT NULL 을 건 뒤에는 그림 없는 시딩이 DB 수준에서 거부되는 것이 새 불변식이다.
+		// ON CONFLICT 멱등 검증은 원문 재실행으로는 더 이상 성립하지 않는다
+		// (NOT NULL 이 conflict 판정보다 먼저 평가됨). V12 원문은 불변 — 테스트 기대만 바뀐다.
+		assertThatThrownBy(() -> em.createNativeQuery(readV12()).executeUpdate())
+			.isInstanceOf(PersistenceException.class);
 	}
 
 	@SuppressWarnings("unchecked")
