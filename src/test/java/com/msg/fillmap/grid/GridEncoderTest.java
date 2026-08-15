@@ -9,6 +9,7 @@ import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 import org.locationtech.proj4j.CRSFactory;
 import org.locationtech.proj4j.CoordinateReferenceSystem;
+import org.locationtech.proj4j.CoordinateTransform;
 import org.locationtech.proj4j.CoordinateTransformFactory;
 import org.locationtech.proj4j.ProjCoordinate;
 import org.locationtech.proj4j.geodesic.Geodesic;
@@ -23,6 +24,17 @@ class GridEncoderTest {
 
 	// 5179 기준 강남역이 속한 셀 — 기대값은 Proj4J 밖의 독립 구현(pyproj/PROJ 9.3.0)으로 교차 산출했다.
 	private static final String GANGNAM_GRID_ID = "19443_9582";
+
+	// 테스트 점을 5179 미터 좌표에 놓기 위한 계약 문자열 변환 (grid-epsg5179-samples.json 생성과 같은 방식).
+	private static final CRSFactory CRS_FACTORY = new CRSFactory();
+	private static final CoordinateReferenceSystem WGS84 =
+		CRS_FACTORY.createFromParameters("WGS84", "+proj=longlat +datum=WGS84 +no_defs");
+	private static final CoordinateReferenceSystem EPSG5179 =
+		CRS_FACTORY.createFromParameters("EPSG:5179", GridConstants.CRS_DEF_EPSG5179);
+	private static final CoordinateTransform TO_DEGREES =
+		new CoordinateTransformFactory().createTransform(EPSG5179, WGS84);
+	private static final CoordinateTransform TO_METERS =
+		new CoordinateTransformFactory().createTransform(WGS84, EPSG5179);
 
 	// ==================== 정방향 (좌표 → 격자) ====================
 
@@ -182,6 +194,76 @@ class GridEncoderTest {
 			.mapToObj(i -> GridEncoder.encode(37.4979, 127.0276))
 			.distinct()
 			.toList()).containsExactly(expected);
+	}
+
+	// ==================== 반경 판정 범위 (MSG-385) ====================
+	// 강남역 셀 19443_9582 의 5179 미터 범위: x ∈ [958200, 958300), y ∈ [1944300, 1944400).
+
+	@Test
+	void 셀_가운데_점의_사방_40m_범위는_자기_셀_하나다() {
+		GridEncoder.GridPoint point = pointAtMeters(958250, 1944350);
+
+		assertThat(GridEncoder.radiusRange(point.lat(), point.lon(), 40))
+			.isEqualTo(new GridEncoder.GridRange(19443, 19443, 9582, 9582));
+	}
+
+	@Test
+	void 경계에서_40m_안쪽이면_이웃_셀이_범위에_들어온다() {
+		// 동쪽 경계에서 20m — 사방 40m 가 경계를 20m 넘어 동쪽 이웃 셀에 걸친다 (1×2).
+		GridEncoder.GridPoint point = pointAtMeters(958280, 1944350);
+
+		assertThat(GridEncoder.radiusRange(point.lat(), point.lon(), 40))
+			.isEqualTo(new GridEncoder.GridRange(19443, 19443, 9582, 9583));
+	}
+
+	@Test
+	void 모서리_근처_점은_2x2_범위가_된다() {
+		// 북동 모서리에서 축마다 20m — 양축 모두 경계를 넘어 2×2.
+		GridEncoder.GridPoint point = pointAtMeters(958280, 1944380);
+
+		assertThat(GridEncoder.radiusRange(point.lat(), point.lon(), 40))
+			.isEqualTo(new GridEncoder.GridRange(19443, 19444, 9582, 9583));
+	}
+
+	@Test
+	void 사방_40m가_경계에_정확히_닿기만_하면_그_셀은_제외된다() {
+		// 반열림 정합 (ceil - 1 가드): 정사각형이 동쪽 경계에 닿기만 하면 이웃 셀은 제외된다.
+		// 역변환 왕복 오차(µm대)가 닿음 판정을 뒤집지 않도록 반경은 정변환 실측 거리로 잡는다 —
+		// Sterbenz 정리로 boundary - x 는 double 에서 정확해 x + radius 가 경계값과 정확히 일치한다.
+		double eastBoundary = 958300;
+		GridEncoder.GridPoint point = pointAtMeters(eastBoundary - 40, 1944350);
+		double exactRadius = eastBoundary - toMetersX(point);
+
+		assertThat(exactRadius).isCloseTo(40.0, Offset.offset(0.01));
+		assertThat(GridEncoder.radiusRange(point.lat(), point.lon(), exactRadius))
+			.isEqualTo(new GridEncoder.GridRange(19443, 19443, 9582, 9582));
+	}
+
+	@Test
+	void 산출_범위는_항상_자기_셀을_포함한다() {
+		// encode 정합 — 자기 셀은 거리 0 이라 경계선 위의 점에서도 범위에 든다.
+		GridEncoder.GridPoint southWest = GridEncoder.bbox(GANGNAM_GRID_ID).get(0);
+		double[][] points = {{37.4979, 127.0276}, {35.1578, 129.0594}, {33.4996, 126.5312},
+			{southWest.lat(), southWest.lon()}};
+
+		for (double[] point : points) {
+			GridEncoder.GridIndex index = GridEncoder.decode(GridEncoder.encode(point[0], point[1]));
+			GridEncoder.GridRange range = GridEncoder.radiusRange(point[0], point[1], 40);
+
+			assertThat(index.gridY()).as("(%s, %s) 의 gridY", point[0], point[1])
+				.isBetween(range.minGridY(), range.maxGridY());
+			assertThat(index.gridX()).as("(%s, %s) 의 gridX", point[0], point[1])
+				.isBetween(range.minGridX(), range.maxGridX());
+		}
+	}
+
+	private static GridEncoder.GridPoint pointAtMeters(double x, double y) {
+		ProjCoordinate degrees = TO_DEGREES.transform(new ProjCoordinate(x, y), new ProjCoordinate());
+		return new GridEncoder.GridPoint(degrees.y, degrees.x);
+	}
+
+	private static double toMetersX(GridEncoder.GridPoint point) {
+		return TO_METERS.transform(new ProjCoordinate(point.lon(), point.lat()), new ProjCoordinate()).x;
 	}
 
 	private static double sideLengthMeters(GridEncoder.GridPoint from, GridEncoder.GridPoint to) {
