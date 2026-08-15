@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.extern.slf4j.Slf4j;
@@ -179,7 +180,10 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	 * 계산을 상세용 SQL 로 복제하지 않는다), 방문 여부는 진행도와 같은 술어(findVisitedGridIds),
 	 * 영상 개수는 MSG-390 후보 술어의 격자별 COUNT 합이다. 사용자별 값이라 전역 캐시를 타지 않는다.
 	 */
+	// REPEATABLE_READ: 같은 술어를 약속하는 progress 와 spotStats.visited 가 한 응답에서 갈라지지 않게
+	// 다섯 읽기를 한 스냅숏으로 묶는다 — 읽기 전용이라 직렬화 실패 부작용 없음 (Codex P2).
 	@Override
+	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 	public MissionDetailResponseDto getMissionDetail(long missionId, long userId) {
 		// 기간 판정은 하지 않는다 — 기간이 끝난 미션도 행이 남아 있으면 상세를 연다(§API 명세).
 		Mission mission = missionRepository.findById(missionId)
