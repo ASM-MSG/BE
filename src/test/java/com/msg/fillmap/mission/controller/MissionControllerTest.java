@@ -24,6 +24,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
+import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
+import com.msg.fillmap.mission.dto.MissionDetailResponseDto.SpotStats;
 import com.msg.fillmap.mission.dto.MissionProgressResponseDto;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionShape;
@@ -32,6 +35,7 @@ import com.msg.fillmap.mission.dto.MissionShape.CellsShape;
 import com.msg.fillmap.mission.dto.MissionShape.PathShape;
 import com.msg.fillmap.mission.dto.MissionShape.Spot;
 import com.msg.fillmap.mission.entity.MissionType;
+import com.msg.fillmap.mission.exception.MissionErrorCode;
 import com.msg.fillmap.mission.service.MissionQueryService;
 import com.msg.fillmap.user.entity.UserRole;
 
@@ -276,5 +280,79 @@ class MissionControllerTest {
 		mockMvc.perform(get("/api/missions/progress").param("missionIds", "412"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.developCode").value(2403));
+	}
+
+	// --- 미션 상세 (MSG-399)
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("미인증 상세 조회는 401이다 — 토큰 필수")
+	void 미인증_상세_조회는_401이다() throws Exception {
+		mockMvc.perform(get("/api/missions/412"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.developCode").value(2403));
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("미션 상세는 공통 응답으로 감싸 반환한다 — mission·progress·videoCount·spotStats 네 필드")
+	void 미션_상세는_공통_응답으로_감싸_반환한다() throws Exception {
+		MissionDetailResponseDto detail = new MissionDetailResponseDto(
+			withoutMetadata(412L, "COURSE", "남파랑길 3코스", 3,
+				new PathShape(null, List.of(new Spot("38677_114635", 35.1, 129.0, 1)))),
+			new MissionProgressResponseDto(412L, 3, 2, false),
+			19L,
+			List.of(new SpotStats("38677_114635", true, 9)));
+		given(missionQueryService.getMissionDetail(412L, USER_ID)).willReturn(detail);
+
+		mockMvc.perform(get("/api/missions/412")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.mission.missionId").value(412))
+			.andExpect(jsonPath("$.data.mission.type").value("COURSE"))
+			.andExpect(jsonPath("$.data.mission.targetCount").value(3))
+			.andExpect(jsonPath("$.data.progress.missionId").value(412))
+			.andExpect(jsonPath("$.data.progress.filledCount").value(2))
+			.andExpect(jsonPath("$.data.progress.completed").value(false))
+			.andExpect(jsonPath("$.data.videoCount").value(19))
+			.andExpect(jsonPath("$.data.spotStats.length()").value(1))
+			.andExpect(jsonPath("$.data.spotStats[0].gridId").value("38677_114635"))
+			.andExpect(jsonPath("$.data.spotStats[0].visited").value(true))
+			.andExpect(jsonPath("$.data.spotStats[0].videoCount").value(9));
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("존재하지 않는 미션은 12404로 응답한다 — 단일 리소스라 빈 결과가 아니라 404")
+	void 존재하지_않는_미션은_12404로_응답한다() throws Exception {
+		given(missionQueryService.getMissionDetail(999L, USER_ID))
+			.willThrow(new ApiException(MissionErrorCode.MISSION_NOT_FOUND));
+
+		mockMvc.perform(get("/api/missions/999")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.developCode").value(12404));
+	}
+
+	// 검증: FR-MISSION-17
+	@Test
+	@DisplayName("코스가 아닌 미션의 spotStats는 빈 배열이다 — null이 아니다")
+	void 코스가_아닌_미션의_spotStats는_빈_배열이다() throws Exception {
+		MissionDetailResponseDto detail = new MissionDetailResponseDto(
+			withoutMetadata(31L, "POPUP", "성수 팝업", 1,
+				new CellsShape(List.of(new Cell("19422_9582", 37.478, 127.027)))),
+			new MissionProgressResponseDto(31L, 1, 0, false),
+			2L,
+			List.of());
+		given(missionQueryService.getMissionDetail(31L, USER_ID)).willReturn(detail);
+
+		mockMvc.perform(get("/api/missions/31")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data", hasKey("spotStats")))
+			.andExpect(jsonPath("$.data.spotStats").isArray())
+			.andExpect(jsonPath("$.data.spotStats.length()").value(0))
+			.andExpect(jsonPath("$.data.videoCount").value(2));
 	}
 }

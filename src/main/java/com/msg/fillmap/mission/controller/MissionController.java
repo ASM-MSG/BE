@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -18,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
 import com.msg.fillmap.mission.dto.MissionProgressResponseDto;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
 import com.msg.fillmap.mission.entity.MissionType;
@@ -31,7 +33,7 @@ import com.msg.fillmap.response.SuccessResponse;
  * 성립하고(FR-MISSION-02), principal 을 안 받는 것이 그 계약의 코드 수준 방어다(D10). 진행도는 사용자별
  * 값이라 principal 로 사용자를 정하고 캐시하지 않는다.
  */
-@Tag(name = "미션 (Missions)", description = "지도 오버레이용 활성 미션 목록·내 진행도 조회 API.")
+@Tag(name = "미션 (Missions)", description = "지도 오버레이용 활성 미션 목록·내 진행도·미션 상세 조회 API.")
 @RestController
 @RequiredArgsConstructor
 public class MissionController {
@@ -89,6 +91,23 @@ public class MissionController {
 		@RequestParam(required = false) List<Long> missionIds
 	) {
 		return SuccessResponse.of(missionQueryService.getMyProgress(principal.userId(), missionIds));
+	}
+
+	@Operation(
+		summary = "미션 상세 조회",
+		description = "미션 ID 하나의 상세 — 미션 정보와 렌더 shape(목록과 같은 필드), 내 진행도와 스탬프 보유 "
+			+ "여부, 이 미션에 올라온 전체 영상 개수, 코스라면 포토스팟별 방문 여부·영상 개수를 한 번에 "
+			+ "반환한다. spotStats 는 shape.spots 와 같은 순서로 오고, 코스가 아니면 null 대신 빈 배열이다.\n\n"
+			+ "기간 판정은 하지 않는다 — 기간이 끝난 미션도 행이 남아 있으면 조회되고, 영상 개수는 그 미션이 "
+			+ "활성일 때 촬영된 것만 센다(미션 영상 목록 GET /api/missions/{missionId}/videos 의 실제 후보 "
+			+ "수와 항상 같다). 존재하지 않는 미션 ID 는 404 + developCode 12404(MISSION_NOT_FOUND)다."
+	)
+	@GetMapping("/api/missions/{missionId}")
+	public SuccessResponse<MissionDetailResponseDto> getMissionDetail(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "미션 ID", example = "412") @PathVariable long missionId
+	) {
+		return SuccessResponse.of(missionQueryService.getMissionDetail(missionId, principal.userId()));
 	}
 
 	/**

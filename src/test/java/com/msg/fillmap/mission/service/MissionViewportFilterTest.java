@@ -36,6 +36,7 @@ import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
+import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
  * 뷰포트 필터 검증 (MissionQueryServiceImpl, 실 PostgreSQL · MSG-398 D2·D3·D4 · Owner B).
@@ -69,6 +70,9 @@ class MissionViewportFilterTest {
 	private MissionGridRepository missionGridRepository;
 
 	@Autowired
+	private VideoRepository videoRepository;
+
+	@Autowired
 	private ObjectMapper objectMapper;
 
 	@Autowired
@@ -80,7 +84,7 @@ class MissionViewportFilterTest {
 
 	/** 캐시를 비운 새 서비스 인스턴스 — 종류별 마진을 주입해 이 tx 의 미션만 재계산해 조회한다. */
 	private MissionQueryService newService(Map<MissionType, Integer> marginMeters) {
-		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, objectMapper,
+		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository, objectMapper,
 			new MissionViewportProperties(marginMeters), Clock.systemUTC(), Duration.ofHours(1).toMillis());
 	}
 
@@ -270,7 +274,8 @@ class MissionViewportFilterTest {
 		MissionGridRepository mockGrids = mock(MissionGridRepository.class);
 		given(mockMissions.findActive(any())).willReturn(List.of(broken, healthy));
 		given(mockGrids.findByMissionIds(any())).willReturn(List.of());
-		MissionQueryService service = new MissionQueryServiceImpl(mockMissions, mockGrids, objectMapper,
+		MissionQueryService service = new MissionQueryServiceImpl(mockMissions, mockGrids,
+			mock(VideoRepository.class), objectMapper,
 			new MissionViewportProperties(Map.of()), Clock.systemUTC(), Duration.ofHours(1).toMillis());
 
 		List<MissionResponseDto> result = assertTimeoutPreemptively(Duration.ofSeconds(10),

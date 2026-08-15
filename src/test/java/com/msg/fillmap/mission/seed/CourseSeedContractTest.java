@@ -42,6 +42,7 @@ import com.msg.fillmap.mission.service.MissionQueryService;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
  * 코스 시드 계약 라운드트립 (MSG-225 모듈 4, 실 PostgreSQL). 이 티켓이 조회(MSG-222)·판정(MSG-223)
@@ -81,6 +82,9 @@ class CourseSeedContractTest {
 
 	@Autowired
 	private UserRepository userRepository;
+
+	@Autowired
+	private VideoRepository videoRepository;
 
 	@Autowired
 	private ObjectMapper objectMapper;
@@ -145,7 +149,7 @@ class CourseSeedContractTest {
 
 	/** 전역 1h 캐시를 피한 새 조회 인스턴스 — 이 tx 의 시드만 재계산한다 (선례: MissionQueryServiceImplTest). */
 	private MissionQueryService newQueryService() {
-		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, objectMapper,
+		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository, objectMapper,
 			new MissionViewportProperties(Map.of()), Clock.systemUTC(), Duration.ofHours(1).toMillis());
 	}
 

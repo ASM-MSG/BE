@@ -38,6 +38,7 @@ import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
+import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
  * 1h 전역 캐시 만료 검증 (MissionQueryServiceImpl, 순수 단위 · MSG-222 §도메인 4 → MSG-398 D1 · Owner B).
@@ -62,6 +63,9 @@ class MissionQueryServiceCacheTest {
 
 	@Mock
 	private MissionGridRepository missionGridRepository;
+
+	@Mock
+	private VideoRepository videoRepository;
 
 	/** 만료 경계를 넘기려 시각을 임의로 앞당길 수 있는 클럭 — 홀더가 clock.millis()/now(clock) 로 시간을 읽는다. */
 	private static final class MutableClock extends Clock {
@@ -98,7 +102,7 @@ class MissionQueryServiceCacheTest {
 	}
 
 	private MissionQueryService newService(MutableClock clock) {
-		return new MissionQueryServiceImpl(missionRepository, missionGridRepository,
+		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository,
 			new ObjectMapper(), new MissionViewportProperties(Map.of()), clock, TTL_MILLIS);
 	}
 

@@ -3,13 +3,14 @@ package com.msg.fillmap.mission.service;
 import java.util.List;
 
 import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
 import com.msg.fillmap.mission.dto.MissionProgressResponseDto;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
 import com.msg.fillmap.mission.entity.MissionType;
 
 /**
- * 미션 조회 (MSG-222 활성 조회 → MSG-398 뷰포트 자르기·진행도). 목록은 active 판정 → 유형별 shape 합성 →
- * 1h 전역 스냅샷 캐시 위 메모리 필터(D1), 진행도는 캐시 없이 조회 시점 집계다.
+ * 미션 조회 (MSG-222 활성 조회 → MSG-398 뷰포트 자르기·진행도 → MSG-399 상세). 목록은 active 판정 →
+ * 유형별 shape 합성 → 1h 전역 스냅샷 캐시 위 메모리 필터(D1), 진행도·상세는 캐시 없이 조회 시점 집계다.
  */
 public interface MissionQueryService {
 
@@ -27,4 +28,12 @@ public interface MissionQueryService {
 	 * 기간이 끝난 미션도 조회된다. 빈 입력은 빈 결과다(예외 아님).
 	 */
 	List<MissionProgressResponseDto> getMyProgress(long userId, List<Long> missionIds);
+
+	/**
+	 * 미션 하나의 상세 (MSG-399). 미션 정보·렌더 shape 에 내 진행도(getMyProgress 와 같은 계산), 전역 공개
+	 * 게이트를 통과한 전체 영상 수, COURSE 면 포토스팟별 방문 여부·영상 수를 담는다. 사용자별 값이라 전역
+	 * 캐시에 넣지 않고, 기간 판정도 하지 않는다 — 기간이 끝난 미션도 행이 남아 있으면 조회된다.
+	 * 존재하지 않는 missionId 는 MISSION_NOT_FOUND(12404) — 단일 리소스 요청이라 목록(빈 결과)과 다르다.
+	 */
+	MissionDetailResponseDto getMissionDetail(long missionId, long userId);
 }
