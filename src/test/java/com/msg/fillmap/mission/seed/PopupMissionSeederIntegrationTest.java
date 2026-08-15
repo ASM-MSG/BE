@@ -17,6 +17,10 @@ import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.locationtech.proj4j.CRSFactory;
+import org.locationtech.proj4j.CoordinateTransform;
+import org.locationtech.proj4j.CoordinateTransformFactory;
+import org.locationtech.proj4j.ProjCoordinate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -25,7 +29,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.global.config.AwsProperties;
+import com.msg.fillmap.grid.GridConstants;
 import com.msg.fillmap.grid.GridEncoder;
+import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionGrid;
 import com.msg.fillmap.mission.entity.MissionType;
@@ -56,6 +62,14 @@ class PopupMissionSeederIntegrationTest {
 	// 한국 범위 내 합성 좌표 (reader FR-6 검증 통과 필요) — 격리는 좌표가 아니라 source_key 가 담당한다.
 	private static final double 합성_LAT = 36.35;
 	private static final double 합성_LON = 127.38;
+	// 테스트 점을 셀 안 특정 위치(경계에서 몇 m)에 놓기 위한 역방향 변환 (MSG-385 테스트 시나리오 —
+	// GridEncoder 의 미터 변환은 비공개라 grid-epsg5179-samples.json 생성과 같은 방식으로 직접 만든다).
+	private static final CRSFactory CRS_FACTORY = new CRSFactory();
+	private static final CoordinateTransform TO_DEGREES = new CoordinateTransformFactory().createTransform(
+		CRS_FACTORY.createFromParameters("EPSG:5179", GridConstants.CRS_DEF_EPSG5179),
+		CRS_FACTORY.createFromParameters("WGS84", "+proj=longlat +datum=WGS84 +no_defs"));
+	/** 합성 좌표가 속한 기준 셀 — cellPoint 의 원점(남서 모서리)이 되는 셀. */
+	private static final GridIndex 기준_셀 = GridEncoder.decode(GridEncoder.encode(합성_LAT, 합성_LON));
 
 	@Autowired
 	private MissionRepository missionRepository;
@@ -106,8 +120,8 @@ class PopupMissionSeederIntegrationTest {
 
 	// 검증: FR-MISSION-10
 	@Test
-	@DisplayName("시드 실행이 POPUP 미션과 격자 81행을 적재한다 — source_key=팝가 id·target_count=1·seq NULL")
-	void 시드_실행이_POPUP_미션과_격자_81행을_적재한다() throws IOException {
+	@DisplayName("시드 실행이 POPUP 미션과 40m 판정 격자를 적재한다 — source_key=팝가 id·target_count=1·seq NULL")
+	void 시드_실행이_POPUP_미션과_40m_판정_격자를_적재한다() throws IOException {
 		long id = uniqueId();
 		Path file = writeJsonl("seed.jsonl", activeRow(id, unique("성수 합성 팝업"), 합성_LAT, 합성_LON));
 
@@ -129,9 +143,149 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(mission.getEndAt()).isEqualTo(FestivalMissionSeeder.toUtcEnd(종료일));
 		assertThat(mission.getCreatedAt()).isNotNull();
 
+		// 격자는 40m 산출과 정확히 일치한다 (MSG-385 완료 조건 ①) — 자기 셀은 거리 0이라 항상 포함.
 		List<MissionGrid> grids = missionGridRepository.findByMissionIds(List.of(mission.getId()));
-		assertThat(grids).hasSize(81).allSatisfy(grid -> assertThat(grid.getSeq()).isNull());
-		assertThat(grids).extracting(MissionGrid::getGridId).contains(GridEncoder.encode(합성_LAT, 합성_LON));
+		assertThat(grids).allSatisfy(grid -> assertThat(grid.getSeq()).isNull());
+		assertThat(grids).extracting(MissionGrid::getGridId)
+			.containsExactlyInAnyOrderElementsOf(PopupMissionSeeder.judgeGrids(합성_LAT, 합성_LON))
+			.contains(GridEncoder.encode(합성_LAT, 합성_LON));
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("팝업은 좌표 사방 40m가 걸치는 격자만 적재한다 — 셀 가운데면 자기 셀 1칸 (MSG-385 D1)")
+	void 팝업은_좌표_사방_40m가_걸치는_격자만_적재한다() throws IOException {
+		// 셀 가운데(경계에서 50m)는 사방 40m 가 어느 경계에도 안 걸친다.
+		long id = uniqueId();
+		double[] point = cellPoint(50, 50);
+		Path file = writeJsonl("cell-one.jsonl", activeRow(id, unique("가운데 팝업"), point[0], point[1]));
+
+		seeder().seed(file);
+
+		assertThat(gridIdsOf(id)).containsExactly(gridId(기준_셀.gridY(), 기준_셀.gridX()));
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("경계에 걸친 팝업은 두 칸을 적재한다 — 동쪽 경계 20m 앞이면 이웃 셀 포함 (MSG-385 D1)")
+	void 경계에_걸친_팝업은_두_칸을_적재한다() throws IOException {
+		long id = uniqueId();
+		double[] point = cellPoint(80, 50);
+		Path file = writeJsonl("cell-two.jsonl", activeRow(id, unique("경계 팝업"), point[0], point[1]));
+
+		seeder().seed(file);
+
+		assertThat(gridIdsOf(id)).containsExactlyInAnyOrder(
+			gridId(기준_셀.gridY(), 기준_셀.gridX()),
+			gridId(기준_셀.gridY(), 기준_셀.gridX() + 1));
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("모서리에 걸친 팝업은 네 칸을 적재한다 — 북동 모서리 20m 앞이면 2×2 (MSG-385 D1)")
+	void 모서리에_걸친_팝업은_네_칸을_적재한다() throws IOException {
+		long id = uniqueId();
+		double[] point = cellPoint(80, 80);
+		Path file = writeJsonl("cell-four.jsonl", activeRow(id, unique("모서리 팝업"), point[0], point[1]));
+
+		seeder().seed(file);
+
+		assertThat(gridIdsOf(id)).containsExactlyInAnyOrder(
+			gridId(기준_셀.gridY(), 기준_셀.gridX()),
+			gridId(기준_셀.gridY(), 기준_셀.gridX() + 1),
+			gridId(기준_셀.gridY() + 1, 기준_셀.gridX()),
+			gridId(기준_셀.gridY() + 1, 기준_셀.gridX() + 1));
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("재실행하면 기존 81칸 팝업의 격자가 40m 산출로 교체된다 — 갱신 경로 차등 교체 (MSG-385 D3, 완료 조건 ②)")
+	void 재실행하면_기존_81칸_팝업의_격자가_40m_산출로_교체된다() throws IOException {
+		long id = uniqueId();
+		long missionId = insertPopga(id, unique("레거시 블록 팝업"),
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		insertLegacyBlock(missionId);
+
+		PopupMissionSeeder.SeedResult result = seeder()
+			.seed(writeJsonl("regrid.jsonl", activeRow(id, unique("레거시 블록 갱신"), 합성_LAT, 합성_LON)));
+
+		assertThat(result.regridded()).isEqualTo(1);
+		assertThat(gridIdsOf(id))
+			.containsExactlyInAnyOrderElementsOf(PopupMissionSeeder.judgeGrids(합성_LAT, 합성_LON));
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("격자가 이미 산출과 같으면 재실행이 아무 행도 쓰지 않는다 — 차집합 둘 다 공집합 = 멱등 (MSG-385 D3)")
+	void 격자가_이미_산출과_같으면_재실행이_아무_행도_쓰지_않는다() throws IOException {
+		long id = uniqueId();
+		Path file = writeJsonl("regrid-idem.jsonl", activeRow(id, unique("멱등 재산출 팝업"), 합성_LAT, 합성_LON));
+		seeder().seed(file);
+		em.flush();
+		em.clear();
+
+		PopupMissionSeeder.SeedResult second = seeder().seed(file);
+
+		assertThat(second.regridded()).isZero();
+		assertThat(gridIdsOf(id))
+			.containsExactlyInAnyOrderElementsOf(PopupMissionSeeder.judgeGrids(합성_LAT, 합성_LON));
+	}
+
+	// 검증: FR-MISSION-04, FR-MISSION-10
+	@Test
+	@DisplayName("격자 교체는 스탬프를 건드리지 않는다 — user_missions 행 보존 (MSG-385 완료 조건 ③)")
+	void 격자_교체는_스탬프를_건드리지_않는다() throws IOException {
+		long userId = userRepository.save(
+			User.createLocalUser("msg385-" + System.nanoTime() + "@example.com", "hash", "재산출테스터")).getId();
+		long id = uniqueId();
+		long missionId = insertPopga(id, unique("스탬프 보존 팝업"),
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		insertLegacyBlock(missionId);
+		insertStamp(userId, missionId);
+
+		PopupMissionSeeder.SeedResult result = seeder()
+			.seed(writeJsonl("regrid-stamp.jsonl", activeRow(id, unique("스탬프 보존 갱신"), 합성_LAT, 합성_LON)));
+
+		assertThat(result.regridded()).isEqualTo(1);
+		em.flush();
+		assertThat(stampCount(userId, missionId)).isEqualTo(1);
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("격자 교체 후에도 target_count는 1이다 — 목표 칸 수 불변 (MSG-385 완료 조건 ④)")
+	void 격자_교체_후에도_target_count는_1이다() throws IOException {
+		long id = uniqueId();
+		long missionId = insertPopga(id, unique("목표 불변 팝업"),
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		insertLegacyBlock(missionId);
+
+		seeder().seed(writeJsonl("regrid-target.jsonl", activeRow(id, unique("목표 불변 갱신"), 합성_LAT, 합성_LON)));
+
+		em.flush();
+		em.clear();
+		assertThat(missionRepository.findById(missionId).orElseThrow().getTargetCount()).isEqualTo(1);
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("좌표가 바뀐 팝업은 새 좌표 기준으로 격자가 옮겨진다 — 구 자리 잔존 잠복 결함 수리 (MSG-385 D3)")
+	void 좌표가_바뀐_팝업은_새_좌표_기준으로_격자가_옮겨진다() throws IOException {
+		long id = uniqueId();
+		String name = unique("이사 간 팝업");
+		seeder().seed(writeJsonl("move-first.jsonl", activeRow(id, name, 합성_LAT, 합성_LON)));
+		em.flush();
+		em.clear();
+		// 약 1.1km 북쪽 — 구 산출과 셀이 전혀 겹치지 않는 거리다.
+		double movedLat = 합성_LAT + 0.01;
+
+		PopupMissionSeeder.SeedResult result = seeder()
+			.seed(writeJsonl("move-second.jsonl", activeRow(id, name, movedLat, 합성_LON)));
+
+		assertThat(result.regridded()).isEqualTo(1);
+		List<String> after = gridIdsOf(id);
+		assertThat(after).containsExactlyInAnyOrderElementsOf(PopupMissionSeeder.judgeGrids(movedLat, 합성_LON));
+		assertThat(after).doesNotContainAnyElementsOf(PopupMissionSeeder.judgeGrids(합성_LAT, 합성_LON));
 	}
 
 	// 검증: FR-MISSION-10
@@ -351,9 +505,8 @@ class PopupMissionSeederIntegrationTest {
 
 	// 검증: FR-MISSION-10
 	@Test
-	@DisplayName("팝업 판정 격자는 여전히 81행이고 목표는 1칸이다 — 이 티켓은 판정 범위를 바꾸지 않는다 (MSG-394 D8)")
-	void 팝업_판정_격자는_여전히_81행이고_목표는_1칸이다() throws IOException {
-		// 반경 40m 축소는 별도 티켓이다 — 이미지 작업과 섞으면 격자가 바뀐 원인을 가릴 수 없다.
+	@DisplayName("이미지가 실려도 팝업 판정 격자는 40m 산출이고 목표는 1칸이다 — 반경 축소 (MSG-385 D1, MSG-394 D8 대체)")
+	void 이미지가_실려도_팝업_판정_격자는_40m_산출이고_목표는_1칸이다() throws IOException {
 		long id = uniqueId();
 		Path file = writeJsonl("radius.jsonl",
 			enrichedRow(id, unique("이미지 있는 팝업"), "소개문", "missions/popup/" + id + "-feedface.jpg"));
@@ -364,7 +517,9 @@ class PopupMissionSeederIntegrationTest {
 		em.clear();
 		Mission mission = findByKey(id);
 		assertThat(mission.getTargetCount()).isEqualTo(1);
-		assertThat(missionGridRepository.findByMissionIds(List.of(mission.getId()))).hasSize(81);
+		assertThat(missionGridRepository.findByMissionIds(List.of(mission.getId())))
+			.extracting(MissionGrid::getGridId)
+			.containsExactlyInAnyOrderElementsOf(PopupMissionSeeder.judgeGrids(합성_LAT, 합성_LON));
 	}
 
 	// 검증: FR-MISSION-08
@@ -410,7 +565,6 @@ class PopupMissionSeederIntegrationTest {
 		long missionId = insertPopga(id, title,
 			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
 		insertMissionGrid(missionId, "999902_500000");
-		long gridsBefore = gridCountOf(missionId);
 
 		// When: 같은 source_key 로 재실행.
 		PopupMissionSeeder.SeedResult result = seeder()
@@ -423,12 +577,14 @@ class PopupMissionSeederIntegrationTest {
 		Mission after = missionRepository.findById(missionId).orElseThrow();
 		assertThat(after.getOperationTime()).isEqualTo("매일 11:00 ~ 20:00");
 		assertThat(after.getPlaceName()).isEqualTo("합성 도로명 합성 상세");
-		// Then: 제목·기간·source_key·격자는 그대로다 — 소스 쪽 이름이 바뀌어도 미션은 흔들리지 않는다(D6).
+		// Then: 제목·기간·source_key 는 그대로다 — 소스 쪽 이름이 바뀌어도 미션은 흔들리지 않는다(D6).
+		// 격자만은 스냅샷 좌표의 40m 산출로 교체된다 (MSG-385 D3 — "격자 불변" 단정 대체).
 		assertThat(after.getTitle()).isEqualTo(title);
 		assertThat(after.getSourceKey()).isEqualTo(String.valueOf(id));
 		assertThat(after.getStartAt()).isEqualTo(FestivalMissionSeeder.toUtcStart(시작일));
 		assertThat(after.getEndAt()).isEqualTo(FestivalMissionSeeder.toUtcEnd(종료일));
-		assertThat(gridCountOf(missionId)).isEqualTo(gridsBefore);
+		assertThat(gridIdsOf(id))
+			.containsExactlyInAnyOrderElementsOf(PopupMissionSeeder.judgeGrids(합성_LAT, 합성_LON));
 	}
 
 	// 검증: FR-MISSION-11
@@ -476,6 +632,30 @@ class PopupMissionSeederIntegrationTest {
 
 	private String unique(String tag) {
 		return "MSG235-it-" + tag + "-" + System.nanoTime();
+	}
+
+	/** 기준 셀 남서 모서리에서 동쪽 dxMeters, 북쪽 dyMeters 지점의 위경도 {lat, lon}. */
+	private static double[] cellPoint(double dxMeters, double dyMeters) {
+		ProjCoordinate degrees = TO_DEGREES.transform(
+			new ProjCoordinate(
+				기준_셀.gridX() * (double) GridConstants.CELL_SIZE_METERS + dxMeters,
+				기준_셀.gridY() * (double) GridConstants.CELL_SIZE_METERS + dyMeters),
+			new ProjCoordinate());
+		return new double[] {degrees.y, degrees.x};
+	}
+
+	private static String gridId(long gridY, long gridX) {
+		return gridY + "_" + gridX;
+	}
+
+	/** 적재된 판정 격자 id 목록 — flush·clear 후 DB 값으로 읽는다. */
+	private List<String> gridIdsOf(long id) {
+		em.flush();
+		em.clear();
+		Mission mission = findByKey(id);
+		return missionGridRepository.findByMissionIds(List.of(mission.getId())).stream()
+			.map(MissionGrid::getGridId)
+			.toList();
 	}
 
 	/** 합성 팝가 id — nanoTime 기반이라 실데이터·타 테스트의 source_key 와 못 겹친다 (VARCHAR(30) 이내). */
@@ -575,6 +755,23 @@ class PopupMissionSeederIntegrationTest {
 			.setParameter("missionId", missionId)
 			.setParameter("gridId", gridId)
 			.executeUpdate();
+	}
+
+	/** 구 규칙(중심±4, 9×9=81칸) 레거시 블록 픽스처 — 기준 셀 중심, 재산출 대상 (MSG-385). */
+	private void insertLegacyBlock(long missionId) {
+		for (long dy = -4; dy <= 4; dy++) {
+			for (long dx = -4; dx <= 4; dx++) {
+				insertMissionGrid(missionId, gridId(기준_셀.gridY() + dy, 기준_셀.gridX() + dx));
+			}
+		}
+	}
+
+	private long stampCount(long userId, long missionId) {
+		return ((Number) em.createNativeQuery(
+				"SELECT COUNT(*) FROM user_missions WHERE user_id = :userId AND mission_id = :missionId")
+			.setParameter("userId", userId)
+			.setParameter("missionId", missionId)
+			.getSingleResult()).longValue();
 	}
 
 	private void insertStamp(long userId, long missionId) {
