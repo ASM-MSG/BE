@@ -106,6 +106,31 @@ class CourseSeedReaderTest {
 	}
 
 	@Test
+	void 경로_좌표가_서비스_범위_밖이면_적재를_거부한다() {
+		// 1e308 은 유한값이라 isFinite 검사를 통과한다 — 이런 값이 적재되면 조회 쪽 뷰포트 사각형 산출에서
+		// Proj4J 경도 정규화가 사실상 무한 루프가 된다 (MSG-398 D3). 위도 100 은 좌표계에 없는 유한 오류값.
+		String hugeFinite = """
+			{"type": "LineString", "coordinates": [[129.03597, 35.09656], [1.0E308, 35.09721]]}""";
+		String latOutOfRange = """
+			{"type": "LineString", "coordinates": [[129.03597, 35.09656], [129.03642, 100.0]]}""";
+
+		for (String badPath : new String[] {hugeFinite, latOutOfRange}) {
+			assertThatThrownBy(() -> read("[" + course("T_1", "코스", badPath, spots(5)) + "]"))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("서비스 범위");
+		}
+	}
+
+	@Test
+	void 정상_범위_경로는_그대로_통과한다() {
+		// 범위 검증 추가(MSG-398)가 기존 산출물(전 좌표 한국 안)을 거부하지 않는다는 회귀 확인.
+		List<CourseRecord> records = read("[" + valid("T_1", "정상 범위 코스") + "]");
+
+		assertThat(records).hasSize(1);
+		assertThat(records.get(0).pathJson()).contains("129.03597");
+	}
+
+	@Test
 	void 스팟이_5개_미만이거나_8개_초과면_예외다() {
 		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, spots(4)) + "]"))
 			.isInstanceOf(IllegalStateException.class)
