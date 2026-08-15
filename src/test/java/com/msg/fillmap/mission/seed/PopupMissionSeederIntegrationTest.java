@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Set;
 
 import jakarta.persistence.EntityManager;
 
@@ -103,6 +104,23 @@ class PopupMissionSeederIntegrationTest {
 
 	private PopupMissionSeeder seeder() {
 		return newSeeder(true, "unused");
+	}
+
+	/**
+	 * 축소 경로 격리 시더 (MSG-385 스펙 리뷰 잔여) — 완전성 가드가 DB 전역의 미종료 POPGA 행 수를 보므로,
+	 * 실데이터 시드가 있는 공유 로컬 DB 에서는 작은 테스트 스냅샷이 가드를 오발동시켜 축소 경로가 로컬에서만
+	 * 스킵된다(CI 빈 DB 와 비대칭). 가드 분모와 축소 후보가 나오는 우주(notEndedPopups)를 이 테스트의
+	 * 픽스처 미션으로만 제한해 그 비대칭을 막는다. 시계는 프로덕션 기본 생성자(KST) 그대로다.
+	 */
+	private PopupMissionSeeder shrinkScopedSeeder(Set<Long> scopeMissionIds) {
+		return new PopupMissionSeeder(missionRepository, missionGridRepository, reader, awsProperties) {
+			@Override
+			List<Mission> notEndedPopups(List<Mission> popups, LocalDateTime nowUtc) {
+				return super.notEndedPopups(popups, nowUtc).stream()
+					.filter(mission -> scopeMissionIds.contains(mission.getId()))
+					.toList();
+			}
+		};
 	}
 
 	// 검증: FR-MISSION-11
@@ -286,6 +304,104 @@ class PopupMissionSeederIntegrationTest {
 		List<String> after = gridIdsOf(id);
 		assertThat(after).containsExactlyInAnyOrderElementsOf(PopupMissionSeeder.judgeGrids(movedLat, 합성_LON));
 		assertThat(after).doesNotContainAnyElementsOf(PopupMissionSeeder.judgeGrids(합성_LAT, 합성_LON));
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("V28로 깨진 79칸 블록도 스냅샷에서 빠지면 센트로이드 셀 1칸으로 줄어든다 — 실측 분포 재현 (MSG-385 D4)")
+	void V28로_깨진_79칸_블록도_스냅샷에서_빠지면_센트로이드_셀_1칸으로_줄어든다() throws IOException {
+		long orphanId = uniqueId();
+		long missionId = insertPopga(orphanId, unique("깨진 블록 팝업"),
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		insertBrokenBlock(missionId);
+		Path file = writeJsonl("shrink-broken.jsonl",
+			activeRow(uniqueId(), unique("무관한 진행 팝업"), 합성_LAT, 합성_LON));
+
+		PopupMissionSeeder.SeedResult result = shrinkScopedSeeder(Set.of(missionId)).seed(file);
+
+		// 남서 모서리 2칸이 빠진 79칸 — 축별 평균 반올림이 여전히 블록 중심 셀이라 그 셀 1칸으로 준다.
+		assertThat(result.shrunk()).isEqualTo(1);
+		assertThat(gridIdsOf(orphanId)).containsExactly(gridId(기준_셀.gridY(), 기준_셀.gridX()));
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("시작 전 팝업도 스냅샷에서 빠지면 센트로이드 셀 1칸으로 줄어든다 — 부류 구멍 가드 (MSG-385 D4)")
+	void 시작_전_팝업도_스냅샷에서_빠지면_센트로이드_셀_1칸으로_줄어든다() throws IOException {
+		// 미래 시작 행이 축소 부류에서 빠지면 레거시 블록인 채 시작 시각에 900m 판정으로 자동 활성화된다.
+		long orphanId = uniqueId();
+		long missionId = insertPopga(orphanId, unique("시작 전 팝업"), nowUtc().plusDays(10), nowUtc().plusDays(20));
+		insertLegacyBlock(missionId);
+		Path file = writeJsonl("shrink-future.jsonl",
+			activeRow(uniqueId(), unique("무관한 진행 팝업"), 합성_LAT, 합성_LON));
+
+		PopupMissionSeeder.SeedResult result = shrinkScopedSeeder(Set.of(missionId)).seed(file);
+
+		assertThat(result.shrunk()).isEqualTo(1);
+		assertThat(gridIdsOf(orphanId)).containsExactly(gridId(기준_셀.gridY(), 기준_셀.gridX()));
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("이미 1에서 4칸인 행은 스냅샷에서 빠져도 그대로 둔다 — 칸 수 > 4 가드 (MSG-385 D4)")
+	void 이미_1에서_4칸인_행은_스냅샷에서_빠져도_그대로_둔다() throws IOException {
+		long orphanId = uniqueId();
+		long missionId = insertPopga(orphanId, unique("신 규칙 고아 팝업"),
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		// 신 규칙 유효 집합의 최대 형태(2×2, 4칸) — 이미 축소가 끝난 행의 재축소 금지를 본다.
+		List<String> fourCells = List.of(
+			gridId(기준_셀.gridY(), 기준_셀.gridX()), gridId(기준_셀.gridY(), 기준_셀.gridX() + 1),
+			gridId(기준_셀.gridY() + 1, 기준_셀.gridX()), gridId(기준_셀.gridY() + 1, 기준_셀.gridX() + 1));
+		fourCells.forEach(cell -> insertMissionGrid(missionId, cell));
+		Path file = writeJsonl("shrink-small.jsonl",
+			activeRow(uniqueId(), unique("무관한 진행 팝업"), 합성_LAT, 합성_LON));
+
+		PopupMissionSeeder.SeedResult result = shrinkScopedSeeder(Set.of(missionId)).seed(file);
+
+		assertThat(result.shrunk()).isZero();
+		assertThat(gridIdsOf(orphanId)).containsExactlyInAnyOrderElementsOf(fourCells);
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("잘린 스냅샷에서는 아무 행도 축소되지 않는다 — 유효 레코드가 미종료 적재분의 절반 미만 (MSG-385 D4 완전성 가드)")
+	void 잘린_스냅샷에서는_아무_행도_축소되지_않는다() throws IOException {
+		// 미종료 3건이 적재돼 있는데 스냅샷에 1건만 남았다 — 1×2 < 3 이라 부분 절단으로 판단해야 한다.
+		long firstId = uniqueId();
+		long first = insertPopga(firstId, unique("절단 생존 1"),
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		long second = insertPopga(uniqueId(), unique("절단 생존 2"),
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		long third = insertPopga(uniqueId(), unique("절단 생존 3"),
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		insertLegacyBlock(first);
+		insertLegacyBlock(second);
+		insertLegacyBlock(third);
+		Path file = writeJsonl("shrink-truncated.jsonl",
+			activeRow(uniqueId(), unique("무관한 진행 팝업"), 합성_LAT, 합성_LON));
+
+		PopupMissionSeeder.SeedResult result = shrinkScopedSeeder(Set.of(first, second, third)).seed(file);
+
+		assertThat(result.shrunk()).isZero();
+		assertThat(gridIdsOf(firstId)).hasSize(81);
+	}
+
+	// 검증: FR-MISSION-10
+	@Test
+	@DisplayName("아홉 시간 안에 끝나는 팝업도 미종료로 판정해 축소한다 — UTC 기준, KST 벽시계 비교면 종료 오판 (MSG-385 D4)")
+	void 아홉_시간_안에_끝나는_팝업도_미종료로_판정해_축소한다() throws IOException {
+		// end_at = UTC 지금 + 5시간. 기본 시계(KST)의 벽시계 LocalDateTime 으로 비교하면 9시간 이르게
+		// 종료로 오판돼 축소 대상(미종료)에서 잘못 빠진다 — 프로덕션 기본 생성자 시계 그대로 검증한다.
+		long orphanId = uniqueId();
+		long missionId = insertPopga(orphanId, unique("다섯 시간 뒤 종료"), nowUtc().minusDays(1), nowUtc().plusHours(5));
+		insertLegacyBlock(missionId);
+		Path file = writeJsonl("shrink-utc.jsonl",
+			activeRow(uniqueId(), unique("무관한 진행 팝업"), 합성_LAT, 합성_LON));
+
+		PopupMissionSeeder.SeedResult result = shrinkScopedSeeder(Set.of(missionId)).seed(file);
+
+		assertThat(result.shrunk()).isEqualTo(1);
+		assertThat(gridIdsOf(orphanId)).containsExactly(gridId(기준_셀.gridY(), 기준_셀.gridX()));
 	}
 
 	// 검증: FR-MISSION-10
@@ -761,6 +877,21 @@ class PopupMissionSeederIntegrationTest {
 	private void insertLegacyBlock(long missionId) {
 		for (long dy = -4; dy <= 4; dy++) {
 			for (long dx = -4; dx <= 4; dx++) {
+				insertMissionGrid(missionId, gridId(기준_셀.gridY() + dy, 기준_셀.gridX() + dx));
+			}
+		}
+	}
+
+	/**
+	 * V28 병합으로 깨진 79칸 블록 픽스처 (MSG-385 D4 실측 분포) — 9×9 에서 남서 모서리 2칸이 빠진 형태.
+	 * 축별 인덱스 평균의 반올림은 여전히 블록 중심 셀이라 centroidGrid 목표가 기준 셀로 결정된다.
+	 */
+	private void insertBrokenBlock(long missionId) {
+		for (long dy = -4; dy <= 4; dy++) {
+			for (long dx = -4; dx <= 4; dx++) {
+				if (dy == -4 && (dx == -4 || dx == -3)) {
+					continue;
+				}
 				insertMissionGrid(missionId, gridId(기준_셀.gridY() + dy, 기준_셀.gridX() + dx));
 			}
 		}
