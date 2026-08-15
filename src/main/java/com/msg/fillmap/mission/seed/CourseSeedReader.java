@@ -14,6 +14,8 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import com.msg.fillmap.global.geo.KoreaCoordinates;
+
 /**
  * courses-seed.json 파서·검증 (MSG-225 D6·D7, 순수 로직 · DB 무관 — FestivalJsonlReader 미러).
  * 축제 파서의 행 스킵·사유 집계와 달리 **위반 즉시 예외**다 — 코스는 파이프라인 완성 산출물이라
@@ -201,6 +203,14 @@ public class CourseSeedReader {
 				|| !isFiniteNumber(point.get(0)) || !isFiniteNumber(point.get(1))) {
 				throw new IllegalStateException(
 					"path 좌표 원소가 [lon, lat] 숫자 쌍이 아닙니다 (D5): " + crsIdx + " coordinates[" + i + "] = " + point);
+			}
+			// 서비스 범위 검증 (MSG-398 D3) — isFinite 만으로는 1e308 급 쓰레기 값이 통과하고, 그런 값은
+			// 뷰포트 사각형 산출(MSG-398)에서 Proj4J 경도 정규화를 사실상 무한 루프로 만든다. 조회 시점
+			// 폴백과 별개로 여기서도 막는다 — 시더 검증은 깨진 데이터가 애초에 DB 에 안 들어오게 한다
+			// (시드 좌표에 KoreaCoordinates 를 쓰는 선례: FestivalJsonlReader).
+			if (KoreaCoordinates.isOutOfService(point.get(1).asDouble(), point.get(0).asDouble())) {
+				throw new IllegalStateException(
+					"path 좌표가 서비스 범위 밖입니다 (MSG-398 D3): " + crsIdx + " coordinates[" + i + "] = " + point);
 			}
 		}
 	}

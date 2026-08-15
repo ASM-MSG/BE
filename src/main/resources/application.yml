@@ -88,6 +88,16 @@ fillmap:
     top-k: 50
     min-score: 3
 
+  # 미션 목록 뷰포트 여유 마진(미터, MSG-398 D4) — "화면 밖 얼마까지 보여 줄까"라는 노출 정책.
+  # FE 와 값 협의 전 기본 0 (축제·팝업은 사방 450m 판정 범위가 이미 데이터에 있고, 코스는 경로 전체가
+  # 사각형에 들어온다). 투영 보정 1칸과 별개 값이라 0 이어도 그 1칸은 항상 붙는다.
+  mission:
+    viewport:
+      margin-meters:
+        EVENT: 0
+        POPUP: 0
+        COURSE: 0
+
   # 알림 발송 파이프라인 (MSG-179) — 기본 off: 로컬·CI 는 Kafka·FCM 없이 그대로 green, dev/prod 만 env 로 on
   notification:
     enabled: ${NOTIFICATION_ENABLED:false}

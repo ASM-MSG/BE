@@ -21,13 +21,49 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 	/**
 	 * 활성 미션 조회 (§도메인 2). start_at/end_at 을 각 경계 독립으로 판정한다 — NULL 은 상시로 해석하되
 	 * start 전 미래 이벤트는 노출하지 않는다. 양쪽 NULL(코스·지속)은 항상 활성.
+	 * ORDER BY m.id 는 표시 정렬이 아니라 결정성 확보다 (MSG-398 D12) — 없으면 스냅샷이 갱신될 때마다
+	 * 목록 카드가 이유 없이 뒤바뀐다. findBySource·findCompleted 가 같은 이유로 id 정렬을 걸어 두었다.
 	 */
 	@Query("""
 		SELECT m FROM Mission m
 		WHERE (m.startAt IS NULL OR m.startAt <= :now)
 		  AND (m.endAt IS NULL OR :now <= m.endAt)
+		ORDER BY m.id
 		""")
 	List<Mission> findActive(@Param("now") LocalDateTime now);
+
+	/**
+	 * 미션별 내 진행도·스탬프 (MSG-398 D8·D9). 채운 칸 = 미션 기간 안에 촬영한 내 영상이 있는 서로 다른
+	 * 격자 수 — videos 조인 조건은 판정 쿼리 findCompleted 와 글자 단위로 같다(2026-08-15 성민 확정으로
+	 * user_grids 교집합 정의를 대체 — 도감 점령은 촬영 시각을 안 봐 "다 채웠는데 완료가 아닌" 카드가
+	 * 그려진다). 다른 점은 둘뿐이다: INNER 가 아니라 LEFT(미진행 미션도 0으로 나온다), HAVING 임계 판정
+	 * 대신 LEAST 로 값 자체를 내린다(81칸 축제 목표 1 → "5/1" 방지). DISTINCT 는 필수다 — 같은 격자의
+	 * 재방문 영상이 videos 조인을 팬아웃시킨다. user_missions LEFT JOIN 은 PK 로 미션당 많아야 한 행이라
+	 * 행 수를 늘리지 않고, 복제된 행에 같은 값이 붙어도 BOOL_OR 라 안전하다(D9). 활성 조건이 없다 —
+	 * 기간이 끝난 미션도 진행도가 나온다(D11). 존재하지 않는 id 는 missions 에서 출발하므로 행이 안 생겨
+	 * 자연히 빠진다. 받치는 인덱스는 findCompleted 와 같은 idx_videos_user_created 의 user_id 선두부다.
+	 */
+	@Query(value = """
+		SELECT m.id AS "missionId",
+			m.target_count AS "targetCount",
+			LEAST(COUNT(DISTINCT v.grid_id), m.target_count) AS "filledCount",
+			BOOL_OR(um.user_id IS NOT NULL) AS "completed"
+		FROM missions m
+		LEFT JOIN mission_grids mg ON mg.mission_id = m.id
+		LEFT JOIN videos v ON v.grid_id = mg.grid_id
+			AND v.user_id = :userId
+			AND v.status <> 'DELETED'
+			AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
+			AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
+		LEFT JOIN user_missions um ON um.user_id = :userId AND um.mission_id = m.id
+		WHERE m.id IN (:missionIds)
+		GROUP BY m.id, m.target_count
+		ORDER BY m.id
+		""", nativeQuery = true)
+	List<MissionProgressProjection> findProgress(
+		@Param("userId") long userId,
+		@Param("missionIds") Collection<Long> missionIds
+	);
 
 	/**
 	 * 후보 역조회 (MSG-223 §D2 1단계, idx_mission_grids_grid). 업로드 격자를 대상으로 하는 활성 미션 중
