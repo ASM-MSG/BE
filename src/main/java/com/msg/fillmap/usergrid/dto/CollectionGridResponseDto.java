@@ -14,7 +14,7 @@ import com.msg.fillmap.usergrid.service.CollectionGridView;
  */
 @Schema(description = "갤러리 격자 항목 — 내가 수집한 격자 하나와 cover 썸네일.",
 	requiredProperties = {"gridId", "gridY", "gridX", "firstCollectedAt", "lastUploadedAt", "videoCount",
-		"coverVideoId", "coverThumbnailUrl", "regionName", "zoneName", "zoneCell"})
+		"coverVideoId", "coverThumbnailUrl", "coverDurationSec", "regionName", "zoneName", "zoneCell"})
 public record CollectionGridResponseDto(
 	@Schema(description = "격자 ID \"{grid_y}_{grid_x}\"", example = "19422_9582")
 	String gridId,
@@ -40,6 +40,10 @@ public record CollectionGridResponseDto(
 	@Schema(description = "cover 썸네일 presigned GET URL(없거나 READY 이전이면 null)", nullable = true)
 	String coverThumbnailUrl,
 
+	@Schema(description = "cover 영상 길이(초) — 카드 duration 뱃지 재료. READY 이전에도 실리고 cover 자체가 "
+		+ "없을 때만 null", example = "12", nullable = true)
+	Integer coverDurationSec,
+
 	@Schema(description = "격자 중심점 행정동 이름(무귀속/미판정이면 null)",
 		example = "서울특별시 강남구 역삼1동", nullable = true)
 	String regionName,
@@ -63,6 +67,7 @@ public record CollectionGridResponseDto(
 			view.videoCount(),
 			view.coverVideoId(),
 			view.coverThumbnailUrl(),
+			view.coverDurationSec(),
 			view.regionName(),
 			view.zoneName(),
 			view.zoneCell()

@@ -22,6 +22,12 @@ public interface CollectionGridProjection {
 
 	String getCoverThumbnailKey();
 
+	/**
+	 * cover 영상 길이(초). READY 게이트 밖이라 인코딩 완료 전에도 실린다 — null 은 cover 자체가 없을 때뿐이다
+	 * (MSG-388).
+	 */
+	Integer getCoverDurationSec();
+
 	/** 격자 중심점 행정동 이름(grids.region_code 경유). 무귀속/미판정이면 null (MSG-167 §D4). */
 	String getRegionName();
 }

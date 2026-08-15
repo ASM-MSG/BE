@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.usergrid.dto.CollectionGridSort;
 import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
 import com.msg.fillmap.usergrid.repository.FriendCollectionGridProjection;
@@ -62,6 +63,11 @@ class UserGridQueryServiceImplTest {
 	 */
 	private void givenSeomyeonZone() {
 		given(zoneNameQueryService.resolver()).willReturn(new ZoneNameResolver(List.of(SEOMYEON)));
+	}
+
+	/** 파라미터 없는 기존 호출과 같은 조합 — 전국·수집 시각순이고 서비스가 상한 30을 채워 넣는다(FR-7). */
+	private List<CollectionGridView> collectDefault() {
+		return userGridQueryService.getCollectionGrids(1L, null, CollectionGridSort.COLLECTED, null);
 	}
 
 	@Nested
@@ -131,10 +137,10 @@ class UserGridQueryServiceImplTest {
 		@DisplayName("gridY gridX는 gridId를 디코드한 값이다")
 		void gridY_gridX는_gridId를_디코드한_값이다() {
 			String gridId = "19422_9582";
-			given(userGridRepository.getCollectionGrids(1L))
+			given(userGridRepository.getCollectionGrids(1L, null, "COLLECTED", 30))
 				.willReturn(List.of(gridProjection(gridId, null, null)));
 
-			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
+			CollectionGridView view = collectDefault().get(0);
 
 			GridIndex decoded = GridEncoder.decode(gridId);
 			assertThat(view.gridId()).isEqualTo(gridId);
@@ -148,11 +154,11 @@ class UserGridQueryServiceImplTest {
 		void coverThumbnailUrl은_썸네일key가_있으면_presigned_GET_URL이다() {
 			String thumbKey = "videos/thumb/1042.jpg";
 			String signed = "https://s3.example/thumb.jpg?X-Amz-Signature=abc";
-			given(userGridRepository.getCollectionGrids(1L))
+			given(userGridRepository.getCollectionGrids(1L, null, "COLLECTED", 30))
 				.willReturn(List.of(gridProjection("19422_9582", 1042L, thumbKey)));
 			given(thumbnailUrlPresigner.presign(thumbKey)).willReturn(signed);
 
-			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
+			CollectionGridView view = collectDefault().get(0);
 
 			assertThat(view.coverVideoId()).isEqualTo(1042L);
 			assertThat(view.coverThumbnailUrl()).isEqualTo(signed);
@@ -162,13 +168,61 @@ class UserGridQueryServiceImplTest {
 		@Test
 		@DisplayName("coverThumbnailUrl은 cover가 null이면 null이다")
 		void coverThumbnailUrl은_cover가_null이면_null이다() {
-			given(userGridRepository.getCollectionGrids(1L))
+			given(userGridRepository.getCollectionGrids(1L, null, "COLLECTED", 30))
 				.willReturn(List.of(gridProjection("19422_9582", null, null)));
 
-			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
+			CollectionGridView view = collectDefault().get(0);
 
 			assertThat(view.coverVideoId()).isNull();
 			assertThat(view.coverThumbnailUrl()).isNull();
+		}
+
+		// 검증: FR-MAP-10
+		@Test
+		@DisplayName("coverDurationSec은 프로젝션 값을 그대로 통과시킨다")
+		void coverDurationSec은_프로젝션_값을_그대로_통과시킨다() {
+			given(userGridRepository.getCollectionGrids(1L, null, "COLLECTED", 30))
+				.willReturn(List.of(gridProjection("19422_9582", 1042L, null)));
+
+			assertThat(collectDefault().get(0).coverDurationSec()).isEqualTo(12);
+		}
+
+		// 검증: FR-MAP-10
+		@Test
+		@DisplayName("regionCode 없이 limit 생략이면 30을 바인딩한다")
+		void regionCode_없이_limit_생략이면_30을_바인딩한다() {
+			collectDefault();
+
+			then(userGridRepository).should().getCollectionGrids(1L, null, "COLLECTED", 30);
+		}
+
+		// 검증: FR-MAP-10
+		@Test
+		@DisplayName("regionCode 지정에 limit 생략이면 null을 바인딩해 무제한이다")
+		void regionCode_지정에_limit_생략이면_null을_바인딩해_무제한이다() {
+			// PostgreSQL 이 LIMIT NULL 을 무제한으로 읽는다 — 그 동네 내 격자 전부가 나간다.
+			userGridQueryService.getCollectionGrids(1L, "1168051500", CollectionGridSort.COLLECTED, null);
+
+			then(userGridRepository).should().getCollectionGrids(1L, "1168051500", "COLLECTED", null);
+		}
+
+		// 검증: FR-MAP-10
+		@Test
+		@DisplayName("limit 1 미만은 1로 보정한다")
+		void limit_1_미만은_1로_보정한다() {
+			userGridQueryService.getCollectionGrids(1L, null, CollectionGridSort.COLLECTED, 0);
+
+			then(userGridRepository).should().getCollectionGrids(1L, null, "COLLECTED", 1);
+		}
+
+		// 검증: FR-MAP-10
+		@Test
+		@DisplayName("sort는 name 문자열로 리포지토리에 넘긴다")
+		void sort는_name_문자열로_리포지토리에_넘긴다() {
+			// enum 을 네이티브 쿼리에 그대로 넘기면 Hibernate 6 가 ordinal 로 바인딩해 텍스트 비교가 항상 실패한다.
+			userGridQueryService.getCollectionGrids(1L, null, CollectionGridSort.UPLOADED, 20);
+
+			then(userGridRepository).should().getCollectionGrids(1L, null, "UPLOADED", 20);
 		}
 	}
 
@@ -223,14 +277,14 @@ class UserGridQueryServiceImplTest {
 			// 뷰 3종이 같은 산식으로 이름을 받는지 한 자리에서 고정한다. 지역별 갤러리는 뷰에 gridY/gridX 가
 			// 없어 이 매핑에서 gridId 를 새로 decode 하는 유일한 경로다 (D-5).
 			givenSeomyeonZone();
-			given(userGridRepository.getCollectionGrids(1L))
+			given(userGridRepository.getCollectionGrids(1L, null, "COLLECTED", 30))
 				.willReturn(List.of(gridProjection("19422_9582", null, null)));
 			given(userGridRepository.getRegionVideos(1L, "1168051500"))
 				.willReturn(List.of(regionVideoProjection(1042L, "19422_9582", null, "ENCODING")));
 			given(userGridRepository.getCollectionGridsForFriend(7L))
 				.willReturn(List.of(friendGridProjection("19422_9582")));
 
-			CollectionGridView collection = userGridQueryService.getCollectionGrids(1L).get(0);
+			CollectionGridView collection = collectDefault().get(0);
 			RegionVideoView regionVideo = userGridQueryService.getRegionVideos(1L, "1168051500").get(0);
 			FriendCollectionGridView friendGrid = userGridQueryService.getCollectionGridsForFriend(7L).get(0);
 
@@ -246,10 +300,10 @@ class UserGridQueryServiceImplTest {
 		@DisplayName("구역 밖 격자는 두 필드가 모두 null이다")
 		void 구역_밖_격자는_두_필드가_모두_null이다() {
 			givenSeomyeonZone();
-			given(userGridRepository.getCollectionGrids(1L))
+			given(userGridRepository.getCollectionGrids(1L, null, "COLLECTED", 30))
 				.willReturn(List.of(gridProjection("16676_11596", null, null)));
 
-			CollectionGridView view = userGridQueryService.getCollectionGrids(1L).get(0);
+			CollectionGridView view = collectDefault().get(0);
 
 			assertThat(view.zoneName()).isNull();
 			assertThat(view.zoneCell()).isNull();
@@ -261,12 +315,12 @@ class UserGridQueryServiceImplTest {
 		void 항목이_여러_건이어도_zones_조회는_1회다() {
 			// FR-8: 항목마다 리졸버를 받으면 격자 수만큼 zones 를 다시 읽는 N+1 이 된다.
 			givenSeomyeonZone();
-			given(userGridRepository.getCollectionGrids(1L)).willReturn(List.of(
+			given(userGridRepository.getCollectionGrids(1L, null, "COLLECTED", 30)).willReturn(List.of(
 				gridProjection("19422_9582", null, null),
 				gridProjection("19423_9583", null, null),
 				gridProjection("19424_9584", null, null)));
 
-			assertThat(userGridQueryService.getCollectionGrids(1L)).hasSize(3);
+			assertThat(collectDefault()).hasSize(3);
 
 			then(zoneNameQueryService).should(times(1)).resolver();
 		}
@@ -371,6 +425,11 @@ class UserGridQueryServiceImplTest {
 			@Override
 			public String getCoverThumbnailKey() {
 				return coverThumbnailKey;
+			}
+
+			@Override
+			public Integer getCoverDurationSec() {
+				return 12;
 			}
 
 			@Override

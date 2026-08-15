@@ -2,6 +2,8 @@ package com.msg.fillmap.usergrid.service;
 
 import java.util.List;
 
+import com.msg.fillmap.usergrid.dto.CollectionGridSort;
+
 /**
  * 개인 도감 조회 계약 (B 제공 → A 소비, infrastructure.md 경계면). GridQueryService 와 대칭.
  * 엔티티는 grid.entity.UserGrid(Owner A, MSG-78 D6) — usergrid 는 그 위의 조회 계약 패키지.
@@ -15,11 +17,19 @@ public interface UserGridQueryService {
 	CollectionSummaryView getCollectionSummary(long userId);
 
 	/**
-	 * 갤러리 격자 목록: 내 점령 격자를 최근 수집순(first_collected_at DESC) 최대 30개 (MSG-153, B 내부 read).
+	 * 갤러리 격자 목록: 내 점령 격자를 정렬·행정동·개수 상한을 받아 반환한다 (MSG-153 + MSG-388 확장,
+	 * B 내부 read — CollectionController 만 소비, Owner A 미소비라 실질 non-breaking).
 	 * 점령 0건이면 빈 리스트. coverVideoId 는 cover 없으면 null(readiness 무관 — 스펙 §API),
 	 * coverThumbnailUrl 만 READY 게이트 — cover 없거나 READY 이전·썸네일 미발급이면 null(§D4).
+	 * coverDurationSec 은 게이트 밖이라 인코딩 완료 전에도 실린다(null 은 cover 자체가 없을 때뿐).
+	 *
+	 * @param regionCode 행정동 코드. null 이면 전국, 지정하면 그 행정동에 속한 격자만(격자 축 귀속 —
+	 *                   영상 좌표가 옆 동이어도 격자 소속 동 기준). 미존재 코드면 빈 리스트(에러 아님)
+	 * @param sort       정렬 축. 컨트롤러 defaultValue 로 항상 비null
+	 * @param limit      카드 수 상한. null 이면 regionCode 없을 때 30(기존 갤러리 계약), regionCode 있을 때
+	 *                   그 동네 전부. 1 미만은 1 로 보정한다(전역 탐색 선례)
 	 */
-	List<CollectionGridView> getCollectionGrids(long userId);
+	List<CollectionGridView> getCollectionGrids(long userId, String regionCode, CollectionGridSort sort, Integer limit);
 
 	/**
 	 * 동 단위 내 영상: 그 행정동(regionCode) 격자들에 올린 내 ACTIVE 영상을 created_at 내림차순으로 반환한다
