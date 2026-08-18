@@ -47,10 +47,10 @@ public sealed interface MissionShape
 	}
 
 	/**
-	 * BOX (EVENT) — mission_grids 격자 집합을 감싸는 경계 사각형 5점 닫힌 링(남서→남동→북동→북서→남서).
+	 * BOX (EVENT·POPUP) — mission_grids 격자 집합을 감싸는 경계 사각형 5점 닫힌 링(남서→남동→북동→북서→남서).
 	 * 축제는 큰 사각형, 단일 격자 팝업은 한 셀 사각형(≈마커)으로 자연 정합.
 	 */
-	@Schema(description = "이벤트(EVENT) — 격자 집합을 감싸는 경계 사각형", requiredProperties = {"polygon"})
+	@Schema(description = "축제·팝업(EVENT·POPUP) — 격자 집합을 감싸는 경계 사각형", requiredProperties = {"polygon"})
 	record BoxShape(List<LatLng> polygon) implements MissionShape {
 	}
 
