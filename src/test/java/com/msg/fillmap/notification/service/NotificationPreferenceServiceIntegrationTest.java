@@ -99,7 +99,8 @@ class NotificationPreferenceServiceIntegrationTest {
 				tuple(NotificationCategory.REMIND, true),
 				tuple(NotificationCategory.VIDEO, true),
 				tuple(NotificationCategory.WEEKLY, true),
-				tuple(NotificationCategory.FRIEND, true));
+				tuple(NotificationCategory.FRIEND, true),
+				tuple(NotificationCategory.MISSION_NEARBY, true));
 	}
 
 	// 검증: FR-NOTI-06
@@ -131,8 +132,8 @@ class NotificationPreferenceServiceIntegrationTest {
 
 	// 검증: FR-NOTI-06
 	@Test
-	@DisplayName("조회는 카테고리 6종 전부를 반환한다 — 부재 카테고리 on 합성, enum 선언 순 (MSG-416 FRIEND 포함)")
-	void 조회는_카테고리_6종_전부를_반환한다() {
+	@DisplayName("조회는 카테고리 7종 전부를 반환한다 — 부재 카테고리 on 합성, enum 선언 순 (MSG-418 MISSION_NEARBY 포함)")
+	void 조회는_카테고리_7종_전부를_반환한다() {
 		notificationPreferenceService.update(me, "HOTZONE", false);
 
 		NotificationPreferenceResponseDto response = notificationPreferenceService.getPreferences(me);
@@ -145,7 +146,8 @@ class NotificationPreferenceServiceIntegrationTest {
 				tuple(NotificationCategory.REMIND, true),
 				tuple(NotificationCategory.VIDEO, true),
 				tuple(NotificationCategory.WEEKLY, true),
-				tuple(NotificationCategory.FRIEND, true));
+				tuple(NotificationCategory.FRIEND, true),
+				tuple(NotificationCategory.MISSION_NEARBY, true));
 	}
 
 	// 검증: FR-NOTI-06
@@ -214,13 +216,32 @@ class NotificationPreferenceServiceIntegrationTest {
 		assertThat(optOutCount(me)).isZero();
 	}
 
+	// 검증: FR-NOTI-16
+	@Test
+	@DisplayName("MISSION_NEARBY 카테고리를 끄고 켤 수 있다 — 기본 켜짐, off/on 왕복 (MSG-418 FR-6)")
+	void MISSION_NEARBY_카테고리를_끄고_켤_수_있다() {
+		assertThat(notificationPreferenceService.isEnabled(me, NotificationCategory.MISSION_NEARBY)).isTrue();
+
+		notificationPreferenceService.update(me, "MISSION_NEARBY", false);
+		assertThat(notificationPreferenceService.isEnabled(me, NotificationCategory.MISSION_NEARBY)).isFalse();
+		assertThat(notificationPreferenceService.getPreferences(me).preferences())
+			.filteredOn(preference -> preference.category() == NotificationCategory.MISSION_NEARBY)
+			.extracting(CategoryPreferenceDto::enabled)
+			.containsExactly(false);
+
+		notificationPreferenceService.update(me, "MISSION_NEARBY", true);
+
+		assertThat(notificationPreferenceService.isEnabled(me, NotificationCategory.MISSION_NEARBY)).isTrue();
+		assertThat(optOutCount(me)).isZero();
+	}
+
 	// 검증: FR-NOTI-15
 	@Test
 	@DisplayName("알림 설정 응답에 MODERATION 이 없다 — 수신 거부 불가 카테고리는 설정 표면 비노출 (MSG-417 FR-7)")
 	void 알림_설정_응답에_MODERATION이_없다() {
 		NotificationPreferenceResponseDto response = notificationPreferenceService.getPreferences(me);
 
-		assertThat(response.preferences()).hasSize(6);
+		assertThat(response.preferences()).hasSize(7);
 		assertThat(response.preferences())
 			.extracting(CategoryPreferenceDto::category)
 			.doesNotContain(NotificationCategory.MODERATION);
