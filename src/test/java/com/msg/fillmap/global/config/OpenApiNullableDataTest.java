@@ -66,7 +66,7 @@ class OpenApiNullableDataTest {
 
 	// 검증: FR-NOTI-15
 	@Test
-	@DisplayName("알림 설정 category 스키마 허용값은 6종이고 MODERATION 이 없다 — 수신 거부 불가 비노출 (MSG-417)")
+	@DisplayName("알림 설정 category 스키마 허용값은 7종이고 MODERATION 이 없다 — 수신 거부 불가 비노출 (MSG-417·MSG-418)")
 	void 알림_설정_category_스키마_허용값에_MODERATION이_없다() throws Exception {
 		JsonNode category = fetchApiDocs().path("components").path("schemas")
 			.path("CategoryPreferenceDto").path("properties").path("category");
@@ -76,7 +76,7 @@ class OpenApiNullableDataTest {
 			.isTrue();
 		List<String> values = new ArrayList<>();
 		allowed.forEach(value -> values.add(value.asString("")));
-		assertThat(values).containsExactly("BADGE", "HOTZONE", "REMIND", "VIDEO", "WEEKLY", "FRIEND");
+		assertThat(values).containsExactly("BADGE", "HOTZONE", "REMIND", "VIDEO", "WEEKLY", "FRIEND", "MISSION_NEARBY");
 	}
 
 	private boolean hasNullType(JsonNode anyOf) {

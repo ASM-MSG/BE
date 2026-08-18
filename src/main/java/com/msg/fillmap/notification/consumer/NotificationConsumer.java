@@ -125,7 +125,7 @@ public class NotificationConsumer {
 		}
 	}
 
-	/** 전송률 제한 (D8·FR-12) — HOTZONE·REMIND 일 상한, 나머지(BADGE·VIDEO·WEEKLY·FRIEND·MODERATION) 무제한. 카운트는 DB 1문장. */
+	/** 전송률 제한 (D8·FR-12) — HOTZONE·REMIND 일 상한, 나머지(BADGE·VIDEO·WEEKLY·FRIEND·MODERATION 등) 무제한. 카운트는 DB 1문장. */
 	private boolean rateLimited(Notification notification) {
 		Integer perDay = switch (notification.getCategory()) {
 			case HOTZONE -> properties.rateLimit().hotzonePerDay();
@@ -135,6 +135,9 @@ public class NotificationConsumer {
 			case WEEKLY -> null;  // 이벤트 키가 주 단위라 트리거가 주 1건 이상 못 만든다 (MSG-315 D6)
 			case FRIEND -> null;  // 상대별 하루 1건은 기록 단계 event_key 가 이미 막고, 다수 상대의 요청은 정당 (MSG-416 D5)
 			case MODERATION -> null;  // 제재 통지는 희소하고 사용자 행동 직결 — 뱃지 획득과 같은 결 (MSG-417 5절)
+			// 알림이 기기 로컬 생성이라 서버 발송 경로가 없고, 하루 5건 상한(PRD FR-4)도 앱 상수라 서버가 세지
+			// 않는다. 이 case 에 런타임이 도달하면 그 자체가 결함이다 — outbox 에 이 카테고리 행이 생겼다는 뜻 (MSG-418).
+			case MISSION_NEARBY -> null;
 		};
 		if (perDay == null) {
 			return false;
