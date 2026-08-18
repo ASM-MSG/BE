@@ -347,4 +347,92 @@ class VideoBlindIntegrationTest {
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.ALREADY_IN_TARGET_STATUS);
 	}
+
+	// ---- 블라인드 전환·해제 → MODERATION 소유자 알림 (MSG-417) ----
+
+	// 검증: FR-NOTI-15
+	@Test
+	@DisplayName("블라인드 전환이 소유자에게 MODERATION 알림을 남긴다 — 문구에 신고 정보 미탑재 (FR-1·FR-2)")
+	void 블라인드_전환이_소유자에게_MODERATION_알림을_남긴다() {
+		long videoId = upload("PUBLIC");
+
+		videoModerationService.blind(videoId);
+
+		List<Object[]> rows = moderationRows();
+		assertThat(rows).hasSize(1);
+		assertThat((String) rows.get(0)[0]).startsWith("MODERATION:BLIND:" + videoId + ":");
+		assertThat(rows.get(0)[1]).isEqualTo("영상이 가려졌어요");
+		assertThat(rows.get(0)[2]).isEqualTo("올린 영상이 운영 정책에 따라 가려졌어요. 지금은 다른 사람에게 보이지 않아요");
+		assertThat(rows.get(0)[3]).isEqualTo("PENDING");
+	}
+
+	// 검증: FR-NOTI-15
+	@Test
+	@DisplayName("해제가 복구 알림을 남긴다 — visibility 보존이라 '공개' 아닌 '원래 상태' 문구 (FR-3)")
+	void 해제가_복구_알림을_남긴다() {
+		long videoId = upload("PRIVATE");
+		videoModerationService.blind(videoId);
+
+		videoModerationService.unblind(videoId);
+
+		List<Object[]> rows = moderationRows();
+		assertThat(rows).hasSize(2);
+		assertThat((String) rows.get(1)[0]).startsWith("MODERATION:UNBLIND:" + videoId + ":");
+		assertThat(rows.get(1)[1]).isEqualTo("영상 숨김이 풀렸어요");
+		assertThat(rows.get(1)[2]).isEqualTo("가려졌던 영상이 원래 상태로 돌아왔어요");
+	}
+
+	// 검증: FR-NOTI-15
+	@Test
+	@DisplayName("해제 후 재블라인드는 새 알림 행을 만든다 — 무작위 UUID 꼬리라 dedupe 에 안 먹힌다 (FR-5)")
+	void 해제_후_재블라인드는_새_알림_행을_만든다() {
+		long videoId = upload("PUBLIC");
+
+		videoModerationService.blind(videoId);
+		videoModerationService.unblind(videoId);
+		videoModerationService.blind(videoId);
+
+		List<Object[]> rows = moderationRows();
+		assertThat(rows).hasSize(3);
+		assertThat(rows.stream().map(row -> (String) row[0]).distinct()).hasSize(3);
+	}
+
+	// 검증: FR-NOTI-15
+	@Test
+	@DisplayName("이미 블라인드된 영상 재요청은 알림을 남기지 않는다 — 3409 가드가 record 앞 (FR-4)")
+	void 이미_블라인드된_영상_재요청은_알림을_남기지_않는다() {
+		long videoId = upload("PUBLIC");
+		videoModerationService.blind(videoId);
+
+		assertThatThrownBy(() -> videoModerationService.blind(videoId))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.ALREADY_IN_TARGET_STATUS);
+
+		assertThat(moderationRows()).hasSize(1);
+	}
+
+	// 검증: FR-NOTI-15
+	@Test
+	@DisplayName("삭제된 영상 블라인드 시도는 알림을 남기지 않는다 — 3404 가드가 record 앞 (FR-4)")
+	void 삭제된_영상_블라인드_시도는_알림을_남기지_않는다() {
+		long videoId = upload("PRIVATE");
+		videoService.deleteVideo(userId, videoId);
+
+		assertThatThrownBy(() -> videoModerationService.blind(videoId))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
+
+		assertThat(moderationRows()).isEmpty();
+	}
+
+	/** 소유자의 MODERATION 알림 행 스냅샷 (id 순) — event_key·title·body·status, 단언은 호출부에서. */
+	@SuppressWarnings("unchecked")
+	private List<Object[]> moderationRows() {
+		return em.createNativeQuery("""
+				SELECT event_key, title, body, status FROM notifications
+				WHERE user_id = :u AND category = 'MODERATION' ORDER BY id
+				""")
+			.setParameter("u", userId)
+			.getResultList();
+	}
 }

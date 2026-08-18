@@ -3,6 +3,11 @@ package com.msg.fillmap.friend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,9 +32,13 @@ import com.msg.fillmap.friend.entity.FriendshipStatus;
 import com.msg.fillmap.friend.exception.FriendErrorCode;
 import com.msg.fillmap.friend.repository.FriendshipRepository;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.service.GridQueryService;
+import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.user.entity.GridColor;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.usergrid.service.UserGridQueryService;
+import com.msg.fillmap.video.service.VideoService;
 
 /**
  * 친구 관계 수명주기 (MSG-185, 실 DB). @Transactional 롤백 격리로 공유 로컬 DB 에 시드를 남기지
@@ -53,6 +62,19 @@ class FriendIntegrationTest {
 
 	@Autowired
 	private FriendshipRepository friendshipRepository;
+
+	// FRIEND 알림 기록 관찰 + 고정 클럭 수동 조립 재료 (MSG-416) — 아래 4개는 FriendServiceImpl 전체 생성자용.
+	@Autowired
+	private NotificationCommandService notificationCommandService;
+
+	@Autowired
+	private UserGridQueryService userGridQueryService;
+
+	@Autowired
+	private GridQueryService gridQueryService;
+
+	@Autowired
+	private VideoService videoService;
 
 	@Autowired
 	private EntityManager em;
@@ -414,5 +436,174 @@ class FriendIntegrationTest {
 
 		assertThatThrownBy(() -> friendshipRepository.saveAndFlush(Friendship.request(other.getId(), me.getId())))
 			.isInstanceOf(DataIntegrityViolationException.class);
+	}
+
+	// ---- FRIEND 알림 기록 (MSG-416) — 롤백 동반 소멸은 커밋 경계 관찰이 필요해 FriendNotificationRollbackTest 별도 ----
+
+	// 검증: FR-NOTI-14
+	@Test
+	@DisplayName("친구 요청이 접수되면 수신자에게 FRIEND 알림이 기록된다 — 요청자 닉네임·KST 날짜 키 (D1·D2·D4)")
+	void 친구_요청이_접수되면_수신자에게_FRIEND_알림이_기록된다() {
+		// 고정 클럭(16:00Z = KST 다음 날 01:00)으로 KST 변환 자체를 단언한다 — UTC 로 새면 20260818 이 찍힌다.
+		clockedService(new SteppingClock()).request(me.getId(), other.getFriendCode());
+
+		Object[] row = notificationRow(other.getId(), "FRIEND_REQ:" + me.getId() + ":20260819");
+		assertThat(row[0]).isEqualTo("FRIEND");
+		assertThat(row[1]).isEqualTo("새 친구 요청");
+		assertThat(row[2]).isEqualTo("나채움님이 친구 요청을 보냈어요");
+		assertThat(notificationCount(me.getId())).isZero();
+	}
+
+	// 검증: FR-NOTI-14
+	@Test
+	@DisplayName("요청을 수락하면 요청자에게 수락 알림이 기록된다 — 수락자 닉네임, FRIEND_ACC 무작위 꼬리 키 (D1·D2)")
+	void 요청을_수락하면_요청자에게_수락_알림이_기록된다() {
+		friendService.request(other.getId(), me.getFriendCode());
+
+		friendService.accept(me.getId(), other.getId());
+
+		List<Object[]> rows = notificationRows(other.getId(), "FRIEND_ACC:" + me.getId() + ":");
+		assertThat(rows).hasSize(1);
+		assertThat(rows.get(0)[1]).isEqualTo("FRIEND");
+		assertThat(rows.get(0)[2]).isEqualTo("친구 요청 수락");
+		assertThat(rows.get(0)[3]).isEqualTo("나채움님이 친구 요청을 수락했어요");
+	}
+
+	// 검증: FR-NOTI-14
+	@Test
+	@DisplayName("상호 요청 자동 수락은 먼저 요청한 쪽에만 수락 알림을 기록한다 — 나중 요청자 수신 0건 (FR-3)")
+	void 상호_요청_자동_수락은_먼저_요청한_쪽에만_수락_알림이_기록된다() {
+		// PENDING 을 직접 시드 — 요청 접수 알림 없이 자동 수락 경로의 기록만 관찰한다 (스펙 Given/When/Then).
+		friendshipRepository.saveAndFlush(Friendship.request(other.getId(), me.getId()));
+
+		FriendshipStatus status = friendService.request(me.getId(), other.getFriendCode()).status();
+
+		assertThat(status).isEqualTo(FriendshipStatus.ACCEPTED);
+		assertThat(notificationRows(other.getId(), "FRIEND_ACC:" + me.getId() + ":")).hasSize(1);
+		assertThat(notificationCount(me.getId())).isZero();
+	}
+
+	// 검증: FR-NOTI-14
+	@Test
+	@DisplayName("거절은 어느 쪽에도 알림을 기록하지 않는다 (FR-4)")
+	void 거절은_어느_쪽에도_알림을_기록하지_않는다() {
+		friendshipRepository.saveAndFlush(Friendship.request(other.getId(), me.getId()));
+
+		friendService.reject(me.getId(), other.getId());
+
+		assertThat(notificationCount(me.getId())).isZero();
+		assertThat(notificationCount(other.getId())).isZero();
+	}
+
+	// 검증: FR-NOTI-14
+	@Test
+	@DisplayName("같은 상대의 같은 날 재요청은 알림이 추가로 기록되지 않는다 — 날짜 키 DO NOTHING 흡수 (FR-8)")
+	void 같은_상대의_같은_날_재요청은_알림이_추가로_기록되지_않는다() {
+		friendService.request(me.getId(), other.getFriendCode());
+		friendService.reject(other.getId(), me.getId());
+
+		friendService.request(me.getId(), other.getFriendCode());
+
+		// 거절 뒤 재요청(FR-7)이지만 같은 날이라 상한(FR-8)이 우선한다 — 행은 그대로 1건.
+		assertThat(notificationCount(other.getId())).isEqualTo(1);
+	}
+
+	// 검증: FR-NOTI-14
+	@Test
+	@DisplayName("거절 후 다른 날 재요청은 새 알림이 기록된다 — 날짜가 키를 갈라 새 행 (FR-7)")
+	void 거절_후_다른_날_재요청은_새_알림이_기록된다() {
+		// KST 일 경계 전진용 수동 조립 — 프로덕션 생성자는 Clock.systemUTC() 고정 (BadgeNearMissIntegrationTest
+		// 선례). @Transactional 테스트 트랜잭션이 열려 있어 프록시 없는 직접 호출도 같은 트랜잭션에서 돈다.
+		SteppingClock clock = new SteppingClock();
+		FriendServiceImpl clocked = clockedService(clock);
+		clocked.request(me.getId(), other.getFriendCode());
+		clocked.reject(other.getId(), me.getId());
+		clock.plusDays(1);
+
+		clocked.request(me.getId(), other.getFriendCode());
+
+		assertThat(notificationCount(other.getId())).isEqualTo(2);
+	}
+
+	// 검증: FR-NOTI-14
+	@Test
+	@DisplayName("친구 삭제 후 재요청·재수락은 같은 날에도 새 수락 알림이 기록된다 — 무작위 UUID 꼬리 (D2 회귀 방지)")
+	void 친구_삭제_후_재요청_재수락은_같은_날에도_새_수락_알림이_기록된다() {
+		friendService.request(me.getId(), other.getFriendCode());
+		friendService.accept(other.getId(), me.getId());
+		friendService.deleteFriend(me.getId(), other.getId());
+
+		friendService.request(me.getId(), other.getFriendCode());
+		friendService.accept(other.getId(), me.getId());
+
+		assertThat(notificationRows(me.getId(), "FRIEND_ACC:" + other.getId() + ":")).hasSize(2);
+	}
+
+	private long notificationCount(long userId) {
+		return ((Number) em.createNativeQuery(
+				"SELECT count(*) FROM notifications WHERE user_id = :userId")
+			.setParameter("userId", userId)
+			.getSingleResult()).longValue();
+	}
+
+	/** category·title·body 스냅샷 — 단언은 호출부에서 (BadgeNotificationIntegrationTest 관례). */
+	private Object[] notificationRow(long userId, String eventKey) {
+		return (Object[]) em.createNativeQuery("""
+				SELECT category, title, body FROM notifications
+				WHERE user_id = :userId AND event_key = :eventKey
+				""")
+			.setParameter("userId", userId)
+			.setParameter("eventKey", eventKey)
+			.getSingleResult();
+	}
+
+	/** 접두 매칭 행 조회 — FRIEND_ACC 키 꼬리가 무작위 UUID 라 완전 일치로는 못 찾는다 (D2). */
+	@SuppressWarnings("unchecked")
+	private List<Object[]> notificationRows(long userId, String keyPrefix) {
+		return em.createNativeQuery("""
+				SELECT event_key, category, title, body FROM notifications
+				WHERE user_id = :userId AND event_key LIKE :prefix || '%'
+				""")
+			.setParameter("userId", userId)
+			.setParameter("prefix", keyPrefix)
+			.getResultList();
+	}
+
+	/** 고정 클럭 수동 조립 — 프로덕션 생성자는 Clock.systemUTC() 고정이라 빈으로는 못 돌린다 (D3). */
+	private FriendServiceImpl clockedService(SteppingClock clock) {
+		return new FriendServiceImpl(userRepository, friendshipRepository, userGridQueryService, gridQueryService,
+			videoService, friendshipQueryService, notificationCommandService, clock);
+	}
+
+	/**
+	 * 전진 가능 시계 (BadgeNearMissIntegrationTest 선례) — 기준 instant 는 KST(08-19)와 UTC(08-18)의
+	 * 날짜가 갈리는 값으로 고정한다: 실시각 의존을 없애고, KST 변환을 빼먹는 회귀가 날짜 차이로 드러난다.
+	 * Badge 원본과 달리 withZone 이 요청된 존을 보존한다 — 여기선 clock.withZone(KST) 의 KST 날짜 산출이
+	 * 검증 축이라, this 반환(존 무시)이면 UTC 날짜로 계산돼 그 회귀를 못 잡는다 (Codex P2, 리더 판정).
+	 * friend 쪽은 뱃지와 달리 DB statement_timestamp 와의 같은 날 정렬이 불필요하다 — 키 유니크만 본다.
+	 */
+	private static final class SteppingClock extends Clock {
+
+		private Instant instant = Instant.parse("2026-08-18T16:00:00Z");
+
+		@Override
+		public ZoneId getZone() {
+			return ZoneOffset.UTC;
+		}
+
+		@Override
+		public Clock withZone(ZoneId zone) {
+			// 호출 시점 스냅숏 뷰 — 프로덕션은 withZone 직후 now() 한 번이라 충분하다 (plusDays 는 기반 시계에만).
+			return Clock.fixed(instant, zone);
+		}
+
+		@Override
+		public Instant instant() {
+			return instant;
+		}
+
+		void plusDays(long days) {
+			instant = instant.plus(Duration.ofDays(days));
+		}
 	}
 }

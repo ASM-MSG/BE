@@ -265,6 +265,21 @@ class NotificationConsumerTest {
 		awaitStatus(second, "SENT");
 	}
 
+	// 검증: FR-NOTI-15
+	@Test
+	@DisplayName("MODERATION 은 전송률 제한 없이 발송된다 — MSG-417, 제재 통지는 희소하고 사용자 행동 직결이라 상한 없음")
+	void MODERATION은_발송_상한이_없다() throws Exception {
+		registerToken("ok-" + System.nanoTime());
+		long first = newNotification(NotificationCategory.MODERATION, "첫째");
+		long second = newNotification(NotificationCategory.MODERATION, "둘째");
+
+		publish(first);
+		publish(second);
+
+		awaitStatus(first, "SENT");
+		awaitStatus(second, "SENT");
+	}
+
 	@Test
 	@DisplayName("토큰이 없으면 SKIPPED NO_TOKEN 이다")
 	void 토큰이_없으면_SKIPPED_NO_TOKEN이다() throws Exception {

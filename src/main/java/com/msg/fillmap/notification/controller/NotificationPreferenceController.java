@@ -36,8 +36,9 @@ public class NotificationPreferenceController {
 
 	@Operation(
 		summary = "알림 설정 조회",
-		description = "카테고리 5종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY) 전부의 수신 상태를 반환한다. "
-			+ "설정을 만진 적 없는 사용자는 전부 true 다 — opt-out 기본 전부 on."
+		description = "카테고리 6종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY·FRIEND) 전부의 수신 상태를 반환한다. "
+			+ "설정을 만진 적 없는 사용자는 전부 true 다 — opt-out 기본 전부 on. "
+			+ "MODERATION 은 설정 대상이 아니라 목록에 없다 (수신 거부 불가)."
 	)
 	@GetMapping
 	public SuccessResponse<NotificationPreferenceResponseDto> getPreferences(
@@ -49,13 +50,13 @@ public class NotificationPreferenceController {
 	@Operation(
 		summary = "카테고리 수신 토글",
 		description = "카테고리 하나의 수신 여부를 바꾸고 변경 후 전체 상태를 반환한다 — 같은 값 재전환은 멱등. "
-			+ "category 가 5종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY, 대소문자 무시) 외면 10420 이다. "
+			+ "category 가 6종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY·FRIEND, 대소문자 무시) 외면 10420 이다. "
 			+ "off 는 발송만 막고 off 중 쌓인 알림이 on 복귀 후 재발송되는 일은 없다."
 	)
 	@PatchMapping("/{category}")
 	public SuccessResponse<NotificationPreferenceResponseDto> update(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
-		@Parameter(description = "알림 카테고리 — BADGE·HOTZONE·REMIND·VIDEO·WEEKLY (대소문자 무시)", example = "HOTZONE")
+		@Parameter(description = "알림 카테고리 — BADGE·HOTZONE·REMIND·VIDEO·WEEKLY·FRIEND (대소문자 무시)", example = "HOTZONE")
 		@PathVariable String category,
 		@Valid @RequestBody NotificationPreferenceUpdateRequestDto request
 	) {

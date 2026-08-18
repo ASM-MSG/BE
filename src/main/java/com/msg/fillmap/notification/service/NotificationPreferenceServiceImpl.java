@@ -59,17 +59,25 @@ public class NotificationPreferenceServiceImpl implements NotificationPreference
 			.map(optOut -> optOut.getId().getCategory())
 			.collect(Collectors.toSet());
 		List<CategoryPreferenceDto> preferences = Stream.of(NotificationCategory.values())
+			// MODERATION 은 수신 거부 불가 (MSG-417 FR-7) — 설정 대상이 아니므로 응답 목록에서 제외한다.
+			.filter(category -> category != NotificationCategory.MODERATION)
 			.map(category -> new CategoryPreferenceDto(category, !optOuts.contains(category)))
 			.toList();
 		return new NotificationPreferenceResponseDto(preferences);
 	}
 
 	private NotificationCategory parseCategory(String category) {
+		NotificationCategory parsed;
 		try {
 			// Locale.ROOT: 터키어 로케일 JVM 의 배포 로케일 의존 차단 (PushTokenServiceImpl.parsePlatform 선례)
-			return NotificationCategory.valueOf(category.toUpperCase(Locale.ROOT));
+			parsed = NotificationCategory.valueOf(category.toUpperCase(Locale.ROOT));
 		} catch (IllegalArgumentException e) {
 			throw new ApiException(NotificationErrorCode.INVALID_CATEGORY);
 		}
+		if (parsed == NotificationCategory.MODERATION) {
+			// 수신 거부 불가 (MSG-417 FR-7) — 존재하지 않는 값과 동일 취급해 설정 표면에서 존재 자체를 숨긴다.
+			throw new ApiException(NotificationErrorCode.INVALID_CATEGORY);
+		}
+		return parsed;
 	}
 }

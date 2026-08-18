@@ -98,7 +98,8 @@ class NotificationPreferenceServiceIntegrationTest {
 				tuple(NotificationCategory.HOTZONE, false),
 				tuple(NotificationCategory.REMIND, true),
 				tuple(NotificationCategory.VIDEO, true),
-				tuple(NotificationCategory.WEEKLY, true));
+				tuple(NotificationCategory.WEEKLY, true),
+				tuple(NotificationCategory.FRIEND, true));
 	}
 
 	// 검증: FR-NOTI-06
@@ -130,8 +131,8 @@ class NotificationPreferenceServiceIntegrationTest {
 
 	// 검증: FR-NOTI-06
 	@Test
-	@DisplayName("조회는 카테고리 5종 전부를 반환한다 — 부재 카테고리 on 합성, enum 선언 순 (MSG-315 WEEKLY 포함)")
-	void 조회는_카테고리_5종_전부를_반환한다() {
+	@DisplayName("조회는 카테고리 6종 전부를 반환한다 — 부재 카테고리 on 합성, enum 선언 순 (MSG-416 FRIEND 포함)")
+	void 조회는_카테고리_6종_전부를_반환한다() {
 		notificationPreferenceService.update(me, "HOTZONE", false);
 
 		NotificationPreferenceResponseDto response = notificationPreferenceService.getPreferences(me);
@@ -143,7 +144,8 @@ class NotificationPreferenceServiceIntegrationTest {
 				tuple(NotificationCategory.HOTZONE, false),
 				tuple(NotificationCategory.REMIND, true),
 				tuple(NotificationCategory.VIDEO, true),
-				tuple(NotificationCategory.WEEKLY, true));
+				tuple(NotificationCategory.WEEKLY, true),
+				tuple(NotificationCategory.FRIEND, true));
 	}
 
 	// 검증: FR-NOTI-06
@@ -182,12 +184,56 @@ class NotificationPreferenceServiceIntegrationTest {
 
 	// 검증: FR-NOTI-06
 	@Test
-	@DisplayName("잘못된 카테고리는 10420 이다 — 소문자 badge 는 성공(대소문자 무시), FRIEND 는 10420")
+	@DisplayName("잘못된 카테고리는 10420 이다 — 소문자 badge 는 성공(대소문자 무시), 미존재 NOPE 는 10420")
 	void 잘못된_카테고리는_10420이다() {
 		notificationPreferenceService.update(me, "badge", false);
 		assertThat(notificationPreferenceService.isEnabled(me, NotificationCategory.BADGE)).isFalse();
 
-		assertThatThrownBy(() -> notificationPreferenceService.update(me, "FRIEND", false))
+		// 프로브는 enum 에 영원히 없을 문자열 — FRIEND 는 MSG-416 에서 유효값이 됐다 (D6 프로브 교체).
+		assertThatThrownBy(() -> notificationPreferenceService.update(me, "NOPE", false))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", NotificationErrorCode.INVALID_CATEGORY);
+	}
+
+	// 검증: FR-NOTI-14
+	@Test
+	@DisplayName("FRIEND 카테고리를 끄고 켤 수 있다 — 기본 켜짐, off/on 왕복 (MSG-416 FR-6)")
+	void FRIEND_카테고리를_끄고_켤_수_있다() {
+		assertThat(notificationPreferenceService.isEnabled(me, NotificationCategory.FRIEND)).isTrue();
+
+		notificationPreferenceService.update(me, "FRIEND", false);
+		assertThat(notificationPreferenceService.isEnabled(me, NotificationCategory.FRIEND)).isFalse();
+		assertThat(notificationPreferenceService.getPreferences(me).preferences())
+			.filteredOn(preference -> preference.category() == NotificationCategory.FRIEND)
+			.extracting(CategoryPreferenceDto::enabled)
+			.containsExactly(false);
+
+		notificationPreferenceService.update(me, "FRIEND", true);
+
+		assertThat(notificationPreferenceService.isEnabled(me, NotificationCategory.FRIEND)).isTrue();
+		assertThat(optOutCount(me)).isZero();
+	}
+
+	// 검증: FR-NOTI-15
+	@Test
+	@DisplayName("알림 설정 응답에 MODERATION 이 없다 — 수신 거부 불가 카테고리는 설정 표면 비노출 (MSG-417 FR-7)")
+	void 알림_설정_응답에_MODERATION이_없다() {
+		NotificationPreferenceResponseDto response = notificationPreferenceService.getPreferences(me);
+
+		assertThat(response.preferences()).hasSize(6);
+		assertThat(response.preferences())
+			.extracting(CategoryPreferenceDto::category)
+			.doesNotContain(NotificationCategory.MODERATION);
+	}
+
+	// 검증: FR-NOTI-15
+	@Test
+	@DisplayName("MODERATION 토글 요청은 10420 이다 — 존재하지 않는 값과 동일 취급, 대소문자 무시 포함 (MSG-417 FR-7)")
+	void MODERATION_토글_요청은_INVALID_CATEGORY다() {
+		assertThatThrownBy(() -> notificationPreferenceService.update(me, "MODERATION", false))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", NotificationErrorCode.INVALID_CATEGORY);
+		assertThatThrownBy(() -> notificationPreferenceService.update(me, "moderation", false))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", NotificationErrorCode.INVALID_CATEGORY);
 	}

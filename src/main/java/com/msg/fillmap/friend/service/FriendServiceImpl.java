@@ -1,8 +1,14 @@
 package com.msg.fillmap.friend.service;
 
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +32,8 @@ import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.service.GridQueryService;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.grid.service.RegionAggregateView;
+import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.exception.UserErrorCode;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -44,6 +52,8 @@ public class FriendServiceImpl implements FriendService {
 
 	private static final String SORT_RECENT = "recent";
 	private static final String SORT_NICKNAME = "nickname";
+	// 요청 도착 event_key 의 일 경계 = KST 자정 (MSG-416 D2, glossary 스트릭 규칙·FR-NOTI-07 과 동일).
+	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
 	private final UserRepository userRepository;
 	private final FriendshipRepository friendshipRepository;
@@ -58,6 +68,22 @@ public class FriendServiceImpl implements FriendService {
 	private final VideoService videoService;
 	// 친구 판정 정본 (MSG-312) — video 와 같은 빈을 본다. 판정 규칙 변경 지점이 여기 하나로 모인다.
 	private final FriendshipQueryService friendshipQueryService;
+	// FRIEND 알림 기록 (MSG-416 D1) — 전파 REQUIRED 라 요청·수락 트랜잭션과 같은 커밋 (FR-5). B-내부 배선.
+	private final NotificationCommandService notificationCommandService;
+	private final Clock clock;
+
+	/**
+	 * 프로덕션 생성자 — 마지막 인자 clock 을 Clock.systemUTC() 로 고정해 Lombok 전체 생성자로 위임한다
+	 * (BadgeAwardServiceImpl 선례, MSG-416 D3). 요청 도착 event_key 의 KST 날짜 산출에 쓰며, 전체
+	 * 생성자는 테스트 고정 클럭 주입용이다.
+	 */
+	@Autowired
+	public FriendServiceImpl(UserRepository userRepository, FriendshipRepository friendshipRepository,
+		UserGridQueryService userGridQueryService, GridQueryService gridQueryService, VideoService videoService,
+		FriendshipQueryService friendshipQueryService, NotificationCommandService notificationCommandService) {
+		this(userRepository, friendshipRepository, userGridQueryService, gridQueryService, videoService,
+			friendshipQueryService, notificationCommandService, Clock.systemUTC());
+	}
 
 	@Override
 	@Transactional(readOnly = true)
@@ -78,12 +104,25 @@ public class FriendServiceImpl implements FriendService {
 		if (target.getId().equals(userId)) {
 			throw new ApiException(FriendErrorCode.SELF_FRIEND_REQUEST);
 		}
+		// 알림 수신자(두 분기 모두 target)의 users KEY SHARE 선취 (MSG-416 D7) — record 의 FK 검사가 나중에
+		// 잡을 잠금을 friendships 잠금(findPair)보다 먼저 확보해 탈퇴 CASCADE(users 배타 → friendships)와
+		// 잠금 순서를 통일한다 (VideoStatusWriter.lockUploaderFirst 선례). 빈 Optional = findByCode 와 이
+		// 사이의 대상 계정 삭제 — 방치하면 pair-empty 분기의 save 가 FK 위반 500 이라 9404 로 변환한다.
+		if (userRepository.findIdForKeyShare(target.getId()).isEmpty()) {
+			throw new ApiException(FriendErrorCode.FRIEND_CODE_NOT_FOUND);
+		}
 		// 상호 동시 요청 레이스의 양방향 2행은 V19 대칭 유니크 인덱스(uq_friendships_pair)가 막는다 —
 		// 늦은 INSERT 는 유니크 위반 500 1회, 재시도가 역방향 PENDING 을 보고 자동 수락으로 수렴.
 		// 방치 시 findPair 의 Optional 단건 계약이 영구 깨져 앱 검증만으론 부족했다 (Codex 리뷰 반영).
 		Optional<Friendship> pair = friendshipRepository.findPair(userId, target.getId());
 		if (pair.isEmpty()) {
 			friendshipRepository.save(Friendship.request(userId, target.getId()));
+			// 요청 도착 알림 (MSG-416 D1·D2) — KST 날짜 키가 "같은 상대 하루 1건" 상한(FR-8)을 겸한다.
+			// 같은 날 재요청은 ON CONFLICT DO NOTHING 흡수, 날이 바뀌면 새 키라 새 행 (FR-7).
+			String eventKey = "FRIEND_REQ:" + userId + ":"
+				+ LocalDate.now(clock.withZone(KST)).format(DateTimeFormatter.BASIC_ISO_DATE);
+			notificationCommandService.record(target.getId(), NotificationCategory.FRIEND, eventKey,
+				"새 친구 요청", findUser(userId).getNickname() + "님이 친구 요청을 보냈어요");
 			return new FriendRequestCreateResponseDto(FriendshipStatus.PENDING);
 		}
 		Friendship existing = pair.get();
@@ -95,6 +134,8 @@ public class FriendServiceImpl implements FriendService {
 		}
 		// 역방향 대기 = 양쪽 다 추가 의사 표명 — 기존 행을 승격해 "최대 1행" 불변식을 유지한다 (FR-8).
 		existing.accept();
+		// 수락 알림은 먼저 요청했던 쪽에만 — 나중 요청자(userId)는 응답 body 로 이미 ACCEPTED 를 받는다 (MSG-416 FR-3).
+		recordAcceptedNotification(existing.getRequesterId(), userId);
 		return new FriendRequestCreateResponseDto(FriendshipStatus.ACCEPTED);
 	}
 
@@ -186,7 +227,13 @@ public class FriendServiceImpl implements FriendService {
 	@Override
 	@Transactional
 	public void accept(Long userId, Long requesterId) {
+		// 알림 수신자(원 요청자)의 users KEY SHARE 선취 (MSG-416 D7) — friendships FOR UPDATE 보다 먼저.
+		// 빈 Optional = 요청자 계정 삭제 진행/완료 — 유효한 대기 요청도 없으므로 기존 실패와 같은 9414.
+		if (userRepository.findIdForKeyShare(requesterId).isEmpty()) {
+			throw new ApiException(FriendErrorCode.FRIEND_REQUEST_NOT_FOUND);
+		}
 		findPendingRequest(requesterId, userId).accept();
+		recordAcceptedNotification(requesterId, userId);
 	}
 
 	@Override
@@ -224,6 +271,17 @@ public class FriendServiceImpl implements FriendService {
 		return friendshipRepository.findWithLockById(new FriendshipId(requesterId, addresseeId))
 			.filter(friendship -> friendship.getStatus() == FriendshipStatus.PENDING)
 			.orElseThrow(() -> new ApiException(FriendErrorCode.FRIEND_REQUEST_NOT_FOUND));
+	}
+
+	/**
+	 * 수락 알림 기록 (MSG-416 D1·D2) — 직접 수락·자동 수락 공통. 키 꼬리는 무작위 UUID: 같은 KST 날짜의
+	 * "삭제 후 재요청·재수락"에서 정당한 두 번째 알림이 dedupe 에 삼켜지지 않는다. 같은 전이의 중복 기록은
+	 * 롤백 동반(전파 REQUIRED)·상태 가드(9414·9409)·컨슈머 종결 가드가 키 없이도 막는다 (D2 논증).
+	 */
+	private void recordAcceptedNotification(Long requesterId, Long accepterId) {
+		notificationCommandService.record(requesterId, NotificationCategory.FRIEND,
+			"FRIEND_ACC:" + accepterId + ":" + UUID.randomUUID(),
+			"친구 요청 수락", findUser(accepterId).getNickname() + "님이 친구 요청을 수락했어요");
 	}
 
 	private User findByCode(String friendCode) {

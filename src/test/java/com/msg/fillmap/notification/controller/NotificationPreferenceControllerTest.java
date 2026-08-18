@@ -116,10 +116,11 @@ class NotificationPreferenceControllerTest {
 	@DisplayName("목록 외 카테고리는 10420 이다 — 서비스 스텁 예외의 핸들러 변환 검증")
 	void 목록_외_카테고리는_10420이다() throws Exception {
 		// 파싱은 서비스 몫 — 10420 을 스텁해 컨트롤러의 예외 전파를 검증한다 (PushTokenControllerTest 선례).
-		given(notificationPreferenceService.update(anyLong(), eq("FRIEND"), anyBoolean()))
+		// 프로브는 enum 에 영원히 없을 문자열 — FRIEND 는 MSG-416 에서 유효값이 됐다 (D6 프로브 교체).
+		given(notificationPreferenceService.update(anyLong(), eq("NOPE"), anyBoolean()))
 			.willThrow(new ApiException(NotificationErrorCode.INVALID_CATEGORY));
 
-		mockMvc.perform(patch(URL + "/FRIEND")
+		mockMvc.perform(patch(URL + "/NOPE")
 				.header(HttpHeaders.AUTHORIZATION, bearer())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"enabled\":false}"))
