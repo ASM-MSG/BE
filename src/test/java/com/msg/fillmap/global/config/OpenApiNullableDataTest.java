@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
@@ -61,6 +62,21 @@ class OpenApiNullableDataTest {
 		assertThat(data.path("anyOf").isArray())
 			.as("data 가 항상 있는 응답까지 null 허용으로 오염되면 안 된다")
 			.isFalse();
+	}
+
+	// 검증: FR-NOTI-15
+	@Test
+	@DisplayName("알림 설정 category 스키마 허용값은 6종이고 MODERATION 이 없다 — 수신 거부 불가 비노출 (MSG-417)")
+	void 알림_설정_category_스키마_허용값에_MODERATION이_없다() throws Exception {
+		JsonNode category = fetchApiDocs().path("components").path("schemas")
+			.path("CategoryPreferenceDto").path("properties").path("category");
+		JsonNode allowed = category.path("enum");
+		assertThat(allowed.isArray())
+			.as("category 가 인라인 enum 스키마가 아니다 — allowableValues 가 공유 $ref 로 빠지면 제약이 사라진다")
+			.isTrue();
+		List<String> values = new ArrayList<>();
+		allowed.forEach(value -> values.add(value.asString("")));
+		assertThat(values).containsExactly("BADGE", "HOTZONE", "REMIND", "VIDEO", "WEEKLY", "FRIEND");
 	}
 
 	private boolean hasNullType(JsonNode anyOf) {
