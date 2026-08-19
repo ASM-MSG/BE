@@ -3,6 +3,7 @@ package com.msg.fillmap.region.repository;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
 import static com.msg.fillmap.region.RegionTestFixtures.squareKm2Json;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -107,6 +108,21 @@ class RegionDistrictQueryTest {
 
 	// 검증: FR-REGION-15
 	@Test
+	@DisplayName("한 시군구에 다른 이름이 섞이면 코드포인트가 앞선 이름이 뽑힌다")
+	void 한_시군구에_다른_이름이_섞이면_코드포인트가_앞선_이름이_뽑힌다() {
+		// 실데이터는 같은 parent_code 면 둘째 토큰이 한 값이지만, 섞였을 때의 선택이 DB 로케일에 좌우되면
+		// 환경마다 이름이 달라진다 — MIN 입력의 COLLATE "C" 가 코드포인트 순으로 고정한다(§D-4).
+		// 'Z'(0x5A) < 'a'(0x61) 라 코드포인트 순이면 Z 쪽, 로케일 정렬(en_US 등)이면 a 쪽이 뽑힌다.
+		seedDong("99944", "00001", "a합성구");
+		seedDong("99944", "00002", "Z합성구");
+
+		assertThat(synthetic())
+			.extracting(RegionDistrictProjection::getName)
+			.containsExactly("Z합성구");
+	}
+
+	// 검증: FR-REGION-15
+	@Test
 	@DisplayName("parent_code 가 없는 행은 목록에 들어가지 않는다")
 	void parent_code가_없는_행은_목록에_들어가지_않는다() {
 		regionRepository.upsert("9994900001", "합성시 무주구 합성동", null, squareKm2Json(1.0), CELL_AREA_M2);
@@ -136,8 +152,11 @@ class RegionDistrictQueryTest {
 	@Test
 	@DisplayName("전국 규모 실행 계획이 성능 기준을 지킨다")
 	void 전국_규모_실행_계획이_성능_기준을_지킨다() throws Exception {
-		String plan = explainAnalyze();
 		long rows = ((Number) em.createNativeQuery("SELECT count(*) FROM regions").getSingleResult()).longValue();
+		// D-5 기준이 "전국 3,558행 기준"이라, 전국 시드가 없는 DB 에서는 재도 의미가 없어 skip 한다
+		// (안 걸면 빈 테이블을 재고 통과하는 허수 단언이 된다).
+		assumeTrue(rows >= 3500, "전국 regions 시드(3,558행)가 있는 환경에서만 성능 기준을 판정한다. 현재 " + rows + "행");
+		String plan = explainAnalyze();
 		double executionMs = Double.parseDouble(plan.replaceAll("(?s).*\"Execution Time\": ([0-9.]+).*", "$1"));
 		System.out.printf("[MSG-435] regions %d행 · Execution Time %.3f ms%n%s%n", rows, executionMs, plan);
 

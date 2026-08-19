@@ -151,20 +151,22 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	 * (GridRepository.aggregateOccupiedInRange)와 같은 규칙이라 두 화면의 시군구 이름이 항상 같다(§D-4).
 	 * 같은 그룹의 이름은 접두가 같아 어차피 한 값이지만 집계 함수 자리라 MIN 으로 단일화한다.
 	 * HAVING 으로 격자 수 0 인 시군구를 빼고(§D-3), WHERE 로 parent_code NULL 그룹이 유령 행으로 서는 것을 막는다.
-	 * ORDER BY 의 COLLATE "C" 는 DB 로케일에 무관한 코드포인트 순서를 강제한다 — 한글 음절 블록은
-	 * 코드포인트 순서가 곧 가나다순이다. COLLATE 는 출력 컬럼 번호에 못 걸어 MIN 식을 반복하는데,
-	 * 토큰 번호가 리터럴이라 MSG-356 이 실측한 파라미터 자리 분리 문제는 없다.
+	 * COLLATE "C" 는 DB 로케일에 무관한 코드포인트 순서를 강제한다 — 한글 음절 블록은 코드포인트 순서가 곧
+	 * 가나다순이다. MIN 밖이 아니라 집계 입력에 붙이는 이유: 밖에 붙이면 "어떤 이름을 고를지"의 비교가 DB
+	 * 기본 collation 으로 남아, 한 그룹에 다른 토큰이 섞였을 때 선택 결과가 환경 의존이 된다(§D-4 결정성).
+	 * ORDER BY 는 출력 컬럼 번호에 COLLATE 를 못 걸어 같은 식을 글자 그대로 반복한다 — 토큰 번호가
+	 * 리터럴이라 MSG-356 이 실측한 파라미터 자리 분리 문제는 없다.
 	 */
 	@Query(value = """
 		SELECT
-			parent_code                           AS "parentCode",
-			MIN(split_part(region_name, ' ', 2))  AS "name",
-			SUM(total_grid_count)                 AS "gridCount"
+			parent_code                                        AS "parentCode",
+			MIN(split_part(region_name, ' ', 2) COLLATE "C")   AS "name",
+			SUM(total_grid_count)                              AS "gridCount"
 		FROM regions
 		WHERE parent_code IS NOT NULL
 		GROUP BY parent_code
 		HAVING SUM(total_grid_count) > 0
-		ORDER BY MIN(split_part(region_name, ' ', 2)) COLLATE "C", parent_code
+		ORDER BY MIN(split_part(region_name, ' ', 2) COLLATE "C"), parent_code
 		""", nativeQuery = true)
 	List<RegionDistrictProjection> findDistricts();
 
