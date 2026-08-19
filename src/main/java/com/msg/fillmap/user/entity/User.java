@@ -93,6 +93,34 @@ public class User {
 	@Column(name = "location_consent_changed_at")
 	private LocalDateTime locationConsentChangedAt;
 
+	/**
+	 * 가입 약관 동의 중 철회가 없는 필수 3항목 (MSG-433 §D-2). 시각 컬럼 하나가 동의 여부와 시각을
+	 * 겸한다 — null 이면 미동의, 값이 있으면 그 시각(UTC)에 동의다. 이 3항목의 철회는 계정 삭제라
+	 * 값이 지워질 경로가 없고, boolean 을 따로 두면 여부와 시각이 어긋날 자리만 생긴다.
+	 * 상태 전이 메서드를 두지 않는 이유는 locationConsent 와 같다 — 갱신 경로가 리포지토리의 원자
+	 * UPDATE 한 곳뿐이다.
+	 */
+	@Column(name = "age_over14_consented_at")
+	private LocalDateTime ageOver14ConsentedAt;
+
+	@Column(name = "service_terms_consented_at")
+	private LocalDateTime serviceTermsConsentedAt;
+
+	@Column(name = "privacy_consented_at")
+	private LocalDateTime privacyConsentedAt;
+
+	/**
+	 * 마케팅 정보 수신 동의 (선택 항목, MSG-433 §D-4). 켜고 끄기를 반복하므로 현재 상태와 마지막
+	 * 변경 시각 쌍으로 둔다 — 시각 하나로는 "동의했다가 철회한 상태"를 표현할 수 없다.
+	 * 신규 가입은 미동의로 시작한다 (자바 기본값 false = DB DEFAULT FALSE).
+	 */
+	@Column(name = "marketing_consent", nullable = false)
+	private boolean marketingConsent;
+
+	/** 마지막 동의·철회 시각(UTC). 한 번도 바꾼 적 없으면 null 이고, 값이 실제로 달라질 때만 갱신된다. */
+	@Column(name = "marketing_consent_changed_at")
+	private LocalDateTime marketingConsentChangedAt;
+
 	@Builder(access = AccessLevel.PRIVATE)
 	private User(AuthProvider provider, String oid, String email, String passwordHash, String nickname, UserRole role) {
 		this.provider = provider;

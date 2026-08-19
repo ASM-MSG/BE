@@ -87,6 +87,51 @@ public interface UserRepository extends JpaRepository<User, Long> {
 		@Param("changedAt") LocalDateTime changedAt);
 
 	/**
+	 * 가입 약관 동의 제출 (MSG-433 §D-5) — updateLocationConsent 의 확장이다. 필수 4항목은 Bean
+	 * Validation 을 통과했으면 전부 동의 확정이라 파라미터는 마케팅 값과 시각뿐이다.
+	 *
+	 * COALESCE 가 필수 3항목의 최초 동의 시각을 보존해 재제출이 증빙 시각을 덮지 않는다(FR-4·8).
+	 * 철회가 가능한 위치·마케팅은 IS DISTINCT FROM CASE 로 값이 실제로 달라질 때만 시각을 갱신한다 —
+	 * MSG-402 온보딩으로 이미 위치 동의를 켠 사용자는 기존 변경 시각이 그대로 남는다(FR-5).
+	 * 한 문장이라 "전량 저장 또는 전량 미저장"(FR-3)과 멱등(FR-8)이 문장 수준에서 성립한다.
+	 * 반환은 영향 행 수 — 0 이면 이미 없는 사용자라 호출자가 1404 로 바꾼다.
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query(value = """
+		UPDATE users
+		SET age_over14_consented_at = COALESCE(age_over14_consented_at, :now),
+		    service_terms_consented_at = COALESCE(service_terms_consented_at, :now),
+		    privacy_consented_at = COALESCE(privacy_consented_at, :now),
+		    location_consent = TRUE,
+		    location_consent_changed_at = CASE
+		        WHEN location_consent IS DISTINCT FROM TRUE THEN :now
+		        ELSE location_consent_changed_at
+		    END,
+		    marketing_consent = :marketing,
+		    marketing_consent_changed_at = CASE
+		        WHEN marketing_consent IS DISTINCT FROM :marketing THEN :now
+		        ELSE marketing_consent_changed_at
+		    END
+		WHERE id = :userId
+		""", nativeQuery = true)
+	int submitConsents(@Param("userId") Long userId, @Param("marketing") boolean marketing,
+		@Param("now") LocalDateTime now);
+
+	/** 마케팅 수신 동의 갱신 (MSG-433 §D-4) — updateLocationConsent 와 완전 동형이다. */
+	@Modifying(clearAutomatically = true)
+	@Query(value = """
+		UPDATE users
+		SET marketing_consent = :consented,
+		    marketing_consent_changed_at = CASE
+		        WHEN marketing_consent IS DISTINCT FROM :consented THEN :changedAt
+		        ELSE marketing_consent_changed_at
+		    END
+		WHERE id = :userId
+		""", nativeQuery = true)
+	int updateMarketingConsent(@Param("userId") Long userId, @Param("consented") boolean consented,
+		@Param("changedAt") LocalDateTime changedAt);
+
+	/**
 	 * users 행 KEY SHARE 선취 (MSG-313 Codex 2R) — notifications FK 검사가 나중에 잡을 잠금을 videos 행
 	 * 잠금보다 먼저 확보해, 탈퇴 CASCADE(users 배타 → videos)와 잠금 순서를 통일한다. 빈 결과 = 탈퇴
 	 * 진행/완료라 호출자가 전이·알림을 스킵한다.
