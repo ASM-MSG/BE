@@ -144,6 +144,31 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	RegionNationalStatProjection findNationalStat(@Param("userId") long userId);
 
 	/**
+	 * 시군구 목록 조회 (MSG-435, 검색 지역 필터의 "전체 지역"). 행정동 마스터를 parent_code 로 묶어
+	 * 이름(전체 경로 이름의 둘째 토큰)과 격자 수 합을 낸다 — 사용자 무관 값이라 userId 가 없고,
+	 * 시딩 때 물질화된 total_grid_count 를 더하기만 해 geospatial 연산이 0 이다(§D-2).
+	 * 토큰 번호 2 의 정본은 RegionUnit.SIGUNGU.getNameTokenIndex() 로, 뷰포트 시군구 집계
+	 * (GridRepository.aggregateOccupiedInRange)와 같은 규칙이라 두 화면의 시군구 이름이 항상 같다(§D-4).
+	 * 같은 그룹의 이름은 접두가 같아 어차피 한 값이지만 집계 함수 자리라 MIN 으로 단일화한다.
+	 * HAVING 으로 격자 수 0 인 시군구를 빼고(§D-3), WHERE 로 parent_code NULL 그룹이 유령 행으로 서는 것을 막는다.
+	 * ORDER BY 의 COLLATE "C" 는 DB 로케일에 무관한 코드포인트 순서를 강제한다 — 한글 음절 블록은
+	 * 코드포인트 순서가 곧 가나다순이다. COLLATE 는 출력 컬럼 번호에 못 걸어 MIN 식을 반복하는데,
+	 * 토큰 번호가 리터럴이라 MSG-356 이 실측한 파라미터 자리 분리 문제는 없다.
+	 */
+	@Query(value = """
+		SELECT
+			parent_code                           AS "parentCode",
+			MIN(split_part(region_name, ' ', 2))  AS "name",
+			SUM(total_grid_count)                 AS "gridCount"
+		FROM regions
+		WHERE parent_code IS NOT NULL
+		GROUP BY parent_code
+		HAVING SUM(total_grid_count) > 0
+		ORDER BY MIN(split_part(region_name, ' ', 2)) COLLATE "C", parent_code
+		""", nativeQuery = true)
+	List<RegionDistrictProjection> findDistricts();
+
+	/**
 	 * 한 행정동의 내 수집률 단건 조회 (MSG-153 §도메인 로직 ②③). regionCode 는 resolveByPoint 가 판정한 실존 행정동이라
 	 * regions 행이 반드시 있고, region_stats 를 LEFT JOIN 해 아직 수집이 없는(155 미실행) 행정동은 0% 로 합성한다 —
 	 * collected_count 는 0, total_count 는 regions.total_grid_count 폴백, progress_rate 는 0.00, updated_at 은 null(§D6).
