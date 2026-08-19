@@ -59,7 +59,7 @@
 | FR-REGION-11 | 구현됨 | GridQueryServiceIntegrationTest |
 | FR-REGION-12 | 구현됨 | GridQueryServiceIntegrationTest, GridRepositoryTest, RegionStatsQueryTest, RegionStatsRecomputeTest |
 | FR-REGION-13 | 계획 | (없음) |
-| FR-REGION-14 | 계획 | RegionControllerTest, RegionNationalStatQueryTest, RegionStatsQueryServiceTest |
+| FR-REGION-14 | 구현됨 | RegionControllerTest, RegionNationalStatQueryTest, RegionStatsQueryServiceTest |
 | FR-SEARCH-01 | 구현됨 | KakaoLocalClientTest, PlaceSearchControllerTest, PlaceSearchServiceTest |
 | FR-SEARCH-02 | 구현됨 | KakaoLocalClientTest, PlaceSearchAggregationIntegrationTest, PlaceSearchControllerTest, PlaceSearchServiceTest |
 | FR-SEARCH-03 | 구현됨 | KakaoLocalClientTest |
