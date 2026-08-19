@@ -17,6 +17,7 @@ import com.msg.fillmap.moderation.entity.Report;
 import com.msg.fillmap.moderation.entity.ReportStatus;
 import com.msg.fillmap.moderation.exception.ReportErrorCode;
 import com.msg.fillmap.moderation.repository.ReportRepository;
+import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
@@ -39,6 +40,8 @@ public class AdminReportServiceImpl implements AdminReportService {
 
 	private final ReportRepository reportRepository;
 	private final VideoRepository videoRepository;
+	// 소유자 users KEY SHARE 선취용 (MSG-417 스펙 2절) — approve 가 videos 를 먼저 잠그는 유일한 경로.
+	private final UserRepository userRepository;
 	private final VideoModerationService videoModerationService;
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
 
@@ -65,6 +68,14 @@ public class AdminReportServiceImpl implements AdminReportService {
 		// AB-BA 데드락이 된다. videoId 는 신고 행에서 불변이라 무잠금 스칼라 선독으로 읽고,
 		// 영상 잠금 확보 뒤 신고를 잠가 PENDING 을 재검증한다(그사이 처리됐으면 11410).
 		Long videoId = reportRepository.findVideoIdById(reportId)
+			.orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
+		// 소유자 users KEY SHARE 선취 (MSG-417 스펙 2절) — blind 내부의 알림 record 가 users FK 잠금을
+		// 요구하는데, 이 메서드는 blind 전에 videos 를 먼저 잠근다. 선취 없이는 순서가 videos → users 로
+		// 남아 탈퇴 CASCADE(users → videos)와 교차한다. 빈 결과 = 탈퇴 진행/완료로 신고도 곧 사라질 행 —
+		// 아래 영상 행 부재와 같은 상황이라 같은 코드로 알린다.
+		Long ownerId = videoRepository.findUserIdById(videoId)   // 무잠금 선독 — user_id 불변
+			.orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
+		userRepository.findIdForKeyShare(ownerId)
 			.orElseThrow(() -> new ApiException(ReportErrorCode.REPORT_NOT_FOUND));
 		// 영상 행 없음 = 선독과 잠금 사이 소유자 탈퇴 CASCADE 로 신고도 함께 사라진 것 — 신고 부재로 알린다.
 		Video video = videoRepository.findWithLockById(videoId)

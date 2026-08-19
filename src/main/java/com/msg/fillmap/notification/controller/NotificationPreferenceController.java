@@ -25,6 +25,7 @@ import com.msg.fillmap.response.SuccessResponse;
 /**
  * 알림 설정 API (MSG-180). 3-layer 얇게 — principal userId + 서비스 호출 + SuccessResponse 변환만.
  * "설정 > 알림 설정" 화면 백엔드 — off 카테고리는 발송만 막고 outbox 기록은 SKIPPED 로 남는다 (FR-8).
+ * 단 MISSION_NEARBY 는 서버 발송 경로가 없어 기기가 발화 전 이 설정을 조회해 로컬로 억제한다 (MSG-418).
  */
 @Tag(name = "알림 (Notification)", description = "카테고리별 알림 수신 설정 조회/토글 API.")
 @RestController
@@ -36,8 +37,9 @@ public class NotificationPreferenceController {
 
 	@Operation(
 		summary = "알림 설정 조회",
-		description = "카테고리 5종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY) 전부의 수신 상태를 반환한다. "
-			+ "설정을 만진 적 없는 사용자는 전부 true 다 — opt-out 기본 전부 on."
+		description = "카테고리 7종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY·FRIEND·MISSION_NEARBY) 전부의 수신 상태를 반환한다. "
+			+ "설정을 만진 적 없는 사용자는 전부 true 다 — opt-out 기본 전부 on. "
+			+ "MODERATION 은 설정 대상이 아니라 목록에 없다 (수신 거부 불가)."
 	)
 	@GetMapping
 	public SuccessResponse<NotificationPreferenceResponseDto> getPreferences(
@@ -49,13 +51,15 @@ public class NotificationPreferenceController {
 	@Operation(
 		summary = "카테고리 수신 토글",
 		description = "카테고리 하나의 수신 여부를 바꾸고 변경 후 전체 상태를 반환한다 — 같은 값 재전환은 멱등. "
-			+ "category 가 5종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY, 대소문자 무시) 외면 10420 이다. "
-			+ "off 는 발송만 막고 off 중 쌓인 알림이 on 복귀 후 재발송되는 일은 없다."
+			+ "category 가 7종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY·FRIEND·MISSION_NEARBY, 대소문자 무시) 외면 10420 이다. "
+			+ "off 는 발송만 막고 off 중 쌓인 알림이 on 복귀 후 재발송되는 일은 없다. "
+			+ "MISSION_NEARBY 는 서버 발송이 없어 기기가 발화 전 이 설정을 조회해 로컬로 억제한다."
 	)
 	@PatchMapping("/{category}")
 	public SuccessResponse<NotificationPreferenceResponseDto> update(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
-		@Parameter(description = "알림 카테고리 — BADGE·HOTZONE·REMIND·VIDEO·WEEKLY (대소문자 무시)", example = "HOTZONE")
+		@Parameter(description = "알림 카테고리 — BADGE·HOTZONE·REMIND·VIDEO·WEEKLY·FRIEND·MISSION_NEARBY (대소문자 무시)",
+			example = "HOTZONE")
 		@PathVariable String category,
 		@Valid @RequestBody NotificationPreferenceUpdateRequestDto request
 	) {

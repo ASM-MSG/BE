@@ -25,7 +25,7 @@ public class NotificationOptOutId implements Serializable {
 	private Long userId;
 
 	@Enumerated(EnumType.STRING)
-	@Column(nullable = false, length = 10)
+	@Column(nullable = false, length = 20)
 	private NotificationCategory category;
 
 	public NotificationOptOutId(Long userId, NotificationCategory category) {
