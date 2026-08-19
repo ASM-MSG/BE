@@ -320,16 +320,18 @@ class UserConsentIntegrationTest {
 
 		// 검증: FR-USER-15
 		@Test
-		@DisplayName("위치 토글로 철회하면 필수 완료가 false 로 돌아간다 (§D-3, 한 값 관리의 귀결)")
-		void 위치_토글로_철회하면_필수_완료가_false로_돌아간다() {
+		@DisplayName("위치 철회 시도는 1400 으로 거절되고 필수 완료가 true 로 유지된다 (§D-11, 철회 불가)")
+		void 위치_철회_시도는_거절되고_필수_완료가_유지된다() {
 			userService.submitConsents(userId, submit(true));
 
-			userService.updateLocationConsent(userId, false);
+			assertThatThrownBy(() -> userService.updateLocationConsent(userId, false))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", UserErrorCode.LOCATION_CONSENT_IRREVOCABLE);
 
 			ConsentStatusResponseDto status = userService.getConsentStatus(userId);
-			assertThat(status.locationTerms()).isFalse();
-			assertThat(status.requiredCompleted()).isFalse();
-			// 철회가 없는 필수 3항목은 그대로다 — 게이트만 다시 뜨고 증빙은 남는다.
+			assertThat(status.locationTerms()).isTrue();
+			assertThat(status.requiredCompleted()).isTrue();
+			// 필수 4항목 전부 철회 경로가 없어 동의를 마친 사용자에게 게이트가 다시 뜨지 않는다.
 			assertThat(status.ageOver14()).isTrue();
 			assertThat(status.serviceTerms()).isTrue();
 			assertThat(status.privacyPolicy()).isTrue();
@@ -337,8 +339,8 @@ class UserConsentIntegrationTest {
 
 		// 검증: FR-USER-15
 		@Test
-		@DisplayName("위치만 동의했던 기존 사용자는 철회와 재제출까지 게이트 생명주기가 이어진다 (FR-7 · §D-3)")
-		void 위치만_동의했던_기존_사용자는_철회와_재제출까지_게이트_생명주기가_이어진다() {
+		@DisplayName("위치만 동의했던 기존 사용자는 철회 거절과 재제출까지 게이트 생명주기가 이어진다 (FR-7 · §D-11)")
+		void 위치만_동의했던_기존_사용자는_철회_거절과_재제출까지_게이트_생명주기가_이어진다() {
 			// MSG-402 온보딩만 거친 기존 사용자 — location_consent 는 true 인데 신규 필수 시각 3개는 NULL 이다.
 			serviceAt(SUBMITTED_AT).updateLocationConsent(userId, true);
 			assertThat(storedAgeOver14At()).isNull();
@@ -351,15 +353,17 @@ class UserConsentIntegrationTest {
 			assertThat(serviceAt(LATER).submitConsents(userId, submit(false)).requiredCompleted()).isTrue();
 			assertThat(storedLocationChangedAt()).isEqualTo(SUBMITTED_AT);
 
-			// ③ 프로필 편집에서 위치를 철회하면 다시 미완료 — 다음 로그인 게이트 재표시 재료다.
-			serviceAt(MUCH_LATER).updateLocationConsent(userId, false);
-			assertThat(userService.getConsentStatus(userId).requiredCompleted()).isFalse();
-			assertThat(storedLocationChangedAt()).isEqualTo(MUCH_LATER);
+			// ③ 프로필 화면에서 위치를 철회하려 해도 1400 으로 거절돼 완료 상태가 유지된다 (§D-11).
+			assertThatThrownBy(() -> serviceAt(MUCH_LATER).updateLocationConsent(userId, false))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", UserErrorCode.LOCATION_CONSENT_IRREVOCABLE);
+			assertThat(userService.getConsentStatus(userId).requiredCompleted()).isTrue();
+			assertThat(storedLocationChangedAt()).isEqualTo(SUBMITTED_AT);
 
-			// ④ 게이트 재제출로 다시 완료가 되고, 이번엔 값이 달라졌으므로 위치 변경 시각이 갱신된다.
+			// ④ 게이트 재제출도 그대로 성공하고(멱등) 시각은 어느 것도 갱신되지 않는다.
 			LocalDateTime resubmittedAt = MUCH_LATER.plusHours(1);
 			assertThat(serviceAt(resubmittedAt).submitConsents(userId, submit(false)).requiredCompleted()).isTrue();
-			assertThat(storedLocationChangedAt()).isEqualTo(resubmittedAt);
+			assertThat(storedLocationChangedAt()).isEqualTo(SUBMITTED_AT);
 			// 필수 3항목의 최초 동의 시각은 ② 시점 그대로다 (COALESCE).
 			assertThat(storedAgeOver14At()).isEqualTo(LATER);
 		}

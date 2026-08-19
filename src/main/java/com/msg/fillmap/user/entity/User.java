@@ -89,7 +89,10 @@ public class User {
 	@Column(name = "location_consent", nullable = false)
 	private boolean locationConsent;
 
-	/** 마지막 동의·철회 시각(UTC). 한 번도 바꾼 적 없으면 null 이고, 값이 실제로 달라질 때만 갱신된다 (FR-3·4). */
+	/**
+	 * 동의 시각(UTC). 한 번도 동의한 적 없으면 null 이고, 값이 실제로 달라질 때만 갱신된다 (FR-3·4).
+	 * 2026-08-19 팀 합의로 위치 동의는 철회가 불가해져(FR-USER-14 개정) true 에서 되돌아갈 경로가 없다.
+	 */
 	@Column(name = "location_consent_changed_at")
 	private LocalDateTime locationConsentChangedAt;
 

@@ -40,9 +40,10 @@ public interface UserService {
 	UserProfileResponseDto removeProfileImage(Long userId);
 
 	/**
-	 * 위치정보 사용 동의 변경 (MSG-402 FR-2·3·4). 온보딩 동의 제출과 프로필 편집 토글이 공용으로 쓴다.
-	 * 값이 실제로 달라질 때만 변경 시각이 갱신되고, 같은 값 재저장은 성공하되 시각이 그대로다(멱등).
-	 * 변경 후 프로필을 반환한다 — 닉네임 수정과 같은 형태라 FE 가 재조회 없이 토글 상태를 확정한다(§D-1).
+	 * 위치정보 사용 동의 켜기 (MSG-402 FR-2·3·4). 온보딩 동의 제출과 프로필 화면이 공용으로 쓴다.
+	 * 철회(consented=false)는 2026-08-19 팀 합의로 불가가 되어 1400 으로 거절된다 (FR-USER-14 개정).
+	 * 켜기 재요청은 성공하되 이미 켜져 있으면 변경 시각이 그대로다(멱등).
+	 * 변경 후 프로필을 반환한다 — 닉네임 수정과 같은 형태라 FE 가 재조회 없이 상태를 확정한다(§D-1).
 	 */
 	UserProfileResponseDto updateLocationConsent(Long userId, boolean consented);
 

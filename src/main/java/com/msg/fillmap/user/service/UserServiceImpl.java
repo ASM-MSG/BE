@@ -221,17 +221,25 @@ public class UserServiceImpl implements UserService {
 	 * 시각은 주입된 Clock 으로 UTC 에서 만들고 DB 정밀도(µs)로 절단한다 (§D-5, User.createdAt 선례).
 	 * 같은 값 재저장이면 이 값이 쓰이지 않고 기존 시각이 남는다.
 	 *
-	 * <p><b>수용한 경합</b> — 시각을 UPDATE 문 밖에서 미리 뽑으므로, 같은 사용자의 반대 토글 두 개가
+	 * <p><b>철회 불가</b> (2026-08-19 팀 합의, FR-USER-14 개정) — 이 API 는 켜기 전용이다. false 요청은
+	 * 1400 으로 거절되므로 저장된 값이 true 에서 false 로 되돌아갈 경로가 없고, 가입 게이트의 필수 동의
+	 * 완료가 사후에 풀리는 일도 없다 (MSG-433 §D-11). 켜기 재요청은 그대로 멱등 성공이다 —
+	 * 웹 온보딩(MSG-407)이 이 경로로 동의를 켠다.
+	 *
+	 * <p><b>수용한 경합</b> — 시각을 UPDATE 문 밖에서 미리 뽑으므로, 같은 사용자의 켜기 요청 두 개가
 	 * 밀리초 간격으로 겹치면 저장된 시각이 실제 순서와 어긋날 수 있다. 요청 A 가 t1 을 뽑고 행 잠금을
 	 * 기다리는 사이 요청 B 가 t2(더 나중)를 저장하고, 뒤늦게 잠금을 잡은 A 가 t1 을 기록하는 경우다.
 	 * 동의 여부(location_consent) 자체는 항상 마지막 UPDATE 값이라 정확하고, 어긋나는 것은 변경 시각
-	 * 하나이며 그 폭도 두 요청이 시각을 뽑은 간격 수준이다. 이 컬럼의 목적이 "언제쯤 동의·철회했나"에
+	 * 하나이며 그 폭도 두 요청이 시각을 뽑은 간격 수준이다. 이 컬럼의 목적이 "언제쯤 동의했나"에
 	 * 답하는 법적 보관이라 밀리초 오차가 의미를 바꾸지 않아 수용한다. DB 의 now() 로 옮기면 문장 안에서
 	 * 순서가 맞지만, 컨테이너 시간대(KST)의 벽시계가 들어와 UTC 저장 컨벤션(MSG-376)을 깬다.
 	 */
 	@Override
 	@Transactional
 	public UserProfileResponseDto updateLocationConsent(Long userId, boolean consented) {
+		if (!consented) {
+			throw new ApiException(UserErrorCode.LOCATION_CONSENT_IRREVOCABLE);
+		}
 		LocalDateTime changedAt = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
 		if (userRepository.updateLocationConsent(userId, consented, changedAt) == 0) {
 			throw new ApiException(UserErrorCode.USER_NOT_FOUND);

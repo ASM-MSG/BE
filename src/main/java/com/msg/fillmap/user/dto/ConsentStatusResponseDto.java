@@ -28,8 +28,8 @@ public record ConsentStatusResponseDto(
 	@Schema(description = "개인정보 수집·이용 동의 여부 (필수)", example = "true")
 	Boolean privacyPolicy,
 
-	@Schema(description = "위치기반서비스 이용약관 동의 여부 (필수). 프로필 편집의 위치정보 사용 토글과 같은 한 값이다 "
-		+ "— 토글로 철회하면 이 값과 requiredCompleted 가 즉시 false 가 된다", example = "true")
+	@Schema(description = "위치기반서비스 이용약관 동의 여부 (필수). 프로필 화면의 위치정보 사용 동의와 같은 한 값이며 "
+		+ "철회할 수 없다 — 한 번 true 가 되면 되돌아가지 않는다", example = "true")
 	Boolean locationTerms,
 
 	@Schema(description = "마케팅 정보 수신 동의 여부 (선택). 가입 후에도 전용 API 로 켜고 끌 수 있다", example = "false")
