@@ -39,6 +39,8 @@ import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.auth.service.RefreshTokenService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.user.dto.ConsentStatusResponseDto;
+import com.msg.fillmap.user.dto.ConsentSubmitRequestDto;
 import com.msg.fillmap.user.dto.ProfileImagePresignRequestDto;
 import com.msg.fillmap.user.dto.ProfileImagePresignResponseDto;
 import com.msg.fillmap.user.dto.UserProfileResponseDto;
@@ -93,8 +95,8 @@ public class UserServiceImpl implements UserService {
 
 	/**
 	 * 프로덕션 생성자 — 마지막 인자 clock 을 Clock.systemUTC() 로 고정해 Lombok 전체 생성자로 위임한다
-	 * (BadgeAwardServiceImpl 선례). 위치정보 동의 변경 시각 산출에만 쓰며, 전체 생성자는 테스트 고정
-	 * 클럭 주입용이다.
+	 * (BadgeAwardServiceImpl 선례). 위치정보·가입 약관 동의의 시각 산출에만 쓰며, 전체 생성자는 테스트
+	 * 고정 클럭 주입용이다.
 	 */
 	@Autowired
 	public UserServiceImpl(UserRepository userRepository, RefreshTokenService refreshTokenService,
@@ -236,6 +238,42 @@ public class UserServiceImpl implements UserService {
 		}
 		// clearAutomatically 가 갱신 전 스냅숏을 비운 뒤라 이 재조회는 DB 의 저장 값을 읽는다.
 		return UserProfileResponseDto.from(findUser(userId));
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public ConsentStatusResponseDto getConsentStatus(Long userId) {
+		return ConsentStatusResponseDto.from(findUser(userId));
+	}
+
+	/**
+	 * 가입 약관 동의 제출 (MSG-433 §도메인 로직). 필수 4항목은 요청 DTO 의 @NotNull·@AssertTrue 가
+	 * 컨트롤러 진입 전에 걸렀으므로 여기 도달했다는 것이 곧 전량 동의라, 리포지토리에 넘기는 값은
+	 * 마케팅 여부와 시각뿐이다 (§D-5·D-6). 판정·비교는 전부 UPDATE 문 안에서 끝난다.
+	 *
+	 * 시각은 updateLocationConsent 와 같은 방식으로 주입된 Clock 에서 UTC 로 만들고 DB 정밀도(µs)로
+	 * 절단한다 (§D-10). 시각 샘플이 행 잠금보다 앞서는 데서 오는 경합 수용도 그 메서드의 판정을
+	 * 그대로 승계한다 — 동의 여부 자체는 항상 마지막 UPDATE 값이라 정확하다.
+	 */
+	@Override
+	@Transactional
+	public ConsentStatusResponseDto submitConsents(Long userId, ConsentSubmitRequestDto request) {
+		LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+		if (userRepository.submitConsents(userId, request.marketing(), now) == 0) {
+			throw new ApiException(UserErrorCode.USER_NOT_FOUND);
+		}
+		return ConsentStatusResponseDto.from(findUser(userId));
+	}
+
+	/** 마케팅 수신 동의 변경 (MSG-433 §D-4) — updateLocationConsent 와 완전 동형이다. */
+	@Override
+	@Transactional
+	public ConsentStatusResponseDto updateMarketingConsent(Long userId, boolean consented) {
+		LocalDateTime changedAt = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+		if (userRepository.updateMarketingConsent(userId, consented, changedAt) == 0) {
+			throw new ApiException(UserErrorCode.USER_NOT_FOUND);
+		}
+		return ConsentStatusResponseDto.from(findUser(userId));
 	}
 
 	/**
