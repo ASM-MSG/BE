@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.region.dto.RegionDistrictResponseDto;
 import com.msg.fillmap.region.dto.RegionNationalStatResponseDto;
 import com.msg.fillmap.region.dto.RegionResponseDto;
 import com.msg.fillmap.region.dto.RegionStatResponseDto;
@@ -75,6 +76,21 @@ public class RegionController {
 		List<RegionStatResponseDto> body = regionStatsQueryService.findStats(principal.userId(), parentCode, collectedOnly)
 			.stream()
 			.map(RegionStatResponseDto::from)
+			.toList();
+		return SuccessResponse.of(body);
+	}
+
+	@Operation(
+		summary = "시군구 목록 (검색 지역 필터)",
+		description = "검색 화면 \"전체 지역\" 목록용 시군구 전량. 이름·식별자와 그 구의 전체 격자 수를 준다. "
+			+ "격자 수는 사용자 무관 값이고 0 인 시군구는 빠진다. 정렬은 이름순, 같은 이름은 식별자순. "
+			+ "응답의 parentCode 는 /api/regions/stats 의 parentCode 로 그대로 이어 쓸 수 있다."
+	)
+	@GetMapping("/districts")
+	public SuccessResponse<List<RegionDistrictResponseDto>> getDistricts() {
+		List<RegionDistrictResponseDto> body = regionStatsQueryService.findDistricts()
+			.stream()
+			.map(RegionDistrictResponseDto::from)
 			.toList();
 		return SuccessResponse.of(body);
 	}

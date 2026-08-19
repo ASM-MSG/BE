@@ -37,4 +37,11 @@ public interface RegionStatsQueryService {
 	 * 화면 몫(§D-2·D-3). 합산이라 수집이 0 이어도 분자 0 으로 항상 present 다(Optional 아님).
 	 */
 	RegionNationalStatView findNationalStat(long userId);
+
+	/**
+	 * 시군구 목록 (MSG-435, 검색 지역 필터). 사용자 무관 값이라 파라미터가 없고, 격자 수는 그 시군구 산하
+	 * 행정동들의 regions.total_grid_count 합이다. 격자 수 0 인 시군구는 빠지고(§D-3), 정렬은 이름 오름차순
+	 * (COLLATE "C") + 같은 이름은 식별자 오름차순이다. regions 미시딩이면 빈 리스트(에러 아님).
+	 */
+	List<RegionDistrictView> findDistricts();
 }
