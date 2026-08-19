@@ -241,7 +241,7 @@ public class UserServiceImpl implements UserService {
 			throw new ApiException(UserErrorCode.LOCATION_CONSENT_IRREVOCABLE);
 		}
 		LocalDateTime changedAt = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
-		if (userRepository.updateLocationConsent(userId, consented, changedAt) == 0) {
+		if (userRepository.consentToLocation(userId, changedAt) == 0) {
 			throw new ApiException(UserErrorCode.USER_NOT_FOUND);
 		}
 		// clearAutomatically 가 갱신 전 스냅숏을 비운 뒤라 이 재조회는 DB 의 저장 값을 읽는다.

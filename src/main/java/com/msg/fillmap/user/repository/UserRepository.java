@@ -65,26 +65,28 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	int deleteUser(@Param("userId") Long userId);
 
 	/**
-	 * 위치정보 사용 동의 갱신 (MSG-402 §D-4) — 읽기·비교·쓰기를 UPDATE 한 문장에 담는다. 조회 후 값을
-	 * 비교하는 방식은 동시 PUT 에서 두 요청이 같은 이전 값을 읽어 변경 시각이 두 번 갱신되거나 상태가
-	 * 역전될 수 있는데, 한 문장이면 DB 행 잠금이 두 요청을 직렬화한다. CASE 가 같은 값 재저장 시 기존
-	 * 시각을 그대로 두므로 멱등(FR-4)이 문장 수준에서 성립한다 — 서비스에 분기 코드가 없다.
+	 * 위치정보 사용 동의 켜기 (MSG-402 §D-4) — 읽기·비교·쓰기를 UPDATE 한 문장에 담는다. 조회 후 값을
+	 * 비교하는 방식은 동시 PUT 에서 두 요청이 같은 이전 값을 읽어 변경 시각이 두 번 갱신될 수 있는데,
+	 * 한 문장이면 DB 행 잠금이 두 요청을 직렬화한다. CASE 가 이미 켜진 사용자의 동의 시각을 그대로 두므로
+	 * 멱등(FR-4)이 문장 수준에서 성립한다 — 서비스에 분기 코드가 없다.
 	 * NULL 비교가 성립해야 하므로 `=` 가 아니라 PostgreSQL 의 IS DISTINCT FROM 을 쓴다.
+	 *
+	 * <p>철회 불가 전환(MSG-433 §D-11)으로 저장 값이 TRUE 하나뿐이라 동의 여부 파라미터를 없앴다 —
+	 * false 를 넘길 방법 자체가 없어 호출자가 가드를 빠뜨려도 철회가 저장될 수 없다.
 	 * 반환은 영향 행 수 — 0 이면 이미 없는 사용자라 호출자가 1404 로 바꾼다.
 	 * clearAutomatically 는 이 UPDATE 를 못 본 1차 캐시 스냅숏을 비워 뒤이은 재조회가 DB 를 읽게 한다.
 	 */
 	@Modifying(clearAutomatically = true)
 	@Query(value = """
 		UPDATE users
-		SET location_consent = :consented,
+		SET location_consent = TRUE,
 		    location_consent_changed_at = CASE
-		        WHEN location_consent IS DISTINCT FROM :consented THEN :changedAt
+		        WHEN location_consent IS DISTINCT FROM TRUE THEN :changedAt
 		        ELSE location_consent_changed_at
 		    END
 		WHERE id = :userId
 		""", nativeQuery = true)
-	int updateLocationConsent(@Param("userId") Long userId, @Param("consented") boolean consented,
-		@Param("changedAt") LocalDateTime changedAt);
+	int consentToLocation(@Param("userId") Long userId, @Param("changedAt") LocalDateTime changedAt);
 
 	/**
 	 * 가입 약관 동의 제출 (MSG-433 §D-5) — updateLocationConsent 의 확장이다. 필수 4항목은 Bean

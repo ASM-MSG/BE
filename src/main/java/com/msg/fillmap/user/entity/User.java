@@ -81,35 +81,38 @@ public class User {
 	private LocalDateTime createdAt;
 
 	/**
-	 * 위치기반서비스 이용 동의 여부 (MSG-402). 신규 가입은 미동의로 시작한다 — 생성자에서 넣지 않아도
-	 * boolean 기본값 false 와 DB DEFAULT FALSE 가 같은 결과를 만든다. 상태 전이 메서드를 두지 않는
-	 * 이유는 갱신 경로가 리포지토리의 원자 UPDATE 한 곳이기 때문이다 (§D-4) — 더티 체킹으로 바꾸면
-	 * 동시 요청이 같은 이전 값을 읽어 변경 시각이 이중 갱신된다.
+	 * 동의 컬럼 7종은 전부 <b>읽기 전용 매핑</b>이다 (updatable = false, MSG-433 Codex P1). 쓰기 경로는
+	 * 리포지토리의 native UPDATE 세 개(submitConsents · updateLocationConsent · updateMarketingConsent)
+	 * 뿐이고, 엔티티에는 이 값들을 바꾸는 setter 도 상태 전이 메서드도 없다.
+	 *
+	 * <p>왜 매핑 수준에서 막는가 — 이 프로젝트는 @DynamicUpdate 를 쓰지 않아 더티 체킹이 <b>전 컬럼</b>을
+	 * UPDATE 한다. 미동의 시점에 User 를 읽은 트랜잭션이 그 사이 커밋된 동의를 못 본 채 닉네임이나 프로필
+	 * 이미지를 저장하면, 낡은 false·NULL 스냅숏이 동의 컬럼을 되덮어 철회 차단(§D-11)이 우회된다.
+	 * updatable = false 면 그 컬럼들이 UPDATE 문에서 아예 빠져 우회가 구조적으로 불가능하다.
+	 * INSERT 에는 그대로 포함되므로 신규 가입의 미동의 시작(자바 기본값 null·false)은 영향이 없다.
 	 */
-	@Column(name = "location_consent", nullable = false)
+	@Column(name = "location_consent", nullable = false, updatable = false)
 	private boolean locationConsent;
 
 	/**
 	 * 동의 시각(UTC). 한 번도 동의한 적 없으면 null 이고, 값이 실제로 달라질 때만 갱신된다 (FR-3·4).
 	 * 2026-08-19 팀 합의로 위치 동의는 철회가 불가해져(FR-USER-14 개정) true 에서 되돌아갈 경로가 없다.
 	 */
-	@Column(name = "location_consent_changed_at")
+	@Column(name = "location_consent_changed_at", updatable = false)
 	private LocalDateTime locationConsentChangedAt;
 
 	/**
 	 * 가입 약관 동의 중 철회가 없는 필수 3항목 (MSG-433 §D-2). 시각 컬럼 하나가 동의 여부와 시각을
 	 * 겸한다 — null 이면 미동의, 값이 있으면 그 시각(UTC)에 동의다. 이 3항목의 철회는 계정 삭제라
 	 * 값이 지워질 경로가 없고, boolean 을 따로 두면 여부와 시각이 어긋날 자리만 생긴다.
-	 * 상태 전이 메서드를 두지 않는 이유는 locationConsent 와 같다 — 갱신 경로가 리포지토리의 원자
-	 * UPDATE 한 곳뿐이다.
 	 */
-	@Column(name = "age_over14_consented_at")
+	@Column(name = "age_over14_consented_at", updatable = false)
 	private LocalDateTime ageOver14ConsentedAt;
 
-	@Column(name = "service_terms_consented_at")
+	@Column(name = "service_terms_consented_at", updatable = false)
 	private LocalDateTime serviceTermsConsentedAt;
 
-	@Column(name = "privacy_consented_at")
+	@Column(name = "privacy_consented_at", updatable = false)
 	private LocalDateTime privacyConsentedAt;
 
 	/**
@@ -117,11 +120,11 @@ public class User {
 	 * 변경 시각 쌍으로 둔다 — 시각 하나로는 "동의했다가 철회한 상태"를 표현할 수 없다.
 	 * 신규 가입은 미동의로 시작한다 (자바 기본값 false = DB DEFAULT FALSE).
 	 */
-	@Column(name = "marketing_consent", nullable = false)
+	@Column(name = "marketing_consent", nullable = false, updatable = false)
 	private boolean marketingConsent;
 
 	/** 마지막 동의·철회 시각(UTC). 한 번도 바꾼 적 없으면 null 이고, 값이 실제로 달라질 때만 갱신된다. */
-	@Column(name = "marketing_consent_changed_at")
+	@Column(name = "marketing_consent_changed_at", updatable = false)
 	private LocalDateTime marketingConsentChangedAt;
 
 	@Builder(access = AccessLevel.PRIVATE)

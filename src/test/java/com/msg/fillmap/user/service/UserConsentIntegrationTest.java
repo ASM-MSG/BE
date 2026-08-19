@@ -109,6 +109,46 @@ class UserConsentIntegrationTest {
 	}
 
 	@Nested
+	@DisplayName("더티 체킹 되덮기 차단")
+	class DirtyCheckingGuard {
+
+		// 검증: FR-USER-15
+		@Test
+		@DisplayName("미동의로 읽어 둔 엔티티의 닉네임 저장이 동의 값을 되덮지 않는다 (Codex P1, updatable = false)")
+		void 미동의로_읽어_둔_엔티티의_닉네임_저장이_동의_값을_되덮지_않는다() {
+			// ① 미동의 시점의 스냅숏을 든 영속 엔티티 — 실제로는 오래 걸리는 요청이 이 상태로 대기한다.
+			User stale = userRepository.findById(userId).orElseThrow();
+			assertThat(stale.isLocationConsent()).isFalse();
+
+			// ② 그 사이 다른 요청이 동의를 커밋한다. 영속성 컨텍스트를 거치지 않는 native 갱신이라
+			//    ①의 스냅숏은 여전히 미동의다 (다른 트랜잭션의 커밋과 같은 상황).
+			em.createNativeQuery("""
+					UPDATE users
+					SET age_over14_consented_at = :now, service_terms_consented_at = :now,
+					    privacy_consented_at = :now, location_consent = TRUE,
+					    location_consent_changed_at = :now, marketing_consent = TRUE,
+					    marketing_consent_changed_at = :now
+					WHERE id = :id
+					""")
+				.setParameter("now", SUBMITTED_AT).setParameter("id", userId).executeUpdate();
+
+			// ③ 낡은 엔티티로 닉네임을 바꿔 flush — @DynamicUpdate 가 없어 UPDATE 는 전 컬럼을 싣는다.
+			stale.updateNickname("경합닉네임");
+
+			Object[] row = stored();   // flush 가 여기서 일어난다
+			assertThat((LocalDateTime) row[0]).isEqualTo(SUBMITTED_AT);
+			assertThat((LocalDateTime) row[1]).isEqualTo(SUBMITTED_AT);
+			assertThat((LocalDateTime) row[2]).isEqualTo(SUBMITTED_AT);
+			assertThat((Boolean) row[3]).isTrue();
+			assertThat((LocalDateTime) row[4]).isEqualTo(SUBMITTED_AT);
+			assertThat((Boolean) row[5]).isTrue();
+			assertThat((LocalDateTime) row[6]).isEqualTo(SUBMITTED_AT);
+			// 닉네임은 정상 저장돼야 한다 — 동의 컬럼만 UPDATE 에서 빠진 것이지 다른 컬럼은 그대로 쓰인다.
+			assertThat(userService.getMyProfile(userId).nickname()).isEqualTo("경합닉네임");
+		}
+	}
+
+	@Nested
 	@DisplayName("도입 직후 상태")
 	class Initial {
 
