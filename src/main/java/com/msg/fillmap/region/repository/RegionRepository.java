@@ -128,6 +128,22 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	);
 
 	/**
+	 * 전국 탐험률 재료 조회 (MSG-406). 분자는 내 region_stats.collected_count 합, 분모는 regions.total_grid_count 합.
+	 * 스칼라 서브쿼리 2개를 한 문장에 묶어 왕복 1회다. geospatial 0 — 155 가 쓰기 시 물질화한 값과 시딩 때 확정된
+	 * 격자 수를 더하기만 한다(§성공 기준 5). 분자를 user_grids COUNT 로 세지 않는 이유는 무귀속(해상) 격자 점령이
+	 * 섞여 "행정동 귀속 격자 총수"인 분모와 축이 어긋나기 때문이다 — region_stats 는 라벨 있는 격자만 세므로
+	 * 행정동 수집률(findStats)의 합과 항상 일치한다(§D-4). LEAST 100 clamp 를 걸지 않는다: 이 응답은 비율이 아니라
+	 * 원값 2개이고, 자르면 실제 수집 개수를 거짓 보고하게 된다(§D-3, 상한은 비율을 만드는 화면 몫).
+	 * 행이 없어도 COALESCE 로 0 이라 결과는 항상 1행이다.
+	 */
+	@Query(value = """
+		SELECT
+			(SELECT COALESCE(SUM(collected_count), 0) FROM region_stats WHERE user_id = :userId) AS "collectedCount",
+			(SELECT COALESCE(SUM(total_grid_count), 0) FROM regions)                             AS "totalCount"
+		""", nativeQuery = true)
+	RegionNationalStatProjection findNationalStat(@Param("userId") long userId);
+
+	/**
 	 * 한 행정동의 내 수집률 단건 조회 (MSG-153 §도메인 로직 ②③). regionCode 는 resolveByPoint 가 판정한 실존 행정동이라
 	 * regions 행이 반드시 있고, region_stats 를 LEFT JOIN 해 아직 수집이 없는(155 미실행) 행정동은 0% 로 합성한다 —
 	 * collected_count 는 0, total_count 는 regions.total_grid_count 폴백, progress_rate 는 0.00, updated_at 은 null(§D6).
