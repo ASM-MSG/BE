@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.region.exception.RegionErrorCode;
+import com.msg.fillmap.region.service.RegionDistrictView;
 import com.msg.fillmap.region.service.RegionNationalStatView;
 import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.region.service.RegionStatView;
@@ -312,6 +313,33 @@ class RegionControllerTest {
 	@DisplayName("national 미인증 요청은 401 이다")
 	void national_미인증_요청은_401이다() throws Exception {
 		mockMvc.perform(get("/api/regions/stats/national"))
+			.andExpect(status().isUnauthorized());
+	}
+
+	// 검증: FR-REGION-15
+	@Test
+	@DisplayName("districts 인증된 요청은 200 과 시군구 목록을 반환한다")
+	void districts_인증된_요청은_200과_시군구_목록을_반환한다() throws Exception {
+		given(regionStatsQueryService.findDistricts()).willReturn(List.of(
+			new RegionDistrictView("11680", "강남구", 4102L),
+			new RegionDistrictView("11440", "마포구", 2841L)));
+
+		mockMvc.perform(get("/api/regions/districts")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data", hasSize(2)))
+			.andExpect(jsonPath("$.data[0].parentCode").value("11680"))
+			.andExpect(jsonPath("$.data[0].name").value("강남구"))
+			.andExpect(jsonPath("$.data[0].gridCount").value(4102))
+			.andExpect(jsonPath("$.data[1].parentCode").value("11440"));
+	}
+
+	// 검증: FR-REGION-15
+	@Test
+	@DisplayName("districts 미인증 요청은 401 이다")
+	void districts_미인증_요청은_401이다() throws Exception {
+		mockMvc.perform(get("/api/regions/districts"))
 			.andExpect(status().isUnauthorized());
 	}
 }
