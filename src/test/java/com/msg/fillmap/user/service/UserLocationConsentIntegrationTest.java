@@ -150,15 +150,28 @@ class UserLocationConsentIntegrationTest {
 
 		// 검증: FR-USER-14
 		@Test
-		@DisplayName("동의를 끄면 응답과 DB 와 후속 프로필 조회에 모두 반영된다 (FR-2, 양방향 전환)")
-		void 동의를_끄면_응답과_DB와_후속_프로필_조회에_모두_반영된다() {
+		@DisplayName("동의를 끄는 요청은 1400 으로 거절되고 저장 값이 true 로 남는다 (철회 불가, 2026-08-19 개정)")
+		void 동의를_끄는_요청은_1400으로_거절된다() {
 			userService.updateLocationConsent(userId, true);
 
-			UserProfileResponseDto updated = userService.updateLocationConsent(userId, false);
+			assertThatThrownBy(() -> userService.updateLocationConsent(userId, false))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", UserErrorCode.LOCATION_CONSENT_IRREVOCABLE);
 
-			assertThat(updated.locationConsent()).isFalse();
+			assertThat(storedFlag(userId)).isTrue();
+			assertThat(userService.getMyProfile(userId).locationConsent()).isTrue();
+		}
+
+		// 검증: FR-USER-14
+		@Test
+		@DisplayName("미동의 사용자의 false 요청도 1400 이다 (값이 안 바뀌어도 거절 — 켜기 전용 API)")
+		void 미동의_사용자의_false_요청도_1400이다() {
+			assertThatThrownBy(() -> userService.updateLocationConsent(userId, false))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", UserErrorCode.LOCATION_CONSENT_IRREVOCABLE);
+
 			assertThat(storedFlag(userId)).isFalse();
-			assertThat(userService.getMyProfile(userId).locationConsent()).isFalse();
+			assertThat(storedChangedAt(userId)).isNull();
 		}
 
 		// 검증: FR-USER-14
@@ -175,16 +188,17 @@ class UserLocationConsentIntegrationTest {
 
 		// 검증: FR-USER-14
 		@Test
-		@DisplayName("철회하면 변경 시각이 동의 시각에서 새 값으로 교체된다 (FR-3, 고정 클럭 2개)")
-		void 철회하면_변경_시각이_동의_시각에서_새_값으로_교체된다() {
+		@DisplayName("거절된 철회 시도는 동의 시각도 건드리지 않는다 (철회 불가, 고정 클럭 2개)")
+		void 거절된_철회_시도는_동의_시각도_건드리지_않는다() {
 			LocalDateTime consentedAt = LocalDateTime.of(2026, 8, 15, 3, 24, 11);
-			LocalDateTime revokedAt = LocalDateTime.of(2026, 8, 16, 9, 0, 0);
+			LocalDateTime revokeAttemptedAt = LocalDateTime.of(2026, 8, 16, 9, 0, 0);
 			serviceAt(consentedAt).updateLocationConsent(userId, true);
 
-			serviceAt(revokedAt).updateLocationConsent(userId, false);
+			assertThatThrownBy(() -> serviceAt(revokeAttemptedAt).updateLocationConsent(userId, false))
+				.isInstanceOf(ApiException.class);
 
-			// 값이 남아 있기만 한 게 아니라 철회 시각으로 바뀌어야 한다 — 갱신 누락이면 동의 시각이 그대로 남는다.
-			assertThat(storedChangedAt(userId)).isEqualTo(revokedAt).isNotEqualTo(consentedAt);
+			// 거절이 UPDATE 앞에서 끝나므로 최초 동의 시각이 증빙으로 그대로 남는다.
+			assertThat(storedChangedAt(userId)).isEqualTo(consentedAt).isNotEqualTo(revokeAttemptedAt);
 		}
 
 		// 검증: FR-USER-14
@@ -219,27 +233,17 @@ class UserLocationConsentIntegrationTest {
 
 		// 검증: FR-USER-14
 		@Test
-		@DisplayName("동의 상태 false 를 false 로 재저장해도 성공하고 변경 시각은 그대로다 (FR-4)")
-		void 동의_상태_false를_false로_재저장해도_성공하고_변경_시각은_그대로다() {
-			// 한 번도 바꾼 적 없는 사용자라 시각이 NULL 이다 — 재저장이 여기에 값을 채우면 안 된다.
-			UserProfileResponseDto again = userService.updateLocationConsent(userId, false);
+		@DisplayName("웹 온보딩의 켜기 재호출은 세 번을 보내도 성공한다 (MSG-407 경로 회귀 방지)")
+		void 웹_온보딩의_켜기_재호출은_세_번을_보내도_성공한다() {
+			LocalDateTime firstAt = LocalDateTime.of(2026, 8, 15, 3, 24, 11);
+			serviceAt(firstAt).updateLocationConsent(userId, true);
 
-			assertThat(again.locationConsent()).isFalse();
-			assertThat(storedChangedAt(userId)).isNull();
-		}
+			serviceAt(LocalDateTime.of(2026, 8, 16, 9, 0, 0)).updateLocationConsent(userId, true);
+			UserProfileResponseDto last = serviceAt(LocalDateTime.of(2026, 8, 17, 9, 0, 0))
+				.updateLocationConsent(userId, true);
 
-		// 검증: FR-USER-14
-		@Test
-		@DisplayName("철회 후 같은 값 재저장도 시각을 건드리지 않는다 (FR-4, NULL 아닌 시각)")
-		void 철회_후_같은_값_재저장도_시각을_건드리지_않는다() {
-			userService.updateLocationConsent(userId, true);
-			userService.updateLocationConsent(userId, false);
-			LocalDateTime revokedAt = storedChangedAt(userId);
-
-			userService.updateLocationConsent(userId, false);
-
-			assertThat(revokedAt).isNotNull();
-			assertThat(storedChangedAt(userId)).isEqualTo(revokedAt);
+			assertThat(last.locationConsent()).isTrue();
+			assertThat(storedChangedAt(userId)).isEqualTo(firstAt);
 		}
 	}
 

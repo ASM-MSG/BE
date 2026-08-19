@@ -39,6 +39,8 @@ import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.auth.service.RefreshTokenService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.user.dto.ConsentStatusResponseDto;
+import com.msg.fillmap.user.dto.ConsentSubmitRequestDto;
 import com.msg.fillmap.user.dto.ProfileImagePresignRequestDto;
 import com.msg.fillmap.user.dto.ProfileImagePresignResponseDto;
 import com.msg.fillmap.user.dto.UserProfileResponseDto;
@@ -93,8 +95,8 @@ public class UserServiceImpl implements UserService {
 
 	/**
 	 * 프로덕션 생성자 — 마지막 인자 clock 을 Clock.systemUTC() 로 고정해 Lombok 전체 생성자로 위임한다
-	 * (BadgeAwardServiceImpl 선례). 위치정보 동의 변경 시각 산출에만 쓰며, 전체 생성자는 테스트 고정
-	 * 클럭 주입용이다.
+	 * (BadgeAwardServiceImpl 선례). 위치정보·가입 약관 동의의 시각 산출에만 쓰며, 전체 생성자는 테스트
+	 * 고정 클럭 주입용이다.
 	 */
 	@Autowired
 	public UserServiceImpl(UserRepository userRepository, RefreshTokenService refreshTokenService,
@@ -219,23 +221,67 @@ public class UserServiceImpl implements UserService {
 	 * 시각은 주입된 Clock 으로 UTC 에서 만들고 DB 정밀도(µs)로 절단한다 (§D-5, User.createdAt 선례).
 	 * 같은 값 재저장이면 이 값이 쓰이지 않고 기존 시각이 남는다.
 	 *
-	 * <p><b>수용한 경합</b> — 시각을 UPDATE 문 밖에서 미리 뽑으므로, 같은 사용자의 반대 토글 두 개가
+	 * <p><b>철회 불가</b> (2026-08-19 팀 합의, FR-USER-14 개정) — 이 API 는 켜기 전용이다. false 요청은
+	 * 1400 으로 거절되므로 저장된 값이 true 에서 false 로 되돌아갈 경로가 없고, 가입 게이트의 필수 동의
+	 * 완료가 사후에 풀리는 일도 없다 (MSG-433 §D-11). 켜기 재요청은 그대로 멱등 성공이다 —
+	 * 웹 온보딩(MSG-407)이 이 경로로 동의를 켠다.
+	 *
+	 * <p><b>수용한 경합</b> — 시각을 UPDATE 문 밖에서 미리 뽑으므로, 같은 사용자의 켜기 요청 두 개가
 	 * 밀리초 간격으로 겹치면 저장된 시각이 실제 순서와 어긋날 수 있다. 요청 A 가 t1 을 뽑고 행 잠금을
 	 * 기다리는 사이 요청 B 가 t2(더 나중)를 저장하고, 뒤늦게 잠금을 잡은 A 가 t1 을 기록하는 경우다.
 	 * 동의 여부(location_consent) 자체는 항상 마지막 UPDATE 값이라 정확하고, 어긋나는 것은 변경 시각
-	 * 하나이며 그 폭도 두 요청이 시각을 뽑은 간격 수준이다. 이 컬럼의 목적이 "언제쯤 동의·철회했나"에
+	 * 하나이며 그 폭도 두 요청이 시각을 뽑은 간격 수준이다. 이 컬럼의 목적이 "언제쯤 동의했나"에
 	 * 답하는 법적 보관이라 밀리초 오차가 의미를 바꾸지 않아 수용한다. DB 의 now() 로 옮기면 문장 안에서
 	 * 순서가 맞지만, 컨테이너 시간대(KST)의 벽시계가 들어와 UTC 저장 컨벤션(MSG-376)을 깬다.
 	 */
 	@Override
 	@Transactional
 	public UserProfileResponseDto updateLocationConsent(Long userId, boolean consented) {
+		if (!consented) {
+			throw new ApiException(UserErrorCode.LOCATION_CONSENT_IRREVOCABLE);
+		}
 		LocalDateTime changedAt = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
-		if (userRepository.updateLocationConsent(userId, consented, changedAt) == 0) {
+		if (userRepository.consentToLocation(userId, changedAt) == 0) {
 			throw new ApiException(UserErrorCode.USER_NOT_FOUND);
 		}
 		// clearAutomatically 가 갱신 전 스냅숏을 비운 뒤라 이 재조회는 DB 의 저장 값을 읽는다.
 		return UserProfileResponseDto.from(findUser(userId));
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public ConsentStatusResponseDto getConsentStatus(Long userId) {
+		return ConsentStatusResponseDto.from(findUser(userId));
+	}
+
+	/**
+	 * 가입 약관 동의 제출 (MSG-433 §도메인 로직). 필수 4항목은 요청 DTO 의 @NotNull·@AssertTrue 가
+	 * 컨트롤러 진입 전에 걸렀으므로 여기 도달했다는 것이 곧 전량 동의라, 리포지토리에 넘기는 값은
+	 * 마케팅 여부와 시각뿐이다 (§D-5·D-6). 판정·비교는 전부 UPDATE 문 안에서 끝난다.
+	 *
+	 * 시각은 updateLocationConsent 와 같은 방식으로 주입된 Clock 에서 UTC 로 만들고 DB 정밀도(µs)로
+	 * 절단한다 (§D-10). 시각 샘플이 행 잠금보다 앞서는 데서 오는 경합 수용도 그 메서드의 판정을
+	 * 그대로 승계한다 — 동의 여부 자체는 항상 마지막 UPDATE 값이라 정확하다.
+	 */
+	@Override
+	@Transactional
+	public ConsentStatusResponseDto submitConsents(Long userId, ConsentSubmitRequestDto request) {
+		LocalDateTime now = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+		if (userRepository.submitConsents(userId, request.marketing(), now) == 0) {
+			throw new ApiException(UserErrorCode.USER_NOT_FOUND);
+		}
+		return ConsentStatusResponseDto.from(findUser(userId));
+	}
+
+	/** 마케팅 수신 동의 변경 (MSG-433 §D-4) — updateLocationConsent 와 완전 동형이다. */
+	@Override
+	@Transactional
+	public ConsentStatusResponseDto updateMarketingConsent(Long userId, boolean consented) {
+		LocalDateTime changedAt = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS);
+		if (userRepository.updateMarketingConsent(userId, consented, changedAt) == 0) {
+			throw new ApiException(UserErrorCode.USER_NOT_FOUND);
+		}
+		return ConsentStatusResponseDto.from(findUser(userId));
 	}
 
 	/**

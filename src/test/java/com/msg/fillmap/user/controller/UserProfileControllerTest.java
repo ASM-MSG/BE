@@ -29,10 +29,12 @@ import com.msg.fillmap.auth.jwt.InMemoryInvalidatedTokenStore;
 import com.msg.fillmap.auth.jwt.JwtProperties;
 import com.msg.fillmap.auth.jwt.JwtTokenProvider;
 import com.msg.fillmap.auth.jwt.TokenProvider;
+import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.dto.ProfileImagePresignRequestDto;
 import com.msg.fillmap.user.dto.ProfileImagePresignResponseDto;
 import com.msg.fillmap.user.dto.UserProfileResponseDto;
 import com.msg.fillmap.user.entity.UserRole;
+import com.msg.fillmap.user.exception.UserErrorCode;
 import com.msg.fillmap.user.service.UserService;
 
 /**
@@ -303,17 +305,18 @@ class UserProfileControllerTest {
 
 	// 검증: FR-USER-14
 	@Test
-	@DisplayName("위치정보 사용 동의를 끄면 false 인 프로필을 반환한다 (MSG-402 FR-2, 양방향)")
-	void 위치정보_사용_동의를_끄면_false인_프로필을_반환한다() throws Exception {
+	@DisplayName("위치정보 사용 동의를 끄는 요청은 400 · 1400 이다 (철회 불가 전환, 2026-08-19 개정)")
+	void 위치정보_사용_동의를_끄는_요청은_1400이다() throws Exception {
+		// false 는 형식상 유효값이라 Bean Validation 이 못 잡고 서비스가 던진다 — 와이어 계약을 여기서 확인한다.
 		given(userService.updateLocationConsent(USER_ID, false))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false));
+			.willThrow(new ApiException(UserErrorCode.LOCATION_CONSENT_IRREVOCABLE));
 
 		mockMvc.perform(put(LOCATION_CONSENT_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"consented\":false}"))
-			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.locationConsent").value(false));
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(1400));
 	}
 
 	// 검증: FR-USER-14

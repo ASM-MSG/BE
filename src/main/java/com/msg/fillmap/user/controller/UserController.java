@@ -23,7 +23,10 @@ import lombok.RequiredArgsConstructor;
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.auth.support.RefreshTokenCookies;
 import com.msg.fillmap.response.SuccessResponse;
+import com.msg.fillmap.user.dto.ConsentStatusResponseDto;
+import com.msg.fillmap.user.dto.ConsentSubmitRequestDto;
 import com.msg.fillmap.user.dto.LocationConsentUpdateRequestDto;
+import com.msg.fillmap.user.dto.MarketingConsentUpdateRequestDto;
 import com.msg.fillmap.user.dto.NicknameUpdateRequestDto;
 import com.msg.fillmap.user.dto.ProfileImagePresignRequestDto;
 import com.msg.fillmap.user.dto.ProfileImagePresignResponseDto;
@@ -66,11 +69,12 @@ public class UserController {
 	}
 
 	@Operation(
-		summary = "위치정보 사용 동의 변경",
-		description = "위치기반서비스 이용 동의를 켜거나 끄고 변경 후 프로필을 반환한다. 첫 로그인 온보딩의 "
-			+ "동의 제출과 프로필 편집의 토글이 이 엔드포인트 하나를 공용으로 쓴다.\n\n"
-			+ "이미 저장된 값과 같은 값을 다시 보내도 성공하며, 이때 서버가 보관하는 마지막 변경 시각은 "
-			+ "갱신되지 않는다(멱등). 동의를 꺼도 서버가 막는 API 는 없다 — 위치 기능 노출 제어는 클라이언트 몫이다."
+		summary = "위치정보 사용 동의 켜기",
+		description = "위치기반서비스 이용 동의를 켜고 변경 후 프로필을 반환한다. 첫 로그인 온보딩의 동의 제출과 "
+			+ "프로필 화면이 이 엔드포인트 하나를 공용으로 쓴다.\n\n"
+			+ "이 동의는 철회할 수 없다 — consented=false 요청은 1400 으로 거절된다. 되돌리려면 계정을 삭제해야 "
+			+ "하며, 이는 다른 필수 약관 동의와 같은 규칙이다. 이미 켜진 상태에서 다시 켜는 요청은 성공하고, "
+			+ "이때 서버가 보관하는 동의 시각은 갱신되지 않는다(멱등)."
 	)
 	@PutMapping("/me/location-consent")
 	public SuccessResponse<UserProfileResponseDto> updateLocationConsent(
@@ -78,6 +82,53 @@ public class UserController {
 		@Valid @RequestBody LocationConsentUpdateRequestDto request
 	) {
 		return SuccessResponse.of(userService.updateLocationConsent(principal.userId(), request.consented()));
+	}
+
+	@Operation(
+		summary = "가입 약관 동의 상태 조회",
+		description = "로그인 직후 동의 게이트를 띄울지 판별하는 재료다. 항목별 동의 여부 5종과 필수 4항목 "
+			+ "완료 여부(requiredCompleted)를 함께 반환한다 — 필수 항목 목록이 늘어도 클라이언트가 조립을 "
+			+ "고치지 않도록 서버가 계산한다.\n\n"
+			+ "위치기반서비스 항목(locationTerms)은 프로필 화면의 위치정보 사용 동의와 같은 한 값이다. "
+			+ "이 동의는 철회할 수 없으므로 한 번 true 가 되면 되돌아가지 않고, 필수 동의를 마친 사용자에게 "
+			+ "게이트가 다시 뜨는 일도 없다. 동의 시각은 서버에만 보관하고 응답에 싣지 않는다."
+	)
+	@GetMapping("/me/consents")
+	public SuccessResponse<ConsentStatusResponseDto> getConsentStatus(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal
+	) {
+		return SuccessResponse.of(userService.getConsentStatus(principal.userId()));
+	}
+
+	@Operation(
+		summary = "가입 약관 동의 제출",
+		description = "가입 게이트의 \"동의하고 시작하기\" 제출이다. 필수 4항목(만 14세 이상·서비스 이용약관·"
+			+ "개인정보 수집·이용·위치기반서비스 이용약관)은 true 여야 하고 마케팅만 선택이다 — 하나라도 "
+			+ "false 거나 누락이면 400 이며 이때 아무 항목도 저장되지 않는다.\n\n"
+			+ "같은 내용을 다시 보내도 성공한다(멱등). 재제출이 필수 4항목의 최초 동의 시각을 덮지 않고, "
+			+ "마케팅만 값이 실제로 달라질 때 변경 시각이 갱신된다. 제출은 위치정보 사용 동의도 함께 켜므로 "
+			+ "프로필 화면의 위치 동의와 값이 하나다. 응답은 제출 후 동의 상태다."
+	)
+	@PutMapping("/me/consents")
+	public SuccessResponse<ConsentStatusResponseDto> submitConsents(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Valid @RequestBody ConsentSubmitRequestDto request
+	) {
+		return SuccessResponse.of(userService.submitConsents(principal.userId(), request));
+	}
+
+	@Operation(
+		summary = "마케팅 정보 수신 동의 변경",
+		description = "가입 후 설정 화면에서 마케팅 수신 동의를 켜거나 끈다. 이미 저장된 값과 같은 값을 다시 "
+			+ "보내도 성공하며, 이때 서버가 보관하는 마지막 변경 시각은 갱신되지 않는다(멱등). "
+			+ "응답은 변경 후 동의 상태다 — 위치정보 사용 동의 변경과 같은 구조다."
+	)
+	@PutMapping("/me/marketing-consent")
+	public SuccessResponse<ConsentStatusResponseDto> updateMarketingConsent(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Valid @RequestBody MarketingConsentUpdateRequestDto request
+	) {
+		return SuccessResponse.of(userService.updateMarketingConsent(principal.userId(), request.consented()));
 	}
 
 	@Operation(
