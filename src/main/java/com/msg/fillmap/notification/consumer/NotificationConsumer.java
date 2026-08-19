@@ -68,9 +68,9 @@ public class NotificationConsumer {
 			.tag("result", "sent").tag("reason", "none").register(meterRegistry);
 		// skip 사유(D8 대문자 코드) → 소문자 고정 태그값 매핑 (스펙 표) — 미지 사유는 증가 없이 무시한다.
 		this.skippedCounters = Map.of(
-			"PREF_OFF", skippedCounter(meterRegistry, "pref_off"),
-			"RATE_LIMITED", skippedCounter(meterRegistry, "rate_limited"),
-			"NO_TOKEN", skippedCounter(meterRegistry, "no_token"));
+			NotificationRepository.SKIP_REASON_PREF_OFF, skippedCounter(meterRegistry, "pref_off"),
+			NotificationRepository.SKIP_REASON_RATE_LIMITED, skippedCounter(meterRegistry, "rate_limited"),
+			NotificationRepository.SKIP_REASON_NO_TOKEN, skippedCounter(meterRegistry, "no_token"));
 	}
 
 	private static Counter skippedCounter(MeterRegistry meterRegistry, String reason) {
@@ -93,16 +93,16 @@ public class NotificationConsumer {
 		}
 		tx.executeWithoutResult(status -> notificationRepository.incrementRetryCount(id));
 		if (!notificationPreferenceService.isEnabled(notification.getUserId(), notification.getCategory())) {
-			skip(id, "PREF_OFF");
+			skip(id, NotificationRepository.SKIP_REASON_PREF_OFF);
 			return;
 		}
 		if (rateLimited(notification)) {
-			skip(id, "RATE_LIMITED");
+			skip(id, NotificationRepository.SKIP_REASON_RATE_LIMITED);
 			return;
 		}
 		List<PushToken> tokens = pushTokenRepository.findAllByUserId(notification.getUserId());
 		if (tokens.isEmpty()) {
-			skip(id, "NO_TOKEN");
+			skip(id, NotificationRepository.SKIP_REASON_NO_TOKEN);
 			return;
 		}
 		SendResult result = notificationSender.send(
