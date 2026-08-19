@@ -63,4 +63,8 @@ public class Notification {
 
 	@Column(name = "sent_at")
 	private LocalDateTime sentAt;
+
+	/** 알림함 읽음 시각 (MSG-434 D-1). NULL 이면 안읽음 — 쓰기는 전부 @Modifying 이라 도메인 메서드가 없다. */
+	@Column(name = "read_at")
+	private LocalDateTime readAt;
 }
