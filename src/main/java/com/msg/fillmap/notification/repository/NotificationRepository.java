@@ -3,6 +3,7 @@ package com.msg.fillmap.notification.repository;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -11,10 +12,66 @@ import org.springframework.data.repository.query.Param;
 import com.msg.fillmap.notification.entity.Notification;
 
 /**
- * 알림 outbox 리포지토리 (MSG-179). 쓰기는 전부 native — record INSERT 는 ON CONFLICT DO NOTHING
+ * 알림 outbox 리포지토리 (MSG-179). 발송 쓰기는 전부 native — record INSERT 는 ON CONFLICT DO NOTHING
  * (FR-6 멱등 1차, PushTokenRepository.upsert 선례), 상태 갱신은 D4 상태 머신의 전이별 1문장.
+ * 알림함 조회·읽음(MSG-434)은 PostgreSQL 전용 기능이 필요 없어 JPQL 이다.
  */
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
+
+	/** 수신 거부 스킵 사유 (MSG-179 D8). 알림함 숨김 판정 술어라 컨슈머와 조회가 같은 값을 봐야 한다 (MSG-434 D-2). */
+	String SKIP_REASON_PREF_OFF = "PREF_OFF";
+
+	/** 전송률 상한 스킵 사유 — 알림함에는 보인다 (MSG-434 FR-11). */
+	String SKIP_REASON_RATE_LIMITED = "RATE_LIMITED";
+
+	/** 푸시 토큰 없음 스킵 사유 — 푸시를 못 받는 사용자에게 알림함이 유일한 경로라 보인다 (MSG-434 FR-3). */
+	String SKIP_REASON_NO_TOKEN = "NO_TOKEN";
+
+	/**
+	 * 알림함 노출 조건 (MSG-434) — 목록과 안읽음 개수가 공유한다. 내 알림 중 최근 30일(threshold 는
+	 * 서비스가 Clock 으로 산출) 이내 생성분에서 수신 거부 스킵만 뺀다. coalesce 는 3치 논리 방어 —
+	 * last_error 가 NULL 인 SKIPPED 행에서 NOT (true AND UNKNOWN) 이 UNKNOWN 이 되어 행이 조용히
+	 * 사라지는 것을 막는다 (운영 경로엔 없지만 술어가 데이터에 의존하면 안 된다).
+	 */
+	String INBOX_VISIBLE = """
+		n.userId = :userId AND n.createdAt >= :threshold
+		AND NOT (n.status = com.msg.fillmap.notification.entity.NotificationStatus.SKIPPED
+			AND coalesce(n.lastError, '') = '""" + SKIP_REASON_PREF_OFF + "')";
+
+	/**
+	 * 알림함 목록 (MSG-434 FR-1·FR-2, D-3) — id 내림차순 keyset. 첫 페이지는 서비스가 커서를
+	 * Long.MAX_VALUE 로 치환해 넘긴다. JPQL 에 LIMIT 이 없어 건수 제한은 Pageable 이 지고,
+	 * 정렬은 ORDER BY 고정이라 Pageable 에 Sort 를 실으면 안 된다. idx_notifications_user 사용.
+	 */
+	@Query("SELECT n FROM Notification n WHERE " + INBOX_VISIBLE + " AND n.id < :cursor ORDER BY n.id DESC")
+	List<Notification> findInboxPage(@Param("userId") long userId,
+		@Param("threshold") LocalDateTime threshold, @Param("cursor") long cursor, Pageable pageable);
+
+	/** 안읽음 개수 (MSG-434 FR-6) — 목록과 같은 노출 조건 + 미읽음. 지도 홈 빨간 점 판정 재료. */
+	@Query("SELECT count(n) FROM Notification n WHERE " + INBOX_VISIBLE + " AND n.readAt IS NULL")
+	long countUnread(@Param("userId") long userId, @Param("threshold") LocalDateTime threshold);
+
+	/**
+	 * 개별 읽음 (MSG-434 FR-4, D-5) — read_at 만 만지므로 outbox 상태 전이와 컬럼이 겹치지 않는다.
+	 * coalesce 로 최초 읽음 시각을 보존해 재요청이 멱등이고, 1행 매칭이라 성공이다. 0행이면
+	 * "없거나 타인 소유"로 FR-7 의 단일 실패 응답(10404)이 술어 하나로 성립한다.
+	 */
+	@Modifying
+	@Query("""
+		UPDATE Notification n SET n.readAt = coalesce(n.readAt, :now)
+		WHERE n.id = :notificationId AND n.userId = :userId
+		""")
+	int markRead(@Param("notificationId") long notificationId, @Param("userId") long userId,
+		@Param("now") LocalDateTime now);
+
+	/**
+	 * 전체 읽음 (MSG-434 FR-5, D-5) — 30일 창·PREF_OFF 숨김 조건을 일부러 안 붙인다. 숨겨진 행이
+	 * 읽음이 돼도 목록·개수 어디에도 관찰되는 차이가 없고(둘 다 자체 필터로 이미 제외), 술어가
+	 * 단순할수록 정합을 따질 면이 준다. 0행이어도 성공이다 (멱등).
+	 */
+	@Modifying
+	@Query("UPDATE Notification n SET n.readAt = :now WHERE n.userId = :userId AND n.readAt IS NULL")
+	int markAllRead(@Param("userId") long userId, @Param("now") LocalDateTime now);
 
 	/**
 	 * outbox 기록 (FR-3·FR-6). 같은 (user_id, event_key) 재기록은 DO NOTHING 으로 흡수 — 반환 0.
@@ -99,7 +156,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 		""", nativeQuery = true)
 	int markSent(@Param("id") long id);
 
-	/** 미발송 종결 (D4·FR-8) — 사유(PREF_OFF·RATE_LIMITED·NO_TOKEN)를 last_error 에 남긴다. 술어는 markSent 와 동일. */
+	/**
+	 * 미발송 종결 (D4·FR-8) — 사유(PREF_OFF·RATE_LIMITED·NO_TOKEN)를 last_error 에 남긴다. 술어는
+	 * markSent 와 동일. PREF_OFF 는 알림함 숨김 판정에 쓰인다 (MSG-434 D-2) — SKIPPED 는 종결 상태라
+	 * 이후 어떤 전이도 이 값을 덮지 않으므로 조회 측 계약으로 삼을 수 있다.
+	 */
 	@Modifying
 	@Query(value = """
 		UPDATE notifications SET status = 'SKIPPED', last_error = left(:reason, 255)
