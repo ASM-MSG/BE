@@ -16,6 +16,7 @@ import com.msg.fillmap.region.exception.RegionErrorCode;
 import com.msg.fillmap.region.repository.RegionNationalStatProjection;
 import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.region.repository.RegionStatProjection;
+import com.msg.fillmap.region.service.RegionDistrictView;
 import com.msg.fillmap.region.service.RegionNationalStatView;
 import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.region.service.RegionStatView;
@@ -65,6 +66,14 @@ public class RegionStatsQueryServiceImpl implements RegionStatsQueryService {
 		// 검증할 입력이 없고 합산은 행이 없어도 0 이라, 리포지토리 단건 조회 후 뷰 변환만 한다(MSG-406 §도메인 로직).
 		RegionNationalStatProjection p = regionRepository.findNationalStat(userId);
 		return new RegionNationalStatView(p.getCollectedCount(), p.getTotalCount());
+	}
+
+	@Override
+	public List<RegionDistrictView> findDistricts() {
+		// 검증할 입력이 없으므로 리포지토리 조회 후 뷰 변환만 한다 (MSG-435 §도메인 로직).
+		return regionRepository.findDistricts().stream()
+			.map(p -> new RegionDistrictView(p.getParentCode(), p.getName(), p.getGridCount()))
+			.toList();
 	}
 
 	private Optional<RegionStatView> resolveStat(long userId, double lat, double lon) {
