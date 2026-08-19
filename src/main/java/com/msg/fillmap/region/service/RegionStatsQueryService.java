@@ -30,4 +30,11 @@ public interface RegionStatsQueryService {
 	 * gridId 형식이 이상하면 Optional.empty(200 + null, 별도 에러 코드 없음 — §D6).
 	 */
 	Optional<RegionStatView> findStatByGrid(long userId, String gridId);
+
+	/**
+	 * 전국 탐험률 재료 (MSG-406, 도감·프로필 헤더의 "전체 지도 N% 탐험"). 분자는 내 region_stats.collected_count 합,
+	 * 분모는 regions.total_grid_count 합이고 둘 다 반올림·clamp 없는 원값이다 — 비율과 표시 자릿수, 100 상한은
+	 * 화면 몫(§D-2·D-3). 합산이라 수집이 0 이어도 분자 0 으로 항상 present 다(Optional 아님).
+	 */
+	RegionNationalStatView findNationalStat(long userId);
 }

@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.region.exception.RegionErrorCode;
+import com.msg.fillmap.region.service.RegionNationalStatView;
 import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.region.service.RegionStatView;
 import com.msg.fillmap.region.service.RegionStatsQueryService;
@@ -274,6 +275,43 @@ class RegionControllerTest {
 	@DisplayName("미인증 요청은 401 이다")
 	void 미인증_요청은_401이다() throws Exception {
 		mockMvc.perform(get("/api/regions/stats"))
+			.andExpect(status().isUnauthorized());
+	}
+
+	// 검증: FR-REGION-14
+	@Test
+	@DisplayName("national 은 200 과 전국 분자·분모 원값을 반환한다")
+	void national은_200과_전국_분자_분모_원값을_반환한다() throws Exception {
+		given(regionStatsQueryService.findNationalStat(USER_ID))
+			.willReturn(new RegionNationalStatView(1223L, 10193482L));
+
+		mockMvc.perform(get("/api/regions/stats/national")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.collectedCount").value(1223))
+			.andExpect(jsonPath("$.data.totalCount").value(10193482))
+			.andExpect(jsonPath("$.data.progressRate").doesNotExist());
+	}
+
+	// 검증: FR-REGION-14
+	@Test
+	@DisplayName("national 은 수집이 0 이어도 200 과 분자 0 을 반환한다")
+	void national은_수집이_0이어도_200과_분자_0을_반환한다() throws Exception {
+		given(regionStatsQueryService.findNationalStat(USER_ID))
+			.willReturn(new RegionNationalStatView(0L, 10193482L));
+
+		mockMvc.perform(get("/api/regions/stats/national")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.collectedCount").value(0));
+	}
+
+	// 검증: FR-REGION-14
+	@Test
+	@DisplayName("national 미인증 요청은 401 이다")
+	void national_미인증_요청은_401이다() throws Exception {
+		mockMvc.perform(get("/api/regions/stats/national"))
 			.andExpect(status().isUnauthorized());
 	}
 }

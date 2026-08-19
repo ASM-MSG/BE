@@ -26,13 +26,14 @@ import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 
 /**
- * RegionStatsQueryService.findStats 통합 (MSG-156 모듈 2, 실 PostGIS). parentCode 실존 검증(§D3)과
- * 빈 리스트·기본 인자 경로를 확인한다. recompute 정합은 155 가, 조회 SQL 세부는 모듈 1 이 커버한다.
+ * RegionStatsQueryService 통합 (MSG-156 모듈 2 findStats + MSG-406 findNationalStat, 실 PostGIS).
+ * parentCode 실존 검증(§D3)과 빈 리스트·기본 인자 경로, 전국 합산의 뷰 변환을 확인한다.
+ * recompute 정합은 155 가, 조회 SQL 세부는 각 모듈 1 이 커버한다.
  * 격리: 신규 유저 + 999 대역 합성 regions/region_stats 직접 시드 + @Transactional 롤백.
  */
 @SpringBootTest
 @Transactional
-@DisplayName("RegionStatsQueryService.findStats (합성 row·롤백 격리)")
+@DisplayName("RegionStatsQueryService (합성 row·롤백 격리)")
 class RegionStatsQueryServiceTest {
 
 	@Autowired
@@ -124,5 +125,30 @@ class RegionStatsQueryServiceTest {
 		List<RegionStatView> stats = regionStatsQueryService.findStats(user1, null, true);
 
 		assertThat(stats).extracting(RegionStatView::regionCode).containsExactly(occupied);
+	}
+
+	// 검증: FR-REGION-14
+	@Test
+	@DisplayName("전국 조회는 수집이 0 이어도 뷰가 항상 present 다 (Optional 아님)")
+	void 전국_조회는_수집이_0이어도_뷰가_항상_present다() {
+		RegionNationalStatView view = regionStatsQueryService.findNationalStat(user1);
+
+		assertThat(view).isNotNull();
+		assertThat(view.collectedCount()).isZero();
+		assertThat(view.totalCount()).isNotNull();
+	}
+
+	// 검증: FR-REGION-14
+	@Test
+	@DisplayName("전국 분자는 내 행정동 수집 수의 합을 원값 그대로 담는다")
+	void 전국_분자는_내_행정동_수집_수의_합을_원값_그대로_담는다() {
+		String a = syntheticCode("1");
+		String b = syntheticCode("2");
+		seedRegion(a, "99900");
+		seedRegion(b, "99910");
+		seedStats(user1, a, 2, 10, "20.00");
+		seedStats(user1, b, 5, 10, "50.00");
+
+		assertThat(regionStatsQueryService.findNationalStat(user1).collectedCount()).isEqualTo(7L);
 	}
 }

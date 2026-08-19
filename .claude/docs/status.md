@@ -103,7 +103,8 @@
 - MSG-156: 수집률 조회(`GET /api/regions/stats` — collectedOnly 기본 true·무LIMIT(구조적 상한 3,558 — Codex 리뷰로 LIMIT 1000 제거)·LEAST 100 clamp·`6404 REGION_NOT_FOUND`, `service/RegionStatsQueryService`(+impl)·`dto/RegionStatResponseDto`)
 - MSG-153: 단건 탐험률(`GET /api/regions/stats/by-point`·`/by-grid` — 격자 중심점 축 `resolveByPoint` 재사용, `findStatByRegion` LEFT JOIN 0% 합성·`LEAST(COALESCE)` clamp, no-match 200+null)
 - MSG-167: 시딩 직후 `grids.region_code` 멱등 보정 백필(`RegionRepository.backfillGridRegionCodes`, `RegionSeeder.run`에서 호출 — regions 후착 환경의 영구 NULL 라벨 방지, `EXISTS` 가드로 무귀속 격자 NULL→NULL 재기록 차단, Codex 리뷰 P1·2차)
-- **없는 것**: 시/도 상위 레벨 집계 (MVP 이후 별도 티켓)
+- MSG-406: 전국 탐험률 재료 조회(`GET /api/regions/stats/national` 파라미터 없음 — `findNationalStat` 스칼라 서브쿼리 2개 native(분자 SUM(region_stats.collected_count)·분모 SUM(regions.total_grid_count)), 원값 정수 2필드 `RegionNationalStatResponseDto`(비율 필드 없음·LEAST clamp 없음 — 100% 상한·반올림은 화면 min 규약, SQL에 LEAST·ST_ 부재를 리플렉션 테스트로 회귀 방어), `RegionNationalStatProjection`/`View`. 도감 헤더 행정동 진행바는 by-point(MSG-153) 재사용이라 무변경. EXPLAIN 실측 2.4~2.6ms(지배 비용 regions 전체 스캔), 신규 인덱스·마이그레이션·에러코드 0)
+- **없는 것**: 시/도·시군구 상위 레벨 집계 (07-22 유예 유지 — MSG-406 초안의 시군구 부활은 같은 날 행정동 축 정정으로 철회), regions 시딩·재시딩 시 region_stats 재구축(기왕 한계, 후속 티켓 후보)
 
 ### `zone` (Owner A · 구현 강정민) — 🟡 부분
 - MSG-234: 격자 표시명 구역 — `entity/Zone`(V8 `zones` 전 컬럼 매핑)·`repository/ZoneRepository`, `GET /api/zones` 전체 목록(`service/ZoneQueryService`(+impl)·`controller/ZoneController`·`dto/ZoneResponseDto`), `seed/{ZoneSeed,ZoneSeeder}`(플래그 게이트 `fillmap.zone.seed.enabled` 기본 off, `resources/seed/zones.json` `zone_key` UPSERT 멱등). 표시명("서면 A-14") 계산은 당초 FE-local(§D3)이었으나 MSG-341로 서버 계산 전환. 장소 검색은 카카오 프록시 MSG-251 이관(2단 폴백 구현분 제거, §D6)

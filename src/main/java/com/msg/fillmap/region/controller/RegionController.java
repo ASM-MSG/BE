@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.region.dto.RegionNationalStatResponseDto;
 import com.msg.fillmap.region.dto.RegionResponseDto;
 import com.msg.fillmap.region.dto.RegionStatResponseDto;
 import com.msg.fillmap.region.exception.RegionErrorCode;
@@ -98,6 +99,20 @@ public class RegionController {
 			.map(RegionStatResponseDto::from)
 			.orElse(null);
 		return SuccessResponse.of(body);
+	}
+
+	@Operation(
+		summary = "내 전국 탐험률 재료 (분자·분모)",
+		description = "도감·프로필 헤더의 \"전체 지도 N% 탐험\" 재료. 내가 점령한 격자 수(전국 합)와 전국 격자 총수를 "
+			+ "반올림 없는 원값 정수 2개로 반환한다. 비율·표시 자릿수·100 상한은 화면이 min(100, 분자/분모 × 100) 으로 계산한다. "
+			+ "수집이 없어도 오류가 아니라 분자 0. 분모가 0 이면 기준 데이터 미적재 상태라 화면은 비율을 그리지 않는다."
+	)
+	@GetMapping("/stats/national")
+	public SuccessResponse<RegionNationalStatResponseDto> getNationalStat(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal
+	) {
+		return SuccessResponse.of(
+			RegionNationalStatResponseDto.from(regionStatsQueryService.findNationalStat(principal.userId())));
 	}
 
 	@Operation(

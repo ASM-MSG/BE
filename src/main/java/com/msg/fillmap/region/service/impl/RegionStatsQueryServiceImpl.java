@@ -13,8 +13,10 @@ import com.msg.fillmap.global.geo.KoreaCoordinates;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.region.exception.RegionErrorCode;
+import com.msg.fillmap.region.repository.RegionNationalStatProjection;
 import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.region.repository.RegionStatProjection;
+import com.msg.fillmap.region.service.RegionNationalStatView;
 import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.region.service.RegionStatView;
 import com.msg.fillmap.region.service.RegionStatsQueryService;
@@ -56,6 +58,13 @@ public class RegionStatsQueryServiceImpl implements RegionStatsQueryService {
 			return Optional.empty();
 		}
 		return resolveStat(userId, center.lat(), center.lon());
+	}
+
+	@Override
+	public RegionNationalStatView findNationalStat(long userId) {
+		// 검증할 입력이 없고 합산은 행이 없어도 0 이라, 리포지토리 단건 조회 후 뷰 변환만 한다(MSG-406 §도메인 로직).
+		RegionNationalStatProjection p = regionRepository.findNationalStat(userId);
+		return new RegionNationalStatView(p.getCollectedCount(), p.getTotalCount());
 	}
 
 	private Optional<RegionStatView> resolveStat(long userId, double lat, double lon) {
