@@ -36,6 +36,7 @@ import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
+import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
@@ -73,6 +74,9 @@ class MissionViewportFilterTest {
 	private VideoRepository videoRepository;
 
 	@Autowired
+	private RegionQueryService regionQueryService;
+
+	@Autowired
 	private ObjectMapper objectMapper;
 
 	@Autowired
@@ -85,7 +89,8 @@ class MissionViewportFilterTest {
 	/** 캐시를 비운 새 서비스 인스턴스 — 종류별 마진을 주입해 이 tx 의 미션만 재계산해 조회한다. */
 	private MissionQueryService newService(Map<MissionType, Integer> marginMeters) {
 		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository, objectMapper,
-			new MissionViewportProperties(marginMeters), Clock.systemUTC(), Duration.ofHours(1).toMillis());
+			new MissionViewportProperties(marginMeters), regionQueryService, Clock.systemUTC(),
+			Duration.ofHours(1).toMillis());
 	}
 
 	/** 셀 중심 기준 뷰포트 — 행 [rowA..rowB], 열 [colA..colB] 를 정확히 덮는다(중심은 경계에서 50m 라 안전). */
@@ -276,7 +281,8 @@ class MissionViewportFilterTest {
 		given(mockGrids.findByMissionIds(any())).willReturn(List.of());
 		MissionQueryService service = new MissionQueryServiceImpl(mockMissions, mockGrids,
 			mock(VideoRepository.class), objectMapper,
-			new MissionViewportProperties(Map.of()), Clock.systemUTC(), Duration.ofHours(1).toMillis());
+			new MissionViewportProperties(Map.of()), regionQueryService, Clock.systemUTC(),
+			Duration.ofHours(1).toMillis());
 
 		List<MissionResponseDto> result = assertTimeoutPreemptively(Duration.ofSeconds(10),
 			() -> service.getMissionsInViewport(viewport(GY0 - 2, GX0 - 2, GY0 + 3, GX0 + 3),

@@ -23,6 +23,7 @@ public enum MissionErrorCode implements ErrorCodeIfs {
 	INVALID_MISSION_TYPE(12402, HttpStatus.BAD_REQUEST, "지원하지 않는 미션 종류입니다"),
 	TOO_MANY_MISSION_IDS(12403, HttpStatus.BAD_REQUEST, "한 번에 조회할 수 있는 미션 수를 넘었습니다"),
 	MISSION_NOT_FOUND(12404, HttpStatus.NOT_FOUND, "미션을 찾을 수 없습니다"),
+	INVALID_AGGREGATION_UNIT(12405, HttpStatus.BAD_REQUEST, "지원하지 않는 집계 단위입니다"),
 	;
 
 	private final Integer errorCode;

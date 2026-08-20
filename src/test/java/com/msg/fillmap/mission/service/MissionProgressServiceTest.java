@@ -24,6 +24,7 @@ import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionProgressProjection;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
+import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
@@ -44,9 +45,12 @@ class MissionProgressServiceTest {
 	@Mock
 	private VideoRepository videoRepository;
 
+	@Mock
+	private RegionQueryService regionQueryService;
+
 	private MissionQueryService newService() {
 		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository,
-			new ObjectMapper(), new MissionViewportProperties(Map.of()),
+			new ObjectMapper(), new MissionViewportProperties(Map.of()), regionQueryService,
 			Clock.systemUTC(), Duration.ofHours(1).toMillis());
 	}
 

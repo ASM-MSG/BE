@@ -40,6 +40,7 @@ import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.mission.service.MissionQueryService;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
+import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.repository.VideoRepository;
@@ -85,6 +86,9 @@ class CourseSeedContractTest {
 
 	@Autowired
 	private VideoRepository videoRepository;
+
+	@Autowired
+	private RegionQueryService regionQueryService;
 
 	@Autowired
 	private ObjectMapper objectMapper;
@@ -150,7 +154,8 @@ class CourseSeedContractTest {
 	/** 전역 1h 캐시를 피한 새 조회 인스턴스 — 이 tx 의 시드만 재계산한다 (선례: MissionQueryServiceImplTest). */
 	private MissionQueryService newQueryService() {
 		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository, objectMapper,
-			new MissionViewportProperties(Map.of()), Clock.systemUTC(), Duration.ofHours(1).toMillis());
+			new MissionViewportProperties(Map.of()), regionQueryService, Clock.systemUTC(),
+			Duration.ofHours(1).toMillis());
 	}
 
 	/** 산출물 파일을 만들어 시더로 적재하고 미션을 돌려준다 — 스팟 5곳 = (baseY..baseY+4, BASE_X), seq 1..5. */
