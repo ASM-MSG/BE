@@ -40,6 +40,7 @@ import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
 import com.msg.fillmap.region.repository.RegionRepository;
+import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
@@ -77,6 +78,9 @@ class MissionQueryServiceImplTest {
 	private VideoRepository videoRepository;
 
 	@Autowired
+	private RegionQueryService regionQueryService;
+
+	@Autowired
 	private EntityManager em;
 
 	@Autowired
@@ -85,7 +89,8 @@ class MissionQueryServiceImplTest {
 	/** 캐시를 비운 새 서비스 인스턴스 — 테스트마다 방금 삽입한 미션만 재계산해 조회하게 한다. */
 	private MissionQueryService newService() {
 		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository, objectMapper,
-			new MissionViewportProperties(Map.of()), Clock.systemDefaultZone(), Duration.ofHours(1).toMillis());
+			new MissionViewportProperties(Map.of()), regionQueryService, Clock.systemDefaultZone(),
+			Duration.ofHours(1).toMillis());
 	}
 
 	/** 테스트 격자 블록(GY0-2 ~ GY0+13)을 덮는 뷰포트 — 셀 코너를 위경도로 되돌려 만든다(span 약 1.5km ≪ 0.5도). */

@@ -38,6 +38,7 @@ import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
+import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
@@ -66,6 +67,9 @@ class MissionQueryServiceCacheTest {
 
 	@Mock
 	private VideoRepository videoRepository;
+
+	@Mock
+	private RegionQueryService regionQueryService;
 
 	/** 만료 경계를 넘기려 시각을 임의로 앞당길 수 있는 클럭 — 홀더가 clock.millis()/now(clock) 로 시간을 읽는다. */
 	private static final class MutableClock extends Clock {
@@ -103,7 +107,7 @@ class MissionQueryServiceCacheTest {
 
 	private MissionQueryService newService(MutableClock clock) {
 		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository,
-			new ObjectMapper(), new MissionViewportProperties(Map.of()), clock, TTL_MILLIS);
+			new ObjectMapper(), new MissionViewportProperties(Map.of()), regionQueryService, clock, TTL_MILLIS);
 	}
 
 	@Test

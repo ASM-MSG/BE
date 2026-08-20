@@ -156,7 +156,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 ## 협업 원칙 (요약)
 
 - **Owner A**: 지도 인프라 도메인 (`com.msg.fillmap.grid.*`, `com.msg.fillmap.region.*`, `com.msg.fillmap.search.*` — MSG-251 §D1, `com.msg.fillmap.hotzone.*` — MSG-233, `com.msg.fillmap.zone.*` — MSG-234 §Owner 판정·MSG-259 확정, 2026-08-07 목록 누락 보완)
-- **Owner B**: 콘텐츠/인증 도메인 (`com.msg.fillmap.user.*`, `com.msg.fillmap.video.*`, `com.msg.fillmap.auth.*`, `com.msg.fillmap.usergrid.*`, `com.msg.fillmap.badge.*` — MSG-239, `com.msg.fillmap.streak.*` — MSG-200, `com.msg.fillmap.mission.*` — MSG-222, `com.msg.fillmap.notification.*` — MSG-178, `com.msg.fillmap.friend.*` — MSG-185, `com.msg.fillmap.moderation.*` — MSG-192, `com.msg.fillmap.event.*` — MSG-443)
+- **Owner B**: 콘텐츠/인증 도메인 (`com.msg.fillmap.user.*`, `com.msg.fillmap.video.*`, `com.msg.fillmap.auth.*`, `com.msg.fillmap.usergrid.*`, `com.msg.fillmap.badge.*` — MSG-239, `com.msg.fillmap.streak.*` — MSG-200, `com.msg.fillmap.mission.*` — MSG-222, `com.msg.fillmap.notification.*` — MSG-178, `com.msg.fillmap.friend.*` — MSG-185, `com.msg.fillmap.moderation.*` — MSG-192, `com.msg.fillmap.event.*` — MSG-438 §Owner 판정·MSG-443)
 - 두 도메인의 접점은 인터페이스로만 (`GridQueryService`, `UserGridQueryService`, `ZoneNameQueryService`(격자 표시명 계산, MSG-341) 등)
 - **Owner는 도메인 분담 라벨이지 "과거에 누가 짰나"의 기록이 아니다.** 계약 인터페이스 경계
   판정과 spec-driven-dev의 개발 에이전트 배정(A→grid-dev·B→auth-dev)에 쓰는 값은 이 라벨이

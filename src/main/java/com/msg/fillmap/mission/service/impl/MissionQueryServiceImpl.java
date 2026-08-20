@@ -3,15 +3,21 @@ package com.msg.fillmap.mission.service.impl;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.extern.slf4j.Slf4j;
@@ -25,11 +31,13 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridEncoder.GridRange;
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.mission.config.MissionViewportProperties;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto.SpotStats;
 import com.msg.fillmap.mission.dto.MissionProgressResponseDto;
+import com.msg.fillmap.mission.dto.MissionRegionAggregateResponseDto;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionShape;
 import com.msg.fillmap.mission.dto.MissionShape.BoxShape;
@@ -47,6 +55,8 @@ import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionProgressProjection;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.MissionQueryService;
+import com.msg.fillmap.region.exception.RegionErrorCode;
+import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.video.repository.MissionVideoCountProjection;
 import com.msg.fillmap.video.repository.VideoRepository;
 
@@ -105,6 +115,7 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	private final VideoRepository videoRepository;
 	private final ObjectMapper objectMapper;
 	private final MissionViewportProperties viewportProperties;
+	private final RegionQueryService regionQueryService;
 	private final Clock clock;
 	private final long ttlMillis;
 
@@ -120,11 +131,12 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 		MissionGridRepository missionGridRepository,
 		VideoRepository videoRepository,
 		ObjectMapper objectMapper,
-		MissionViewportProperties viewportProperties
+		MissionViewportProperties viewportProperties,
+		RegionQueryService regionQueryService
 	) {
 		// systemUTC: findActive 의 :now 는 UTC 저장 start_at/end_at 과 비교된다 — 기본존(로컬 KST)이면 +9h 스큐.
 		this(missionRepository, missionGridRepository, videoRepository, objectMapper, viewportProperties,
-			Clock.systemUTC(), CACHE_TTL.toMillis());
+			regionQueryService, Clock.systemUTC(), CACHE_TTL.toMillis());
 	}
 
 	/** 캐시 만료 검증용 — 클럭·TTL 을 주입한다(§테스트 시나리오 캐시). */
@@ -134,6 +146,7 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 		VideoRepository videoRepository,
 		ObjectMapper objectMapper,
 		MissionViewportProperties viewportProperties,
+		RegionQueryService regionQueryService,
 		Clock clock,
 		long ttlMillis
 	) {
@@ -142,13 +155,43 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 		this.videoRepository = videoRepository;
 		this.objectMapper = objectMapper;
 		this.viewportProperties = viewportProperties;
+		this.regionQueryService = regionQueryService;
 		this.clock = clock;
 		this.ttlMillis = ttlMillis;
 	}
 
+	/**
+	 * 부트 웜업 (MSG-437 후속) — 기동 직후 스냅숏을 한 번 미리 계산해, 첫 사용자 요청이 콜드 재계산 비용을
+	 * 물지 않게 한다. dev 실측에서 콜드 첫 요청이 1.51초(웜 12ms)였고 그 차이는 활성 축제·팝업 전량의
+	 * 역지오코딩이다. 재시작당 한 번뿐인 비용이라 사용자가 없는 기동 시점으로 옮기는 것이 최소 변경이다
+	 * (D1 이 예고한 판단 지점의 결론 — unnest 배치 승격은 활성 미션이 수천 건이 될 때로 유지).
+	 *
+	 * ApplicationReadyEvent 는 시더(ApplicationRunner)들이 끝난 뒤 발화하므로, 시딩을 켠 기동에서도
+	 * 방금 적재한 미션이 그대로 스냅숏에 들어온다.
+	 *
+	 * 실패해도 기동을 죽이지 않는다 — 웜업은 성능 최적화지 기동 조건이 아니다. 재계산이 실패하면 스냅숏이
+	 * 발행되지 않은 상태 그대로라 첫 사용자 요청이 재계산을 다시 시도한다(D1 의미론 그대로).
+	 *
+	 * NOT_SUPPORTED 로 클래스 레벨 {@code @Transactional(readOnly = true)} 밖에 둔다. 그대로 두면 프록시가
+	 * 리스너 진입 시점에 트랜잭션을 열어야 하는데, 하필 이 목표가 겨냥한 기동 시 DB 장애에서는 그 열기가
+	 * CannotCreateTransactionException 으로 실패한다 — 아래 try 에 닿기도 전이라 예외가 리스너 밖으로 나가
+	 * 기동이 죽는다. 트랜잭션 밖이면 프록시가 DB 를 건드리지 않아 그 경로 자체가 사라지고, snapshot() 안의
+	 * 리포지토리 호출들은 Spring Data 자체 트랜잭션으로 돈다(재계산은 원래 호출자 트랜잭션에 기대지 않는
+	 * 읽기 조합이라 동작이 같다). 이 어노테이션을 지우면 결함이 조용히 되살아난다 (Codex P1, 리뷰 반영).
+	 */
+	@EventListener(ApplicationReadyEvent.class)
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void warmUpSnapshot() {
+		try {
+			log.info("미션 스냅숏 부트 웜업 완료: 활성 미션 {}건 (MSG-437)", snapshot().size());
+		} catch (RuntimeException e) {
+			log.warn("미션 스냅숏 부트 웜업에 실패해 첫 조회 요청이 재계산합니다 (MSG-437)", e);
+		}
+	}
+
 	@Override
 	public List<MissionResponseDto> getMissionsInViewport(ViewportBounds bounds, MissionType type) {
-		validateBounds(bounds);
+		validateBounds(bounds, MAX_VIEWPORT_SPAN_DEG);
 		List<CachedMission> snapshot = snapshot();
 		// 스냅샷은 불변 리스트 — 필터는 새 리스트를 만들고 캐시에 담긴 리스트를 변형하지 않는다.
 		GridRange view = GridEncoder.viewportRange(bounds);
@@ -158,6 +201,72 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 			.filter(cached -> intersects(cached.bounds(), view, pad))
 			.map(CachedMission::dto)
 			.toList();
+	}
+
+	/**
+	 * 행정 단위 집계 (MSG-437 D2) — 목록과 같은 스냅숏 위 산술이라 요청 경로에서 DB 를 타지 않는다.
+	 * type 필터 → 귀속점이 bbox 안(경계 포함, D3)인 미션 선별 → 행정동 코드 접두로 그룹핑 → 항목 조립.
+	 * 무귀속 미션은 제외가 아니라 키 null 인 한 그룹으로 모여 맨 뒤에 실린다(MSG-356 NULLS LAST 와 같다).
+	 */
+	@Override
+	public List<MissionRegionAggregateResponseDto> getMissionAggregates(
+		ViewportBounds bounds, MissionType type, RegionUnit unit) {
+		validateBounds(bounds, unit.getMaxSpanDeg());
+		// HashMap 은 null 키를 받는다 — Collectors.groupingBy 는 무귀속 키에서 NPE 라 직접 모은다.
+		Map<String, List<CachedMission>> grouped = new HashMap<>();
+		for (CachedMission cached : snapshot()) {
+			if (cached.type() != type || !containsAnchor(bounds, cached.anchor())) {
+				continue;
+			}
+			grouped.computeIfAbsent(regionKey(cached.anchor(), unit), key -> new ArrayList<>()).add(cached);
+		}
+		return grouped.entrySet().stream()
+			.sorted(Map.Entry.comparingByKey(Comparator.nullsLast(Comparator.naturalOrder())))
+			.map(entry -> toAggregate(entry.getKey(), entry.getValue(), unit))
+			.toList();
+	}
+
+	/** 귀속점이 bbox 안인지 — 경계선 위는 포함이다(D3). 귀속점이 없는 미션(격자 없음·비집계 유형)은 제외. */
+	private static boolean containsAnchor(ViewportBounds bounds, RegionAnchor anchor) {
+		return anchor != null
+			&& anchor.lat() >= bounds.swLat() && anchor.lat() <= bounds.neLat()
+			&& anchor.lon() >= bounds.swLng() && anchor.lon() <= bounds.neLng();
+	}
+
+	/** 묶음 키 — 행정동 코드를 단위 길이로 자른 접두. 무귀속은 null 키 한 그룹으로 모인다. */
+	private static String regionKey(RegionAnchor anchor, RegionUnit unit) {
+		String regionCode = anchor.regionCode();
+		if (regionCode == null) {
+			return null;
+		}
+		return regionCode.substring(0, Math.min(unit.getCodePrefixLength(), regionCode.length()));
+	}
+
+	private static MissionRegionAggregateResponseDto toAggregate(
+		String regionCode, List<CachedMission> group, RegionUnit unit) {
+		// MIN 단일화 — 같은 접두면 이름도 한 값이지만 결정적으로 하나를 고른다(MSG-356 MIN(split_part) 와 동일).
+		String name = group.stream()
+			.map(cached -> nameToken(cached.anchor().regionFullName(), unit.getNameTokenIndex()))
+			.filter(Objects::nonNull)
+			.min(Comparator.naturalOrder())
+			.orElse(null);
+		double lat = group.stream().mapToDouble(cached -> cached.anchor().lat()).average().orElseThrow();
+		double lng = group.stream().mapToDouble(cached -> cached.anchor().lon()).average().orElseThrow();
+		List<Long> missionIds = group.stream().map(cached -> cached.dto().missionId()).sorted().toList();
+		return new MissionRegionAggregateResponseDto(regionCode, name, lat, lng, group.size(), missionIds);
+	}
+
+	/**
+	 * 전체 경로 이름("부산광역시 부산진구 부전2동")의 tokenIndex 번째 공백 토큰 — 도감 집계의
+	 * split_part(region_name, ' ', n) 와 동작을 맞춘다(MSG-356). 토큰이 모자라면 split_part 처럼 빈 문자열이고,
+	 * 이름 자체가 없으면(무귀속) null 이다. 같은 화면의 도감 마커와 지역 이름이 갈리지 않는 것이 우선이다(D2).
+	 */
+	private static String nameToken(String fullName, int tokenIndex) {
+		if (fullName == null) {
+			return null;
+		}
+		String[] tokens = fullName.split(" ", -1);
+		return tokenIndex <= tokens.length ? tokens[tokenIndex - 1] : "";
 	}
 
 	@Override
@@ -232,8 +341,11 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	 * viewportRange 가 쓰는 Proj4J 경도 정규화(반복 감산)를 사실상 무한 루프로 만든다.
 	 * ponytail: GridQueryServiceImpl.validateBounds 의 쌍둥이(여덟 줄 복제) — Owner A 코드를 고치지 않으려는
 	 * 의도적 복제다. 세 번째 호출자가 생기면 global/geo 로 승격한다 (MSG-398 D6).
+	 *
+	 * maxSpanDeg 는 호출 경로마다 다르다 — 개별 목록은 0.5도 고정이고, 행정 집계는 단위별 상한
+	 * (RegionUnit.maxSpanDeg — DONG 1도·SIGUNGU 4도·SIDO 10도)이다 (MSG-437). 정확히 상한값은 허용한다.
 	 */
-	private void validateBounds(ViewportBounds bounds) {
+	private void validateBounds(ViewportBounds bounds, double maxSpanDeg) {
 		if (!isValidCoordinates(bounds)) {
 			throw new ApiException(MissionErrorCode.INVALID_VIEWPORT);
 		}
@@ -242,7 +354,7 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 		}
 		double latSpan = bounds.neLat() - bounds.swLat();
 		double lngSpan = bounds.neLng() - bounds.swLng();
-		if (latSpan > MAX_VIEWPORT_SPAN_DEG || lngSpan > MAX_VIEWPORT_SPAN_DEG) {
+		if (latSpan > maxSpanDeg || lngSpan > maxSpanDeg) {
 			throw new ApiException(MissionErrorCode.VIEWPORT_TOO_LARGE);
 		}
 	}
@@ -284,7 +396,8 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 			if (latest != null && clock.millis() < latest.expiresAtMillis()) {
 				return latest.snapshot();
 			}
-			List<CachedMission> recomputed = recompute();
+			// 재계산이 실패하면 cache 를 갱신하지 않는다 — 뭉개진 세대가 발행되지 않고 다음 요청이 다시 시도한다(D1).
+			List<CachedMission> recomputed = recompute(latest);
 			this.cache = new CacheEntry(recomputed, clock.millis() + ttlMillis);
 			return recomputed;
 		}
@@ -294,12 +407,26 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	private record CacheEntry(List<CachedMission> snapshot, long expiresAtMillis) {
 	}
 
-	/** 스냅샷 한 줄 — 응답 DTO 와 뷰포트 판정용 정수 사각형을 함께 들고 다닌다 (MSG-398 D2). */
-	private record CachedMission(MissionResponseDto dto, MissionType type, GridRange bounds) {
+	/**
+	 * 스냅샷 한 줄 — 응답 DTO 와 뷰포트 판정용 정수 사각형(MSG-398 D2), 행정 집계용 귀속(MSG-437 D1)을
+	 * 함께 들고 다닌다. anchor 는 집계 대상 유형(EVENT·POPUP)이면서 판정 사각형이 있는 미션에만 있다.
+	 */
+	private record CachedMission(MissionResponseDto dto, MissionType type, GridRange bounds, RegionAnchor anchor) {
 	}
 
-	/** active 미션 → mission_grids 일괄 조회(2쿼리) → missionId 그룹핑 → 유형별 shape·사각형 합성(§도메인 1). */
-	private List<CachedMission> recompute() {
+	/**
+	 * 미션의 행정 귀속 (MSG-437 D1) — 판정 사각형 중앙 셀 중심의 위경도와 그 점이 속한 행정동이다.
+	 * 포함 행정동이 없거나 서비스 범위 밖이면 좌표만 남고 regionCode·regionFullName 이 null 이다(무귀속).
+	 */
+	private record RegionAnchor(double lat, double lon, String regionCode, String regionFullName) {
+	}
+
+	/**
+	 * active 미션 → mission_grids 일괄 조회(2쿼리) → missionId 그룹핑 → 유형별 shape·사각형 합성(§도메인 1)
+	 * → 집계 대상 유형의 행정 귀속 판정(MSG-437 D1). previous 는 직전 세대로, 판정 사각형이 그대로인
+	 * 미션의 귀속을 다시 묻지 않고 옮겨 싣는 메모이즈 재료다.
+	 */
+	private List<CachedMission> recompute(CacheEntry previous) {
 		List<Mission> missions = missionRepository.findActive(LocalDateTime.now(clock));
 		if (missions.isEmpty()) {
 			return List.of();
@@ -307,16 +434,59 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 		List<Long> missionIds = missions.stream().map(Mission::getId).toList();
 		Map<Long, List<MissionGrid>> gridsByMission = missionGridRepository.findByMissionIds(missionIds).stream()
 			.collect(Collectors.groupingBy(MissionGrid::getMissionId));
+		Map<Long, CachedMission> memo = previous == null ? Map.of() : previous.snapshot().stream()
+			.collect(Collectors.toMap(cached -> cached.dto().missionId(), cached -> cached, (a, b) -> a));
 
 		return missions.stream()
 			.map(mission -> {
 				List<MissionGrid> grids = gridsByMission.getOrDefault(mission.getId(), List.of());
+				GridRange bounds = missionBounds(mission, grids);
 				return new CachedMission(
 					MissionResponseDto.of(mission, buildShape(mission, grids)),
 					mission.getType(),
-					missionBounds(mission, grids));
+					bounds,
+					resolveAnchor(mission, bounds, memo));
 			})
 			.toList();
+	}
+
+	/**
+	 * 행정 귀속 판정 (MSG-437 D1). 집계 대상은 EVENT·POPUP 뿐이라 나머지 유형은 판정을 부르지 않고,
+	 * 격자가 하나도 없어 사각형이 없는 미션도 위치를 모르므로 건너뛴다. 직전 세대의 판정 사각형이 같으면
+	 * 역지오코딩을 다시 부르지 않는다 — 미션은 수동 시딩이라 정상 상태의 추가 쿼리가 신규·변경 건수로 떨어진다.
+	 *
+	 * 무귀속으로 수용하는 실패는 둘뿐이다: 포함 행정동 없음(Optional.empty)과 서비스 범위 밖 좌표(6400).
+	 * 둘 다 데이터 성질이라 다시 물어도 같으므로 그 미션만 코드 없이 싣고 warn 을 남긴다. 그 밖의 예외
+	 * (DB 장애 등)는 흡수하지 않고 전파한다 — 일괄 흡수하면 장애 한 번에 전 미션이 무귀속으로 뭉개진
+	 * 스냅숏이 1시간 캐시되는 사고가 난다.
+	 */
+	private RegionAnchor resolveAnchor(Mission mission, GridRange bounds, Map<Long, CachedMission> memo) {
+		if (bounds == null || !AGGREGATABLE_TYPES.contains(mission.getType())) {
+			return null;
+		}
+		CachedMission previous = memo.get(mission.getId());
+		if (previous != null && previous.anchor() != null && bounds.equals(previous.bounds())) {
+			return previous.anchor();
+		}
+		GridPoint anchorPoint = GridEncoder.center(
+			(bounds.minGridY() + bounds.maxGridY()) / 2 + "_" + (bounds.minGridX() + bounds.maxGridX()) / 2);
+		try {
+			return regionQueryService.resolveByPoint(anchorPoint.lat(), anchorPoint.lon())
+				.map(region -> new RegionAnchor(
+					anchorPoint.lat(), anchorPoint.lon(), region.regionCode(), region.regionName()))
+				.orElseGet(() -> {
+					log.warn("미션 귀속점을 포함하는 행정동이 없어 무귀속으로 집계합니다 (MSG-437 D1): "
+						+ "missionId={} lat={} lon={}", mission.getId(), anchorPoint.lat(), anchorPoint.lon());
+					return new RegionAnchor(anchorPoint.lat(), anchorPoint.lon(), null, null);
+				});
+		} catch (ApiException e) {
+			if (e.getErrorCode() != RegionErrorCode.INVALID_COORDINATE) {
+				throw e;
+			}
+			log.warn("미션 귀속점이 서비스 범위 밖이라 무귀속으로 집계합니다 (MSG-437 D1): missionId={} lat={} lon={}",
+				mission.getId(), anchorPoint.lat(), anchorPoint.lon());
+			return new RegionAnchor(anchorPoint.lat(), anchorPoint.lon(), null, null);
+		}
 	}
 
 	/**
