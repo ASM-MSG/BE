@@ -214,6 +214,11 @@
 - MSG-417: `approve()`에 소유자 선취 — `findWithLockById`(videos)·`lockPendingReport`(reports) 앞에 users FOR KEY SHARE, 최종 획득 순서 users → videos → reports(탈퇴 CASCADE와 동방향 — AB-BA 데드락 차단), 빈 결과는 주변 경로와 같은 11404
 - **없는 것**: 신고 rate limit(같은 사용자의 다수 영상 연속 신고 — 요구 생기면 PRD부터), 사용자 신고(대상은 영상만 2026-08-06 확정 — 사용자 차단 MSG-194는 제품 범위 제외로 종결 2026-08-06), 신고자 처리 결과 알림(후속 논의)
 
+### `event` (Owner B · 구현 강정민) — 🟡 부분
+
+- MSG-443: 행사방 열람 인원 집계 — `POST /api/event-occurrences/{id}/heartbeat`·`GET .../viewer-count`(`EventViewerController`, **둘 다 permitAll — JwtAuthenticationFilter.PUBLIC_AUTH_PATHS엔 미등록**(등록하면 Bearer 파싱이 건너뛰어져 로그인 사용자가 익명 집계됨, 스펙 D4)), `EventViewerService`(+Impl — Redis Sorted Set `eventviewer:{occurrenceId}`, member `u:{userId}`/`s:{세션헤더}`, score epoch초, Lua 원자: 배타 청소→ZADD GT→EXPIRE 120, 조회 ZCOUNT 90초 포함 경계, Clock 주입), `EventViewerCountResponseDto`(viewerCount — 0=빈 방 표시·null=집계 장애 숨김). DB·Flyway·계약 인터페이스 0. occurrenceId 존재 검증 없음(행사 도메인 모델 MSG-438 이후 후속)
+- **없는 것**: 행사 도메인 엔티티·테이블(MSG-438), 행사 조회 API(MSG-439), 익명 heartbeat rate limit(공개 근사값이라 부풀리기 수용 — 스펙 D4)
+
 ## 계약 인터페이스 (Owner A ↔ B 경계면)
 
 `infrastructure.md`가 계약 인터페이스로 명시하지만 **아직 코드에 하나도 없다.** 새로 만들기 전엔
