@@ -27,6 +27,7 @@ import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
+import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
@@ -48,6 +49,9 @@ class MissionQueryServiceClockTest {
 	@Mock
 	private VideoRepository videoRepository;
 
+	@Mock
+	private RegionQueryService regionQueryService;
+
 	// 검증: FR-MISSION-02
 	@Test
 	@DisplayName("기본 클럭은 JVM 기본존과 무관하게 UTC 벽시계로 활성 판정한다")
@@ -59,7 +63,7 @@ class MissionQueryServiceClockTest {
 			TimeZone.setDefault(TimeZone.getTimeZone("Asia/Seoul"));
 			// 운영 배선과 같은 기본 생성자 — 주입 생성자로는 이 결함(기본 클럭 선택)이 재현되지 않는다.
 			new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository,
-				new ObjectMapper(), new MissionViewportProperties(Map.of()))
+				new ObjectMapper(), new MissionViewportProperties(Map.of()), regionQueryService)
 				.getMissionsInViewport(new ViewportBounds(37.50, 127.00, 37.55, 127.05), MissionType.EVENT);
 		} finally {
 			TimeZone.setDefault(original);
