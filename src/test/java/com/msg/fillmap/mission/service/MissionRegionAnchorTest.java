@@ -242,6 +242,31 @@ class MissionRegionAnchorTest {
 				.as("실패한 세대가 발행되면 안 된다 — 캐시 엔트리가 첫 세대 그대로여야 한다")
 				.isSameAs(첫_세대);
 		}
+
+		@Test
+		@DisplayName("귀속 인프라 예외로 재계산이 실패하면 목록 조회도 같이 실패한다")
+		void 귀속_인프라_예외로_재계산이_실패하면_목록_조회도_같이_실패한다() {
+			// 스냅숏이 목록·집계 공용이라, 축제 한 건의 귀속 판정이 인프라 예외로 죽으면 그 세대가 통째로
+			// 발행되지 않고 귀속을 읽지도 않는 코스 목록 조회까지 함께 실패한다. 의도된 의미론이다 —
+			// 캐시를 갈라 두면 목록과 집계가 서로 다른 세대를 보고, findActive 실패가 목록을 실패시켜 온
+			// 기존 동작과도 같은 결이다 (Codex P2-2, 리더 확정).
+			given(missionRepository.findActive(any()))
+				.willReturn(List.of(mission(1L, MissionType.COURSE), mission(2L, MissionType.EVENT)));
+			given(missionGridRepository.findByMissionIds(List.of(1L, 2L)))
+				.willReturn(List.of(new MissionGrid(1L, cell(0, 0)), new MissionGrid(2L, cell(3, 3))))
+				.willReturn(List.of(new MissionGrid(1L, cell(0, 0)), new MissionGrid(2L, cell(9, 9))));
+			given(regionQueryService.resolveByPoint(anyDouble(), anyDouble()))
+				.willReturn(Optional.of(부전2동()))
+				.willThrow(new IllegalStateException("역지오코딩 DB 연결 실패"));
+			MissionQueryService service = newService();
+			assertThat(service.getMissionsInViewport(기준_뷰포트, MissionType.COURSE)).hasSize(1);
+
+			// 사각형이 바뀌어 메모이즈가 안 듣는 축제를 새 세대가 다시 판정하다 인프라 예외를 만난다.
+			clock.set(Instant.ofEpochMilli(TTL_MILLIS + 1));
+
+			assertThatThrownBy(() -> service.getMissionsInViewport(기준_뷰포트, MissionType.COURSE))
+				.isInstanceOf(IllegalStateException.class);
+		}
 	}
 
 	@Nested
