@@ -129,27 +129,37 @@ Controller → Service → Repository → DB
 - Service에 비즈니스 로직 집중.
 - Repository는 JpaRepository 상속 + native UPSERT는 `@Modifying @Query nativeQuery = true`.
 
-## 영속 계층 — JPA 사용 방식 (MSG-334 명문화)
+## 영속 계층 — JPA 사용 방식 (MSG-334 명문화 · 2026-08-19 개정)
 
-**엔티티 간 연관관계 매핑(`@ManyToOne`·`@OneToMany`)을 만들지 않는다.** 참조는
-`reporterId`·`videoId`처럼 **id 컬럼 보관**(Long/String)으로 통일한다 — 전 도메인 선례
-(Video·UserGrid·Friendship·Report).
+**연관관계 매핑(`@ManyToOne` 등)을 기본으로 허용한다** (2026-08-19 정민 확정 — MSG-334의
+"연관관계 금지·id 보관" 원칙 번복). 번복 이유: id 보관 원칙이 모든 조인 조회를 native와
+세타 조인·프로젝션으로 밀어붙여, JPA를 유지하기로 해놓고(아래 ADR) 영속 계층이 사실상
+SQL 직서기가 됐다. 같은 날 멘토링(박원형)에서도 유지보수를 이유로 native 최소화, JPQL과
+애플리케이션 수준 로직 우선, DB 기능의 유틸리티 계층 추상화가 권고됐다(2026-09-07 네이티브
+쿼리 집중 라이브 코드 리뷰 예정). 신규 코드는 연관관계·JPQL·fetch join을 정상적으로 쓴다.
 
-이유 4가지:
+사용 수칙 (convention-reviewer 검사 대상):
 
-1. **Owner A/B 도메인 경계**: 연관관계는 엔티티 클래스 수준의 타 도메인 import를 만든다 —
-   "접점은 인터페이스로만" 원칙이 엔티티에서 무너진다. id 보관이면 참조가 값 수준.
-2. **부분 매핑 전략과 정합**: 엔티티는 사용 컬럼만 매핑한다(`Grid.geom` 미매핑,
-   `Report.reviewed_by` 후속 티켓 매핑 등). 연관관계는 상대 엔티티의 온전한 매핑을 전제한다.
-3. **N+1 · LAZY 프록시 함정 원천 차단**: 조회는 프로젝션·native로 명시적으로 짠다.
-4. **무결성은 DB 소유**: FK 제약·ON DELETE는 Flyway DDL이 보장한다 (JPA는 `validate`만).
+1. **fetch는 전부 LAZY 명시.** EAGER 금지.
+2. **단방향 `@ManyToOne` 우선.** 컬렉션 매핑(`@OneToMany`)은 크기 상한이 분명한 자식에만,
+   근거 주석과 함께 단다. 역방향을 습관으로 달지 않는다.
+3. **equals/hashCode/toString에서 연관 필드 제외** (프록시 초기화·순환 참조 방지).
+4. **조회는 파생 쿼리와 JPQL(fetch join·생성자 프로젝션) 우선.** native는 PostgreSQL 전용
+   기능(ON CONFLICT upsert·PostGIS·advisory lock)과 대량 배치에 한정한다 — "일단 native"
+   관성이 이번 번복이 겨눈 대상이다. 불가피한 native는 흩어 두지 말고 전담 리포지토리나
+   유틸 계층으로 모은다(멘토 권고).
+5. **N+1은 리뷰에서 잡는다**: 루프 안 지연 로딩이 보이면 fetch join이나 `@EntityGraph`로 수렴.
+6. **무결성은 여전히 DB 소유**: FK 제약·ON DELETE는 Flyway DDL이 보장한다 (JPA는 `validate`만).
 
-**예외 (애그리거트 내부)**: 동일 패키지·동일 Owner에서 생명주기를 공유하는 부모-자식
-(예: Mission↔MissionGrid 류)은 근거를 주석과 PR에 남기고 연관관계를 쓸 수 있다.
-도메인·Owner 경계를 넘는 참조는 예외 없이 id 보관.
+**기존 코드 소급 리팩터링은 하지 않는다.** id 보관으로 짜인 기존 도메인(Video·UserGrid·
+Friendship·Report 등)은 그대로 두고 혼재를 허용한다(서지컬 원칙). 2026-09-07 멘토링
+라이브 코드 리뷰 전까지 구조 변경 없이 기능 구현을 완료한다는 합의와도 같은 방향이다 —
+기존 native의 정리는 그 리뷰에서 나올 개선점을 따라간다. 연관관계 없는 기존
+엔티티에서 조인이 필요하면 종전대로 세타 조인 + 생성자 프로젝션을 쓴다
+(`FROM Report r, User ru WHERE ru.id = r.reporterId`).
 
-조인이 필요하면 **세타 조인 + 생성자 프로젝션**으로 쓴다
-(`FROM Report r, User ru WHERE ru.id = r.reporterId` — Friendship·Report 리포지토리 선례).
+타 도메인 엔티티를 연관으로 참조할 때는 **읽기 전용으로만** 쓴다 — 상태 변경은 소유 도메인
+서비스를 거친다. "두 도메인의 접점은 인터페이스로만"은 서비스 계층 원칙으로 유지된다.
 
 연관관계 없이도 JPA를 유지하는 이유: 상태 전이 더티 체킹(`Video.markBlinded()` 류 도메인
 메서드가 UPDATE문 없이 성립), `@Lock` 파생 쿼리·페이징 인프라, enum·시각 타입 자동 매핑,
