@@ -1,6 +1,7 @@
 package com.msg.fillmap.mission.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
@@ -26,6 +27,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -37,6 +40,7 @@ import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.mission.config.MissionViewportProperties;
 import com.msg.fillmap.mission.dto.MissionRegionAggregateResponseDto;
+import com.msg.fillmap.mission.dto.MissionResponseDto;
 import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionGrid;
 import com.msg.fillmap.mission.entity.MissionType;
@@ -118,7 +122,8 @@ class MissionRegionAnchorTest {
 
 	private final MutableClock clock = new MutableClock(Instant.ofEpochMilli(0));
 
-	private MissionQueryService newService() {
+	/** 부트 웜업은 인터페이스가 아니라 구현체의 이벤트 훅이라 구현 타입으로 돌려준다. */
+	private MissionQueryServiceImpl newService() {
 		return new MissionQueryServiceImpl(missionRepository, missionGridRepository, videoRepository,
 			new ObjectMapper(), new MissionViewportProperties(Map.of()), regionQueryService, clock, TTL_MILLIS);
 	}
@@ -330,6 +335,65 @@ class MissionRegionAnchorTest {
 			verify(regionQueryService, times(1)).resolveByPoint(anyDouble(), anyDouble());
 			assertThat(items).singleElement()
 				.extracting(MissionRegionAggregateResponseDto::regionCode).isEqualTo("26230");
+		}
+	}
+
+	@Nested
+	@DisplayName("부트 웜업")
+	class 부트_웜업 {
+
+		// 검증: FR-MISSION-20
+		@Test
+		@DisplayName("웜업이 스냅숏을 선계산해 첫 조회가 재계산 없이 응답한다")
+		void 웜업이_스냅숏을_선계산해_첫_조회가_재계산_없이_응답한다() {
+			given(missionRepository.findActive(any())).willReturn(List.of(mission(1L, MissionType.EVENT)));
+			given(missionGridRepository.findByMissionIds(List.of(1L)))
+				.willReturn(List.of(new MissionGrid(1L, cell(0, 0))));
+			given(regionQueryService.resolveByPoint(anyDouble(), anyDouble())).willReturn(Optional.of(부전2동()));
+			MissionQueryServiceImpl service = newService();
+
+			service.warmUpSnapshot();
+			List<MissionResponseDto> missions = service.getMissionsInViewport(기준_뷰포트, MissionType.EVENT);
+
+			// 웜업이 재계산을 마쳤으면 첫 요청은 스냅숏만 읽는다 — dev 실측 콜드 1.51초를 사용자에게서 걷어낸다.
+			verify(missionRepository, times(1)).findActive(any());
+			verify(regionQueryService, times(1)).resolveByPoint(anyDouble(), anyDouble());
+			assertThat(missions).extracting(MissionResponseDto::missionId).containsExactly(1L);
+		}
+
+		// 검증: FR-MISSION-20
+		@Test
+		@DisplayName("웜업 중 인프라 예외는 기동을 죽이지 않고 첫 요청이 재시도한다")
+		void 웜업_중_인프라_예외는_기동을_죽이지_않고_첫_요청이_재시도한다() {
+			given(missionRepository.findActive(any())).willReturn(List.of(mission(1L, MissionType.EVENT)));
+			given(missionGridRepository.findByMissionIds(List.of(1L)))
+				.willReturn(List.of(new MissionGrid(1L, cell(0, 0))));
+			given(regionQueryService.resolveByPoint(anyDouble(), anyDouble()))
+				.willThrow(new IllegalStateException("역지오코딩 DB 연결 실패"))
+				.willReturn(Optional.of(부전2동()));
+			MissionQueryServiceImpl service = newService();
+
+			// 웜업은 성능 최적화지 기동 조건이 아니다 — 여기서 예외가 새면 앱이 뜨지 못한다.
+			assertThatCode(service::warmUpSnapshot).doesNotThrowAnyException();
+			List<MissionResponseDto> missions = service.getMissionsInViewport(기준_뷰포트, MissionType.EVENT);
+
+			// 실패한 세대는 발행되지 않으므로 첫 사용자 요청이 재계산을 다시 시도해 정상 응답한다(D1).
+			verify(missionRepository, times(2)).findActive(any());
+			assertThat(missions).extracting(MissionResponseDto::missionId).containsExactly(1L);
+		}
+
+		// 검증: FR-MISSION-20
+		@Test
+		@DisplayName("웜업은 클래스 레벨 트랜잭션 밖이다 — NOT_SUPPORTED 가 지워지면 기동이 DB 장애에 죽는다")
+		void 웜업은_클래스_레벨_트랜잭션_밖이다() throws Exception {
+			// 이 어노테이션이 없으면 프록시가 리스너 진입에서 트랜잭션을 열다 실패하고(DB 장애 시
+			// CannotCreateTransactionException), 메서드 안 try/catch 에 닿기 전에 예외가 새어 기동이 죽는다.
+			// 위 두 테스트는 목 호출이라 프록시를 안 타므로 그 회귀를 못 잡는다 — 선언 자체를 잠근다.
+			Transactional declared = MissionQueryServiceImpl.class
+				.getDeclaredMethod("warmUpSnapshot").getAnnotation(Transactional.class);
+
+			assertThat(declared).as("웜업 메서드에 @Transactional 선언이 없다").isNotNull();
+			assertThat(declared.propagation()).isEqualTo(Propagation.NOT_SUPPORTED);
 		}
 	}
 }
