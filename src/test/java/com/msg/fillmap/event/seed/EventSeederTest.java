@@ -165,6 +165,20 @@ class EventSeederTest {
 		return videoRepository.save(video).getId();
 	}
 
+	/**
+	 * 현재 트랜잭션이 event_* 다섯 테이블에 만든 행 변경 수(삽입 + 갱신 + 삭제).
+	 * PostgreSQL 이 자기 트랜잭션 안에서 세는 값이라 JPA·native·벌크 어느 경로의 쓰기든 똑같이 잡힌다.
+	 * 값이 같아지는 UPDATE 도 행을 건드리면 세므로, "결과가 같다"와 "쓰지 않았다"를 구분한다.
+	 */
+	private long event_행변경수() {
+		em.flush();
+		Number changes = (Number) em.createNativeQuery("""
+				SELECT COALESCE(SUM(n_tup_ins + n_tup_upd + n_tup_del), 0)
+				FROM pg_stat_xact_user_tables WHERE relname LIKE 'event\\_%'""")
+			.getSingleResult();
+		return changes.longValue();
+	}
+
 	/** 지연 제약의 커밋 시점 검증을 트랜잭션 안으로 당긴다. 위반이면 여기서 예외가 난다. */
 	private void 지연제약검증() {
 		em.flush();
@@ -219,7 +233,7 @@ class EventSeederTest {
 
 		// 검증: FR-EVENT-08
 		@Test
-		@DisplayName("시드를 두 번 실행해도 결과가 같다 (멱등)")
+		@DisplayName("시드를 두 번 실행해도 결과가 같고 두 번째 실행은 DML 을 한 건도 내지 않는다 (멱등)")
 		void 시드를_두_번_실행해도_결과가_같다() {
 			Resource seed = json(시리즈("msg438-idem", 회차("msg438-idem-2026",
 				위치("msg438-idem-loc", 사각형(Y, Y + 4, X, X + 4)))));
@@ -228,9 +242,13 @@ class EventSeederTest {
 			String 첫_대표 = 위치조회("msg438-idem-loc").getRepresentativeGridId();
 			List<String> 첫_격자 = 격자조회("msg438-idem-loc");
 
+			long 이전_행변경 = event_행변경수();
 			seeder().seed(json(시리즈("msg438-idem", 회차("msg438-idem-2026",
 				위치("msg438-idem-loc", 사각형(Y, Y + 4, X, X + 4))))));
 
+			// 결과 상태만 비교하면 매번 불필요한 UPDATE·재삽입을 내는 시더도 통과한다. DB 가 센 행 변경 수를
+			// 봐야 "결과가 같다"와 "쓰지 않았다"가 구분된다.
+			assertThat(event_행변경수() - 이전_행변경).as("2회차 실행의 event_* 행 변경 수").isZero();
 			assertThat(위치조회("msg438-idem-loc").getRepresentativeGridId()).isEqualTo(첫_대표);
 			assertThat(격자조회("msg438-idem-loc")).isEqualTo(첫_격자).hasSize(25);
 			assertThat(첫_대표).isEqualTo((Y + 2) + "_" + (X + 2));   // 홀수 5×5 정중앙
@@ -283,6 +301,25 @@ class EventSeederTest {
 			assertThatCode(EventSeederTest.this::지연제약검증).doesNotThrowAnyException();
 			assertThat(격자조회("msg438-move-a")).hasSize(6).doesNotContain(Y + "_" + (X + 2));
 			assertThat(격자조회("msg438-move-b")).hasSize(12).contains(Y + "_" + (X + 2));
+		}
+
+		@Test
+		@DisplayName("격자를 넘겨받는 위치가 시드에서 먼저 와도 재시드가 성공한다 (입력 순서 무관)")
+		void 격자를_넘겨받는_위치가_시드에서_먼저_와도_재시드가_성공한다() {
+			// 위 테스트의 거울상. 받는 쪽(b)이 먼저면 b 의 insert 가 큐에 쌓인 뒤 a 를 처리하며 나가는 조회가
+			// auto-flush 를 일으켜, a 의 delete 가 아직 없는 상태에서 insert 가 DB 에 닿는다.
+			// 즉시 제약이면 이 순서에서 UNIQUE 위반으로 깨진다.
+			seeder().seed(json(시리즈("msg438-order", 회차("msg438-order-2026",
+				위치("msg438-order-b", 사각형(Y, Y + 2, X + 3, X + 5)),
+				위치("msg438-order-a", 사각형(Y, Y + 2, X, X + 2))))));
+
+			seeder().seed(json(시리즈("msg438-order", 회차("msg438-order-2026",
+				위치("msg438-order-b", 사각형(Y, Y + 2, X + 2, X + 5)),
+				위치("msg438-order-a", 사각형(Y, Y + 2, X, X + 1))))));
+
+			assertThatCode(EventSeederTest.this::지연제약검증).doesNotThrowAnyException();
+			assertThat(격자조회("msg438-order-a")).hasSize(6).doesNotContain(Y + "_" + (X + 2));
+			assertThat(격자조회("msg438-order-b")).hasSize(12).contains(Y + "_" + (X + 2));
 		}
 
 		@Test
@@ -429,6 +466,21 @@ class EventSeederTest {
 	@Nested
 	@DisplayName("V39 DDL 제약")
 	class Constraints {
+
+		@Test
+		@DisplayName("회차 내 격자 유일과 대표 격자 FK 는 지연 제약으로 선언돼 있다 (DDL 메타데이터)")
+		void 두_제약은_지연_제약으로_선언돼_있다() {
+			// 재시드의 성공은 flush 순서에 따라 즉시 제약으로도 우연히 통과할 수 있으므로,
+			// 지연 선언 자체를 카탈로그에서 직접 확인해 DDL 속성을 고정한다.
+			@SuppressWarnings("unchecked")
+			List<String> deferred = em.createNativeQuery("""
+					SELECT conname FROM pg_constraint
+					WHERE conname IN ('uq_event_grid_per_occ', 'fk_event_loc_rep_grid')
+					  AND condeferrable AND condeferred""")
+				.getResultList();
+
+			assertThat(deferred).containsExactlyInAnyOrder("uq_event_grid_per_occ", "fk_event_loc_rep_grid");
+		}
 
 		@Test
 		@DisplayName("한 회차에서 두 위치에 같은 격자를 넣은 시드는 실패한다 (uq_event_grid_per_occ)")

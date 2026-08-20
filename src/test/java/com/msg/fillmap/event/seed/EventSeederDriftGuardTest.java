@@ -188,25 +188,31 @@ class EventSeederDriftGuardTest {
 		Long videoId = tx.execute(status -> 영상생성(사용자생성(), gridId));
 
 		AtomicReference<Exception> 시더예외 = new AtomicReference<>();
+		AtomicReference<Integer> 시더_pid = new AtomicReference<>();
 		Thread 시더 = new Thread(() -> {
 			try {
-				new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-					seeder().seed(json("msg438-race", (int) 중심.gridY() + 10, (int) 중심.gridX())));
+				new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+					시더_pid.set(백엔드_pid());   // 잠금 대기에 들어가기 전에 자기 세션을 알린다
+					seeder().seed(json("msg438-race", (int) 중심.gridY() + 10, (int) 중심.gridX()));
+				});
 			} catch (Exception e) {
 				시더예외.set(e);
 			}
 		}, "msg438-race-seeder");
 
-		tx.executeWithoutResult(status -> {
+		Boolean 시더가_대기했다 = tx.execute(status -> {
 			// 업로드 경로가 대표 격자를 읽기 위해 같은 행을 잠근다 (MSG-440 계약).
 			EventLocation location = locationRepository.findWithLockByLocationKey("msg438-race-loc").orElseThrow();
 			행사영상연결(videoId, location);
 			eventVideoRepository.flush();
 			시더.start();
-			sleep();       // 시더가 잠금 대기에 진입할 시간
+			return 내가_막고_있기를_기다린다(시더_pid);
 		});
 		시더.join(15_000);
 
+		// 대기를 확인하고 커밋했다는 것이 잠금 계약의 관측 증거다. 시간만 기다리면 시더가 늦게 시작한
+		// 경우에도 통과해 버리므로, 경쟁 지점 도달을 실제로 확인한다.
+		assertThat(시더가_대기했다).as("시더가 위치 행 잠금에서 실제로 대기해야 한다").isTrue();
 		assertThat(시더예외.get())
 			.as("잠금 뒤 커밋된 영상을 보고 대표 격자 변경을 거부해야 한다")
 			.isInstanceOf(IllegalStateException.class)
@@ -217,9 +223,73 @@ class EventSeederDriftGuardTest {
 		assertThat(최종_대표).isEqualTo(gridId);
 	}
 
+	/**
+	 * 반대 직렬화 순서. 시더가 먼저 위치 행을 잠그고 대표 격자를 옮기는 동안 업로드가 들어오면, 업로드는
+	 * 대기 후 <b>갱신된</b> 대표 격자를 읽어야 한다. 낡은 값을 읽으면 신규 영상이 옛 격자에 붙어
+	 * 위치의 피드와 격자 노출이 갈라진다 — 앞 테스트와 반대 방향의 같은 드리프트다.
+	 */
+	@Test
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	@DisplayName("시더가 먼저 잠그면 업로드는 갱신된 대표 격자를 읽는다 (반대 직렬화 순서)")
+	void 시더가_먼저_잠그면_업로드는_갱신된_대표_격자를_읽는다() throws InterruptedException {
+		TransactionTemplate tx = new TransactionTemplate(transactionManager);
+		String gridId = GridEncoder.encode(합성_LAT, 합성_LON);
+		GridIndex 중심 = GridEncoder.decode(gridId);
+		tx.executeWithoutResult(status -> seeder().seed(json("msg438-race2", (int) 중심.gridY(), (int) 중심.gridX())));
+
+		AtomicReference<String> 업로드가_읽은_대표 = new AtomicReference<>();
+		AtomicReference<Integer> 업로드_pid = new AtomicReference<>();
+		Thread 업로드 = new Thread(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+			업로드_pid.set(백엔드_pid());
+			업로드가_읽은_대표.set(locationRepository.findWithLockByLocationKey("msg438-race2-loc").orElseThrow()
+				.getRepresentativeGridId());
+		}), "msg438-race2-upload");
+
+		Boolean 업로드가_대기했다 = tx.execute(status -> {
+			// 영상이 붙어 있지 않으므로 가드를 통과하고 대표 격자가 북쪽 10칸으로 이동한다.
+			seeder().seed(json("msg438-race2", (int) 중심.gridY() + 10, (int) 중심.gridX()));
+			업로드.start();
+			return 내가_막고_있기를_기다린다(업로드_pid);
+		});
+		업로드.join(15_000);
+
+		assertThat(업로드가_대기했다).as("업로드가 시더의 위치 행 잠금에서 실제로 대기해야 한다").isTrue();
+		assertThat(업로드가_읽은_대표)
+			.as("커밋된 새 대표 격자를 읽어야 한다 (낡은 값 %s 가 아니다)", gridId)
+			.hasValue(((int) 중심.gridY() + 10) + "_" + (int) 중심.gridX());
+	}
+
+	/**
+	 * 상대 스레드가 <b>이 세션 때문에</b> 막힐 때까지 기다린다 (최대 10초, 관찰되면 true).
+	 * {@code pg_blocking_pids} 는 그 세션을 실제로 막고 있는 백엔드 목록이라, 여기에 내 pid 가 있으면
+	 * "내가 잡은 잠금이 상대를 세우고 있다"가 확정된다. 전역 미허용 잠금 수를 세면 무관한 세션의 대기나
+	 * 다른 잠금(예: 시더끼리의 advisory lock) 대기를 경쟁 지점 도달로 오인한다.
+	 */
+	private boolean 내가_막고_있기를_기다린다(AtomicReference<Integer> 상대_pid) {
+		for (int attempt = 0; attempt < 200; attempt++) {
+			Integer pid = 상대_pid.get();
+			if (pid != null && 내가_막고_있는가(pid)) {
+				return true;
+			}
+			sleep();
+		}
+		return false;
+	}
+
+	private boolean 내가_막고_있는가(int 상대_pid) {
+		return (Boolean) em.createNativeQuery(
+				"SELECT pg_backend_pid() = ANY(pg_blocking_pids(:pid))")
+			.setParameter("pid", 상대_pid)
+			.getSingleResult();
+	}
+
+	private int 백엔드_pid() {
+		return ((Number) em.createNativeQuery("SELECT pg_backend_pid()").getSingleResult()).intValue();
+	}
+
 	private void sleep() {
 		try {
-			Thread.sleep(500);
+			Thread.sleep(50);
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 		}
