@@ -77,6 +77,11 @@ fillmap:
     seed:
       enabled: true
 
+  # 행사 시딩 — 기동마다 seed/events.json 멱등 UPSERT (MSG-438). 코드 기본값 false — 로컬·테스트 무영향
+  event:
+    seed:
+      enabled: true
+
   # 알림 발송 (MSG-179 D1) — 브로커는 dev/prod 공유(단일 KRaft), 토픽 prefix·컨슈머 그룹으로 격리
   notification:
     topic: prod.notification.send

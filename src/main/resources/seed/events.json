@@ -1,0 +1,127 @@
+[
+	{
+		"seriesKey": "biff",
+		"seriesName": "부산국제영화제",
+		"occurrences": [
+			{
+				"occurrenceKey": "biff-busan-2026",
+				"title": "부산국제영화제",
+				"cityName": "부산",
+				"startsAt": "2026-10-06T10:00:00+09:00",
+				"endsAt": "2026-10-15T22:00:00+09:00",
+				"exposure": { "minGridY": 16780, "maxGridY": 16890, "minGridX": 11380, "maxGridX": 11530 },
+				"locations": [
+					{
+						"locationKey": "biff-2026-cinema-center",
+						"name": "영화의전당",
+						"type": "ETC",
+						"operatingHours": null,
+						"displayOrder": 1,
+						"areaRects": [
+							{ "minGridY": 16872, "maxGridY": 16876, "minGridX": 11476, "maxGridX": 11480 }
+						],
+						"representativeGridId": null
+					},
+					{
+						"locationKey": "biff-2026-haeundae-event-zone",
+						"name": "해운대 이벤트존",
+						"type": "EXPERIENCE_ZONE",
+						"operatingHours": null,
+						"displayOrder": 2,
+						"areaRects": [
+							{ "minGridY": 16859, "maxGridY": 16861, "minGridX": 11509, "maxGridX": 11515 }
+						],
+						"representativeGridId": null
+					},
+					{
+						"locationKey": "biff-2026-nampo-biff-square",
+						"name": "남포동 비프광장",
+						"type": "ETC",
+						"operatingHours": null,
+						"displayOrder": 3,
+						"areaRects": [
+							{ "minGridY": 16791, "maxGridY": 16793, "minGridX": 11392, "maxGridX": 11394 }
+						],
+						"representativeGridId": null
+					}
+				]
+			}
+		]
+	},
+	{
+		"seriesKey": "busan-fireworks",
+		"seriesName": "부산불꽃축제",
+		"occurrences": [
+			{
+				"occurrenceKey": "busan-fireworks-2026",
+				"title": "부산불꽃축제",
+				"cityName": "부산",
+				"startsAt": "2026-11-07T18:00:00+09:00",
+				"endsAt": "2026-11-07T22:00:00+09:00",
+				"exposure": { "minGridY": 16820, "maxGridY": 16870, "minGridX": 11460, "maxGridX": 11515 },
+				"locations": [
+					{
+						"locationKey": "busan-fireworks-2026-gwangalli",
+						"name": "광안리해수욕장",
+						"type": "ETC",
+						"operatingHours": null,
+						"displayOrder": 1,
+						"areaRects": [
+							{ "minGridY": 16853, "maxGridY": 16855, "minGridX": 11468, "maxGridX": 11480 }
+						],
+						"representativeGridId": null
+					},
+					{
+						"locationKey": "busan-fireworks-2026-igidae",
+						"name": "이기대",
+						"type": "PHOTO_ZONE",
+						"operatingHours": null,
+						"displayOrder": 2,
+						"areaRects": [
+							{ "minGridY": 16829, "maxGridY": 16831, "minGridX": 11477, "maxGridX": 11479 }
+						],
+						"representativeGridId": null
+					},
+					{
+						"locationKey": "busan-fireworks-2026-dongbaekseom",
+						"name": "동백섬",
+						"type": "PHOTO_ZONE",
+						"operatingHours": null,
+						"displayOrder": 3,
+						"areaRects": [
+							{ "minGridY": 16853, "maxGridY": 16855, "minGridX": 11503, "maxGridX": 11505 }
+						],
+						"representativeGridId": null
+					}
+				]
+			}
+		]
+	},
+	{
+		"seriesKey": "seoul-fireworks",
+		"seriesName": "서울세계불꽃축제",
+		"occurrences": [
+			{
+				"occurrenceKey": "seoul-fireworks-2026",
+				"title": "서울세계불꽃축제",
+				"cityName": "서울",
+				"startsAt": "2026-09-05T14:00:00+09:00",
+				"endsAt": "2026-09-05T21:30:00+09:00",
+				"exposure": { "minGridY": 19460, "maxGridY": 19495, "minGridX": 9480, "maxGridX": 9515 },
+				"locations": [
+					{
+						"locationKey": "seoul-fireworks-2026-yeouido",
+						"name": "여의도 한강공원",
+						"type": "ETC",
+						"operatingHours": null,
+						"displayOrder": 1,
+						"areaRects": [
+							{ "minGridY": 19477, "maxGridY": 19479, "minGridX": 9494, "maxGridX": 9502 }
+						],
+						"representativeGridId": null
+					}
+				]
+			}
+		]
+	}
+]
