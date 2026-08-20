@@ -13,8 +13,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import lombok.extern.slf4j.Slf4j;
@@ -155,6 +158,35 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 		this.regionQueryService = regionQueryService;
 		this.clock = clock;
 		this.ttlMillis = ttlMillis;
+	}
+
+	/**
+	 * 부트 웜업 (MSG-437 후속) — 기동 직후 스냅숏을 한 번 미리 계산해, 첫 사용자 요청이 콜드 재계산 비용을
+	 * 물지 않게 한다. dev 실측에서 콜드 첫 요청이 1.51초(웜 12ms)였고 그 차이는 활성 축제·팝업 전량의
+	 * 역지오코딩이다. 재시작당 한 번뿐인 비용이라 사용자가 없는 기동 시점으로 옮기는 것이 최소 변경이다
+	 * (D1 이 예고한 판단 지점의 결론 — unnest 배치 승격은 활성 미션이 수천 건이 될 때로 유지).
+	 *
+	 * ApplicationReadyEvent 는 시더(ApplicationRunner)들이 끝난 뒤 발화하므로, 시딩을 켠 기동에서도
+	 * 방금 적재한 미션이 그대로 스냅숏에 들어온다.
+	 *
+	 * 실패해도 기동을 죽이지 않는다 — 웜업은 성능 최적화지 기동 조건이 아니다. 재계산이 실패하면 스냅숏이
+	 * 발행되지 않은 상태 그대로라 첫 사용자 요청이 재계산을 다시 시도한다(D1 의미론 그대로).
+	 *
+	 * NOT_SUPPORTED 로 클래스 레벨 {@code @Transactional(readOnly = true)} 밖에 둔다. 그대로 두면 프록시가
+	 * 리스너 진입 시점에 트랜잭션을 열어야 하는데, 하필 이 목표가 겨냥한 기동 시 DB 장애에서는 그 열기가
+	 * CannotCreateTransactionException 으로 실패한다 — 아래 try 에 닿기도 전이라 예외가 리스너 밖으로 나가
+	 * 기동이 죽는다. 트랜잭션 밖이면 프록시가 DB 를 건드리지 않아 그 경로 자체가 사라지고, snapshot() 안의
+	 * 리포지토리 호출들은 Spring Data 자체 트랜잭션으로 돈다(재계산은 원래 호출자 트랜잭션에 기대지 않는
+	 * 읽기 조합이라 동작이 같다). 이 어노테이션을 지우면 결함이 조용히 되살아난다 (Codex P1, 리뷰 반영).
+	 */
+	@EventListener(ApplicationReadyEvent.class)
+	@Transactional(propagation = Propagation.NOT_SUPPORTED)
+	public void warmUpSnapshot() {
+		try {
+			log.info("미션 스냅숏 부트 웜업 완료: 활성 미션 {}건 (MSG-437)", snapshot().size());
+		} catch (RuntimeException e) {
+			log.warn("미션 스냅숏 부트 웜업에 실패해 첫 조회 요청이 재계산합니다 (MSG-437)", e);
+		}
 	}
 
 	@Override
