@@ -18,9 +18,11 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
 import com.msg.fillmap.mission.dto.MissionProgressResponseDto;
+import com.msg.fillmap.mission.dto.MissionRegionAggregateResponseDto;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
 import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.exception.MissionErrorCode;
@@ -70,7 +72,51 @@ public class MissionController {
 		@RequestParam(required = false) Double neLng
 	) {
 		ViewportBounds bounds = toBounds(swLat, swLng, neLat, neLng);
-		return SuccessResponse.of(missionQueryService.getMissionsInViewport(bounds, toType(type)));
+		return SuccessResponse.of(missionQueryService.getMissionsInViewport(bounds, toType(type, LISTABLE_TYPES)));
+	}
+
+	@Operation(
+		summary = "넓은 축척용 미션 행정 단위 집계 조회 (줌아웃)",
+		description = "지도를 축소해 개별 핀을 그릴 수 없는 축척에서, bbox 안의 축제·팝업 미션을 행정 단위"
+			+ "(동·구·시)로 묶어 지역 이름과 개수로 반환한다. 단위 전환 시점은 서버가 정하지 않으며 "
+			+ "클라이언트가 화면 축척에 맞춰 unit 만 바꿔 부른다.\n\n"
+			+ "항목마다 마커 식별 키(regionCode), 표시 이름, 대표 좌표, 미션 수, 그 묶음의 미션 id 목록이 온다. "
+			+ "대표 좌표는 묶음에 속한 미션 귀속점의 평균이라 마커가 실제 데이터 위에 선다. missionIds 는 "
+			+ "묶음 마커를 눌러 줌인한 뒤 개별 조회(GET /api/missions/active) 결과와 교집합을 내 목록을 좁히는 "
+			+ "재료다 — 카드 재료는 개별 조회 응답에 있다.\n\n"
+			+ "미션이 속한 격자 사각형이 아니라 그 사각형 중앙의 귀속점이 bbox 안인지로 센다. 사각형이 화면에 "
+			+ "걸쳤지만 중심이 밖인 미션은 빠지며, 이 때문에 개별 조회와 집계를 갈아타는 순간 마커 수가 미세하게 "
+			+ "달라질 수 있다. 행정동이 판정되지 않은 미션은 제외가 아니라 regionCode·name 이 null 인 항목 "
+			+ "하나로 묶여 마지막에 온다. 범위 안에 미션이 없으면 빈 배열이다.\n\n"
+			+ "bbox span 상한은 단위별로 다르다(DONG 1도, SIGUNGU 4도, SIDO 10도 — 위도·경도 각 변에 따로 적용, "
+			+ "정확히 상한값은 허용). 초과 시 400 + developCode 12401, 좌표가 WGS84 범위를 벗어나거나 bbox 가 "
+			+ "뒤집히면 12400, type 이 없거나 EVENT·POPUP 이 아니면 12402, unit 이 없거나 미지원 값이면 12405 다. "
+			+ "응답에 사용자별 값은 없다."
+	)
+	@GetMapping("/api/missions/aggregation")
+	public SuccessResponse<List<MissionRegionAggregateResponseDto>> getMissionAggregates(
+		@Parameter(description = "미션 종류 — EVENT(지역축제), POPUP(팝업스토어). 대소문자 무관",
+			required = true, example = "POPUP")
+		@RequestParam(required = false) String type,
+		@Parameter(description = "집계 단위 — DONG(동), SIGUNGU(시군구), SIDO(시도). 대소문자 무관",
+			required = true, example = "SIGUNGU")
+		@RequestParam(required = false) String unit,
+		@Parameter(description = "남서 모서리 위도", required = true, example = "35.10")
+		@RequestParam(required = false) Double swLat,
+		@Parameter(description = "남서 모서리 경도", required = true, example = "128.90")
+		@RequestParam(required = false) Double swLng,
+		@Parameter(description = "북동 모서리 위도", required = true, example = "35.30")
+		@RequestParam(required = false) Double neLat,
+		@Parameter(description = "북동 모서리 경도", required = true, example = "129.20")
+		@RequestParam(required = false) Double neLng
+	) {
+		// 검증 순서가 곧 응답 코드다 (§API 명세) — bbox 누락 12400 → type 12402 → unit 12405 →
+		// 좌표 정의역·뒤집힘 12400 → span 상한 12401(서비스 validateBounds).
+		ViewportBounds bounds = toBounds(swLat, swLng, neLat, neLng);
+		// 허용 종류는 서비스 계약 상수 하나가 정본이다 — 컨트롤러가 따로 들면 여기만 열린 유형이
+		// 12402 대신 늘 빈 배열로 나간다.
+		MissionType missionType = toType(type, MissionQueryService.AGGREGATABLE_TYPES);
+		return SuccessResponse.of(missionQueryService.getMissionAggregates(bounds, missionType, toUnit(unit)));
 	}
 
 	@Operation(
@@ -121,7 +167,8 @@ public class MissionController {
 		return new ViewportBounds(swLat, swLng, neLat, neLng);
 	}
 
-	private MissionType toType(String type) {
+	/** 허용 집합은 경로마다 다르다 — 목록은 코스를 포함하고(LISTABLE_TYPES) 집계는 축제·팝업뿐이다. */
+	private MissionType toType(String type, Set<MissionType> allowed) {
 		if (type == null) {
 			throw new ApiException(MissionErrorCode.INVALID_MISSION_TYPE);
 		}
@@ -131,9 +178,21 @@ public class MissionController {
 		} catch (IllegalArgumentException e) {
 			throw new ApiException(MissionErrorCode.INVALID_MISSION_TYPE, e);
 		}
-		if (!LISTABLE_TYPES.contains(parsed)) {
+		if (!allowed.contains(parsed)) {
 			throw new ApiException(MissionErrorCode.INVALID_MISSION_TYPE);
 		}
 		return parsed;
+	}
+
+	/** unit 도 같은 이유로 required = false 로 받아 여기서 검증한다 (GridController.toUnit 동일 패턴). */
+	private RegionUnit toUnit(String unit) {
+		if (unit == null) {
+			throw new ApiException(MissionErrorCode.INVALID_AGGREGATION_UNIT);
+		}
+		try {
+			return RegionUnit.valueOf(unit.toUpperCase(Locale.ROOT));
+		} catch (IllegalArgumentException e) {
+			throw new ApiException(MissionErrorCode.INVALID_AGGREGATION_UNIT, e);
+		}
 	}
 }
