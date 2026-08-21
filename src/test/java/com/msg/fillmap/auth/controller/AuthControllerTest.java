@@ -88,7 +88,7 @@ class AuthControllerTest {
 		KakaoOidcProperties kakaoOidcProperties() {
 			// nonceCookieSecure=true — 공통(dev·prod) 기본값. false 분기는 NonceCookies 직접 단언으로 덮는다
 			return new KakaoOidcProperties("https://kauth.kakao.com",
-				"https://kauth.kakao.com/.well-known/jwks.json", "test-client-id",
+				"https://kauth.kakao.com/.well-known/jwks.json", "test-client-id", "test-app-client-id",
 				"https://kauth.kakao.com/oauth/token", "https://kauth.kakao.com/oauth/authorize", true);
 		}
 	}
