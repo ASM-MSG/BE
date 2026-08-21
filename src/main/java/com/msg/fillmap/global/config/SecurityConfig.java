@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -79,6 +80,15 @@ public class SecurityConfig {
 				.requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
 				// API 문서(MSG-131) — Swagger UI · OpenAPI 스펙. prod 노출 정책은 별도 검토.
 				.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+				// 행사 조회(MSG-439) — 비로그인 열람 허용("상단 칩은 비로그인, 업로드는 로그인").
+				// GET 한정 등록이 계약의 일부다: 메서드 무제한 문자열 패턴으로 열면 같은 경로에 붙을 쓰기
+				// API(업로드 MSG-440 · 댓글 MSG-441 · 알림 MSG-442)까지 조용히 인증 없이 열린다.
+				// 경로도 정확히 넷만 적는다 — /api/grids/** 로 넓히면 격자 단일 조회의 인증이 함께 풀린다.
+				.requestMatchers(HttpMethod.GET,
+					"/api/event-occurrences",
+					"/api/event-occurrences/*",
+					"/api/event-occurrences/*/locations",
+					"/api/grids/*/event-locations").permitAll()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.
