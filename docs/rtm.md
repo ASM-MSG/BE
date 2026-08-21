@@ -5,7 +5,7 @@
 **병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(`git checkout --ours docs/rtm.md` 등)
 스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다.
 
-요약: FR 248건 중 테스트 연결 212건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 29건, 성격상 테스트 비대상 7건 별도)
+요약: FR 248건 중 테스트 연결 214건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 27건, 성격상 테스트 비대상 7건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -175,14 +175,14 @@
 | FR-MISSION-17 | 진행 중 | MissionControllerTest, MissionDetailConsistencyTest, MissionDetailServiceTest, MissionVideoControllerTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVideoListServiceTest, MissionVisitedGridQueryTest |
 | FR-MISSION-18 | 진행 중 | MissionDetailConsistencyTest, MissionDetailServiceTest, MissionProgressQueryTest, MissionProgressServiceTest, MissionVisitedGridQueryTest |
 | FR-MISSION-19 | 계획 | (없음) |
-| FR-EVENT-01 | 계획 | (없음) |
-| FR-EVENT-02 | 계획 | (없음) |
+| FR-EVENT-01 | 구현됨 | EventQueryServiceTest |
+| FR-EVENT-02 | 구현됨 | EventQueryServiceTest |
 | FR-EVENT-03 | 폐기됨 | (없음) |
 | FR-EVENT-04 | 폐기됨 | (없음) |
 | FR-EVENT-05 | 폐기됨 | (없음) |
 | FR-EVENT-06 | 계획 | (없음) |
-| FR-EVENT-07 | 진행 중 | EventOccurrenceStatusTest, EventSeederTest |
-| FR-EVENT-08 | 진행 중 | EventSeederTest, RepresentativeGridResolverTest |
+| FR-EVENT-07 | 진행 중 | EventOccurrenceStatusTest, EventQueryServiceTest, EventSeederTest |
+| FR-EVENT-08 | 진행 중 | EventQueryServiceTest, EventSeederTest, RepresentativeGridResolverTest |
 | FR-EVENT-09 | 계획 | (없음) |
 | FR-EVENT-10 | 계획 | (없음) |
 | FR-EVENT-11 | 구현됨 | EventViewerCacheFailureControllerTest, EventViewerControllerTest, EventViewerServiceImplTest |
@@ -280,8 +280,6 @@
 - FR-MISSION-12 (계획)
 - FR-MISSION-15 (계획)
 - FR-MISSION-19 (계획)
-- FR-EVENT-01 (계획)
-- FR-EVENT-02 (계획)
 - FR-EVENT-03 (폐기됨)
 - FR-EVENT-04 (폐기됨)
 - FR-EVENT-05 (폐기됨)
