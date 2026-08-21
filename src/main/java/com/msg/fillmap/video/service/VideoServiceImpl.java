@@ -44,6 +44,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 
 import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
@@ -134,6 +135,9 @@ public class VideoServiceImpl implements VideoService {
 	private final ZoneNameQueryService zoneNameQueryService;
 	// 처리 시간 시작점 등록·제거 (MSG-343 D2) — submitEncoding 진입(확정 커밋 직후)이 시작점이다.
 	private final VideoProcessingMetrics videoProcessingMetrics;
+	// 행사 영상 판정 (MSG-440) — 공개범위 전환 차단 하나에만 쓴다. 같은 Owner B 내부 의존이고, 엔티티
+	// 방향(event 가 video 참조)과 빈 방향(video 서비스가 event 리포지토리 참조)이 달라 순환이 없다.
+	private final EventVideoRepository eventVideoRepository;
 	private final Clock clock;
 
 	/**
@@ -149,11 +153,11 @@ public class VideoServiceImpl implements VideoService {
 		BadgeAwardService badgeAwardService, StreakCommandService streakCommandService,
 		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService,
 		FriendshipQueryService friendshipQueryService, ZoneNameQueryService zoneNameQueryService,
-		VideoProcessingMetrics videoProcessingMetrics) {
+		VideoProcessingMetrics videoProcessingMetrics, EventVideoRepository eventVideoRepository) {
 		this(videoRepository, videoEncodingService, videoStatusWriter, s3Presigner, s3Client, awsProperties,
 			regionStatsCommandService, thumbnailUrlPresigner, badgeAwardService, streakCommandService,
 			missionAwardService, hotScoreCommandService, friendshipQueryService, zoneNameQueryService,
-			videoProcessingMetrics, Clock.systemUTC());
+			videoProcessingMetrics, eventVideoRepository, Clock.systemUTC());
 	}
 
 	@Override
@@ -314,6 +318,12 @@ public class VideoServiceImpl implements VideoService {
 		Video video = findOwnedVideo(userId, videoId);
 		if (video.isDeleted()) {
 			throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);   // 지운 영상은 공개로 되살리지 않는다
+		}
+		// 행사 영상은 PUBLIC 고정이라 전환 자체를 막는다 (MSG-438 확정, MSG-440 구현). 피드·위치별 영상
+		// 수·상세가 전부 PUBLIC 게이트라, 전환을 허용하면 올린 본인만 자기 영상을 행사방에서 잃는다.
+		// 존재·소유권 판정 뒤에 두어 기존 에러 우선순위(3404 → 3403 → 그 밖)를 유지한다.
+		if (eventVideoRepository.existsById(videoId)) {
+			throw new ApiException(VideoErrorCode.EVENT_VIDEO_VISIBILITY_FIXED);
 		}
 		video.changeVisibility(parseVisibility(request.visibility()));
 		return VideoVisibilityResponseDto.from(video);
