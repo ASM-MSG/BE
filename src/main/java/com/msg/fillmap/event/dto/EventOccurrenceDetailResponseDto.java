@@ -11,7 +11,8 @@ import com.msg.fillmap.event.entity.EventStatus;
 /**
  * 행사방 헤더 (MSG-439 API 2). status 와 uploadClosesAt 은 저장 컬럼이 아니라 서버 시각 기준 파생값이다
  * ({@link EventOccurrence#statusAt} · {@link EventOccurrence#uploadClosesAt}).
- * 열람 인원(MSG-443)과 실제 알림 구독 조회(MSG-442)는 이 응답의 범위 밖이다.
+ * notificationOn 도 저장값이 아니라 파생값이다 — 구독 행 존재 AND 상태가 예정·진행 중 (MSG-442).
+ * 열람 인원(MSG-443)은 이 응답의 범위 밖이다.
  */
 @Schema(description = "행사 회차 상세 — 행사방 헤더",
 	requiredProperties = {"occurrenceId", "seriesId", "title", "startsAt", "endsAt", "uploadClosesAt",
@@ -39,7 +40,8 @@ public record EventOccurrenceDetailResponseDto(
 		allowableValues = {"UPCOMING", "LIVE", "UPLOAD_GRACE", "ARCHIVED"})
 	String status,
 
-	@Schema(description = "알림 구독 여부 — 비로그인은 항상 false, 구독 저장소(MSG-442) 전까지는 로그인도 false",
+	@Schema(description = "알림 구독 여부 — 구독 행 존재이면서 회차가 예정·진행 중일 때만 true. 비로그인은 항상 false 고, "
+		+ "종료된 회차는 구독 행이 남아 있어도 false 다",
 		example = "false")
 	Boolean notificationOn,
 

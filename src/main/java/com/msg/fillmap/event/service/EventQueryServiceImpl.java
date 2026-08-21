@@ -85,6 +85,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 	private final EventVideoRepository eventVideoRepository;
 	private final GridQueryService gridQueryService;
 	private final ZoneNameQueryService zoneNameQueryService;
+	private final EventNotificationService eventNotificationService;
 	private final Clock clock;
 
 	/**
@@ -99,10 +100,11 @@ public class EventQueryServiceImpl implements EventQueryService {
 		EventLocationGridRepository locationGridRepository,
 		EventVideoRepository eventVideoRepository,
 		GridQueryService gridQueryService,
-		ZoneNameQueryService zoneNameQueryService
+		ZoneNameQueryService zoneNameQueryService,
+		EventNotificationService eventNotificationService
 	) {
 		this(occurrenceRepository, locationRepository, locationGridRepository, eventVideoRepository,
-			gridQueryService, zoneNameQueryService, Clock.systemUTC());
+			gridQueryService, zoneNameQueryService, eventNotificationService, Clock.systemUTC());
 	}
 
 	public EventQueryServiceImpl(
@@ -112,6 +114,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		EventVideoRepository eventVideoRepository,
 		GridQueryService gridQueryService,
 		ZoneNameQueryService zoneNameQueryService,
+		EventNotificationService eventNotificationService,
 		Clock clock
 	) {
 		this.occurrenceRepository = occurrenceRepository;
@@ -120,6 +123,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		this.eventVideoRepository = eventVideoRepository;
 		this.gridQueryService = gridQueryService;
 		this.zoneNameQueryService = zoneNameQueryService;
+		this.eventNotificationService = eventNotificationService;
 		this.clock = clock;
 	}
 
@@ -150,9 +154,11 @@ public class EventQueryServiceImpl implements EventQueryService {
 			.filter(candidate -> isVisible(candidate, now))
 			.map(PreviousOccurrenceDto::from)
 			.toList();
-		// notificationOn 은 구독 저장소(MSG-442)가 생기기 전까지 로그인 여부와 무관하게 false 다.
-		// userId 는 그때 구독 조회 키가 되며, 지금은 컨트롤러→서비스 전달 계약만 확정한다.
-		return EventOccurrenceDetailResponseDto.of(occurrence, occurrence.statusAt(now), false, previous);
+		// 노출 상태는 행 존재가 아니라 파생값이다 (MSG-442) — 비로그인은 항상 false 고, 종료된 회차는
+		// 구독 행이 남아 있어도 false 다. now 를 넘겨 status 와 같은 시각으로 판정한다 — 두 서비스가 각자
+		// Clock 을 읽으면 경계 근처에서 "진행 중인데 구독이 꺼져 보이는" 응답이 나온다.
+		boolean notificationOn = eventNotificationService.isSubscribed(userId, occurrenceId, now);
+		return EventOccurrenceDetailResponseDto.of(occurrence, occurrence.statusAt(now), notificationOn, previous);
 	}
 
 	@Override
@@ -274,9 +280,13 @@ public class EventQueryServiceImpl implements EventQueryService {
 		return rightStartsAt.compareTo(leftStartsAt);
 	}
 
-	/** 노출 판정 — 아직 노출 시작 전인 예정 회차만 감춘다. 네 조회가 이 술어 하나를 공유한다 (§API 명세). */
+	/**
+	 * 노출 판정 — 아직 노출 시작 전인 예정 회차만 감춘다 (§API 명세). 정의는 엔티티가 갖는다
+	 * ({@link EventOccurrence#isVisibleAt}) — 알림 구독(MSG-442)도 같은 술어를 써야 미공개 회차의 존재가
+	 * 한쪽 경로로만 새지 않는다.
+	 */
 	private boolean isVisible(EventOccurrence occurrence, LocalDateTime now) {
-		return occurrence.statusAt(now) != EventStatus.UPCOMING || !occurrence.getVisibleFrom().isAfter(now);
+		return occurrence.isVisibleAt(now);
 	}
 
 	/** 노출 영역 사각형과 뷰포트(보정 포함)의 정수 부등식 겹침 판정 — 과다 포함 쪽으로만 틀리고 누락이 없다. */

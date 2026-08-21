@@ -135,7 +135,9 @@ public class EventVideoServiceImpl implements EventVideoService {
 		if (alreadyConfirmed.isPresent()) {
 			return replay(userId, locationId, alreadyConfirmed.get());
 		}
-		validateUploadWindow(occurrence, now);
+		// 창 판정(startsAt <= now < uploadClosesAt, 반개구간)은 442 가드가 단일 판정처다 — now 를 넘겨
+		// 잠금·refresh 뒤의 이 시각으로 판정하게 한다. 일반 격자 업로드(POST /api/videos)는 이 창과 무관하다.
+		EventLifecycleGuard.checkUploadOpen(occurrence, now);
 
 		ConfirmedVideo confirmed = videoService.confirmAtGrid(userId, location.getRepresentativeGridId(),
 			request.s3Key(), request.durationSec(), request.recordedAt());
@@ -290,21 +292,6 @@ public class EventVideoServiceImpl implements EventVideoService {
 		}
 		return new EventVideoUploadResponseDto(video.getId(), video.getGridId(),
 			video.getProcessingStatus().name(), false, List.of());
-	}
-
-	/**
-	 * 업로드 허용 창 = {@code startsAt <= now < uploadClosesAt()} (신규 확정에만 적용).
-	 * 시작 전 불가는 2026-08-21 확정이다 — 행사 시작 전에는 행사 관련 기록이 남으면 안 된다(PRD §4.2).
-	 * 경계는 시작 정각 포함·마감 정각 제외의 반개구간이라 정각이 정확히 한 판정에만 속한다
-	 * ({@code EventOccurrence.statusAt} 과 같은 축). 일반 격자 업로드(POST /api/videos)는 이 창과 무관하다.
-	 */
-	private void validateUploadWindow(EventOccurrence occurrence, LocalDateTime now) {
-		if (now.isBefore(occurrence.getStartsAt())) {
-			throw new ApiException(EventErrorCode.EVENT_UPLOAD_NOT_STARTED);
-		}
-		if (!now.isBefore(occurrence.uploadClosesAt())) {
-			throw new ApiException(EventErrorCode.EVENT_UPLOAD_CLOSED);
-		}
 	}
 
 	/**

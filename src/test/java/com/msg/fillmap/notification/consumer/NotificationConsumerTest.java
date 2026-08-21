@@ -280,6 +280,35 @@ class NotificationConsumerTest {
 		awaitStatus(second, "SENT");
 	}
 
+	// 검증: FR-EVENT-06
+	@Test
+	@DisplayName("EVENT 는 전송률 제한 없이 발송된다 — MSG-442, 시작 알림은 dedupe 가 회차당 1건으로 이미 누른다")
+	void EVENT는_발송_상한이_없다() throws Exception {
+		registerToken("ok-" + System.nanoTime());
+		long first = newNotification(NotificationCategory.EVENT, "행사 시작");
+		long second = newNotification(NotificationCategory.EVENT, "일정 변경");
+
+		publish(first);
+		publish(second);
+
+		awaitStatus(first, "SENT");
+		awaitStatus(second, "SENT");
+	}
+
+	// 검증: FR-EVENT-06
+	@Test
+	@DisplayName("EVENT off 사용자의 행사 알림은 SKIPPED PREF_OFF 다 — 카테고리 스위치가 회차 구독 위에 겹친다")
+	void EVENT_off_사용자의_행사_알림은_SKIPPED_처리된다() throws Exception {
+		given(notificationPreferenceService.isEnabled(eq(me), eq(NotificationCategory.EVENT))).willReturn(false);
+		long id = newNotification(NotificationCategory.EVENT, "행사 시작");
+
+		publish(id);
+
+		awaitStatus(id, "SKIPPED");
+		assertThat(lastErrorOf(id)).isEqualTo("PREF_OFF");
+		then(notificationSender).shouldHaveNoInteractions();
+	}
+
 	@Test
 	@DisplayName("토큰이 없으면 SKIPPED NO_TOKEN 이다")
 	void 토큰이_없으면_SKIPPED_NO_TOKEN이다() throws Exception {

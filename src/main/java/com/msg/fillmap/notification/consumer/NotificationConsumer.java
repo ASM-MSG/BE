@@ -138,6 +138,8 @@ public class NotificationConsumer {
 			// 알림이 기기 로컬 생성이라 서버 발송 경로가 없고, 하루 5건 상한(PRD FR-4)도 앱 상수라 서버가 세지
 			// 않는다. 이 case 에 런타임이 도달하면 그 자체가 결함이다 — outbox 에 이 카테고리 행이 생겼다는 뜻 (MSG-418).
 			case MISSION_NEARBY -> null;
+			// 시작 알림은 dedupe 가 회차당 1건으로 이미 누르고 일정 변경은 희소해 도배 벡터가 없다 (MSG-442)
+			case EVENT -> null;
 		};
 		if (perDay == null) {
 			return false;

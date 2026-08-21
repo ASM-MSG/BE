@@ -71,6 +71,14 @@ public class EventOccurrence {
 	@Column(name = "max_grid_x", nullable = false)
 	private Integer maxGridX;
 
+	/**
+	 * 일정 개정 번호 (MSG-442) — 시각(starts_at·ends_at)이 실제로 바뀐 재시드마다 +1 하는 단조 증가값이다.
+	 * 일정 변경 알림의 dedupe 키 재료이고, 시각값을 키로 쓰면 일정 왕복(A→B→A→B)에서 두 번째 "B로 변경"이
+	 * 첫 번째와 같은 키가 되어 억제되기 때문에 번호를 쓴다.
+	 */
+	@Column(name = "schedule_revision", nullable = false)
+	private Integer scheduleRevision = 0;
+
 	public EventOccurrence(EventSeries series, String occurrenceKey) {
 		this.series = series;
 		this.occurrenceKey = occurrenceKey;
@@ -79,9 +87,15 @@ public class EventOccurrence {
 	/**
 	 * 재시드 갱신. starts_at 과 visible_from 을 항상 함께 세팅한다 — 한 flush 의 단일 UPDATE 로 두 컬럼이
 	 * 같이 나가므로 행 단위 CHECK 등식(visible_from = starts_at - 14일)이 중간 상태 없이 유지된다.
+	 * <p>
+	 * 시각이 실제로 바뀐 경우에만 {@link #scheduleRevision} 을 +1 한다 (MSG-442) — 값이 같은 재시드는
+	 * 번호가 불변이라 멱등이 유지되고, 시더가 이 번호로 일정 변경 알림 발송 여부를 판단한다.
 	 */
 	public void update(EventSeries series, String title, String cityName, LocalDateTime startsAt,
 		LocalDateTime endsAt, int minGridY, int maxGridY, int minGridX, int maxGridX) {
+		if (isScheduleChanged(startsAt, endsAt)) {
+			this.scheduleRevision = this.scheduleRevision + 1;
+		}
 		this.series = series;
 		this.title = title;
 		this.cityName = cityName;
@@ -92,6 +106,22 @@ public class EventOccurrence {
 		this.maxGridY = maxGridY;
 		this.minGridX = minGridX;
 		this.maxGridX = maxGridX;
+	}
+
+	/**
+	 * 최초 세팅(startsAt 이 아직 null 인 신규 회차)은 변경이 아니다 — 개정 0 으로 태어나야 첫 시딩이
+	 * 존재하지도 않던 일정의 "변경 알림"을 만들지 않는다.
+	 */
+	private boolean isScheduleChanged(LocalDateTime startsAt, LocalDateTime endsAt) {
+		return this.startsAt != null && (!this.startsAt.equals(startsAt) || !this.endsAt.equals(endsAt));
+	}
+
+	/**
+	 * 노출 판정 (MSG-439 §API 명세 존재 은닉) — 아직 노출 시작 전인 예정 회차만 감춘다. 조회 네 경로와
+	 * 알림 구독(MSG-442)이 이 술어 하나를 공유한다. 갈라지면 미공개 회차의 존재가 한쪽 경로로만 새어 나간다.
+	 */
+	public boolean isVisibleAt(LocalDateTime now) {
+		return statusAt(now) != EventStatus.UPCOMING || !visibleFrom.isAfter(now);
 	}
 
 	/** 업로드 마감 = 종료 30일 후 (PRD §4.2). */
