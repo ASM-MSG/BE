@@ -94,6 +94,14 @@ public class SecurityConfig {
 					"/api/event-occurrences/*",
 					"/api/event-occurrences/*/locations",
 					"/api/grids/*/event-locations").permitAll()
+				// 행사 영상 조회(MSG-440) — 위 조회 4종과 같은 규칙이다. 피드 경로는 업로드 POST 와 URL 이
+				// 같아 메서드 무제한으로 열면 업로드까지 익명에 풀린다 — GET 한정이 계약의 일부다.
+				.requestMatchers(HttpMethod.GET,
+					"/api/event-occurrences/*/locations/*/videos",
+					"/api/event-videos/*").permitAll()
+				// 상세의 명시 HEAD 매핑(부수효과 없는 200)은 GET 한정 matcher 에 안 잡혀 익명 HEAD 가 401 이
+				// 된다 — 같은 경로를 HEAD 로도 연다. HEAD 응답은 전 id 동일이라 존재 오라클이 아니다.
+				.requestMatchers(HttpMethod.HEAD, "/api/event-videos/*").permitAll()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.
