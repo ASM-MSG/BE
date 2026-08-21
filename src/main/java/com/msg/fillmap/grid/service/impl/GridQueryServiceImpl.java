@@ -1,6 +1,9 @@
 package com.msg.fillmap.grid.service.impl;
 
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -84,6 +87,26 @@ public class GridQueryServiceImpl implements GridQueryService {
 		return regionQueryService.resolveByPoint(center.lat(), center.lon())
 			.map(RegionView::regionName)
 			.orElse(null);
+	}
+
+	/**
+	 * 격자마다 중심점 재판정을 돌려 이름을 모은다 (MSG-439). 저장 라벨(grids.region_code)을 섞지 않고 전량
+	 * 중심점으로 가는 이유는 호출부인 행사 대표 격자에 grids row 가 없는 게 정상 케이스라, 저장 라벨 조회를
+	 * 먼저 태워봐야 대부분 miss 라서다. 판정 술어가 getCell 과 같아 두 경로의 답이 갈리지 않는다(MSG-349 FR-6).
+	 * 벌크 계약이지만 내부는 격자당 resolveByPoint(ST_Covers) 1회를 도는 루프다 — RegionQueryService 에
+	 * 다중 점 판정이 없고, 호출부가 소수 격자(행사 위치 목록 수준, 회차당 한 자릿수)라 스펙이 용인한 형태다.
+	 * 수백 건 규모 소비처가 생기면 점 배열을 한 번에 판정하는 벌크 쿼리로 올린다.
+	 */
+	@Override
+	public Map<String, String> resolveRegionNames(Collection<String> gridIds) {
+		Map<String, String> names = new LinkedHashMap<>();
+		gridIds.stream().distinct().forEach(gridId -> {
+			String regionName = resolveRegionName(gridId);
+			if (regionName != null) {
+				names.put(gridId, regionName);
+			}
+		});
+		return names;
 	}
 
 	@Override
