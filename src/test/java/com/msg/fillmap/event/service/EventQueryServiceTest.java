@@ -39,7 +39,10 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.grid.repository.GridRepository;
 import com.msg.fillmap.grid.service.GridQueryService;
+import com.msg.fillmap.region.RegionTestFixtures;
+import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
@@ -75,9 +78,13 @@ class EventQueryServiceTest {
 	private static final double 곡률_중간_LON = 127.441772;
 	private static final double 곡률_동쪽_LON = 127.603991;
 
-	/** 부산 서면 — 행정동 폴리곤 안이라 regionName 이 실제로 채워지는 내륙 좌표. */
-	private static final double 내륙_LAT = 35.1578;
-	private static final double 내륙_LON = 129.0594;
+	/**
+	 * 행정동 이름 검증용 합성 행정동 (GridQueryServiceIntegrationTest 선례). regions 시딩은 기본 off 라
+	 * CI 는 regions 가 빈 상태다 — 실 행정동 좌표에 기대면 로컬만 통과하고 CI 에서 깨진다(MSG-349).
+	 * 실존하지 않는 sido 999 대역 코드라 실데이터와 충돌하지 않고, 롤백으로 사라진다.
+	 */
+	private static final String REGION_CODE = "9996000439";
+	private static final String REGION_NAME = "합성시 합성구 합성439동";
 
 	@Autowired
 	private EventSeriesRepository seriesRepository;
@@ -102,6 +109,12 @@ class EventQueryServiceTest {
 
 	@Autowired
 	private ZoneRepository zoneRepository;
+
+	@Autowired
+	private RegionRepository regionRepository;
+
+	@Autowired
+	private GridRepository gridRepository;
 
 	@Autowired
 	private GridQueryService gridQueryService;
@@ -210,6 +223,14 @@ class EventQueryServiceTest {
 			.maxGridX((int) index.gridX())
 			.priority(0)
 			.build());
+	}
+
+	/** 격자 한 칸을 덮는 합성 행정동 — 실 regions 데이터 유무와 무관하게 regionName 기대값을 고정한다. */
+	private void 합성행정동(long dy, long dx) {
+		regionRepository.upsert(REGION_CODE, REGION_NAME, REGION_CODE.substring(0, 5),
+			RegionTestFixtures.cellBlockPolygonJson(바다.gridY() + dy, 바다.gridY() + dy + 1,
+				바다.gridX() + dx, 바다.gridX() + dx + 1),
+			RegionTestFixtures.CELL_AREA_M2);
 	}
 
 	private List<Long> 회차ids(List<EventOccurrenceChipResponseDto> chips, List<EventOccurrence> mine) {
@@ -570,15 +591,19 @@ class EventQueryServiceTest {
 		}
 
 		@Test
-		@DisplayName("grids 행이 없는 내륙 대표 격자도 regionName 이 담긴다 (lazy insert 무관)")
-		void grids_행이_없는_내륙_대표_격자도_regionName이_담긴다() {
-			String 내륙격자 = GridEncoder.encode(내륙_LAT, 내륙_LON);
-			EventOccurrence 진행중 = 회차(시리즈(), "내륙 행사", "부산", NOW.minusDays(1), NOW.plusDays(1));
-			위치(진행중, "내륙 위치", 1, 내륙격자);
+		@DisplayName("grids 행이 없는 행정동 안 대표 격자도 regionName 이 담긴다 (lazy insert 무관)")
+		void grids_행이_없는_행정동_안_대표_격자도_regionName이_담긴다() {
+			String 대표 = 격자(50, 50);
+			합성행정동(50, 50);
+			assertThat(gridRepository.findById(대표))
+				.as("전제: 아무도 영상을 올리지 않은 격자라 grids row 가 없다")
+				.isEmpty();
+			EventOccurrence 진행중 = 회차(시리즈(), "행정동 행사", "부산", NOW.minusDays(1), NOW.plusDays(1));
+			위치(진행중, "행정동 위치", 1, 대표);
 
 			assertThat(service().getLocations(진행중.getId()).get(0).regionName())
 				.as("행사 대표 격자에는 grids row 가 없을 수 있다 — 중심점 재판정이라야 이름이 나온다")
-				.isNotNull();
+				.isEqualTo(REGION_NAME);
 		}
 	}
 
