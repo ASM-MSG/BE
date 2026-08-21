@@ -1,5 +1,6 @@
 package com.msg.fillmap.event.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -20,4 +21,10 @@ public interface EventLocationRepository extends JpaRepository<EventLocation, Lo
 	 */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	Optional<EventLocation> findWithLockByLocationKey(String locationKey);
+
+	/**
+	 * 회차의 위치 목록 (MSG-439 API 3). 정렬 계약은 display_order 오름차순 → id 오름차순 타이브레이커라
+	 * 같은 표시 순서를 준 위치가 둘이어도 응답 순서가 흔들리지 않는다.
+	 */
+	List<EventLocation> findByOccurrenceIdOrderByDisplayOrderAscIdAsc(Long occurrenceId);
 }
