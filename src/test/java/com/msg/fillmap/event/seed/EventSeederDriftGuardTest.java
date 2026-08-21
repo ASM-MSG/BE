@@ -30,12 +30,14 @@ import com.msg.fillmap.event.entity.EventLocation;
 import com.msg.fillmap.event.entity.EventVideo;
 import com.msg.fillmap.event.repository.EventLocationGridRepository;
 import com.msg.fillmap.event.repository.EventLocationRepository;
+import com.msg.fillmap.event.repository.EventNotificationSubscriptionRepository;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventSeriesRepository;
 import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
+import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
@@ -74,6 +76,12 @@ class EventSeederDriftGuardTest {
 	private EventVideoRepository eventVideoRepository;
 
 	@Autowired
+	private EventNotificationSubscriptionRepository subscriptionRepository;
+
+	@Autowired
+	private NotificationCommandService notificationCommandService;
+
+	@Autowired
 	private VideoRepository videoRepository;
 
 	@Autowired
@@ -90,7 +98,8 @@ class EventSeederDriftGuardTest {
 
 	private EventSeeder seeder() {
 		EventSeeder seeder = new EventSeeder(seriesRepository, occurrenceRepository, locationRepository,
-			locationGridRepository, eventVideoRepository, objectMapper);
+			locationGridRepository, eventVideoRepository, subscriptionRepository, notificationCommandService,
+			objectMapper);
 		ReflectionTestUtils.setField(seeder, "enabled", true);
 		ReflectionTestUtils.setField(seeder, "path", "unused");
 		return seeder;

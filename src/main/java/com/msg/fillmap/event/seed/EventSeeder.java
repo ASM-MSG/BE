@@ -2,6 +2,7 @@ package com.msg.fillmap.event.seed;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -21,7 +23,6 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import tools.jackson.databind.ObjectMapper;
@@ -29,13 +30,17 @@ import tools.jackson.databind.ObjectMapper;
 import com.msg.fillmap.event.entity.EventLocation;
 import com.msg.fillmap.event.entity.EventLocationGrid;
 import com.msg.fillmap.event.entity.EventLocationType;
+import com.msg.fillmap.event.entity.EventNotificationSubscription;
 import com.msg.fillmap.event.entity.EventOccurrence;
 import com.msg.fillmap.event.entity.EventSeries;
 import com.msg.fillmap.event.repository.EventLocationGridRepository;
 import com.msg.fillmap.event.repository.EventLocationRepository;
+import com.msg.fillmap.event.repository.EventNotificationSubscriptionRepository;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventSeriesRepository;
 import com.msg.fillmap.event.repository.EventVideoRepository;
+import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.service.NotificationCommandService;
 
 /**
  * 행사 시더 (MSG-438, ZoneSeeder 선례). 기본 off — {@code fillmap.event.seed.enabled=true} 일 때만
@@ -49,7 +54,6 @@ import com.msg.fillmap.event.repository.EventVideoRepository;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @Order(30)
 public class EventSeeder implements ApplicationRunner {
 
@@ -59,12 +63,44 @@ public class EventSeeder implements ApplicationRunner {
 	/** EPSG:5179 국내 정의역을 넉넉히 포함하는 방어 상한. 정수 제곱 산술의 오버플로 여유도 여기서 나온다. */
 	private static final int GRID_INDEX_UPPER_EXCLUSIVE = 100_000;
 
+	/** 일정 변경 알림 문구 (MSG-442 발송 표 확정값). */
+	private static final String SCHEDULE_CHANGED_BODY = "행사 일정이 변경됐어요. 새 일정을 확인해 보세요";
+
 	private final EventSeriesRepository seriesRepository;
 	private final EventOccurrenceRepository occurrenceRepository;
 	private final EventLocationRepository locationRepository;
 	private final EventLocationGridRepository locationGridRepository;
 	private final EventVideoRepository eventVideoRepository;
+	private final EventNotificationSubscriptionRepository subscriptionRepository;
+	private final NotificationCommandService notificationCommandService;
 	private final ObjectMapper objectMapper;
+	private final Clock clock;
+
+	@Autowired
+	public EventSeeder(EventSeriesRepository seriesRepository, EventOccurrenceRepository occurrenceRepository,
+		EventLocationRepository locationRepository, EventLocationGridRepository locationGridRepository,
+		EventVideoRepository eventVideoRepository, EventNotificationSubscriptionRepository subscriptionRepository,
+		NotificationCommandService notificationCommandService, ObjectMapper objectMapper) {
+		this(seriesRepository, occurrenceRepository, locationRepository, locationGridRepository,
+			eventVideoRepository, subscriptionRepository, notificationCommandService, objectMapper,
+			Clock.systemUTC());
+	}
+
+	/** 종료 경계 통과 판정용 고정 Clock 주입 (MSG-442, EventQueryServiceImpl 선례). UTC 인 이유는 회차 시각이 UTC 저장이라서다. */
+	public EventSeeder(EventSeriesRepository seriesRepository, EventOccurrenceRepository occurrenceRepository,
+		EventLocationRepository locationRepository, EventLocationGridRepository locationGridRepository,
+		EventVideoRepository eventVideoRepository, EventNotificationSubscriptionRepository subscriptionRepository,
+		NotificationCommandService notificationCommandService, ObjectMapper objectMapper, Clock clock) {
+		this.seriesRepository = seriesRepository;
+		this.occurrenceRepository = occurrenceRepository;
+		this.locationRepository = locationRepository;
+		this.locationGridRepository = locationGridRepository;
+		this.eventVideoRepository = eventVideoRepository;
+		this.subscriptionRepository = subscriptionRepository;
+		this.notificationCommandService = notificationCommandService;
+		this.objectMapper = objectMapper;
+		this.clock = clock;
+	}
 
 	@Value("${fillmap.event.seed.enabled:false}")
 	private boolean enabled;
@@ -89,13 +125,16 @@ public class EventSeeder implements ApplicationRunner {
 	public int seed(Resource resource) {
 		List<EventSeed> seeds = read(resource);
 		// 롤링 배포로 두 인스턴스가 동시에 돌 때의 자연키 UNIQUE 충돌을 막는다. 트랜잭션 종료 시 자동 해제.
-		seriesRepository.acquireSeedLock();
+		// MSG-442 의 종료 구독 정리 틱도 같은 키를 잡으므로 시더와 정리가 한 줄로 직렬화된다.
+		seriesRepository.acquireEventWriteLock();
+		// 락 획득 뒤에 읽는다 — 대기 중 정리 틱이 커밋했을 수 있어 그 이전 시각으로 판정하면 창이 어긋난다.
+		LocalDateTime now = LocalDateTime.now(clock);
 
 		int locations = 0;
 		for (EventSeed seed : seeds) {
 			EventSeries series = upsertSeries(seed);
 			for (EventSeed.Occurrence occurrenceSeed : orEmpty(seed.occurrences())) {
-				EventOccurrence occurrence = upsertOccurrence(series, occurrenceSeed);
+				EventOccurrence occurrence = upsertOccurrence(series, occurrenceSeed, now);
 				for (EventSeed.Location locationSeed : orEmpty(occurrenceSeed.locations())) {
 					upsertLocation(occurrence, locationSeed);
 					locations++;
@@ -112,16 +151,51 @@ public class EventSeeder implements ApplicationRunner {
 		return seriesRepository.save(series);
 	}
 
-	private EventOccurrence upsertOccurrence(EventSeries series, EventSeed.Occurrence seed) {
+	private EventOccurrence upsertOccurrence(EventSeries series, EventSeed.Occurrence seed, LocalDateTime now) {
 		EventSeed.Rect exposure = seed.exposure();
 		validateRect(exposure, seed.occurrenceKey() + " 노출 영역");
 
 		EventOccurrence occurrence = occurrenceRepository.findByOccurrenceKey(seed.occurrenceKey())
 			.orElseGet(() -> new EventOccurrence(series, seed.occurrenceKey()));
+		releaseSubscriptionsIfEnded(occurrence, now);
+
+		int revisionBefore = occurrence.getScheduleRevision();
 		occurrence.update(series, seed.title(), seed.cityName(),
 			toUtc(seed.startsAt(), seed.occurrenceKey()), toUtc(seed.endsAt(), seed.occurrenceKey()),
 			exposure.minGridY(), exposure.maxGridY(), exposure.minGridX(), exposure.maxGridX());
-		return occurrenceRepository.save(occurrence);
+		EventOccurrence saved = occurrenceRepository.save(occurrence);
+		if (saved.getScheduleRevision() > revisionBefore) {
+			notifyScheduleChanged(saved);
+		}
+		return saved;
+	}
+
+	/**
+	 * 종료 경계를 지난 회차를 건드리는 재시드는 새 값과 무관하게 구독을 먼저 지운다 (MSG-442).
+	 * 구독 해제 시점을 정리 틱 타이밍이 아니라 종료 경계 통과 하나로 결정하기 위해서다 — 부활 연장이면
+	 * 정리 틱의 no-op 으로 살아남은 행이 노출 상태를 다시 ON 으로 만들고, 종료를 유지하는 변경이면 정리 틱
+	 * 전 창의 행이 일정 변경 알림을 받는다. 둘 다 논리적으로 이미 해제된 사용자다.
+	 */
+	private void releaseSubscriptionsIfEnded(EventOccurrence occurrence, LocalDateTime now) {
+		if (occurrence.getId() == null || occurrence.getEndsAt().isAfter(now)) {
+			return;
+		}
+		subscriptionRepository.deleteByOccurrenceId(occurrence.getId());
+	}
+
+	/**
+	 * 일정 변경 알림 (MSG-442). 시딩 트랜잭션 안이라 outbox 의 원자성 설계(비즈니스 커밋과 같은 커밋)에
+	 * 정확히 부합하고, 재실행돼도 같은 개정 번호는 같은 dedupe 키라 흡수된다. 키가 시각값이 아니라 개정
+	 * 번호인 이유는 일정 왕복(A→B→A→B)에서 두 번째 변경 알림이 억제되지 않게 하기 위해서다.
+	 */
+	private void notifyScheduleChanged(EventOccurrence occurrence) {
+		String eventKey = "EVENT_SCHEDULE:%s:%d".formatted(
+			occurrence.getOccurrenceKey(), occurrence.getScheduleRevision());
+		for (EventNotificationSubscription subscription :
+			subscriptionRepository.findAllByIdEventOccurrenceId(occurrence.getId())) {
+			notificationCommandService.record(subscription.getId().getUserId(), NotificationCategory.EVENT,
+				eventKey, occurrence.getTitle(), SCHEDULE_CHANGED_BODY);
+		}
 	}
 
 	private void upsertLocation(EventOccurrence occurrence, EventSeed.Location seed) {
