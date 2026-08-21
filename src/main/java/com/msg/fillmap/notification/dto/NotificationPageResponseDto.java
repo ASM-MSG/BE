@@ -35,7 +35,7 @@ public record NotificationPageResponseDto(
 
 		// MISSION_NEARBY 는 서버 발송 경로가 없어(V36 주석의 CHECK 방어선) 여기에 등장하지 않는다 (FR-9).
 		@Schema(description = "알림 카테고리", example = "BADGE",
-			allowableValues = {"BADGE", "HOTZONE", "REMIND", "VIDEO", "WEEKLY", "FRIEND", "MODERATION"})
+			allowableValues = {"BADGE", "HOTZONE", "REMIND", "VIDEO", "WEEKLY", "FRIEND", "MODERATION", "EVENT"})
 		NotificationCategory category,
 
 		@Schema(description = "알림 제목", example = "새 뱃지 획득")
