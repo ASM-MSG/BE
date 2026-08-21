@@ -78,6 +78,11 @@ public class SecurityConfig {
 				// (application-prod.yml 의 management.server.port) + 보안그룹이 접근을 막고,
 				// 공개 포트에서 /actuator/** 는 404 다. 로컬·dev 는 지금 그대로 굴러간다.
 				.requestMatchers("/actuator/health", "/actuator/prometheus").permitAll()
+				// 행사방 열람 인원(MSG-443 D4) — 열람 계열이라 비로그인 허용. JwtAuthenticationFilter 의
+				// PUBLIC_AUTH_PATHS 에는 넣지 않는다 — 인증 불요이지 토큰 무시가 아니라, 토큰이 실려
+				// 오면 필터가 평소처럼 principal 을 세워야 로그인 사용자가 u:{userId} 로 집계된다.
+				.requestMatchers("/api/event-occurrences/*/heartbeat", "/api/event-occurrences/*/viewer-count")
+				.permitAll()
 				// API 문서(MSG-131) — Swagger UI · OpenAPI 스펙. prod 노출 정책은 별도 검토.
 				.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
 				// 행사 조회(MSG-439) — 비로그인 열람 허용("상단 칩은 비로그인, 업로드는 로그인").
