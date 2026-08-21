@@ -1,6 +1,8 @@
 package com.msg.fillmap.grid.service;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
@@ -48,4 +50,15 @@ public interface GridQueryService {
 	 */
 	GridAggregationView getOccupiedAggregatesWithCurrentRegion(
 		long userId, ViewportBounds bounds, RegionUnit unit);
+
+	/**
+	 * 격자 여러 개의 행정동 이름을 한 번에 얻는다 (MSG-439, 행사 위치 표시명 재료).
+	 * grids row 존재와 무관하게 격자 중심점으로 판정한다 — grids 는 lazy insert 라 아무도 영상을 안 올린
+	 * 격자에는 row 가 없고, 저장 라벨에만 기대면 실제 행정동 안 격자가 무귀속으로 보인다.
+	 * 저장 라벨을 읽는 GridRepository.findRegionNames 와 이름을 나눈 이유가 그 차이다 — 그쪽은 grids
+	 * INNER JOIN 이라 row 없는 격자가 결과에서 빠지므로 표시명 재료로는 쓸 수 없다.
+	 * 반환은 gridId → 이름 사전이고 무귀속·서비스 범위 밖 격자는 키 자체가 없다(null 값을 담지 않는다).
+	 * 입력 순서는 유지되며 중복 gridId 는 한 번만 판정한다. 빈 목록이면 빈 맵이다.
+	 */
+	Map<String, String> resolveRegionNames(Collection<String> gridIds);
 }

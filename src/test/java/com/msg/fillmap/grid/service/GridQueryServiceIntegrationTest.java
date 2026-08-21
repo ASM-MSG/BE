@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 import jakarta.persistence.EntityManager;
 
@@ -266,6 +267,37 @@ class GridQueryServiceIntegrationTest {
 		assertThat(view.regionName()).isNull();
 		assertThat(view.occupied()).isFalse();
 		verifyNoInteractions(regionQueryService);
+	}
+
+	// 검증: FR-REGION-09, FR-REGION-11
+	@Test
+	@DisplayName("grids 행이 없는 내륙 격자도 벌크 조회에서 regionName 이 나온다 (MSG-439 §계약 변경 1)")
+	void grids_행이_없는_내륙_대표_격자도_regionName이_담긴다() {
+		// 행사 대표 격자는 아무도 영상을 안 올린 격자가 정상이다(grids 는 lazy insert) — 저장 라벨이 없어도
+		// 중심점 재판정으로 이름이 나와야 한다. 행이 있는 격자와 이름이 갈리지 않는 것도 같이 본다.
+		String rowlessGridId = (baseY + 3) + "_" + (baseX + 3);
+		assertThat(gridRepository.findById(rowlessGridId)).isEmpty();
+
+		Map<String, String> names = gridQueryService.resolveRegionNames(List.of(rowlessGridId, occupiedGridId));
+
+		assertThat(names).containsEntry(rowlessGridId, REGION_NAME).containsEntry(occupiedGridId, REGION_NAME);
+	}
+
+	// 검증: FR-REGION-10
+	@Test
+	@DisplayName("행정동 무귀속 격자만 벌크 조회 결과에서 빠진다 (MSG-349 FR-5 술어 동일)")
+	void 행정동_무귀속_격자는_벌크_조회_결과에_없다() {
+		String openSeaGridId = GridEncoder.encode(35.0, 125.0);
+
+		Map<String, String> names = gridQueryService.resolveRegionNames(List.of(openSeaGridId, occupiedGridId));
+
+		assertThat(names).doesNotContainKey(openSeaGridId).containsOnlyKeys(occupiedGridId);
+	}
+
+	@Test
+	@DisplayName("빈 목록 벌크 조회는 빈 맵이다 (호출부에 0건 가드를 요구하지 않는다)")
+	void 빈_목록_벌크_조회는_빈_맵이다() {
+		assertThat(gridQueryService.resolveRegionNames(List.of())).isEmpty();
 	}
 
 	// 검증: FR-ZONE-05, FR-ZONE-09
