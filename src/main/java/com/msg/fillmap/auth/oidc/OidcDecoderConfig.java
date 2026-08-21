@@ -1,6 +1,7 @@
 package com.msg.fillmap.auth.oidc;
 
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,13 +29,21 @@ public class OidcDecoderConfig {
 		NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri()).build();
 
 		OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(properties.issuer());
-		OAuth2TokenValidator<Jwt> withAudience = jwt ->
-			jwt.getAudience().contains(properties.clientId())
-				? OAuth2TokenValidatorResult.success()
-				: OAuth2TokenValidatorResult.failure(
-					new OAuth2Error("invalid_audience", "ID Token audience 가 카카오 clientId 와 일치하지 않습니다", null));
+		OAuth2TokenValidator<Jwt> withAudience =
+			audienceValidator(Set.of(properties.clientId(), properties.appClientId()));
 
 		decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(List.of(withIssuer, withAudience)));
 		return decoder;
+	}
+
+	/**
+	 * 카카오는 인가를 요청한 앱 키를 그대로 aud 에 넣는다 — 같은 카카오 애플리케이션이라도
+	 * 웹(REST API 키)과 앱(네이티브 SDK 의 네이티브 앱 키)의 aud 가 갈리므로 두 키를 모두 허용한다 (MSG-452).
+	 */
+	static OAuth2TokenValidator<Jwt> audienceValidator(Set<String> allowedAudiences) {
+		return jwt -> jwt.getAudience().stream().anyMatch(allowedAudiences::contains)
+			? OAuth2TokenValidatorResult.success()
+			: OAuth2TokenValidatorResult.failure(
+				new OAuth2Error("invalid_audience", "ID Token audience 가 허용된 카카오 앱 키가 아닙니다", null));
 	}
 }
