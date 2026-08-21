@@ -68,8 +68,9 @@ public class EventOccurrenceController {
 			+ "여부, 같은 시리즈의 지난 회차 목록이다. 상태는 저장값이 아니라 요청 시점 계산이며 경계 정각은 "
 			+ "다음 상태에 속한다(종료 정각부터 UPLOAD_GRACE).\n\n"
 			+ "지난 회차는 최신순이고 예정 회차는 담기지 않는다. 그 회차의 위치·영상은 회차 id 로 위치 목록을 "
-			+ "다시 부르면 되므로 회차 간 데이터가 섞이지 않는다. 알림 구독 여부는 지금 항상 false 다"
-			+ "(구독 저장소는 MSG-442). 존재하지 않는 회차와 아직 노출 기간 전인 예정 회차는 똑같이 404 + "
+			+ "다시 부르면 되므로 회차 간 데이터가 섞이지 않는다. 알림 구독 여부는 구독을 켰으면서 회차가 예정이거나 "
+			+ "진행 중일 때만 true 다 — 비로그인 열람과 종료된 회차는 false 다.\n\n"
+			+ "존재하지 않는 회차와 아직 노출 기간 전인 예정 회차는 똑같이 404 + "
 			+ "developCode 13404 다 — 노출 전 행사의 존재를 id 대입으로 알아낼 수 없다."
 	)
 	@GetMapping("/api/event-occurrences/{occurrenceId}")
@@ -108,7 +109,7 @@ public class EventOccurrenceController {
 		return new ViewportBounds(swLat, swLng, neLat, neLng);
 	}
 
-	/** 비로그인 요청은 principal 이 없다 — 알림 구독 여부(MSG-442)의 조회 키가 될 값이라 null 을 그대로 넘긴다. */
+	/** 비로그인 요청은 principal 이 없다 — 알림 구독 여부(MSG-442)의 조회 키라 null 을 그대로 넘긴다(항상 false). */
 	private Long userId(AuthPrincipal principal) {
 		return principal == null ? null : principal.userId();
 	}

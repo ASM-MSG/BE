@@ -31,6 +31,7 @@ import com.msg.fillmap.event.entity.EventVideo;
 import com.msg.fillmap.event.exception.EventErrorCode;
 import com.msg.fillmap.event.repository.EventLocationGridRepository;
 import com.msg.fillmap.event.repository.EventLocationRepository;
+import com.msg.fillmap.event.repository.EventNotificationSubscriptionRepository;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventSeriesRepository;
 import com.msg.fillmap.event.repository.EventVideoRepository;
@@ -122,13 +123,19 @@ class EventQueryServiceTest {
 	@Autowired
 	private ZoneNameQueryService zoneNameQueryService;
 
+	@Autowired
+	private EventNotificationService eventNotificationService;
+
+	@Autowired
+	private EventNotificationSubscriptionRepository subscriptionRepository;
+
 	private EventQueryService service() {
 		return service(NOW);
 	}
 
 	private EventQueryService service(LocalDateTime now) {
 		return new EventQueryServiceImpl(occurrenceRepository, locationRepository, locationGridRepository,
-			eventVideoRepository, gridQueryService, zoneNameQueryService,
+			eventVideoRepository, gridQueryService, zoneNameQueryService, eventNotificationService,
 			Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 
@@ -195,9 +202,13 @@ class EventQueryServiceTest {
 		연결(video, location);
 	}
 
-	private Video 영상(String gridId, Visibility visibility) {
-		Long userId = userRepository.save(User.createLocalUser(
+	private Long 사용자() {
+		return userRepository.save(User.createLocalUser(
 			"msg439-" + UUID.randomUUID() + "@example.com", "hash", "테스터")).getId();
+	}
+
+	private Video 영상(String gridId, Visibility visibility) {
+		Long userId = 사용자();
 		GridIndex index = GridEncoder.decode(gridId);
 		GridPoint center = GridEncoder.center(gridId);
 		videoRepository.upsertGrid(gridId, index.gridY(), index.gridX(), center.lat(), center.lon(),
@@ -454,12 +465,37 @@ class EventQueryServiceTest {
 		}
 
 		@Test
-		@DisplayName("알림 구독 여부는 비로그인·로그인 모두 false 다 (구독 저장소는 MSG-442)")
-		void 상세_조회의_notificationOn은_false다() {
+		@DisplayName("구독하지 않았거나 비로그인이면 알림 구독 여부가 false 다")
+		void 구독하지_않았으면_notificationOn은_false다() {
 			EventOccurrence 진행중 = 회차(시리즈(), "진행 중 행사", "부산", NOW.minusDays(1), NOW.plusDays(1));
 
 			assertThat(service().getOccurrenceDetail(진행중.getId(), null).notificationOn()).isFalse();
-			assertThat(service().getOccurrenceDetail(진행중.getId(), 42L).notificationOn()).isFalse();
+			assertThat(service().getOccurrenceDetail(진행중.getId(), 사용자()).notificationOn()).isFalse();
+		}
+
+		// 검증: FR-EVENT-06
+		@Test
+		@DisplayName("구독한 사용자의 헤더 notificationOn 은 true 다 (MSG-442 배선)")
+		void 구독한_사용자의_헤더_notificationOn은_true다() {
+			EventOccurrence 진행중 = 회차(시리즈(), "진행 중 행사", "부산", NOW.minusDays(1), NOW.plusDays(1));
+			Long userId = 사용자();
+			subscriptionRepository.insertSubscription(userId, 진행중.getId());
+
+			assertThat(service().getOccurrenceDetail(진행중.getId(), userId).notificationOn()).isTrue();
+		}
+
+		// 검증: FR-EVENT-06
+		@Test
+		@DisplayName("종료된 회차는 구독 행이 있어도 헤더가 false 다 — 조회 시각과 같은 시각으로 파생 판정")
+		void 종료된_회차는_구독_행이_있어도_헤더가_false다() {
+			EventOccurrence 유예 = 회차(시리즈(), "유예 행사", "부산", NOW.minusDays(10), NOW.minusDays(1));
+			Long userId = 사용자();
+			subscriptionRepository.insertSubscription(userId, 유예.getId());
+
+			EventOccurrenceDetailResponseDto detail = service().getOccurrenceDetail(유예.getId(), userId);
+
+			assertThat(detail.status()).isEqualTo("UPLOAD_GRACE");
+			assertThat(detail.notificationOn()).isFalse();
 		}
 	}
 
