@@ -183,7 +183,7 @@
 | FR-EVENT-06 | 계획 | (없음) |
 | FR-EVENT-07 | 진행 중 | EventOccurrenceStatusTest, EventQueryServiceTest, EventSeederTest, EventVideoQueryServiceTest |
 | FR-EVENT-08 | 구현됨 | EventQueryServiceTest, EventSeederTest, EventVideoQueryServiceTest, EventVideoUploadConcurrencyTest, EventVideoUploadServiceTest, RepresentativeGridResolverTest |
-| FR-EVENT-09 | 진행 중 | EventVideoQueryServiceTest, EventVideoUploadServiceTest, EventVideoVisibilityIntegrationTest |
+| FR-EVENT-09 | 진행 중 | EventVideoPublicAccessHttpTest, EventVideoQueryServiceTest, EventVideoUploadServiceTest, EventVideoVisibilityIntegrationTest |
 | FR-EVENT-10 | 진행 중 | EventVideoQueryServiceTest, EventVideoUploadConcurrencyTest, EventVideoUploadServiceTest |
 | FR-EVENT-11 | 구현됨 | EventViewerCacheFailureControllerTest, EventViewerControllerTest, EventViewerServiceImplTest |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
