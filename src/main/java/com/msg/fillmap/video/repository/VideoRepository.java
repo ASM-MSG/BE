@@ -341,6 +341,13 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	boolean existsByOriginalS3KeyStartingWith(String originalS3KeyPrefix);
 
 	/**
+	 * 이 pending 에서 파생된 확정 영상 (MSG-440 멱등 재시도 판정) — 위 exists 와 같은 클레임 기준의 find
+	 * 버전이다. 확정이 pending 키 advisory lock 으로 직렬화돼 있어 같은 prefix 의 행은 최대 하나지만,
+	 * 반환을 단건으로 좁히면 이론상의 다중 행에서 NonUniqueResult 로 깨지므로 First 로 받는다.
+	 */
+	Optional<Video> findFirstByOriginalS3KeyStartingWith(String originalS3KeyPrefix);
+
+	/**
 	 * 확정을 pending 키 단위로 직렬화한다 (MSG-247 2R). 시도별 original 키는 UNIQUE 제약의 동시 이중 확정
 	 * 직렬화를 무력화하므로, 같은 pending 의 동시 확정 2건이 둘 다 exists 검사를 통과(미커밋 불가시)해
 	 * 영상 2개가 되는 걸 이 락이 막는다 — 락 획득자는 앞 확정의 커밋/롤백 이후에만 진입해 커밋을 본다.

@@ -16,6 +16,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
@@ -54,7 +55,7 @@ class VideoHourlyUploadServiceTest {
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
-			mock(ZoneNameQueryService.class), mock(VideoProcessingMetrics.class));
+			mock(ZoneNameQueryService.class), mock(VideoProcessingMetrics.class), mock(EventVideoRepository.class));
 	}
 
 	/** 저장 존 인자가 어긋나면 이 스텁이 매치되지 않아 테스트가 깨진다 — UTC 배선 검증을 겸한다. */

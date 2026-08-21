@@ -19,6 +19,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
@@ -64,7 +65,8 @@ class VideoGridQueryServiceTest {
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
-			() -> new ZoneNameResolver(List.of()), mock(VideoProcessingMetrics.class));
+			() -> new ZoneNameResolver(List.of()), mock(VideoProcessingMetrics.class),
+			mock(EventVideoRepository.class));
 	}
 
 	private void givenVideos(Video... videos) {

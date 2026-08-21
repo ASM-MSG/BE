@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
@@ -219,6 +220,7 @@ class VideoProcessingMetricsTest {
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
-			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()), metrics);
+			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()), metrics,
+			mock(EventVideoRepository.class));
 	}
 }
