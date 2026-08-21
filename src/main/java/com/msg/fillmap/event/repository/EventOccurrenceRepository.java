@@ -34,4 +34,17 @@ public interface EventOccurrenceRepository extends JpaRepository<EventOccurrence
 	 */
 	List<EventOccurrence> findBySeriesIdAndStartsAtLessThanOrderByStartsAtDescIdDesc(
 		Long seriesId, LocalDateTime startsAt);
+
+	/**
+	 * 시작 알림 발송 후보 (MSG-442) — 이미 시작했고, 아직 끝나지 않았으며, 시작한 지 발송 창(24시간) 안인
+	 * 회차다. 세 번째 조건은 dedupe 가 아니라 스캔 상한이다: 열흘짜리 LIVE 회차를 매 틱 다시 훑어 전 구독자
+	 * 무효 insert 를 반복하지 않게 한다. {@code now < startsAt + 24시간} 을 바인딩 가능한 형태로 옮긴 것이
+	 * {@code startsAt > windowFloor} 다 (windowFloor = now - 24시간).
+	 */
+	@Query("""
+		SELECT o FROM EventOccurrence o
+		WHERE o.startsAt <= :now AND o.endsAt > :now AND o.startsAt > :windowFloor
+		""")
+	List<EventOccurrence> findStartNotificationCandidates(
+		@Param("now") LocalDateTime now, @Param("windowFloor") LocalDateTime windowFloor);
 }
