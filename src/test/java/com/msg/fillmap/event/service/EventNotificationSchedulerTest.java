@@ -100,9 +100,27 @@ class EventNotificationSchedulerTest {
 	}
 
 	private EventNotificationScheduler 스케줄러(boolean notificationEnabled, LocalDateTime now) {
+		return 스케줄러(notificationEnabled, now, notificationCommandService);
+	}
+
+	private EventNotificationScheduler 스케줄러(boolean notificationEnabled, LocalDateTime now,
+		NotificationCommandService commandService) {
 		return new EventNotificationScheduler(occurrenceRepository, subscriptionRepository, seriesRepository,
-			notificationCommandService, txManager, notificationEnabled,
+			commandService, txManager, notificationEnabled,
 			Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+	}
+
+	/** 이미 끝난 별도 회차 + 그 구독 — 정리 단계에 일감을 만든다(같은 시리즈라 @AfterEach 가 함께 지운다). */
+	private long 종료된_회차의_구독() {
+		return tx.execute(status -> {
+			EventOccurrence ended = new EventOccurrence(
+				occurrenceRepository.findById(occurrenceId).orElseThrow().getSeries(), "msg442s-ended-" + 짧은키());
+			ended.update(ended.getSeries(), "끝난 회차", "부산", 시작.minusDays(60), 시작.minusDays(50),
+				90000, 90001, 90500, 90501);
+			long endedId = occurrenceRepository.save(ended).getId();
+			subscriptionRepository.insertSubscription(userId, endedId);
+			return endedId;
+		});
 	}
 
 	/** 구독 행을 만들면서 created_at 을 원하는 시각으로 고정한다 — 발송 대상 판정 재료라 값이 검증에 든다. */
@@ -234,6 +252,29 @@ class EventNotificationSchedulerTest {
 			스케줄러(true, 종료.minusNanos(1_000)).tick();
 
 			assertThat(subscriptionRepository.findAllByIdEventOccurrenceId(occurrenceId)).hasSize(1);
+		}
+
+		/**
+		 * 틱의 두 단계가 서로 독립임을 고정한다. 발송 단계가 통째로 실패해도 정리는 돌아야 한다 — 정리가
+		 * 발송에 딸려 죽으면 구독 행이 무한 축적된다(게이트 분리와 같은 이유, 이번엔 예외 경로).
+		 * try 범위가 tick 전체로 넓어지거나 정리가 그 try 안으로 들어가면 이 테스트가 깨진다.
+		 */
+		// 검증: FR-EVENT-06
+		@Test
+		@DisplayName("발송 단계가 예외를 내도 종료 구독 해제는 돈다 — 두 단계는 독립이다")
+		void 발송_단계가_예외를_내도_종료_구독_해제는_돈다() {
+			구독(시작.minusDays(1));            // 발송 후보(진행 중 회차)의 구독자 — record 가 호출된다
+			long endedId = 종료된_회차의_구독();   // 정리 단계의 일감
+			NotificationCommandService 던지는_스텁 = (u, c, k, t, b) -> {
+				throw new IllegalStateException("발송 기록 실패 주입");
+			};
+
+			// 발송 창 안이라 후보가 잡히고, 스텁이 트랜잭션을 통째로 터뜨린다
+			스케줄러(true, 시작.plusMinutes(1), 던지는_스텁).tick();
+
+			assertThat(subscriptionRepository.findAllByIdEventOccurrenceId(endedId))
+				.as("발송 실패와 무관하게 종료 회차 구독은 해제돼야 한다").isEmpty();
+			assertThat(알림수()).as("발송은 롤백돼 알림이 남지 않는다").isZero();
 		}
 
 		// 검증: FR-EVENT-06

@@ -3,7 +3,6 @@ package com.msg.fillmap.event.service;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -112,43 +111,42 @@ public class EventNotificationScheduler {
 	 * <p>
 	 * 이벤트 키에 startsAt 을 넣는 이유는 일정 변경으로 시작이 미뤄지면 새 시각 도래 때 알림이 다시 나가야
 	 * 하기 때문이다 — 일정 버전마다 키가 달라 dedupe 가 버전 단위로 걸린다.
+	 * <p>
+	 * <b>후보 조회부터 기록까지가 락을 선취한 트랜잭션 하나다.</b> 정리 단계와 같은 이유이고 방향만 반대다:
+	 * 락 없이 읽으면 그 스냅숏이 도는 사이 재시드가 시작을 미뤄도 옛 startsAt 으로 "행사가 시작됐어요"가
+	 * 나가, 아직 시작하지 않은 행사의 알림이 된다. 락 획득 후 조회라 재시드 커밋분이 보이고, 연기된 회차는
+	 * 후보 술어에서 자연히 빠진다. 락 보유 시간은 구독자 수 규모의 INSERT 뿐이라 수용 가능하다.
+	 * <p>
+	 * 한 트랜잭션이 됐으므로 실패 격리 단위도 사용자에서 틱 전체로 굵어졌다. 잃는 것은 없다 — 기록은
+	 * {@code ON CONFLICT DO NOTHING} 이라 정상 경로의 중복은 애초에 예외가 아니고, 남는 실패는 트랜잭션을
+	 * 어차피 오염시키는 DB 오류뿐이다. 복구 수단은 그대로 다음 틱 재실행 + dedupe 흡수다.
 	 */
 	private void notifyStarted(LocalDateTime now) {
-		List<EventOccurrence> occurrences = tx.execute(status -> occurrenceRepository
-			.findStartNotificationCandidates(now, now.minusHours(START_WINDOW_HOURS)));
-		if (occurrences == null || occurrences.isEmpty()) {
-			return;
-		}
-		int failed = 0;
-		Exception lastError = null;
-		for (EventOccurrence occurrence : occurrences) {
-			String eventKey = "EVENT_START:%s:%d".formatted(
-				occurrence.getOccurrenceKey(), occurrence.getStartsAt().toEpochSecond(ZoneOffset.UTC));
-			for (EventNotificationSubscription subscription : subscribersBefore(occurrence)) {
-				try {
-					notificationCommandService.record(subscription.getId().getUserId(), NotificationCategory.EVENT,
-						eventKey, occurrence.getTitle(), START_BODY);
-				} catch (Exception e) {
-					failed++;   // 사용자 단위 격리 — 한 명 실패가 나머지 구독자를 막지 않는다
-					lastError = e;
+		try {
+			tx.executeWithoutResult(status -> {
+				seriesRepository.acquireEventWriteLock();
+				for (EventOccurrence occurrence : occurrenceRepository
+					.findStartNotificationCandidates(now, now.minusHours(START_WINDOW_HOURS))) {
+					recordStart(occurrence);
 				}
-			}
-		}
-		if (failed > 0) {
-			log.warn("행사 시작 알림 기록 실패 {}건 — 다음 틱 재실행이 재시도, dedupe 가 중복 흡수", failed, lastError);
+			});
+		} catch (Exception e) {
+			log.warn("행사 시작 알림 틱 실패 — 다음 틱 재실행이 재시도, dedupe 가 중복 흡수", e);
 		}
 	}
 
-	/** 시작 시각 이전에 구독한 사용자만. 조회는 회차 단위 파생 쿼리라 회차 수만큼만 돈다. */
-	private List<EventNotificationSubscription> subscribersBefore(EventOccurrence occurrence) {
-		List<EventNotificationSubscription> subscriptions = tx.execute(status ->
-			subscriptionRepository.findAllByIdEventOccurrenceId(occurrence.getId()));
-		if (subscriptions == null) {
-			return List.of();
+	/** 시작 시각 이전에 구독한 사용자에게만 기록한다. 구독자 조회는 회차 단위라 회차 수만큼만 돈다. */
+	private void recordStart(EventOccurrence occurrence) {
+		String eventKey = "EVENT_START:%s:%d".formatted(
+			occurrence.getOccurrenceKey(), occurrence.getStartsAt().toEpochSecond(ZoneOffset.UTC));
+		for (EventNotificationSubscription subscription :
+			subscriptionRepository.findAllByIdEventOccurrenceId(occurrence.getId())) {
+			if (subscription.getCreatedAt().isAfter(occurrence.getStartsAt())) {
+				continue;
+			}
+			notificationCommandService.record(subscription.getId().getUserId(), NotificationCategory.EVENT,
+				eventKey, occurrence.getTitle(), START_BODY);
 		}
-		return subscriptions.stream()
-			.filter(subscription -> !subscription.getCreatedAt().isAfter(occurrence.getStartsAt()))
-			.toList();
 	}
 
 	/**

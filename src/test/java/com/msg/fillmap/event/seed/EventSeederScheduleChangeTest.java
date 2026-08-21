@@ -59,6 +59,14 @@ class EventSeederScheduleChangeTest {
 	private static final LocalDateTime 진행중 = LocalDateTime.of(2026, 10, 7, 1, 0);
 	/** 회차가 이미 끝난 시점 — 종료 22:00 KST = 13:00 UTC. */
 	private static final LocalDateTime 종료후 = LocalDateTime.of(2026, 10, 16, 1, 0);
+	/** 시작 직후 (발송 창 24시간 안) — 시작 알림 후보 술어가 잡는 지점. */
+	private static final LocalDateTime 시작직후 = LocalDateTime.of(2026, 10, 6, 2, 0);
+	/** 연기된 시작 — 시작직후 기준으로 아직 미래라 후보에서 빠져야 한다. */
+	private static final String 연기_시작_KST = "2026-10-20T10:00:00+09:00";
+	/** 위 연기 시작의 UTC 값 (10:00 KST = 01:00 UTC) — 새 시작 알림 키의 재료다. */
+	private static final LocalDateTime 연기_시작_UTC = LocalDateTime.of(2026, 10, 20, 1, 0);
+	/** 연기된 시작 직후 (발송 창 24시간 안, 연장 종료 13:00 UTC 이전). */
+	private static final LocalDateTime 연기_시작_이후 = LocalDateTime.of(2026, 10, 20, 2, 0);
 
 	@Autowired
 	private EventSeriesRepository seriesRepository;
@@ -142,7 +150,7 @@ class EventSeederScheduleChangeTest {
 	 * (EventSeederDriftGuardTest 선례). 상대 pid 를 미리 알 수 없어 방향만 뒤집었고 판정은 같다 —
 	 * 전역 대기 수를 세는 것이 아니라 여전히 "나에게 막힌" 세션만 본다.
 	 */
-	private boolean 정리가_나에게_막히기를_기다린다() {
+	private boolean 틱이_나에게_막히기를_기다린다() {
 		String sql = "SELECT EXISTS (SELECT 1 FROM pg_stat_activity a WHERE a.pid <> pg_backend_pid() "
 			+ "AND pg_backend_pid() = ANY(pg_blocking_pids(a.pid)))";
 		for (int attempt = 0; attempt < 200; attempt++) {
@@ -276,44 +284,6 @@ class EventSeederScheduleChangeTest {
 			assertThat(구독수()).isZero();
 			assertThat(알림키()).isEmpty();
 		}
-
-		/**
-		 * advisory lock 직렬화 검증 (MSG-438 잠금 계약 테스트와 같은 형태). 두 트랜잭션을 실제로 겹쳐
-		 * 돌린다 — 시더가 락을 쥔 채 연장을 아직 커밋하지 않은 상태에서 정리 틱을 띄우고, 정리가 그 락에
-		 * 막히는 것을 관측한 뒤 시더를 커밋시킨다.
-		 * <p>
-		 * 정리의 시각은 <b>구</b> ends_at 을 지났고 <b>새</b> ends_at 은 안 지난 지점이다. 락이 없으면
-		 * 정리의 DELETE 가 시더 커밋 전 스냅숏(구 ends_at)을 읽어 구독을 전멸시키므로 아래 두 단언이 함께
-		 * 깨진다 — {@code acquireEventWriteLock()} 을 지우면 실패하는 테스트다.
-		 * <p>
-		 * 시더 쪽 시각은 구 ends_at 이전이라 종료 회차 선삭제가 발화하지 않는다(발화하면 락과 무관하게
-		 * 구독이 정당하게 사라져 이 경쟁 자체를 볼 수 없다).
-		 */
-		// 검증: FR-EVENT-06
-		@Test
-		@DisplayName("정리와 일정 연장 재시드가 경쟁해도 연장된 회차의 구독이 해제되지 않는다")
-		void 정리와_일정_연장_재시드가_경쟁해도_연장된_회차의_구독이_해제되지_않는다() throws InterruptedException {
-			시딩(진행중, 시작_KST, 종료_KST);
-			구독();
-
-			Thread 정리 = new Thread(() -> 스케줄러(종료후).tick(), "msg442-cleanup");   // 발송 게이트 off
-			Boolean 정리가_대기했다 = tx.execute(status -> {
-				시더(진행중).seed(시드(시작_KST, 연장_종료_KST));   // 락 선취 + 연장 (아직 미커밋)
-				em.flush();
-				정리.start();
-				return 정리가_나에게_막히기를_기다린다();
-			});
-			정리.join(15_000);
-
-			assertThat(정리가_대기했다).as("정리 틱이 시더의 advisory lock 에서 실제로 대기해야 한다").isTrue();
-			assertThat(구독수()).as("정리는 커밋된 새 ends_at 을 읽어 no-op 이어야 한다").isEqualTo(1);
-		}
-
-		private EventNotificationScheduler 스케줄러(LocalDateTime now) {
-			return new EventNotificationScheduler(occurrenceRepository, subscriptionRepository, seriesRepository,
-				notificationCommandService, txManager, false,
-				Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
-		}
 	}
 
 	@Nested
@@ -333,4 +303,85 @@ class EventSeederScheduleChangeTest {
 				.isEqualTo(0);
 		}
 	}
+
+	/**
+	 * 시더와 스케줄러의 advisory lock 직렬화 (MSG-438 잠금 계약 테스트와 같은 형태). 두 트랜잭션을 실제로
+	 * 겹쳐 돌린다 — 시더가 락을 쥔 채 재시드를 아직 커밋하지 않은 상태에서 틱을 띄우고, 틱이 그 락에
+	 * 막히는 것을 {@code pg_blocking_pids} 로 관측한 뒤 시더를 커밋시킨다.
+	 * <p>
+	 * 두 테스트 모두 시더 쪽 시각을 구 ends_at 이전으로 둔다 — 종료 회차 선삭제가 발화하면 락과 무관하게
+	 * 구독이 정당하게 사라져 경쟁 자체를 볼 수 없다.
+	 */
+	@Nested
+	@DisplayName("advisory lock 직렬화")
+	class Serialization {
+
+		/**
+		 * 정리 단계의 낡은 스냅숏 방어. 정리 시각은 <b>구</b> ends_at 을 지났고 <b>새</b> ends_at 은 안
+		 * 지난 지점이라, 락이 없으면 정리의 DELETE 가 시더 커밋 전 스냅숏(구 ends_at)을 읽어 구독을
+		 * 전멸시켜 아래 두 단언이 함께 깨진다.
+		 */
+		// 검증: FR-EVENT-06
+		@Test
+		@DisplayName("정리와 일정 연장 재시드가 경쟁해도 연장된 회차의 구독이 해제되지 않는다")
+		void 정리와_일정_연장_재시드가_경쟁해도_연장된_회차의_구독이_해제되지_않는다() throws InterruptedException {
+			시딩(진행중, 시작_KST, 종료_KST);
+			구독();
+
+			Thread 정리 = new Thread(() -> 스케줄러(false, 종료후).tick(), "msg442-cleanup");   // 발송 게이트 off
+			Boolean 정리가_대기했다 = tx.execute(status -> {
+				시더(진행중).seed(시드(시작_KST, 연장_종료_KST));   // 락 선취 + 연장 (아직 미커밋)
+				em.flush();
+				정리.start();
+				return 틱이_나에게_막히기를_기다린다();
+			});
+			정리.join(15_000);
+
+			assertThat(정리가_대기했다).as("정리 틱이 시더의 advisory lock 에서 실제로 대기해야 한다").isTrue();
+			assertThat(구독수()).as("정리는 커밋된 새 ends_at 을 읽어 no-op 이어야 한다").isEqualTo(1);
+		}
+
+		/**
+		 * 발송 단계의 낡은 스냅숏 방어. 락 없이 후보를 읽으면 그 스냅숏이 도는 사이 재시드가 시작을 미뤄도
+		 * 옛 startsAt 키로 "행사가 시작됐어요"가 나가, 아직 시작하지 않은 행사의 알림이 된다.
+		 * 발송 시각은 <b>구</b> starts_at 을 지났고(발송 창 24시간 안) <b>새</b> starts_at 은 안 지난
+		 * 지점이라, 락이 없으면 알림이 1건 생겨 아래 단언이 깨진다.
+		 */
+		// 검증: FR-EVENT-06
+		@Test
+		@DisplayName("연기 재시드와 경쟁해도 연기된 회차의 시작 알림은 나가지 않는다")
+		void 연기_재시드와_경쟁해도_연기된_회차의_시작_알림은_나가지_않는다() throws InterruptedException {
+			시딩(시작직후, 시작_KST, 종료_KST);
+			구독();
+
+			Thread 발송 = new Thread(() -> 스케줄러(true, 시작직후).tick(), "msg442-start-fanout");
+			Boolean 발송이_대기했다 = tx.execute(status -> {
+				시더(시작직후).seed(시드(연기_시작_KST, 연장_종료_KST));   // 락 선취 + 시작 연기 (아직 미커밋)
+				em.flush();
+				발송.start();
+				return 틱이_나에게_막히기를_기다린다();
+			});
+			발송.join(15_000);
+
+			assertThat(발송이_대기했다).as("발송 틱이 시더의 advisory lock 에서 실제로 대기해야 한다").isTrue();
+			// 연기 재시드 자체의 일정 변경 알림은 정상 발송이라 시작 알림 키만 골라 본다
+			assertThat(알림키()).as("연기된 회차는 락 획득 후 후보 술어에서 빠져야 한다")
+				.noneMatch(key -> key.startsWith("EVENT_START:"));
+
+			// 부재를 존재로 승격 — 새 시작 시각이 오면 정확히 1건 나간다. 틱이 조용히 실패해 부재가 된
+			// 것이라면 여기서도 안 나가므로, 두 단언이 함께 있어야 위 부재가 "억제"임이 확정된다.
+			스케줄러(true, 연기_시작_이후).tick();
+
+			assertThat(알림키()).containsExactly(
+				"EVENT_SCHEDULE:" + 회차키 + ":1",
+				"EVENT_START:" + 회차키 + ":" + 연기_시작_UTC.toEpochSecond(ZoneOffset.UTC));
+		}
+
+		private EventNotificationScheduler 스케줄러(boolean notificationEnabled, LocalDateTime now) {
+			return new EventNotificationScheduler(occurrenceRepository, subscriptionRepository, seriesRepository,
+				notificationCommandService, txManager, notificationEnabled,
+				Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+		}
+	}
+
 }
