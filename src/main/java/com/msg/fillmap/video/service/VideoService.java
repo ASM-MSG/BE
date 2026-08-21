@@ -1,6 +1,8 @@
 package com.msg.fillmap.video.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
@@ -16,6 +18,7 @@ import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadResponseDto;
 import com.msg.fillmap.video.dto.VideoVisibilityRequestDto;
 import com.msg.fillmap.video.dto.VideoVisibilityResponseDto;
+import com.msg.fillmap.video.entity.Video;
 
 public interface VideoService {
 
@@ -80,6 +83,24 @@ public interface VideoService {
 	 * 업로드 완료 메타데이터 저장. 좌표 → 격자 인코딩 → grids lazy insert → videos INSERT → 점령 UPSERT.
 	 */
 	VideoUploadResponseDto saveVideo(long userId, VideoUploadRequestDto request);
+
+	/**
+	 * 격자 지정 업로드 확정 (MSG-440) — 좌표 대신 호출자가 정한 격자에 영상을 확정한다. 행사 업로드가 쓰며
+	 * geom 은 그 격자의 셀 중심점, 공개범위는 PUBLIC 고정이다. pending 키 검증·grids lazy insert·
+	 * videos INSERT·S3 복사·점령 UPSERT·뱃지·스트릭·커밋 후 인코딩과 핫스코어는 saveVideo 와 같은 코어를
+	 * 지나고, <b>미션 판정만 타지 않는다</b>(행사 업로드 미션 비연계, MSG-438 제외 계약).
+	 * 호출자의 트랜잭션에 합류한다 — 영상 생성과 행사 연결이 한 트랜잭션이어야 하기 때문이다.
+	 * video 도 event 도 Owner B 라 도메인 간 계약 인터페이스가 아니라 B 내부 확장이다.
+	 */
+	ConfirmedVideo confirmAtGrid(long userId, String gridId, String s3Key, Short durationSec,
+		LocalDateTime recordedAt);
+
+	/**
+	 * pending 키에서 이미 확정된 영상 조회 (MSG-440 멱등 재시도 판정). 확정과 같은 advisory lock 을 먼저
+	 * 잡으므로 앞 시도가 커밋됐다면 반드시 보인다 — 호출자는 찾은 영상의 소유자·연결이 자기 요청과 같은지
+	 * 확인해 재시도(성공 재응답)와 도용(3401)을 가른다. 형식이 어긋난 키는 empty 다.
+	 */
+	Optional<Video> findConfirmedByPendingKey(String pendingKey);
 
 	/**
 	 * 클라이언트가 S3 에 직접 PUT 할 presigned URL 발급. 응답의 s3Key 는 이후 saveVideo 가 그대로 소비한다.

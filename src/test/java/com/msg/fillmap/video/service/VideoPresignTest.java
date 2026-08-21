@@ -20,6 +20,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
@@ -64,7 +65,7 @@ class VideoPresignTest {
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
-			mock(VideoProcessingMetrics.class));
+			mock(VideoProcessingMetrics.class), mock(EventVideoRepository.class));
 	}
 
 	// 검증: FR-VIDEO-02

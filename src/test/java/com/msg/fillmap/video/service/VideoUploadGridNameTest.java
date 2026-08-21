@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
@@ -89,7 +90,7 @@ class VideoUploadGridNameTest {
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of(zones)),
-			mock(VideoProcessingMetrics.class));
+			mock(VideoProcessingMetrics.class), mock(EventVideoRepository.class));
 	}
 
 	private VideoUploadRequestDto uploadRequest() {

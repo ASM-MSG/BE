@@ -38,12 +38,27 @@ public class EventLifecycleGuard {
 		this.clock = clock;
 	}
 
+	/** 판정 시각을 이 가드의 Clock 에서 얻는 형태. 호출자가 이미 now 를 고정했다면 아래 static 을 쓴다. */
+	public void checkUploadOpen(EventOccurrence occurrence) {
+		checkUploadOpen(occurrence, LocalDateTime.now(clock));
+	}
+
+	/** 위와 같음 (FR-13). */
+	public void checkInteractionOpen(EventOccurrence occurrence) {
+		checkInteractionOpen(occurrence, LocalDateTime.now(clock));
+	}
+
 	/**
 	 * 행사 경유 업로드 가능 구간은 시작부터 종료 30일 후까지다 (FR-12·FR-15, 2026-08-21 확정).
 	 * 시작 전 차단이 마감과 다른 코드인 것은 FE 가 버튼 비활성화 근거를 구분해야 하기 때문이다.
+	 * <p>
+	 * static 인 이유: 판정 시각을 이미 고정한 호출자가 <b>그 시각 그대로</b> 넘겨 쓰기 위해서다. 업로드
+	 * 경로(MSG-440)는 위치 행 잠금과 회차 refresh 뒤의 시각으로 판정해야 하는데, 가드가 자기 Clock 을
+	 * 다시 읽으면 두 시각이 갈려 경계 정각에서 판정이 어긋난다. 규칙 자체가 (회차, 시각)의 순수 함수라
+	 * 상태를 가질 이유도 없다 — 빈으로 주입받는 호출자는 위 인스턴스 메서드가 이리로 위임한다.
 	 */
-	public void checkUploadOpen(EventOccurrence occurrence) {
-		EventStatus status = occurrence.statusAt(LocalDateTime.now(clock));
+	public static void checkUploadOpen(EventOccurrence occurrence, LocalDateTime now) {
+		EventStatus status = occurrence.statusAt(now);
 		if (status == EventStatus.UPCOMING) {
 			throw new ApiException(EventErrorCode.EVENT_UPLOAD_NOT_STARTED);
 		}
@@ -53,8 +68,8 @@ public class EventLifecycleGuard {
 	}
 
 	/** 댓글·도움돼요 변경은 종료 시점부터 잠긴다 (FR-13). 예정 상태는 열려 있다 (PRD §4.2). */
-	public void checkInteractionOpen(EventOccurrence occurrence) {
-		EventStatus status = occurrence.statusAt(LocalDateTime.now(clock));
+	public static void checkInteractionOpen(EventOccurrence occurrence, LocalDateTime now) {
+		EventStatus status = occurrence.statusAt(now);
 		if (status == EventStatus.UPLOAD_GRACE || status == EventStatus.ARCHIVED) {
 			throw new ApiException(EventErrorCode.EVENT_INTERACTION_LOCKED);
 		}

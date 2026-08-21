@@ -23,9 +23,14 @@ public enum EventErrorCode implements ErrorCodeIfs {
 
 	INVALID_VIEWPORT(13400, HttpStatus.BAD_REQUEST, "유효하지 않은 지도 범위입니다"),
 	VIEWPORT_TOO_LARGE(13401, HttpStatus.BAD_REQUEST, "조회 범위가 너무 넓습니다"),
+	INVALID_CURSOR(13402, HttpStatus.BAD_REQUEST, "유효하지 않은 커서입니다"),
 	EVENT_NOT_FOUND(13404, HttpStatus.NOT_FOUND, "행사를 찾을 수 없습니다"),
-	EVENT_UPLOAD_NOT_STARTED(13420, HttpStatus.CONFLICT, "아직 시작 전인 행사입니다"),
-	EVENT_UPLOAD_CLOSED(13421, HttpStatus.CONFLICT, "업로드 기간이 마감된 행사입니다"),
+	EVENT_LOCATION_NOT_FOUND(13405, HttpStatus.NOT_FOUND, "행사 위치를 찾을 수 없습니다"),
+	EVENT_VIDEO_NOT_FOUND(13406, HttpStatus.NOT_FOUND, "행사 영상을 찾을 수 없습니다"),
+	EVENT_UPLOAD_CLOSED(13409, HttpStatus.CONFLICT, "행사 영상 업로드가 마감되었습니다"),
+	// 마감(13409)과 같은 창 위반이지만 FE 안내 문구가 달라야 해 코드를 가른다 (MSG-440, 2026-08-21 확정).
+	// MSG-442 초안의 13420·13421 은 440·442 레인 조정으로 이 두 코드에 통일됐다 (2026-08-21 합의).
+	EVENT_UPLOAD_NOT_STARTED(13410, HttpStatus.CONFLICT, "행사 시작 전에는 영상을 올릴 수 없습니다"),
 	EVENT_INTERACTION_LOCKED(13422, HttpStatus.CONFLICT, "종료된 행사에서는 변경할 수 없습니다"),
 	;
 
