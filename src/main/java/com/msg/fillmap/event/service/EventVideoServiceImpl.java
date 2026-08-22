@@ -64,6 +64,8 @@ public class EventVideoServiceImpl implements EventVideoService {
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
 	private final ZoneNameQueryService zoneNameQueryService;
 	private final EntityManager entityManager;
+	// 상세의 반응 네 필드와 피드 카드의 두 수를 읽는다 (MSG-441). 같은 도메인 안의 읽기 전용 의존이다.
+	private final EventVideoInteractionService interactionService;
 	private final Clock clock;
 
 	/**
@@ -80,10 +82,11 @@ public class EventVideoServiceImpl implements EventVideoService {
 		VideoRepository videoRepository,
 		ThumbnailUrlPresigner thumbnailUrlPresigner,
 		ZoneNameQueryService zoneNameQueryService,
-		EntityManager entityManager
+		EntityManager entityManager,
+		EventVideoInteractionService interactionService
 	) {
 		this(occurrenceRepository, locationRepository, eventVideoRepository, videoService, videoRepository,
-			thumbnailUrlPresigner, zoneNameQueryService, entityManager, Clock.systemUTC());
+			thumbnailUrlPresigner, zoneNameQueryService, entityManager, interactionService, Clock.systemUTC());
 	}
 
 	public EventVideoServiceImpl(
@@ -95,6 +98,7 @@ public class EventVideoServiceImpl implements EventVideoService {
 		ThumbnailUrlPresigner thumbnailUrlPresigner,
 		ZoneNameQueryService zoneNameQueryService,
 		EntityManager entityManager,
+		EventVideoInteractionService interactionService,
 		Clock clock
 	) {
 		this.occurrenceRepository = occurrenceRepository;
@@ -105,6 +109,7 @@ public class EventVideoServiceImpl implements EventVideoService {
 		this.thumbnailUrlPresigner = thumbnailUrlPresigner;
 		this.zoneNameQueryService = zoneNameQueryService;
 		this.entityManager = entityManager;
+		this.interactionService = interactionService;
 		this.clock = clock;
 	}
 
@@ -170,9 +175,13 @@ public class EventVideoServiceImpl implements EventVideoService {
 		List<EventLocationVideoRow> rows = queryPage(locationId, cursor, pageSize + 1);
 		boolean hasNext = rows.size() > pageSize;
 		List<EventLocationVideoRow> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
+		// 반응 수는 이 페이지의 영상 id 집합으로 도는 group by 두 번이다 — 항목마다 세면 N+1 이다.
+		EventVideoReactionCounts reactions = interactionService.countReactions(
+			pageRows.stream().map(EventLocationVideoRow::videoId).toList());
 		List<EventLocationVideoResponseDto> videos = pageRows.stream()
 			.map(row -> new EventLocationVideoResponseDto(row.videoId(),
-				thumbnailUrlPresigner.presign(row.thumbnailKey()), row.durationSec(), row.createdAt()))
+				thumbnailUrlPresigner.presign(row.thumbnailKey()), row.durationSec(), row.createdAt(),
+				reactions.helpfulCount(row.videoId()), reactions.commentCount(row.videoId())))
 			.toList();
 		String nextCursor = null;
 		if (hasNext) {
@@ -243,13 +252,15 @@ public class EventVideoServiceImpl implements EventVideoService {
 		// 빈손이면 그 영상이 위 조회 이후(READ COMMITTED) 탈퇴로 연쇄 삭제된 것이라 존재 은닉 404 로 수렴한다.
 		String nickname = videoRepository.findAuthorNickname(video.getUserId())
 			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_VIDEO_NOT_FOUND));
+		EventStatus status = occurrence.statusAt(now);
+		EventVideoDetailReactions reactions = interactionService.getDetailReactions(videoId, userId);
 		String gridId = location.getRepresentativeGridId();
 		GridIndex index = GridEncoder.decode(gridId);
 		ZoneCellName zone = zoneNameQueryService.resolver().name(index.gridY(), index.gridX());
 		return new EventVideoDetailResponseDto(
 			videoId,
 			occurrence.getId(),
-			occurrence.statusAt(now).name(),
+			status.name(),
 			location.getId(),
 			location.getName(),
 			gridId,
@@ -261,8 +272,14 @@ public class EventVideoServiceImpl implements EventVideoService {
 			video.getRecordedAt(),
 			video.getCreatedAt(),
 			nickname,
-			// 종료 정각부터 댓글·도움돼요 입력을 잠근다(FR-13). 서버 측 강제는 MSG-441 변경 API 몫이다.
-			!now.isBefore(occurrence.getEndsAt()));
+			// 아카이브 전환(종료 + 30일)부터 댓글·도움돼요 입력을 잠근다(FR-13, 2026-08-21 정책 번복 —
+			// 유예 기간은 열려 있다). 표시와 집행(EventLifecycleGuard.checkInteractionOpen)이 갈리면 안 되므로
+			// 둘 다 회차 상태를 축으로 보고, 경계 정각의 해석은 statusAt 이 정본이다.
+			status == EventStatus.ARCHIVED,
+			reactions.helpfulCount(),
+			reactions.helpfulByMe(),
+			reactions.commentCount(),
+			reactions.comments());
 	}
 
 	/**
