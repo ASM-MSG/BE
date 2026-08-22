@@ -37,7 +37,7 @@ public class NotificationPreferenceController {
 
 	@Operation(
 		summary = "알림 설정 조회",
-		description = "카테고리 7종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY·FRIEND·MISSION_NEARBY) 전부의 수신 상태를 반환한다. "
+		description = "카테고리 8종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY·FRIEND·MISSION_NEARBY·EVENT) 전부의 수신 상태를 반환한다. "
 			+ "설정을 만진 적 없는 사용자는 전부 true 다 — opt-out 기본 전부 on. "
 			+ "MODERATION 은 설정 대상이 아니라 목록에 없다 (수신 거부 불가)."
 	)
@@ -51,7 +51,7 @@ public class NotificationPreferenceController {
 	@Operation(
 		summary = "카테고리 수신 토글",
 		description = "카테고리 하나의 수신 여부를 바꾸고 변경 후 전체 상태를 반환한다 — 같은 값 재전환은 멱등. "
-			+ "category 가 7종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY·FRIEND·MISSION_NEARBY, 대소문자 무시) 외면 10420 이다. "
+			+ "category 가 8종(BADGE·HOTZONE·REMIND·VIDEO·WEEKLY·FRIEND·MISSION_NEARBY·EVENT, 대소문자 무시) 외면 10420 이다. "
 			+ "off 는 발송만 막고 off 중 쌓인 알림이 on 복귀 후 재발송되는 일은 없다. "
 			+ "MISSION_NEARBY 는 서버 발송이 없어 기기가 발화 전 이 설정을 조회해 로컬로 억제한다."
 	)

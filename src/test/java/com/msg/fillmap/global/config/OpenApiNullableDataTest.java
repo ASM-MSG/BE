@@ -66,7 +66,7 @@ class OpenApiNullableDataTest {
 
 	// 검증: FR-NOTI-15
 	@Test
-	@DisplayName("알림 설정 category 스키마 허용값은 7종이고 MODERATION 이 없다 — 수신 거부 불가 비노출 (MSG-417·MSG-418)")
+	@DisplayName("알림 설정 category 스키마 허용값은 8종이고 MODERATION 이 없다 — 수신 거부 불가 비노출 (MSG-417·442)")
 	void 알림_설정_category_스키마_허용값에_MODERATION이_없다() throws Exception {
 		JsonNode category = fetchApiDocs().path("components").path("schemas")
 			.path("CategoryPreferenceDto").path("properties").path("category");
@@ -76,7 +76,24 @@ class OpenApiNullableDataTest {
 			.isTrue();
 		List<String> values = new ArrayList<>();
 		allowed.forEach(value -> values.add(value.asString("")));
-		assertThat(values).containsExactly("BADGE", "HOTZONE", "REMIND", "VIDEO", "WEEKLY", "FRIEND", "MISSION_NEARBY");
+		assertThat(values).containsExactly("BADGE", "HOTZONE", "REMIND", "VIDEO", "WEEKLY", "FRIEND",
+			"MISSION_NEARBY", "EVENT");
+	}
+
+	// 검증: FR-EVENT-06
+	@Test
+	@DisplayName("알림함 목록 category 스키마 허용값에 EVENT 가 실린다 — 서버 발송형이라 목록에 나타난다 (MSG-442)")
+	void 알림함_목록_category_스키마_허용값에_EVENT가_실린다() throws Exception {
+		JsonNode allowed = fetchApiDocs().path("components").path("schemas")
+			.path("NotificationItemResponseDto").path("properties").path("category").path("enum");
+		assertThat(allowed.isArray())
+			.as("category 가 인라인 enum 스키마가 아니다 — allowableValues 가 공유 $ref 로 빠지면 제약이 사라진다")
+			.isTrue();
+		List<String> values = new ArrayList<>();
+		allowed.forEach(value -> values.add(value.asString("")));
+		// MISSION_NEARBY 는 서버 발송 경로가 없어 여전히 빠진다 (MSG-418 의도 제외)
+		assertThat(values).containsExactly("BADGE", "HOTZONE", "REMIND", "VIDEO", "WEEKLY", "FRIEND",
+			"MODERATION", "EVENT");
 	}
 
 	private boolean hasNullType(JsonNode anyOf) {

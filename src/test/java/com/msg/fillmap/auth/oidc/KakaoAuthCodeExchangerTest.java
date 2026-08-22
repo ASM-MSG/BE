@@ -53,8 +53,8 @@ class KakaoAuthCodeExchangerTest {
 		RestClient.Builder builder = RestClient.builder();
 		server = MockRestServiceServer.bindTo(builder).build();
 		KakaoOidcProperties properties = new KakaoOidcProperties("https://kauth.test",
-			"https://kauth.test/.well-known/jwks.json", CLIENT_ID, TOKEN_URL, "https://kauth.test/oauth/authorize",
-			true);
+			"https://kauth.test/.well-known/jwks.json", CLIENT_ID, "test-app-client-id", TOKEN_URL,
+			"https://kauth.test/oauth/authorize", true);
 		exchanger = new KakaoAuthCodeExchanger(builder.baseUrl(TOKEN_URL).build(), properties, new ObjectMapper());
 	}
 

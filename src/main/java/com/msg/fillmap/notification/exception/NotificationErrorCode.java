@@ -20,7 +20,7 @@ public enum NotificationErrorCode implements ErrorCodeIfs {
 
 	INVALID_PLATFORM(10400, HttpStatus.BAD_REQUEST, "platform 은 IOS, ANDROID, WEB 중 하나여야 합니다"),
 	INVALID_CATEGORY(10420, HttpStatus.BAD_REQUEST,
-		"category 는 BADGE, HOTZONE, REMIND, VIDEO, WEEKLY, FRIEND, MISSION_NEARBY 중 하나여야 합니다"),
+		"category 는 BADGE, HOTZONE, REMIND, VIDEO, WEEKLY, FRIEND, MISSION_NEARBY, EVENT 중 하나여야 합니다"),
 	// 없는 알림과 타인 알림이 같은 응답이다 (MSG-434 FR-7) — 남의 알림 존재 여부가 응답으로 새지 않는다.
 	NOTIFICATION_NOT_FOUND(10404, HttpStatus.NOT_FOUND, "알림을 찾을 수 없습니다"),
 	;

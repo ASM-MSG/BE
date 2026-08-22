@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -43,6 +44,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 
 import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
 import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.friend.service.FriendshipQueryService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
@@ -133,6 +135,9 @@ public class VideoServiceImpl implements VideoService {
 	private final ZoneNameQueryService zoneNameQueryService;
 	// 처리 시간 시작점 등록·제거 (MSG-343 D2) — submitEncoding 진입(확정 커밋 직후)이 시작점이다.
 	private final VideoProcessingMetrics videoProcessingMetrics;
+	// 행사 영상 판정 (MSG-440) — 공개범위 전환 차단 하나에만 쓴다. 같은 Owner B 내부 의존이고, 엔티티
+	// 방향(event 가 video 참조)과 빈 방향(video 서비스가 event 리포지토리 참조)이 달라 순환이 없다.
+	private final EventVideoRepository eventVideoRepository;
 	private final Clock clock;
 
 	/**
@@ -148,11 +153,11 @@ public class VideoServiceImpl implements VideoService {
 		BadgeAwardService badgeAwardService, StreakCommandService streakCommandService,
 		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService,
 		FriendshipQueryService friendshipQueryService, ZoneNameQueryService zoneNameQueryService,
-		VideoProcessingMetrics videoProcessingMetrics) {
+		VideoProcessingMetrics videoProcessingMetrics, EventVideoRepository eventVideoRepository) {
 		this(videoRepository, videoEncodingService, videoStatusWriter, s3Presigner, s3Client, awsProperties,
 			regionStatsCommandService, thumbnailUrlPresigner, badgeAwardService, streakCommandService,
 			missionAwardService, hotScoreCommandService, friendshipQueryService, zoneNameQueryService,
-			videoProcessingMetrics, Clock.systemUTC());
+			videoProcessingMetrics, eventVideoRepository, Clock.systemUTC());
 	}
 
 	@Override
@@ -166,21 +171,73 @@ public class VideoServiceImpl implements VideoService {
 		double lat = request.lat();
 		double lon = request.lng();
 		validateCoordinate(lat, lon);
-		validateRecordedAt(request.recordedAt());
-		String originalKey = confirmUpload(userId, request.s3Key());
 
 		String gridId = GridEncoder.encode(lat, lon);
+		ConfirmedVideo confirmed = confirmAndStore(userId, gridId, GeoSupport.toPoint(lat, lon), request.s3Key(),
+			request.durationSec(), request.recordedAt(), visibility);
+		Video video = confirmed.video();
+
+		// 미션 판정 (MSG-223): 방문(videos 이벤트)이 근거라 점령 여부와 무관하게 매 업로드 1회. 판정·스탬프·
+		// 종류별 미션 뱃지는 미션 도메인 몫 — 여기서는 완료 스탬프를 응답에 싣고 획득 뱃지를 합류시키기만
+		// 한다(§D2). 코어 밖에 있는 이유는 행사 업로드가 이 훅만 타지 않기 때문이다 (MSG-440 제외 계약).
+		MissionAwardResult missionAward = missionAwardService.awardOnUpload(userId, gridId);
+		List<EarnedBadgeResponseDto> newBadges = new ArrayList<>(confirmed.newBadges());
+		newBadges.addAll(missionAward.newBadges());
+
+		// 격자 표시명 (MSG-341). 구역 이름은 순수 산술이고, 행정동 이름은 upsertGrid 가 방금 저장한 라벨을
+		// 읽는다 — 좌표 재판정이 아니라 저장 라벨이라야 도감·카드 리스트의 regionName 과 같은 동이 나온다(D-6).
+		ZoneCellName zoneCellName = zoneName(gridId);
+		return new VideoUploadResponseDto(
+			video.getId(), gridId, video.getProcessingStatus().name(), confirmed.occupied(), newBadges,
+			missionAward.completedMissions(),
+			zoneCellName.zoneName(), zoneCellName.zoneCell(), findRegionName(gridId));
+	}
+
+	/**
+	 * 격자 지정 업로드 확정 (MSG-440) — 좌표 대신 호출자가 정한 격자에 확정한다. geom 은 그 격자의 셀
+	 * 중심점이고 공개범위는 PUBLIC 고정이다(행사 피드는 공개 전제, MSG-438 확정).
+	 * 미션 판정만 타지 않고 나머지 부수효과는 saveVideo 와 같은 코어 하나를 지난다.
+	 */
+	@Override
+	@Transactional
+	public ConfirmedVideo confirmAtGrid(long userId, String gridId, String s3Key, Short durationSec,
+		LocalDateTime recordedAt) {
+		GridPoint center = GridEncoder.center(gridId);
+		return confirmAndStore(userId, gridId, GeoSupport.toPoint(center.lat(), center.lon()), s3Key,
+			durationSec, recordedAt, Visibility.PUBLIC);
+	}
+
+	@Override
+	@Transactional
+	public Optional<Video> findConfirmedByPendingKey(String pendingKey) {
+		// 확정과 같은 advisory lock 을 먼저 잡는다 — 락 획득자는 앞 확정의 커밋/롤백 이후에만 진입하므로
+		// 이 조회는 "앞 시도가 커밋됐다면 반드시 본다". 락 없이 보면 재시도가 확정 중인 행을 못 보고
+		// 새 확정으로 진입해 중복 영상이 된다. xact lock 이라 뒤따르는 confirmUpload 의 재획득은 무해하다.
+		videoRepository.acquirePendingKeyConfirmLock(pendingKey);
+		return claimPrefix(pendingKey).flatMap(videoRepository::findFirstByOriginalS3KeyStartingWith);
+	}
+
+	/**
+	 * 업로드 확정 코어 (MSG-440 에서 추출) — 좌표 경로(saveVideo)와 격자 지정 경로(confirmAtGrid)가 공유한다.
+	 * 순서가 계약이다: recordedAt 검증 → confirmUpload(pending 키 소유·이중 확정 차단·실측 크기) →
+	 * grids lazy insert → 점령 여부 스냅숏 → videos INSERT → S3 복사 → 점령 UPSERT → 뱃지·스트릭 →
+	 * 커밋 후 핫스코어·인코딩 등록. 미션 판정은 코어 밖이다 — 행사 업로드가 그 훅 하나만 제외하기 때문이다.
+	 */
+	private ConfirmedVideo confirmAndStore(long userId, String gridId, Point geom, String s3Key, Short durationSec,
+		LocalDateTime recordedAt, Visibility visibility) {
+		validateRecordedAt(recordedAt);
+		String originalKey = confirmUpload(userId, s3Key);
+
 		registerGridIfAbsent(gridId);
 
 		boolean alreadyOccupied = videoRepository.existsUserGrid(userId, gridId);
 
-		Point geom = GeoSupport.toPoint(lat, lon);
 		// saveAndFlush: original_s3_key 클레임(INSERT)을 S3 복사보다 먼저 확정한다 (MSG-247 1R 클레임 선행).
 		// IDENTITY 라 save 도 즉시 INSERT 지만, ID 전략이 바뀌어도 순서가 유지되게 명시한다.
 		Video video = videoRepository.saveAndFlush(
-			Video.create(userId, gridId, originalKey, geom, request.durationSec(), request.recordedAt(), visibility));
+			Video.create(userId, gridId, originalKey, geom, durationSec, recordedAt, visibility));
 
-		copyToOriginal(request.s3Key(), originalKey);
+		copyToOriginal(s3Key, originalKey);
 		videoRepository.upsertUserGrid(userId, gridId, video.getId());
 
 		// 뱃지 지급 훅 (MSG-239): 업로드와 같은 트랜잭션에서 동기 판정하고, 새로 획득한 뱃지를 응답에 실어
@@ -197,21 +254,11 @@ public class VideoServiceImpl implements VideoService {
 		// 스트릭 (MSG-200): 아무 업로드(재방문 포함)가 인정 이벤트라 분기 바깥. 갱신·꾸준함 뱃지 판정은
 		// 스트릭 도메인 몫 — 여기서는 획득분을 응답에 합류시키기만 한다.
 		newBadges.addAll(streakCommandService.recordUpload(userId));
-		// 미션 판정 (MSG-223): 방문(videos 이벤트)이 근거라 이 역시 분기 바깥. 판정·스탬프·종류별 미션
-		// 뱃지는 미션 도메인 몫 — 여기서는 완료 스탬프를 응답에 싣고 획득 뱃지를 합류시키기만 한다(§D2).
-		MissionAwardResult missionAward = missionAwardService.awardOnUpload(userId, gridId);
-		newBadges.addAll(missionAward.newBadges());
 		// 핫스코어 (MSG-233): 커밋 후 증분 — 롤백 시 유령 증분 방지. 실패는 구현이 삼킨다 (FR-6).
 		afterCommit(() -> hotScoreCommandService.recordUpload(gridId));
 		triggerEncodingAfterCommit(video.getId(), originalKey);
 
-		// 격자 표시명 (MSG-341). 구역 이름은 순수 산술이고, 행정동 이름은 upsertGrid 가 방금 저장한 라벨을
-		// 읽는다 — 좌표 재판정이 아니라 저장 라벨이라야 도감·카드 리스트의 regionName 과 같은 동이 나온다(D-6).
-		ZoneCellName zoneCellName = zoneName(gridId);
-		return new VideoUploadResponseDto(
-			video.getId(), gridId, video.getProcessingStatus().name(), !alreadyOccupied, newBadges,
-			missionAward.completedMissions(),
-			zoneCellName.zoneName(), zoneCellName.zoneCell(), findRegionName(gridId));
+		return new ConfirmedVideo(video, !alreadyOccupied, List.copyOf(newBadges));
 	}
 
 	/**
@@ -271,6 +318,12 @@ public class VideoServiceImpl implements VideoService {
 		Video video = findOwnedVideo(userId, videoId);
 		if (video.isDeleted()) {
 			throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);   // 지운 영상은 공개로 되살리지 않는다
+		}
+		// 행사 영상은 PUBLIC 고정이라 전환 자체를 막는다 (MSG-438 확정, MSG-440 구현). 피드·위치별 영상
+		// 수·상세가 전부 PUBLIC 게이트라, 전환을 허용하면 올린 본인만 자기 영상을 행사방에서 잃는다.
+		// 존재·소유권 판정 뒤에 두어 기존 에러 우선순위(3404 → 3403 → 그 밖)를 유지한다.
+		if (eventVideoRepository.existsById(videoId)) {
+			throw new ApiException(VideoErrorCode.EVENT_VIDEO_VISIBILITY_FIXED);
 		}
 		video.changeVisibility(parseVisibility(request.visibility()));
 		return VideoVisibilityResponseDto.from(video);
@@ -767,10 +820,9 @@ public class VideoServiceImpl implements VideoService {
 		}
 		String stem = pendingKey.substring(PENDING_PREFIX.length());   // "{userId}/{uuid}.{ext}"
 		int extAt = stem.lastIndexOf('.');
-		if (extAt < 0) {
-			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);   // presign 발급 키는 항상 확장자를 가진다
-		}
-		String claimPrefix = ORIGINAL_PREFIX + stem.substring(0, extAt) + "-";
+		// presign 발급 키는 항상 확장자를 가진다 — 확장자 없는 키는 클레임 파생이 비어 여기서 걸린다.
+		String claimPrefix = claimPrefix(pendingKey)
+			.orElseThrow(() -> new ApiException(VideoErrorCode.INVALID_S3_KEY));
 
 		videoRepository.acquirePendingKeyConfirmLock(pendingKey);
 		// 영상 1개로 좌표만 바꿔가며 무한 점령하는 걸 막는다(이중 확정 차단). prefix 매치가 시도별 키를,
@@ -790,6 +842,23 @@ public class VideoServiceImpl implements VideoService {
 			throw new ApiException(VideoErrorCode.FILE_TOO_LARGE);
 		}
 		return claimPrefix + UUID.randomUUID() + stem.substring(extAt);
+	}
+
+	/**
+	 * pending 키에서 파생되는 original 클레임 prefix — 확정(쓰기)과 멱등 재시도 판정(읽기)이 이 규칙 하나를
+	 * 공유한다 (MSG-440). 규칙이 갈라지면 재시도가 자기 확정을 못 찾아 영상이 하나 더 생긴다.
+	 * 형식이 어긋난 키(pending prefix 아님·확장자 없음)는 empty 다 — 확정은 이것으로 3401 을 던지고,
+	 * 재시도 판정은 "찾은 게 없다"로 받아 뒤따르는 확정이 같은 3401 을 내게 한다.
+	 */
+	private Optional<String> claimPrefix(String pendingKey) {
+		if (!pendingKey.startsWith(PENDING_PREFIX)) {
+			return Optional.empty();
+		}
+		String stem = pendingKey.substring(PENDING_PREFIX.length());
+		int extAt = stem.lastIndexOf('.');
+		return extAt < 0
+			? Optional.empty()
+			: Optional.of(ORIGINAL_PREFIX + stem.substring(0, extAt) + "-");
 	}
 
 	/**

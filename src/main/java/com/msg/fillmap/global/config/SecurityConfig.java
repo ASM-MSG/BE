@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -84,6 +85,39 @@ public class SecurityConfig {
 				.permitAll()
 				// API 문서(MSG-131) — Swagger UI · OpenAPI 스펙. prod 노출 정책은 별도 검토.
 				.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
+				// 행사 조회(MSG-439) — 비로그인 열람 허용("상단 칩은 비로그인, 업로드는 로그인").
+				// GET 한정 등록이 계약의 일부다: 메서드 무제한 문자열 패턴으로 열면 같은 경로에 붙을 쓰기
+				// API(업로드 MSG-440 · 댓글 MSG-441 · 알림 MSG-442)까지 조용히 인증 없이 열린다.
+				// 경로도 정확히 넷만 적는다 — /api/grids/** 로 넓히면 격자 단일 조회의 인증이 함께 풀린다.
+				.requestMatchers(HttpMethod.GET,
+					"/api/event-occurrences",
+					"/api/event-occurrences/*",
+					"/api/event-occurrences/*/locations",
+					"/api/grids/*/event-locations").permitAll()
+				// 행사 영상 조회(MSG-440) — 위 조회 4종과 같은 규칙이다. 피드 경로는 업로드 POST 와 URL 이
+				// 같아 메서드 무제한으로 열면 업로드까지 익명에 풀린다 — GET 한정이 계약의 일부다.
+				// 댓글 목록(MSG-441)도 같은 규칙이다 — 위 "/api/event-videos/*" 는 세그먼트 하나만 매치해
+				// 하위 경로를 덮지 않으므로 한 줄을 더 적는다. 여기서도 GET 한정이 계약이다: 문자열
+				// 패턴으로 열면 같은 경로의 댓글 작성 POST 가 익명에 함께 풀린다.
+				.requestMatchers(HttpMethod.GET,
+					"/api/event-occurrences/*/locations/*/videos",
+					"/api/event-videos/*",
+					"/api/event-videos/*/comments").permitAll()
+				// 상세의 명시 HEAD 매핑(부수효과 없는 200)은 GET 한정 matcher 에 안 잡혀 익명 HEAD 가 401 이
+				// 된다 — 같은 경로를 HEAD 로도 연다. HEAD 응답은 전 id 동일이라 존재 오라클이 아니다.
+				.requestMatchers(HttpMethod.HEAD, "/api/event-videos/*").permitAll()
+				// 핫구역·미션 조회(MSG-454) — 위 행사 조회와 같은 "상단 칩은 비로그인, 업로드는 로그인"
+				// 원칙의 적용이다(정본 docs/prd/mission-map-explore.md 8절). GET 한정이 계약의 일부인 것도
+				// 같은 이유다. 상세·영상 두 줄만 {missionId:[0-9]+} 제약 변수를 쓴다: 제약 없는
+				// /api/missions/* 는 progress 같은 리터럴 형제와 미래의 한 세그먼트 GET 경로까지 기본
+				// 공개로 만드는 fail-open 이라서다. 숫자 제약이면 문자 경로는 이 matcher 에 안 잡혀
+				// anyRequest().authenticated() 로 떨어진다(기본이 인증 쪽, NFR-SEC-01).
+				.requestMatchers(HttpMethod.GET,
+					"/api/hotzones",
+					"/api/missions/active",
+					"/api/missions/aggregation",
+					"/api/missions/{missionId:[0-9]+}",
+					"/api/missions/{missionId:[0-9]+}/videos").permitAll()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.

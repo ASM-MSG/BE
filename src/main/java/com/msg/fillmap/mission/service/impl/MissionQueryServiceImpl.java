@@ -288,21 +288,25 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	 * 횟수가 늘지 않는다 — 스팟마다 DB 를 다시 읽지 않는다. 진행도는 findProgress 재사용(같은 교집합
 	 * 계산을 상세용 SQL 로 복제하지 않는다), 방문 여부는 진행도와 같은 술어(findVisitedGridIds),
 	 * 영상 개수는 MSG-390 후보 술어의 격자별 COUNT 합이다. 사용자별 값이라 전역 캐시를 타지 않는다.
+	 *
+	 * <p>userId 가 null 이면 비로그인 조회다(MSG-454) — 사용자별 두 조회를 아예 건너뛰어(조회 세 번)
+	 * progress 는 null, 방문 격자는 빈 집합이 되고 spotStats.visited 가 전부 false 로 조립된다.
 	 */
 	// REPEATABLE_READ: 같은 술어를 약속하는 progress 와 spotStats.visited 가 한 응답에서 갈라지지 않게
 	// 다섯 읽기를 한 스냅숏으로 묶는다 — 읽기 전용이라 직렬화 실패 부작용 없음 (Codex P2).
 	@Override
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-	public MissionDetailResponseDto getMissionDetail(long missionId, long userId) {
+	public MissionDetailResponseDto getMissionDetail(long missionId, Long userId) {
 		// 기간 판정은 하지 않는다 — 기간이 끝난 미션도 행이 남아 있으면 상세를 연다(§API 명세).
 		Mission mission = missionRepository.findById(missionId)
 			.orElseThrow(() -> new ApiException(MissionErrorCode.MISSION_NOT_FOUND));
 		List<MissionGrid> grids = missionGridRepository.findByMissionIds(List.of(missionId));
 		// findById 직후라 진행도 행은 사실상 하나다. READ_COMMITTED 는 문장 사이 스냅샷이 갱신되므로
 		// 그 사이 시더 정리가 커밋되는 극소 경합(부팅 시·스탬프 없는 종료 미션 한정)은 감수한다.
-		MissionProgressResponseDto progress =
-			toProgressDto(missionRepository.findProgress(userId, List.of(missionId)).get(0));
-		Set<String> visitedGridIds = Set.copyOf(missionGridRepository.findVisitedGridIds(missionId, userId));
+		MissionProgressResponseDto progress = userId == null ? null
+			: toProgressDto(missionRepository.findProgress(userId, List.of(missionId)).get(0));
+		Set<String> visitedGridIds = userId == null ? Set.of()
+			: Set.copyOf(missionGridRepository.findVisitedGridIds(missionId, userId));
 		Map<String, Long> videoCountByGrid = videoRepository.countMissionVideosByGrid(missionId).stream()
 			.collect(Collectors.toMap(
 				MissionVideoCountProjection::getGridId, MissionVideoCountProjection::getVideoCount));
