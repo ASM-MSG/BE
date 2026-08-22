@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.event.EventVideoFixtures;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridFixtures;
@@ -200,6 +201,24 @@ class MissionAwardQueryTest {
 			.containsExactly(mission);
 	}
 
+	// 검증: FR-EVENT-12
+	@Test
+	@DisplayName("행사 영상만으로는 미션이 완료되지 않는다 (MSG-450)")
+	void 행사_영상만으로는_미션이_완료되지_않는다() {
+		long mission = insertMission(nowUtc().minusDays(1), nowUtc().plusDays(1), 1);
+		String gridId = seedGrid(0);
+		insertMissionGrid(mission, gridId);
+		EventVideoFixtures.linkEventVideo(em, seedVideo(userId, gridId, nowUtc(), "ACTIVE"));
+
+		assertThat(missionRepository.findCompleted(userId, List.of(mission))).isEmpty();
+
+		// 같은 격자에 일반 영상이 하나 들어오면 그때 충족된다 — 빠지는 것은 행사 영상뿐이다.
+		seedVideo(userId, gridId, nowUtc(), "ACTIVE");
+		assertThat(missionRepository.findCompleted(userId, List.of(mission)))
+			.extracting(CompletedMissionProjection::getMissionId)
+			.containsExactly(mission);
+	}
+
 	private LocalDateTime nowUtc() {
 		return LocalDateTime.now(ZoneOffset.UTC);
 	}
@@ -243,7 +262,7 @@ class MissionAwardQueryTest {
 			.executeUpdate();
 	}
 
-	private void seedVideo(long ownerId, String gridId, LocalDateTime recordedAt, String status) {
+	private long seedVideo(long ownerId, String gridId, LocalDateTime recordedAt, String status) {
 		em.createNativeQuery("""
 				INSERT INTO videos (user_id, grid_id, geom, duration_sec, recorded_at, status)
 				VALUES (
@@ -257,5 +276,7 @@ class MissionAwardQueryTest {
 			.setParameter("recordedAt", recordedAt)
 			.setParameter("status", status)
 			.executeUpdate();
+		// 같은 커넥션의 직전 시퀀스 값 = 방금 넣은 영상 id (native INSERT 라 엔티티 id 를 못 받는다).
+		return ((Number) em.createNativeQuery("SELECT lastval()").getSingleResult()).longValue();
 	}
 }
