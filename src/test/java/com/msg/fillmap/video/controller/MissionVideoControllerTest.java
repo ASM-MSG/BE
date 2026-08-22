@@ -96,10 +96,6 @@ class MissionVideoControllerTest {
 			.andExpect(jsonPath("$.data.nextCursor").value(Matchers.nullValue()));
 	}
 
-	@Test
-	@DisplayName("미인증 요청은 401 이다")
-	void 미인증_요청은_401이다() throws Exception {
-		mockMvc.perform(get(URL, MISSION_ID))
-			.andExpect(status().isUnauthorized());
-	}
+	// 미인증 401 이었던 시나리오는 MSG-454(비로그인 열람 허용)로 뜻이 뒤집혀 삭제했다 — 무인증 200 계약은
+	// MissionPublicAccessHttpTest 가 다섯 경로를 한 곳에서 본다.
 }
