@@ -80,6 +80,27 @@ public class VideoStatusWriter {
 		});
 	}
 
+	/**
+	 * 블러 꺼짐 경로의 후행 하이라이트 저장 (MSG-456 D-1). READY 전이 후에 불리므로 가드도 READY 국면을
+	 * 요구한다. 시도 식별 키는 originalS3Key 다. encoded 키는 결정적(videos/encoded/{userId}/{videoId}.mp4)
+	 * 이라 교체 후 새 시도의 READY 와 구분되지 않지만, 원본 키는 교체마다 새 attemptUuid 키라 시도를 유일하게
+	 * 식별한다 (isCurrentEncodingAttempt 와 같은 축). 불일치(교체로 UPLOADED 복귀, 삭제로 ACTIVE 이탈,
+	 * 새 시도의 READY)면 logStaleSkip 후 버린다. lockUploaderFirst 는 타지 않는다. 알림도 users FK 쓰기도
+	 * 없어 videos 행 잠금만으로 충분하다(잠금 순서 사이클 없음).
+	 */
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void recordHighlights(Long videoId, String expectedOriginalKey, List<List<Double>> highlights) {
+		videoRepository.findWithLockById(videoId).ifPresent(video -> {
+			if (video.getStatus() != VideoStatus.ACTIVE
+				|| video.getProcessingStatus() != ProcessingStatus.READY
+				|| !Objects.equals(video.getOriginalS3Key(), expectedOriginalKey)) {
+				logStaleSkip("하이라이트 저장", videoId, expectedOriginalKey, video);
+				return;
+			}
+			video.recordHighlights(highlights);
+		});
+	}
+
 	/** AI 활성 인코딩 완료 지점 (MSG-149) — READY 대신 BLURRING. thumbnailUrl 은 폴러가 완료 시 기록한다(P2). */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void markEncoded(Long videoId, String expectedOriginalKey, String encodedKey) {
