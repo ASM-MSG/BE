@@ -37,8 +37,11 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 	 * 격자 수 — videos 조인 조건은 판정 쿼리 findCompleted 와 글자 단위로 같다(2026-08-15 성민 확정으로
 	 * user_grids 교집합 정의를 대체 — 도감 점령은 촬영 시각을 안 봐 "다 채웠는데 완료가 아닌" 카드가
 	 * 그려진다). 다른 점은 둘뿐이다: INNER 가 아니라 LEFT(미진행 미션도 0으로 나온다), HAVING 임계 판정
-	 * 대신 LEAST 로 값 자체를 내린다(81칸 축제 목표 1 → "5/1" 방지). DISTINCT 는 필수다 — 같은 격자의
-	 * 재방문 영상이 videos 조인을 팬아웃시킨다. user_missions LEFT JOIN 은 PK 로 미션당 많아야 한 행이라
+	 * 대신 LEAST 로 값 자체를 내린다(81칸 축제 목표 1 → "5/1" 방지). 행사 영상 안티조인(NOT EXISTS
+	 * event_videos)도 그 글자 단위 동일 계약의 일부다 — 행사 영상은 현장에 없어도 올릴 수 있어 격자 방문
+	 * 증거가 아니므로 미션에서 제외한다(MSG-450). LEFT JOIN 이라 ON 절에 둔다: WHERE 로 내리면 미진행
+	 * 미션 행이 통째로 사라져 0 진행도가 안 나온다. DISTINCT 는 필수다 — 같은 격자의 재방문 영상이
+	 * videos 조인을 팬아웃시킨다. user_missions LEFT JOIN 은 PK 로 미션당 많아야 한 행이라
 	 * 행 수를 늘리지 않고, 복제된 행에 같은 값이 붙어도 BOOL_OR 라 안전하다(D9). 활성 조건이 없다 —
 	 * 기간이 끝난 미션도 진행도가 나온다(D11). 존재하지 않는 id 는 missions 에서 출발하므로 행이 안 생겨
 	 * 자연히 빠진다. 받치는 인덱스는 findCompleted 와 같은 idx_videos_user_created 의 user_id 선두부다.
@@ -53,6 +56,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 		LEFT JOIN videos v ON v.grid_id = mg.grid_id
 			AND v.user_id = :userId
 			AND v.status <> 'DELETED'
+			AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 			AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 			AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		LEFT JOIN user_missions um ON um.user_id = :userId AND um.mission_id = m.id
@@ -90,6 +94,8 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 	 * 기간 조건이 IS NULL OR 형태라 무기간(코스)은 자연 생략된다(FR-12) — 코드 분기 없음. 경계는 양끝
 	 * 포함(findActive 동형). videos 조인은 v.user_id 를 ON 절에 태워 idx_videos_user_created prefix 로
 	 * 내 영상만 훑는다. status <> 'DELETED' 만 거른다 — BLINDED 는 촬영 사실이 유효하므로 포함(§D2).
+	 * 행사 영상(event_videos 행이 붙은 영상)은 NOT EXISTS 로 뺀다 — 현장에 없어도 올릴 수 있어 격자 방문
+	 * 증거가 아니다(MSG-450). 이 줄도 findProgress 와의 글자 단위 동일 계약에 포함된다.
 	 * ORDER BY m.id 는 응답 배열 순서의 원천이다 (MSG-363 §D3) — 집계 결과 순서는 PostgreSQL 이
 	 * 보장하지 않아, 한 업로드가 두 종류를 완료하면 completedMissions·newBadges 순서가 실행마다 흔들린다.
 	 */
@@ -100,6 +106,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 		JOIN videos v ON v.grid_id = mg.grid_id
 			AND v.user_id = :userId
 			AND v.status <> 'DELETED'
+			AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 			AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 			AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		WHERE m.id IN (:candidateIds)
