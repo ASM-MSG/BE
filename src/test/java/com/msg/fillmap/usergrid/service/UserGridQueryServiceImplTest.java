@@ -1,7 +1,6 @@
 package com.msg.fillmap.usergrid.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.times;
@@ -10,7 +9,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,18 +21,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
-import com.msg.fillmap.global.exception.ApiException;
-import com.msg.fillmap.response.ErrorCode;
 import com.msg.fillmap.usergrid.dto.CollectionGridSort;
 import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
-import com.msg.fillmap.usergrid.repository.CollectionGridPageRepository;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
 import com.msg.fillmap.usergrid.repository.FriendCollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.RegionVideoProjection;
 import com.msg.fillmap.usergrid.repository.UploadHistoryProjection;
 import com.msg.fillmap.usergrid.repository.UserGridRepository;
 import com.msg.fillmap.usergrid.service.impl.UserGridQueryServiceImpl;
-import com.msg.fillmap.usergrid.support.CollectionGridCursor;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.zone.entity.Zone;
 import com.msg.fillmap.zone.service.ZoneNameQueryService;
@@ -43,8 +37,6 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("UserGridQueryServiceImpl")
 class UserGridQueryServiceImplTest {
-
-	private static final LocalDateTime BASE_TIME = LocalDateTime.of(2026, 8, 22, 9, 30);
 
 	/** 테스트 격자(19422_9582)를 덮는 구역 — 행 = 'A' + (19430 − 19422) = 'I', 열 = 9582 − 9574 + 1 = 9. */
 	private static final Zone SEOMYEON = Zone.builder()
@@ -55,9 +47,6 @@ class UserGridQueryServiceImplTest {
 
 	@Mock
 	private UserGridRepository userGridRepository;
-
-	@Mock
-	private CollectionGridPageRepository collectionGridPageRepository;
 
 	@Mock
 	private ThumbnailUrlPresigner thumbnailUrlPresigner;
@@ -209,11 +198,12 @@ class UserGridQueryServiceImplTest {
 
 		// 검증: FR-MAP-10
 		@Test
-		@DisplayName("regionCode 지정에 limit 생략이면 20을 바인딩한다")
-		void regionCode_지정에_limit_생략이면_20을_바인딩한다() {
+		@DisplayName("regionCode 지정에 limit 생략이면 null을 바인딩해 무제한이다")
+		void regionCode_지정에_limit_생략이면_null을_바인딩해_무제한이다() {
+			// PostgreSQL 이 LIMIT NULL 을 무제한으로 읽는다 — 그 동네 내 격자 전부가 나간다.
 			userGridQueryService.getCollectionGrids(1L, "1168051500", CollectionGridSort.COLLECTED, null);
 
-			then(userGridRepository).should().getCollectionGrids(1L, "1168051500", "COLLECTED", 20);
+			then(userGridRepository).should().getCollectionGrids(1L, "1168051500", "COLLECTED", null);
 		}
 
 		// 검증: FR-MAP-10
@@ -233,75 +223,6 @@ class UserGridQueryServiceImplTest {
 			userGridQueryService.getCollectionGrids(1L, null, CollectionGridSort.UPLOADED, 20);
 
 			then(userGridRepository).should().getCollectionGrids(1L, null, "UPLOADED", 20);
-		}
-	}
-
-	@Nested
-	@DisplayName("getCollectionGridPage")
-	class GetCollectionGridPage {
-
-		@Test
-		// 검증: FR-COLLECT-13
-		@DisplayName("21개를 읽으면 20개와 마지막 반환행 커서를 만든다")
-		void 이십일_개를_읽으면_이십_개와_마지막_반환행_커서를_만든다() {
-			givenSeomyeonZone();
-			List<CollectionGridProjection> rows = IntStream.range(0, 21)
-				.mapToObj(i -> gridProjection("19422_" + (9582 - i), BASE_TIME.minusMinutes(i), 30 - i))
-				.toList();
-			given(collectionGridPageRepository.getPage(1L, "1168051500", 21))
-				.willReturn(rows);
-
-			CollectionGridPage page = userGridQueryService.getCollectionGridPage(1L, "1168051500", null);
-
-			assertThat(page.items()).hasSize(20);
-			assertThat(page.hasNext()).isTrue();
-			CollectionGridProjection last = rows.get(19);
-			assertThat(CollectionGridCursor.decode(page.nextCursor())).isEqualTo(new CollectionGridCursor(
-				"1168051500", last.getLastUploadedAt(), last.getVideoCount(), last.getGridId()));
-			then(thumbnailUrlPresigner).should(times(20)).presign(null);
-		}
-
-		@Test
-		@DisplayName("20개 이하면 다음 페이지가 없다")
-		void 이십_개_이하면_다음_페이지가_없다() {
-			givenSeomyeonZone();
-			given(collectionGridPageRepository.getPage(1L, "1168051500", 21))
-				.willReturn(List.of(gridProjection("19422_9582", BASE_TIME, 1)));
-
-			CollectionGridPage page = userGridQueryService.getCollectionGridPage(1L, "1168051500", null);
-
-			assertThat(page.items()).hasSize(1);
-			assertThat(page.hasNext()).isFalse();
-			assertThat(page.nextCursor()).isNull();
-		}
-
-		@Test
-		@DisplayName("커서 정렬값을 리포지토리에 전달한다")
-		void 커서_정렬값을_리포지토리에_전달한다() {
-			givenSeomyeonZone();
-			LocalDateTime uploadedAt = BASE_TIME.minusMinutes(3);
-			String cursor = CollectionGridCursor.encode("1168051500", uploadedAt, 7, "19422_9582");
-			given(collectionGridPageRepository.getPageAfter(
-				1L, "1168051500", uploadedAt, 7, "19422_9582", 21)).willReturn(List.of());
-
-			userGridQueryService.getCollectionGridPage(1L, "1168051500", cursor);
-
-			then(collectionGridPageRepository).should().getPageAfter(
-				1L, "1168051500", uploadedAt, 7, "19422_9582", 21);
-		}
-
-		@Test
-		@DisplayName("다른 행정동 커서와 깨진 커서는 BAD_REQUEST다")
-		void 다른_행정동_커서와_깨진_커서는_BAD_REQUEST다() {
-			String otherRegionCursor = CollectionGridCursor.encode("1111010100", BASE_TIME, 1, "19422_9582");
-
-			assertThatThrownBy(() -> userGridQueryService.getCollectionGridPage(
-				1L, "1168051500", otherRegionCursor))
-				.isInstanceOfSatisfying(ApiException.class,
-					exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST));
-			assertThatThrownBy(() -> userGridQueryService.getCollectionGridPage(1L, "1168051500", "broken"))
-				.isInstanceOfSatisfying(ApiException.class,
-					exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST));
 		}
 	}
 
@@ -475,16 +396,6 @@ class UserGridQueryServiceImplTest {
 	}
 
 	private CollectionGridProjection gridProjection(String gridId, Long coverVideoId, String coverThumbnailKey) {
-		return gridProjection(gridId, LocalDateTime.of(2026, 7, 21, 9, 12, 0), 3,
-			coverVideoId, coverThumbnailKey);
-	}
-
-	private CollectionGridProjection gridProjection(String gridId, LocalDateTime lastUploadedAt, int videoCount) {
-		return gridProjection(gridId, lastUploadedAt, videoCount, null, null);
-	}
-
-	private CollectionGridProjection gridProjection(String gridId, LocalDateTime lastUploadedAt, int videoCount,
-		Long coverVideoId, String coverThumbnailKey) {
 		return new CollectionGridProjection() {
 			@Override
 			public String getGridId() {
@@ -498,12 +409,12 @@ class UserGridQueryServiceImplTest {
 
 			@Override
 			public LocalDateTime getLastUploadedAt() {
-				return lastUploadedAt;
+				return LocalDateTime.of(2026, 7, 21, 9, 12, 0);
 			}
 
 			@Override
 			public Integer getVideoCount() {
-				return videoCount;
+				return 3;
 			}
 
 			@Override
