@@ -289,6 +289,21 @@ class MissionProgressQueryTest {
 		assertThat(single(mission).getFilledCount()).isEqualTo(1);
 	}
 
+	// 검증: FR-EVENT-12
+	@Test
+	@DisplayName("대상 격자가 전부 행사 영상뿐이어도 미션은 0 진행도로 나온다 (MSG-450 — 안티조인 ON 절 배치)")
+	void 행사_영상뿐인_미션도_0_진행도로_나온다() {
+		// 안티조인을 ON 절이 아니라 WHERE 절에 두면 이 미션의 유일한 조인 행이 통째로 걸러져
+		// findProgress 결과에서 미션이 사라진다(0 진행도가 아니라 행 없음). 위 테스트는 다른 격자의
+		// 일반 영상이 미션을 살려 그 오배치를 못 잡는다 — 배치 회귀는 이 케이스가 유일한 가드다.
+		long mission = insertMission(nowUtc().minusDays(1), nowUtc().plusDays(1), 3);
+		String eventOnly = seedGrid(2);
+		insertMissionGrid(mission, eventOnly);
+		EventVideoFixtures.linkEventVideo(em, seedVideo(userId, eventOnly, nowUtc(), "ACTIVE"));
+
+		assertThat(single(mission).getFilledCount()).isZero();
+	}
+
 	private MissionProgressProjection single(long missionId) {
 		List<MissionProgressProjection> rows = missionRepository.findProgress(userId, List.of(missionId));
 		assertThat(rows).hasSize(1);
