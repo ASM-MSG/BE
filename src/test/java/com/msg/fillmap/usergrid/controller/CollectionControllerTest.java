@@ -195,6 +195,8 @@ class CollectionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(200))
 			.andExpect(jsonPath("$.data.items.length()").value(1))
 			.andExpect(jsonPath("$.data.items[0].gridId").value("19422_9582"))
+			.andExpect(jsonPath("$.data.items[0].firstCollectedAt").value("2026-07-20T18:03:11Z"))
+			.andExpect(jsonPath("$.data.items[0].lastUploadedAt").value("2026-07-21T09:12:00Z"))
 			.andExpect(jsonPath("$.data.hasNext").value(true))
 			.andExpect(jsonPath("$.data.nextCursor").value("next-cursor"));
 	}
