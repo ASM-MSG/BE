@@ -181,10 +181,10 @@
 | FR-EVENT-04 | 폐기됨 | (없음) |
 | FR-EVENT-05 | 폐기됨 | (없음) |
 | FR-EVENT-06 | 구현됨 | EventNotificationControllerTest, EventNotificationSchedulerTest, EventNotificationServiceTest, EventNotificationSubscriptionRepositoryTest, EventQueryServiceTest, EventSeederScheduleChangeTest, NotificationConsumerTest, NotificationPreferenceServiceIntegrationTest, OpenApiNullableDataTest |
-| FR-EVENT-07 | 진행 중 | EventOccurrenceStatusTest, EventQueryServiceTest, EventSeederTest, EventVideoQueryServiceTest |
+| FR-EVENT-07 | 구현됨 | EventOccurrenceStatusTest, EventQueryServiceTest, EventSeederTest, EventVideoQueryServiceTest |
 | FR-EVENT-08 | 구현됨 | EventQueryServiceTest, EventSeederTest, EventVideoQueryServiceTest, EventVideoUploadConcurrencyTest, EventVideoUploadServiceTest, RepresentativeGridResolverTest |
-| FR-EVENT-09 | 진행 중 | EventVideoPublicAccessHttpTest, EventVideoQueryServiceTest, EventVideoUploadServiceTest, EventVideoVisibilityIntegrationTest |
-| FR-EVENT-10 | 진행 중 | EventLifecycleGuardTest, EventNotificationSubscriptionRepositoryTest, EventSeederScheduleChangeTest, EventVideoQueryServiceTest, EventVideoUploadConcurrencyTest, EventVideoUploadServiceTest |
+| FR-EVENT-09 | 구현됨 | EventVideoCommentServiceTest, EventVideoHelpfulServiceTest, EventVideoPublicAccessHttpTest, EventVideoQueryServiceTest, EventVideoUploadServiceTest, EventVideoVisibilityIntegrationTest |
+| FR-EVENT-10 | 구현됨 | EventInteractionLockTest, EventLifecycleGuardTest, EventNotificationSubscriptionRepositoryTest, EventSeederScheduleChangeTest, EventVideoQueryServiceTest, EventVideoUploadConcurrencyTest, EventVideoUploadServiceTest |
 | FR-EVENT-11 | 구현됨 | EventViewerCacheFailureControllerTest, EventViewerControllerTest, EventViewerServiceImplTest |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
 | FR-NOTI-02 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest, NotificationRelayTest |

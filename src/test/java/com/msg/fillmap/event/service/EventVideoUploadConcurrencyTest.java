@@ -111,6 +111,10 @@ class EventVideoUploadConcurrencyTest {
 	@Autowired
 	private ZoneNameQueryService zoneNameQueryService;
 
+	/** 업로드는 반응을 읽지 않지만 상세·피드 경로의 협력자라 서비스 생성에 필요하다 (MSG-441). */
+	@Autowired
+	private EventVideoInteractionService interactionService;
+
 	@Autowired
 	private EntityManager em;
 
@@ -172,7 +176,7 @@ class EventVideoUploadConcurrencyTest {
 
 	private EventVideoService service() {
 		return new EventVideoServiceImpl(occurrenceRepository, locationRepository, eventVideoRepository,
-			videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em,
+			videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em, interactionService,
 			Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 

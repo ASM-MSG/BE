@@ -9,12 +9,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * 어느 행사·어느 위치·어느 대표 격자의 것인지를 함께 준다(US-006 "대표 격자 표시").
  * 표시명 조립은 클라이언트 몫으로 {@code zoneName 있으면 "{zoneName} {zoneCell}", 없으면 regionName} 이며
  * 서버는 폴백 문자열을 만들지 않는다(MSG-341 공통 규칙).
- * 댓글 목록과 도움돼요 수는 MSG-441 이 이 응답에 추가한다(자리 예약).
+ * 도움돼요 수·댓글 수·댓글 첫 페이지도 함께 온다(MSG-441) — 화면이 상세 진입에 목록 API 를 한 번 더
+ * 부르지 않게 첫 20건을 품고, 둘째 페이지부터 GET /api/event-videos/{videoId}/comments 를 쓴다.
  */
 @Schema(description = "행사 영상 상세",
 	requiredProperties = {"videoId", "occurrenceId", "occurrenceStatus", "locationId", "locationName",
 		"representativeGridId", "zoneName", "zoneCell", "regionName", "playbackUrl", "durationSec",
-		"recordedAt", "createdAt", "uploaderNickname", "interactionLocked"})
+		"recordedAt", "createdAt", "uploaderNickname", "interactionLocked", "helpfulCount", "helpfulByMe",
+		"commentCount", "comments"})
 public record EventVideoDetailResponseDto(
 	@Schema(description = "영상 ID", example = "1042")
 	Long videoId,
@@ -61,7 +63,20 @@ public record EventVideoDetailResponseDto(
 	@Schema(description = "작성자 닉네임", example = "필맵러")
 	String uploaderNickname,
 
-	@Schema(description = "댓글·도움돼요 입력 UI 를 비활성화할지 여부 — 행사 종료 시각부터 true", example = "false")
-	boolean interactionLocked
+	@Schema(description = "댓글·도움돼요 입력 UI 를 비활성화할지 여부 — 아카이브 전환(행사 종료 + 30일)부터 true",
+		example = "false")
+	boolean interactionLocked,
+
+	@Schema(description = "도움돼요 수", example = "12")
+	long helpfulCount,
+
+	@Schema(description = "내가 도움돼요를 누른 상태인지. 비로그인 조회는 항상 false", example = "false")
+	boolean helpfulByMe,
+
+	@Schema(description = "댓글 수", example = "3")
+	long commentCount,
+
+	@Schema(description = "댓글 첫 페이지 (오래된 순 20건)")
+	EventVideoCommentPageResponseDto comments
 ) {
 }
