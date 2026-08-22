@@ -81,7 +81,7 @@
 | FR-HOTZONE-04 | 구현됨 | HotScoreCommandServiceImplTest, HotZoneServiceImplTest |
 | FR-HOTZONE-05 | 구현됨 | HotScoreCommandServiceImplTest |
 | FR-HOTZONE-06 | 구현됨 | HotZoneServiceImplTest |
-| FR-HOTZONE-07 | 구현됨 | HotZoneServiceImplTest |
+| FR-HOTZONE-07 | 구현됨 | HotZoneServiceImplTest, MissionPublicAccessHttpTest |
 | FR-HOTZONE-08 | 구현됨 | HotZoneServiceImplTest |
 | FR-HOTZONE-09 | 구현됨 | HotZoneControllerTest, HotZoneServiceImplTest |
 | FR-HOTZONE-10 | 구현됨 | HotZoneControllerTest |
@@ -155,7 +155,7 @@
 | FR-STREAK-06 | 구현됨 | StreakCommandServiceIntegrationTest |
 | FR-STREAK-07 | 구현됨 | StreakRemindSchedulerTest |
 | FR-STREAK-08 | 구현됨 | CollectionControllerTest, UploadHistoryIntegrationTest, UserGridQueryServiceImplTest, UserGridRepositoryTest |
-| FR-MISSION-01 | 구현됨 | CourseSeedContractTest, MissionControllerTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest |
+| FR-MISSION-01 | 구현됨 | CourseSeedContractTest, MissionControllerTest, MissionPublicAccessHttpTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest |
 | FR-MISSION-02 | 구현됨 | MissionAggregationHttpTest, MissionControllerTest, MissionQueryServiceClockTest, MissionRepositoryTest, MissionValidationHttpTest, MissionViewportFilterTest |
 | FR-MISSION-03 | 구현됨 | CourseSeedContractTest, MissionAwardQueryTest, MissionAwardServiceTest |
 | FR-MISSION-04 | 구현됨 | FestivalMissionSeederIntegrationTest, MissionAwardQueryTest, MissionAwardServiceTest, MissionProgressQueryTest, MissionRepositoryTest, MissionSchemaMigrationTest, PopupMissionSeederIntegrationTest, UserMissionRepositoryTest |
@@ -170,10 +170,10 @@
 | FR-MISSION-13 | 진행 중 | MissionViewportFilterTest |
 | FR-MISSION-14 | 진행 중 | MissionViewportFilterTest |
 | FR-MISSION-15 | 계획 | (없음) |
-| FR-MISSION-20 | 진행 중 | MissionAggregationHttpTest, MissionAggregationIntegrationTest, MissionRegionAnchorTest |
-| FR-MISSION-16 | 진행 중 | CourseMissionSeederIntegrationTest, CourseSeedReaderTest, FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, MissionControllerTest, MissionDetailServiceTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
-| FR-MISSION-17 | 진행 중 | MissionControllerTest, MissionDetailConsistencyTest, MissionDetailServiceTest, MissionVideoControllerTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVideoListServiceTest, MissionVisitedGridQueryTest |
-| FR-MISSION-18 | 진행 중 | MissionDetailConsistencyTest, MissionDetailServiceTest, MissionProgressQueryTest, MissionProgressServiceTest, MissionVisitedGridQueryTest |
+| FR-MISSION-20 | 진행 중 | MissionAggregationHttpTest, MissionAggregationIntegrationTest, MissionPublicAccessHttpTest, MissionRegionAnchorTest |
+| FR-MISSION-16 | 진행 중 | CourseMissionSeederIntegrationTest, CourseSeedReaderTest, FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, MissionControllerTest, MissionDetailServiceTest, MissionPublicAccessHttpTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
+| FR-MISSION-17 | 진행 중 | MissionControllerTest, MissionDetailConsistencyTest, MissionDetailServiceTest, MissionPublicAccessHttpTest, MissionVideoControllerTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVideoListServiceTest, MissionVisitedGridQueryTest |
+| FR-MISSION-18 | 진행 중 | MissionControllerTest, MissionDetailConsistencyTest, MissionDetailServiceTest, MissionProgressQueryTest, MissionProgressServiceTest, MissionPublicAccessHttpTest, MissionVisitedGridQueryTest |
 | FR-MISSION-19 | 계획 | (없음) |
 | FR-EVENT-01 | 구현됨 | EventQueryServiceTest |
 | FR-EVENT-02 | 구현됨 | EventQueryServiceTest |

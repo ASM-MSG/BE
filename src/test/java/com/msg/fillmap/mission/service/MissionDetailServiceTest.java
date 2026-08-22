@@ -2,6 +2,11 @@ package com.msg.fillmap.mission.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -14,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.global.exception.ApiException;
@@ -25,6 +31,8 @@ import com.msg.fillmap.mission.dto.MissionDetailResponseDto.SpotStats;
 import com.msg.fillmap.mission.dto.MissionShape.PathShape;
 import com.msg.fillmap.mission.dto.MissionShape.Spot;
 import com.msg.fillmap.mission.exception.MissionErrorCode;
+import com.msg.fillmap.mission.repository.MissionGridRepository;
+import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 
@@ -53,6 +61,13 @@ class MissionDetailServiceTest {
 
 	@Autowired
 	private UserRepository userRepository;
+
+	// 스파이(실동작 그대로) — 익명 상세가 사용자별 두 조회를 아예 건너뛰는지(MSG-454) 호출 여부로 본다.
+	@MockitoSpyBean
+	private MissionRepository missionRepository;
+
+	@MockitoSpyBean
+	private MissionGridRepository missionGridRepository;
 
 	@Autowired
 	private EntityManager em;
@@ -189,6 +204,47 @@ class MissionDetailServiceTest {
 		assertThat(detail.spotStats()).isNotNull().isEmpty();
 		// 스팟 조립만 빠질 뿐 전체 영상 개수는 유형과 무관하게 담긴다.
 		assertThat(detail.videoCount()).isEqualTo(1);
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("익명 상세는 진행도가 null이고 스팟 방문이 전부 false다 — 전역 값은 로그인과 같다 (MSG-454)")
+	void 익명_상세는_진행도가_null이고_스팟_방문이_전부_false다() {
+		long mission = insertMission("COURSE", null, null, 2);
+		String firstSpot = seedGrid(0);
+		String secondSpot = seedGrid(1);
+		insertMissionGrid(mission, firstSpot, 1);
+		insertMissionGrid(mission, secondSpot, 2);
+		insertVideo(userId, firstSpot, nowUtc(), "ACTIVE", "PUBLIC", "READY");
+		insertStamp(userId, mission);
+
+		MissionDetailResponseDto anonymous = missionQueryService.getMissionDetail(mission, null);
+
+		assertThat(anonymous.progress()).isNull();
+		assertThat(anonymous.spotStats()).extracting(SpotStats::visited).containsOnly(false);
+		// 전역 값은 로그인 조회와 글자 그대로 같다 — 익명이라고 미션·영상 수가 달라지지 않는다.
+		MissionDetailResponseDto loggedIn = missionQueryService.getMissionDetail(mission, userId);
+		assertThat(anonymous.mission()).isEqualTo(loggedIn.mission());
+		assertThat(anonymous.videoCount()).isEqualTo(loggedIn.videoCount());
+		assertThat(anonymous.spotStats()).extracting(SpotStats::gridId, SpotStats::videoCount)
+			.containsExactlyElementsOf(loggedIn.spotStats().stream()
+				.map(spot -> tuple(spot.gridId(), spot.videoCount())).toList());
+		// 로그인 쪽은 그대로 개인화 값을 담는다 (익명 분기가 로그인 경로를 갉아먹지 않았다).
+		assertThat(loggedIn.progress().completed()).isTrue();
+		assertThat(loggedIn.spotStats().get(0).visited()).isTrue();
+	}
+
+	// 검증: FR-MISSION-16
+	@Test
+	@DisplayName("익명 상세는 진행도와 방문 조회를 실행하지 않는다 — 사용자별 쿼리 두 건이 빠진다")
+	void 익명_상세는_진행도와_방문_조회를_실행하지_않는다() {
+		long mission = insertMission("COURSE", null, null, 1);
+		insertMissionGrid(mission, seedGrid(0), 1);
+
+		missionQueryService.getMissionDetail(mission, null);
+
+		then(missionRepository).should(never()).findProgress(anyLong(), any());
+		then(missionGridRepository).should(never()).findVisitedGridIds(anyLong(), anyLong());
 	}
 
 	// 검증: FR-MISSION-16

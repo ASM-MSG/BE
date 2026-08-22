@@ -30,10 +30,11 @@ import com.msg.fillmap.mission.service.MissionQueryService;
 import com.msg.fillmap.response.SuccessResponse;
 
 /**
- * 미션 조회 API (MSG-222 → MSG-398 뷰포트 자르기·진행도). 목록은 전역 데이터라 principal 을 읽지 않지만
- * 인증은 필수다(SecurityConfig anyRequest().authenticated()) — 응답이 호출자와 무관해야 전역 캐시가
- * 성립하고(FR-MISSION-02), principal 을 안 받는 것이 그 계약의 코드 수준 방어다(D10). 진행도는 사용자별
- * 값이라 principal 로 사용자를 정하고 캐시하지 않는다.
+ * 미션 조회 API (MSG-222 → MSG-398 뷰포트 자르기·진행도). 목록·집계·상세는 비로그인 열람이다
+ * (MSG-454 — 지도 홈 상단 칩은 로그인 없이 보인다). 목록·집계는 응답이 호출자와 무관해야 전역 캐시가
+ * 성립하고(FR-MISSION-02), principal 을 아예 받지 않는 것이 그 계약의 코드 수준 방어다(D10). 상세는
+ * principal 이 있으면 그 사용자의 진행도를 담고 없으면 개인화 필드를 null 로 내린다. 진행도 조회는
+ * 사용자별 값이라 로그인 필수이고 캐시하지 않는다.
  */
 @Tag(name = "미션 (Missions)", description = "지도 오버레이용 활성 미션 목록·내 진행도·미션 상세 조회 API.")
 @RestController
@@ -146,14 +147,21 @@ public class MissionController {
 			+ "반환한다. spotStats 는 shape.spots 와 같은 순서로 오고, 코스가 아니면 null 대신 빈 배열이다.\n\n"
 			+ "기간 판정은 하지 않는다 — 기간이 끝난 미션도 행이 남아 있으면 조회되고, 영상 개수는 그 미션이 "
 			+ "활성일 때 촬영된 것만 센다(미션 영상 목록 GET /api/missions/{missionId}/videos 의 실제 후보 "
-			+ "수와 항상 같다). 존재하지 않는 미션 ID 는 404 + developCode 12404(MISSION_NOT_FOUND)다."
+			+ "수와 항상 같다). 존재하지 않는 미션 ID 는 404 + developCode 12404(MISSION_NOT_FOUND)다.\n\n"
+			+ "비로그인으로도 조회된다(MSG-454). 이때 사용자별 값은 빠진다 — progress 는 키는 있고 값이 null 이며 "
+			+ "spotStats[].visited 는 전부 false 다. 미션 정보·전체 영상 수·스팟별 영상 수는 로그인과 같다."
 	)
 	@GetMapping("/api/missions/{missionId}")
 	public SuccessResponse<MissionDetailResponseDto> getMissionDetail(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "미션 ID", example = "412") @PathVariable long missionId
 	) {
-		return SuccessResponse.of(missionQueryService.getMissionDetail(missionId, principal.userId()));
+		return SuccessResponse.of(missionQueryService.getMissionDetail(missionId, userId(principal)));
+	}
+
+	/** 비로그인 상세 요청은 principal 이 없다 — 개인화 필드(진행도·방문)의 조회 키라 null 을 그대로 넘긴다. */
+	private Long userId(AuthPrincipal principal) {
+		return principal == null ? null : principal.userId();
 	}
 
 	/**

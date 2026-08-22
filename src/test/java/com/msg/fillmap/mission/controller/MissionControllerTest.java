@@ -270,28 +270,17 @@ class MissionControllerTest {
 			.andExpect(jsonPath("$.developCode").value(400));
 	}
 
+	// 검증: FR-MISSION-18
 	@Test
-	@DisplayName("미인증 요청은 401이다 — 두 엔드포인트 모두 (MSG-398 D10)")
-	void 미인증_요청은_401이다() throws Exception {
-		mockMvc.perform(activeRequest("POPUP"))
-			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.developCode").value(2403));
-
+	@DisplayName("미인증 진행도 요청은 401이다 — 사용자별 값이라 로그인 필수 (MSG-454)")
+	void 미인증_진행도_요청은_401이다() throws Exception {
+		// 목록·집계·상세는 MSG-454 로 비로그인 열람이 됐다 — 그 계약은 MissionPublicAccessHttpTest 가 본다.
 		mockMvc.perform(get("/api/missions/progress").param("missionIds", "412"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.developCode").value(2403));
 	}
 
 	// --- 미션 상세 (MSG-399)
-
-	// 검증: FR-MISSION-16
-	@Test
-	@DisplayName("미인증 상세 조회는 401이다 — 토큰 필수")
-	void 미인증_상세_조회는_401이다() throws Exception {
-		mockMvc.perform(get("/api/missions/412"))
-			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.developCode").value(2403));
-	}
 
 	// 검증: FR-MISSION-16
 	@Test
