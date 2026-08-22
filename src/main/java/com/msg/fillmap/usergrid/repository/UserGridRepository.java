@@ -3,7 +3,6 @@ package com.msg.fillmap.usergrid.repository;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -109,76 +108,6 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 		@Param("regionCode") String regionCode,
 		@Param("sort") String sort,
 		@Param("limit") Integer limit
-	);
-
-	/**
-	 * 행정동 전체 보기 페이지.
-	 * 최근 업로드 시각, 영상 수, 격자 ID 내림차순의 마지막 행을 경계로
-	 * 첫 페이지와 커서 이후 페이지를 분리해 nullable 커서 파라미터를 만들지 않는다.
-	 */
-	@Query("""
-		SELECT
-			ug.id.gridId AS gridId,
-			ug.firstCollectedAt AS firstCollectedAt,
-			ug.lastUploadedAt AS lastUploadedAt,
-			ug.videoCount AS videoCount,
-			ug.coverVideoId AS coverVideoId,
-			CASE WHEN v.processingStatus = com.msg.fillmap.video.entity.ProcessingStatus.READY
-				THEN v.thumbnailUrl ELSE NULL END AS coverThumbnailKey,
-			CAST(v.durationSec AS integer) AS coverDurationSec,
-			r.regionName AS regionName
-		FROM UserGrid ug
-		JOIN Grid g ON g.gridId = ug.id.gridId
-		LEFT JOIN Video v ON v.id = ug.coverVideoId
-		LEFT JOIN Region r ON r.regionCode = g.regionCode
-		WHERE ug.id.userId = :userId
-			AND g.regionCode = :regionCode
-		ORDER BY ug.lastUploadedAt DESC, ug.videoCount DESC, ug.id.gridId DESC
-		""")
-	List<CollectionGridProjection> getCollectionGridPage(
-		@Param("userId") long userId,
-		@Param("regionCode") String regionCode,
-		Pageable pageable
-	);
-
-	@Query("""
-		SELECT
-			ug.id.gridId AS gridId,
-			ug.firstCollectedAt AS firstCollectedAt,
-			ug.lastUploadedAt AS lastUploadedAt,
-			ug.videoCount AS videoCount,
-			ug.coverVideoId AS coverVideoId,
-			CASE WHEN v.processingStatus = com.msg.fillmap.video.entity.ProcessingStatus.READY
-				THEN v.thumbnailUrl ELSE NULL END AS coverThumbnailKey,
-			CAST(v.durationSec AS integer) AS coverDurationSec,
-			r.regionName AS regionName
-		FROM UserGrid ug
-		JOIN Grid g ON g.gridId = ug.id.gridId
-		LEFT JOIN Video v ON v.id = ug.coverVideoId
-		LEFT JOIN Region r ON r.regionCode = g.regionCode
-		WHERE ug.id.userId = :userId
-			AND g.regionCode = :regionCode
-			AND (
-				ug.lastUploadedAt < :cursorLastUploadedAt
-				OR (
-					ug.lastUploadedAt = :cursorLastUploadedAt
-					AND ug.videoCount < :cursorVideoCount
-				)
-				OR (
-					ug.lastUploadedAt = :cursorLastUploadedAt
-					AND ug.videoCount = :cursorVideoCount
-					AND ug.id.gridId < :cursorGridId
-				)
-			)
-		ORDER BY ug.lastUploadedAt DESC, ug.videoCount DESC, ug.id.gridId DESC
-		""")
-	List<CollectionGridProjection> getCollectionGridPageAfter(
-		@Param("userId") long userId,
-		@Param("regionCode") String regionCode,
-		@Param("cursorLastUploadedAt") LocalDateTime cursorLastUploadedAt,
-		@Param("cursorVideoCount") Integer cursorVideoCount,
-		@Param("cursorGridId") String cursorGridId,
-		Pageable pageable
 	);
 
 	/**

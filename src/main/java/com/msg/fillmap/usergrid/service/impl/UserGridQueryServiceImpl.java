@@ -3,7 +3,6 @@ package com.msg.fillmap.usergrid.service.impl;
 import java.time.ZoneOffset;
 import java.util.List;
 
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +14,7 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.response.ErrorCode;
 import com.msg.fillmap.usergrid.dto.CollectionGridSort;
 import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
+import com.msg.fillmap.usergrid.repository.CollectionGridPageRepository;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
 import com.msg.fillmap.usergrid.repository.FriendCollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.RegionVideoProjection;
@@ -44,6 +44,7 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 	private static final int COLLECTION_GRID_LOOKAHEAD_SIZE = COLLECTION_GRID_PAGE_SIZE + 1;
 
 	private final UserGridRepository userGridRepository;
+	private final CollectionGridPageRepository collectionGridPageRepository;
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
 	private final ZoneNameQueryService zoneNameQueryService;
 
@@ -102,12 +103,12 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 
 	private List<CollectionGridProjection> queryCollectionGridPage(
 		long userId, String regionCode, CollectionGridCursor cursor) {
-		PageRequest pageRequest = PageRequest.of(0, COLLECTION_GRID_LOOKAHEAD_SIZE);
 		if (cursor == null) {
-			return userGridRepository.getCollectionGridPage(userId, regionCode, pageRequest);
+			return collectionGridPageRepository.getPage(userId, regionCode, COLLECTION_GRID_LOOKAHEAD_SIZE);
 		}
-		return userGridRepository.getCollectionGridPageAfter(
-			userId, regionCode, cursor.lastUploadedAt(), cursor.videoCount(), cursor.gridId(), pageRequest);
+		return collectionGridPageRepository.getPageAfter(
+			userId, regionCode, cursor.lastUploadedAt(), cursor.videoCount(), cursor.gridId(),
+			COLLECTION_GRID_LOOKAHEAD_SIZE);
 	}
 
 	private CollectionGridCursor decodeCursor(String regionCode, String cursor) {
