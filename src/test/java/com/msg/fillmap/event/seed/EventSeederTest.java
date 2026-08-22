@@ -580,7 +580,14 @@ class EventSeederTest {
 	@DisplayName("첫 시드 실값")
 	class RealSeed {
 
-		/** 스펙 "첫 시드 실값 초안"의 기준 위경도. 대표 격자는 전 위치가 홀수 직사각형이라 시더가 정중앙으로 정한다. */
+		/**
+		 * 스펙 "첫 시드 실값 초안"의 기준 위경도. 대표 격자는 전 위치가 홀수 직사각형이라 시더가 정중앙으로 정한다.
+		 * <p>
+		 * LoL 국가대표 평가전 두 위치(MSG-455)의 기준 좌표는 영화의전당 단지 실측이다 — 루프씨어터는 시네마운틴
+		 * 본관 좌표(위키백과 표기 35.171165, 129.127188)가 속한 셀이고, 두레라움 광장은 그 서쪽 인접 셀이다.
+		 * 같은 단지의 biff-2026-cinema-center 기준 좌표(129.1240)와 약 300m 어긋나는데, 그쪽은 첫 시드 작도
+		 * 시점의 값이라 이번 티켓에서 손대지 않았다 (MSG-455 티켓에 별건으로 남김).
+		 */
 		private static final Map<String, double[]> 기준_위경도 = Map.of(
 			"biff-2026-cinema-center", new double[] {35.1717, 129.1240},
 			"biff-2026-haeundae-event-zone", new double[] {35.1587, 129.1604},
@@ -588,7 +595,9 @@ class EventSeederTest {
 			"busan-fireworks-2026-gwangalli", new double[] {35.1532, 129.1187},
 			"busan-fireworks-2026-igidae", new double[] {35.1318, 129.1233},
 			"busan-fireworks-2026-dongbaekseom", new double[] {35.1529, 129.1520},
-			"seoul-fireworks-2026-yeouido", new double[] {37.5284, 126.9327});
+			"seoul-fireworks-2026-yeouido", new double[] {37.5284, 126.9327},
+			"lol-national-team-2026-roof-theater", new double[] {35.1712, 129.1272},
+			"lol-national-team-2026-dureraum-plaza", new double[] {35.1712, 129.1262});
 
 		// 검증: FR-EVENT-08
 		@Test

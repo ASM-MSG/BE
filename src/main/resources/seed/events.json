@@ -123,5 +123,43 @@
 				]
 			}
 		]
+	},
+	{
+		"seriesKey": "lol-national-team",
+		"seriesName": "리그 오브 레전드 국가대표 평가전",
+		"occurrences": [
+			{
+				"occurrenceKey": "lol-national-team-busan-2026",
+				"title": "리그 오브 레전드 국가대표 평가전",
+				"cityName": "부산",
+				"startsAt": "2026-09-19T18:00:00+09:00",
+				"endsAt": "2026-09-20T22:00:00+09:00",
+				"exposure": { "minGridY": 16854, "maxGridY": 16894, "minGridX": 11461, "maxGridX": 11501 },
+				"locations": [
+					{
+						"locationKey": "lol-national-team-2026-roof-theater",
+						"name": "영화의전당 루프씨어터",
+						"type": "ETC",
+						"operatingHours": "18:00~22:00",
+						"displayOrder": 1,
+						"areaRects": [
+							{ "minGridY": 16873, "maxGridY": 16875, "minGridX": 11481, "maxGridX": 11481 }
+						],
+						"representativeGridId": null
+					},
+					{
+						"locationKey": "lol-national-team-2026-dureraum-plaza",
+						"name": "두레라움 광장",
+						"type": "EXPERIENCE_ZONE",
+						"operatingHours": null,
+						"displayOrder": 2,
+						"areaRects": [
+							{ "minGridY": 16873, "maxGridY": 16875, "minGridX": 11480, "maxGridX": 11480 }
+						],
+						"representativeGridId": null
+					}
+				]
+			}
+		]
 	}
 ]
