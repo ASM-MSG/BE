@@ -16,7 +16,8 @@ public record MissionDetailResponseDto(
 	@Schema(description = "미션 정보 — 목록(GET /api/missions/active)과 같은 필드·shape")
 	MissionResponseDto mission,
 
-	@Schema(description = "내 진행도 — 목록 진행도(GET /api/missions/progress)와 같은 계산 (MSG-398 D8)")
+	@Schema(description = "내 진행도 — 목록 진행도(GET /api/missions/progress)와 같은 계산 (MSG-398 D8). "
+		+ "비로그인 조회면 키는 그대로 있고 값이 null 이다 (MSG-454)", nullable = true)
 	MissionProgressResponseDto progress,
 
 	@Schema(description = "미션 기간 안에 촬영된 전역 공개(ACTIVE·PUBLIC·READY) 영상 수 — "
@@ -35,7 +36,8 @@ public record MissionDetailResponseDto(
 		@Schema(description = "포토스팟 격자 id — shape.spots 의 gridId 에 대응", example = "38677_114635")
 		String gridId,
 
-		@Schema(description = "미션 기간 안에 촬영한 내 영상이 있는지 — 진행도와 같은 술어", example = "true")
+		@Schema(description = "미션 기간 안에 촬영한 내 영상이 있는지 — 진행도와 같은 술어. "
+			+ "비로그인 조회면 항상 false (MSG-454)", example = "true")
 		boolean visited,
 
 		@Schema(description = "이 스팟에 올라온 전역 공개 영상 수. 영상이 없으면 0", example = "9")

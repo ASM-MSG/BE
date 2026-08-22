@@ -58,6 +58,9 @@ public interface MissionQueryService {
 	 * 게이트를 통과한 전체 영상 수, COURSE 면 포토스팟별 방문 여부·영상 수를 담는다. 사용자별 값이라 전역
 	 * 캐시에 넣지 않고, 기간 판정도 하지 않는다 — 기간이 끝난 미션도 행이 남아 있으면 조회된다.
 	 * 존재하지 않는 missionId 는 MISSION_NOT_FOUND(12404) — 단일 리소스 요청이라 목록(빈 결과)과 다르다.
+	 *
+	 * <p>userId 가 null 이면 비로그인 조회다(MSG-454) — 개인화 필드만 빠진다: progress 는 null 값이고
+	 * 스팟 방문 여부는 전부 false 다. 미션 정보·영상 수는 로그인 조회와 같다.
 	 */
-	MissionDetailResponseDto getMissionDetail(long missionId, long userId);
+	MissionDetailResponseDto getMissionDetail(long missionId, Long userId);
 }
