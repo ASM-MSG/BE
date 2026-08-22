@@ -26,16 +26,10 @@ public interface UserGridQueryService {
 	 * @param regionCode 행정동 코드. null 이면 전국, 지정하면 그 행정동에 속한 격자만(격자 축 귀속 —
 	 *                   영상 좌표가 옆 동이어도 격자 소속 동 기준). 미존재 코드면 빈 리스트(에러 아님)
 	 * @param sort       정렬 축. 컨트롤러 defaultValue 로 항상 비null
-	 * @param limit      카드 수 상한. null 이면 전국 조회는 30, 행정동 조회는 20. 1 미만은 1로 보정
+	 * @param limit      카드 수 상한. null 이면 regionCode 없을 때 30(기존 갤러리 계약), regionCode 있을 때
+	 *                   그 동네 전부. 1 미만은 1 로 보정한다(전역 탐색 선례)
 	 */
 	List<CollectionGridView> getCollectionGrids(long userId, String regionCode, CollectionGridSort sort, Integer limit);
-
-	/**
-	 * 행정동 전체 보기 개인 격자 페이지.
-	 * cursor 는 직전 응답의 nextCursor 이며 null 이면 첫 페이지다.
-	 * 한 페이지는 최대 20개고 최근 업로드 시각, 영상 수, 격자 ID 내림차순이다.
-	 */
-	CollectionGridPage getCollectionGridPage(long userId, String regionCode, String cursor);
 
 	/**
 	 * 동 단위 내 영상: 그 행정동(regionCode) 격자들에 올린 내 ACTIVE 영상을 created_at 내림차순으로 반환한다

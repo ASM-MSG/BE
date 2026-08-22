@@ -140,6 +140,18 @@ class RegionExploreQueryTest {
 		return LocalDateTime.of(2026, 7, 20, hour, 0, 0);
 	}
 
+	private void occupy(long userId, String gridId, LocalDateTime lastUploadedAt) {
+		em.createNativeQuery("""
+			INSERT INTO user_grids (
+				user_id, grid_id, first_collected_at, last_uploaded_at, video_count)
+			VALUES (:userId, :gridId, :uploadedAt, :uploadedAt, 1)
+			""")
+			.setParameter("userId", userId)
+			.setParameter("gridId", gridId)
+			.setParameter("uploadedAt", lastUploadedAt)
+			.executeUpdate();
+	}
+
 	/* ---------- 모듈 1: 격자 카드 ---------- */
 
 	@Test
@@ -394,8 +406,8 @@ class RegionExploreQueryTest {
 	/* ---------- 모듈 3: 전체 지역 ---------- */
 
 	/** 공유 DB 의 타 데이터가 섞일 수 있어 합성(99954) region 행만 걸러 단언한다. */
-	private List<RegionGridCountProjection> syntheticRows() {
-		return videoRepository.getRegionGridCounts().stream()
+	private List<RegionExplorePageProjection> syntheticRows(long userId) {
+		return videoRepository.getRegionExplorePage(userId, false, false, null, null, null, 21).stream()
 			.filter(row -> row.getRegionCode().startsWith("99954"))
 			.toList();
 	}
@@ -413,7 +425,7 @@ class RegionExploreQueryTest {
 		seedVideo(me, seedLabeledGrid(GY0 + 20, GX0, REGION_C), "thumbs/m238-x4.jpg", "READY", "PRIVATE",
 			"ACTIVE", 9L, GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
-		List<RegionGridCountProjection> rows = syntheticRows();
+		List<RegionExplorePageProjection> rows = syntheticRows(me);
 
 		// A(2) → B(1) 내림차순, C(비공개만)는 부재 — gridCount DESC 는 전역 정렬이라 상대 순서로 검증한다.
 		assertThat(rows).extracting(RegionGridCountProjection::getRegionCode)
@@ -433,11 +445,134 @@ class RegionExploreQueryTest {
 		seedVideo(me, seedLabeledGrid(GY0, GX0 + 2, REGION_A), "thumbs/m238-y3.jpg", "READY", "PRIVATE",
 			"ACTIVE", 9L, GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
-		RegionGridCountProjection row = syntheticRows().get(0);
+		RegionExplorePageProjection row = syntheticRows(me).get(0);
 
 		// ①↔② 일관(DoD) — 전체 지역의 격자 수 = 그 행정동 카드 집합 크기(같은 게이트 정의 §D1).
 		assertThat(row.getRegionCode()).isEqualTo(REGION_A);
 		assertThat(row.getGridCount()).isEqualTo(videoRepository.findExploreGridsPopular(REGION_A, null).size());
+	}
+
+	@Test
+	// 검증: FR-SEARCH-15
+	@DisplayName("직접_최근_업로드한_지역이_격자수가_많은_미업로드_지역보다_먼저다")
+	void 직접_최근_업로드한_지역이_격자수가_많은_미업로드_지역보다_먼저다() {
+		long me = newUser();
+		long other = newUser();
+		seedRegionA();
+		seedRegionB();
+		String a1 = seedLabeledGrid(GY0, GX0, REGION_A);
+		String a2 = seedLabeledGrid(GY0, GX0 + 1, REGION_A);
+		String b1 = seedLabeledGrid(GY0 + 10, GX0, REGION_B);
+		gated(other, a1, "thumbs/m460-a1.jpg", 1L, BASE);
+		gated(other, a2, "thumbs/m460-a2.jpg", 1L, BASE);
+		gated(other, b1, "thumbs/m460-b1.jpg", 1L, BASE);
+		occupy(me, b1, BASE.plusDays(1));
+
+		List<RegionExplorePageProjection> rows = syntheticRows(me);
+
+		assertThat(rows).extracting(RegionExplorePageProjection::getRegionCode)
+			.containsExactly(REGION_B, REGION_A);
+		assertThat(rows.get(0).getPersonalLastUploadedAt()).isEqualTo(BASE.plusDays(1));
+		assertThat(rows.get(1).getPersonalLastUploadedAt()).isNull();
+	}
+
+	@Test
+	// 검증: FR-SEARCH-15
+	@DisplayName("개인_지역_커서_다음에는_남은_비개인_지역을_격자수순으로_조회한다")
+	void 개인_지역_커서_다음에는_남은_비개인_지역을_격자수순으로_조회한다() {
+		long me = newUser();
+		long other = newUser();
+		seedRegionA();
+		seedRegionB();
+		seedRegionC();
+		String a1 = seedLabeledGrid(GY0, GX0, REGION_A);
+		String b1 = seedLabeledGrid(GY0 + 10, GX0, REGION_B);
+		String c1 = seedLabeledGrid(GY0 + 20, GX0, REGION_C);
+		gated(other, a1, "thumbs/m460-ca.jpg", 1L, BASE);
+		gated(other, b1, "thumbs/m460-cb.jpg", 1L, BASE);
+		gated(other, c1, "thumbs/m460-cc.jpg", 1L, BASE);
+		occupy(me, a1, BASE.plusDays(1));
+
+		RegionExplorePageProjection first = videoRepository.getRegionExplorePage(
+			me, false, false, null, null, null, 1).get(0);
+		List<RegionExplorePageProjection> next = videoRepository.getRegionExplorePage(
+			me, true, true, first.getPersonalLastUploadedAt(), first.getGridCount(), first.getRegionCode(), 21)
+			.stream().filter(row -> row.getRegionCode().startsWith("99954")).toList();
+
+		assertThat(first.getRegionCode()).isEqualTo(REGION_A);
+		assertThat(next).extracting(RegionExplorePageProjection::getRegionCode)
+			.containsExactly(REGION_B, REGION_C);
+	}
+
+	@Test
+	// 검증: FR-SEARCH-15
+	@DisplayName("개인_지역끼리는_마지막_업로드_시각_내림차순이다")
+	void 개인_지역끼리는_마지막_업로드_시각_내림차순이다() {
+		long me = newUser();
+		seedRegionA();
+		seedRegionB();
+		String a1 = seedLabeledGrid(GY0, GX0, REGION_A);
+		String b1 = seedLabeledGrid(GY0 + 10, GX0, REGION_B);
+		gated(me, a1, "thumbs/m460-ra.jpg", 1L, BASE);
+		gated(me, b1, "thumbs/m460-rb.jpg", 1L, BASE);
+		occupy(me, a1, BASE);
+		occupy(me, b1, BASE.plusHours(1));
+
+		assertThat(syntheticRows(me)).extracting(RegionExplorePageProjection::getRegionCode)
+			.containsExactly(REGION_B, REGION_A);
+	}
+
+	@Test
+	// 검증: FR-SEARCH-15
+	@DisplayName("개인_업로드_시각_동률은_격자수와_행정동_코드로_고정한다")
+	void 개인_업로드_시각_동률은_격자수와_행정동_코드로_고정한다() {
+		long me = newUser();
+		seedRegionA();
+		seedRegionB();
+		seedRegionC();
+		String a1 = seedLabeledGrid(GY0, GX0, REGION_A);
+		String a2 = seedLabeledGrid(GY0, GX0 + 1, REGION_A);
+		String b1 = seedLabeledGrid(GY0 + 10, GX0, REGION_B);
+		String c1 = seedLabeledGrid(GY0 + 20, GX0, REGION_C);
+		for (String gridId : List.of(a1, a2, b1, c1)) {
+			gated(me, gridId, "thumbs/m460-t-" + gridId + ".jpg", 1L, BASE);
+		}
+		occupy(me, a1, BASE);
+		occupy(me, a2, BASE);
+		occupy(me, b1, BASE);
+		occupy(me, c1, BASE);
+
+		assertThat(syntheticRows(me)).extracting(RegionExplorePageProjection::getRegionCode)
+			.containsExactly(REGION_A, REGION_B, REGION_C);
+	}
+
+	@Test
+	// 검증: FR-SEARCH-15
+	@DisplayName("비개인_지역_커서_뒤는_격자수와_행정동_코드_경계로_이어진다")
+	void 비개인_지역_커서_뒤는_격자수와_행정동_코드_경계로_이어진다() {
+		long me = newUser();
+		long other = newUser();
+		seedRegionA();
+		seedRegionB();
+		seedRegionC();
+		String a1 = seedLabeledGrid(GY0, GX0, REGION_A);
+		String a2 = seedLabeledGrid(GY0, GX0 + 1, REGION_A);
+		String b1 = seedLabeledGrid(GY0 + 10, GX0, REGION_B);
+		String c1 = seedLabeledGrid(GY0 + 20, GX0, REGION_C);
+		gated(other, a1, "thumbs/m460-na1.jpg", 1L, BASE);
+		gated(other, a2, "thumbs/m460-na2.jpg", 1L, BASE);
+		gated(other, b1, "thumbs/m460-nb.jpg", 1L, BASE);
+		gated(other, c1, "thumbs/m460-nc.jpg", 1L, BASE);
+
+		RegionExplorePageProjection first = videoRepository.getRegionExplorePage(
+			me, false, false, null, null, null, 1).get(0);
+		List<RegionExplorePageProjection> next = videoRepository.getRegionExplorePage(
+			me, true, false, null, first.getGridCount(), first.getRegionCode(), 21)
+			.stream().filter(row -> row.getRegionCode().startsWith("99954")).toList();
+
+		assertThat(first.getRegionCode()).isEqualTo(REGION_A);
+		assertThat(next).extracting(RegionExplorePageProjection::getRegionCode)
+			.containsExactly(REGION_B, REGION_C);
 	}
 
 	// 검증: FR-VIDEO-17
@@ -449,13 +584,14 @@ class RegionExploreQueryTest {
 		seedVideo(me, seedLabeledGrid(GY0 + 20, GX0, REGION_C), "thumbs/m238-z1.jpg", "READY", "PRIVATE",
 			"ACTIVE", 9L, GridFixtures.pointAt(GY0 + 0.5, GX0 + 0.5), BASE);
 
-		assertThat(syntheticRows()).isEmpty();
+		assertThat(syntheticRows(me)).isEmpty();
 	}
 
 	@Test
 	@DisplayName("전체_지역_쿼리에_ST__geospatial_연산이_없다")
 	void 전체_지역_쿼리에_ST__geospatial_연산이_없다() throws Exception {
-		String listSql = VideoRepository.class.getMethod("getRegionGridCounts")
+		String listSql = VideoRepository.class.getMethod("getRegionExplorePage", long.class, boolean.class,
+			boolean.class, LocalDateTime.class, Integer.class, String.class, int.class)
 			.getAnnotation(Query.class).value();
 		String summarySql = VideoRepository.class.getMethod("getRegionExploreSummary", String.class)
 			.getAnnotation(Query.class).value();

@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,13 +16,11 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
-import com.msg.fillmap.usergrid.dto.CollectionGridPageResponseDto;
 import com.msg.fillmap.usergrid.dto.CollectionGridResponseDto;
 import com.msg.fillmap.usergrid.dto.CollectionGridSort;
 import com.msg.fillmap.usergrid.dto.CollectionSummaryResponseDto;
 import com.msg.fillmap.usergrid.dto.RegionVideoResponseDto;
 import com.msg.fillmap.usergrid.dto.UploadHistoryResponseDto;
-import com.msg.fillmap.usergrid.service.CollectionGridPage;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
 import com.msg.fillmap.usergrid.service.RegionVideoView;
@@ -72,31 +69,13 @@ public class CollectionController {
 		@RequestParam(required = false) String regionCode,
 		@Parameter(description = "정렬 축 — COLLECTED(수집 시각순, 기본) 또는 UPLOADED(최신 업로드순)")
 		@RequestParam(defaultValue = "COLLECTED") CollectionGridSort sort,
-		@Parameter(description = "카드 수 상한. 생략하면 전국은 30, 행정동은 20. 1 미만은 1로 보정",
-			example = "20")
+		@Parameter(description = "카드 수 상한 — 지도 홈 패널은 20 (SRS FR-MAP-10). 생략하면 regionCode 없을 때 30, "
+			+ "regionCode 있을 때 그 동네 전부. 1 미만은 1 로 보정한다", example = "20")
 		@RequestParam(required = false) Integer limit
 	) {
 		List<CollectionGridView> views =
 			userGridQueryService.getCollectionGrids(principal.userId(), regionCode, sort, limit);
 		return SuccessResponse.of(views.stream().map(CollectionGridResponseDto::from).toList());
-	}
-
-	@Operation(
-		summary = "행정동 전체 보기 개인 격자 페이지 조회",
-		description = "로그인 사용자의 해당 행정동 격자를 최근 업로드 시각, 영상 수, 격자 ID "
-			+ "내림차순으로 최대 20개씩 반환한다. 첫 요청은 cursor를 생략하고, hasNext가 true면 "
-			+ "nextCursor를 다음 요청에 "
-			+ "그대로 넣는다. 다른 행정동에서 발급된 커서와 깨진 커서는 400이다."
-	)
-	@GetMapping("/regions/{regionCode}/grids")
-	public SuccessResponse<CollectionGridPageResponseDto> getCollectionGridPage(
-		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
-		@Parameter(description = "행정동 코드", example = "1168051500") @PathVariable String regionCode,
-		@Parameter(description = "직전 응답의 nextCursor. 첫 페이지는 생략")
-		@RequestParam(required = false) String cursor
-	) {
-		CollectionGridPage page = userGridQueryService.getCollectionGridPage(principal.userId(), regionCode, cursor);
-		return SuccessResponse.of(CollectionGridPageResponseDto.from(page));
 	}
 
 	@Operation(

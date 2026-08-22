@@ -27,6 +27,7 @@ import com.msg.fillmap.video.dto.ExploreGridResponseDto;
 import com.msg.fillmap.video.dto.ExploreSort;
 import com.msg.fillmap.video.dto.RegionExploreResponseDto;
 import com.msg.fillmap.video.dto.RegionGridCountResponseDto;
+import com.msg.fillmap.video.service.RegionExplorePage;
 import com.msg.fillmap.video.service.RegionExploreService;
 
 /**
@@ -166,32 +167,40 @@ class RegionExploreControllerTest {
 	}
 
 	@Test
+	// 검증: FR-SEARCH-15
 	@DisplayName("전체_지역_조회는_200과_행정동_리스트를_반환한다")
 	void 전체_지역_조회는_200과_행정동_리스트를_반환한다() throws Exception {
-		given(regionExploreService.getExploreRegions()).willReturn(List.of(
-			new RegionGridCountResponseDto(REGION_CODE, "부산광역시 부산진구 부전2동", 5),
-			new RegionGridCountResponseDto("1168051500", "서울특별시 강남구 역삼1동", 3)));
+		given(regionExploreService.getExploreRegions(USER_ID, "current-cursor"))
+			.willReturn(new RegionExplorePage(List.of(
+				new RegionGridCountResponseDto(REGION_CODE, "부산광역시 부산진구 부전2동", 5),
+				new RegionGridCountResponseDto("1168051500", "서울특별시 강남구 역삼1동", 3)),
+				true, "next-cursor"));
 
-		mockMvc.perform(get(EXPLORE_URL)
+		mockMvc.perform(get(EXPLORE_URL).param("cursor", "current-cursor")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.data[0].regionCode").value(REGION_CODE))
-			.andExpect(jsonPath("$.data[0].regionName").value("부산광역시 부산진구 부전2동"))
-			.andExpect(jsonPath("$.data[0].gridCount").value(5))
-			.andExpect(jsonPath("$.data[1].regionCode").value("1168051500"));
+			.andExpect(jsonPath("$.data.items[0].regionCode").value(REGION_CODE))
+			.andExpect(jsonPath("$.data.items[0].regionName").value("부산광역시 부산진구 부전2동"))
+			.andExpect(jsonPath("$.data.items[0].gridCount").value(5))
+			.andExpect(jsonPath("$.data.items[1].regionCode").value("1168051500"))
+			.andExpect(jsonPath("$.data.hasNext").value(true))
+			.andExpect(jsonPath("$.data.nextCursor").value("next-cursor"));
 	}
 
 	@Test
-	@DisplayName("전역_콘텐츠가_없으면_200과_빈_배열이다")
-	void 전역_콘텐츠가_없으면_200과_빈_배열이다() throws Exception {
-		given(regionExploreService.getExploreRegions()).willReturn(List.of());
+	@DisplayName("전역_콘텐츠가_없으면_200과_빈_페이지다")
+	void 전역_콘텐츠가_없으면_200과_빈_페이지다() throws Exception {
+		given(regionExploreService.getExploreRegions(USER_ID, null))
+			.willReturn(new RegionExplorePage(List.of(), false, null));
 
 		mockMvc.perform(get(EXPLORE_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200))
-			.andExpect(jsonPath("$.data").isEmpty());
+			.andExpect(jsonPath("$.data.items").isEmpty())
+			.andExpect(jsonPath("$.data.hasNext").value(false))
+			.andExpect(jsonPath("$.data.nextCursor").doesNotExist());
 	}
 
 	@Test

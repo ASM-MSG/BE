@@ -75,6 +75,7 @@
 | FR-SEARCH-12 | 구현됨 | SearchKeywordDailyCountRepositoryTest |
 | FR-SEARCH-13 | 계획 | (없음) |
 | FR-SEARCH-14 | 계획 | (없음) |
+| FR-SEARCH-15 | 구현됨 | RegionExploreControllerTest, RegionExploreCursorTest, RegionExploreQueryTest, RegionExploreServiceTest |
 | FR-HOTZONE-01 | 구현됨 | (없음) |
 | FR-HOTZONE-02 | 구현됨 | HotScoreCommandServiceImplTest |
 | FR-HOTZONE-03 | 구현됨 | HotScoreCommandServiceImplTest |
@@ -134,7 +135,6 @@
 | FR-COLLECT-10 | 구현됨 | CollectionControllerTest, RegionVideosRepositoryTest, UserGridQueryServiceImplTest |
 | FR-COLLECT-11 | 구현됨 | GridVideoControllerTest, VideoGridQueryServiceTest, VideoGridQueryTest |
 | FR-COLLECT-12 | 구현됨 | CollectionGridsRepositoryTest, RegionVideosRepositoryTest, UserGridRepositoryTest |
-| FR-COLLECT-13 | 구현됨 | CollectionControllerTest, CollectionGridsFilterRepositoryTest, UserGridQueryServiceImplTest |
 | FR-BADGE-01 | 구현됨 | BadgeQueryServiceIntegrationTest, BadgeSchemaSeedTest, MissionTypeBadgeSeedTest |
 | FR-BADGE-02 | 구현됨 | BadgeAwardServiceIntegrationTest, BadgeAwardServiceTest |
 | FR-BADGE-03 | 구현됨 | BadgeAwardServiceIntegrationTest, BadgeAwardServiceTest, StreakCommandServiceIntegrationTest |
