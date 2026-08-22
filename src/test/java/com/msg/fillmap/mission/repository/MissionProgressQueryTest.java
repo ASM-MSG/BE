@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.event.EventVideoFixtures;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridFixtures;
@@ -272,6 +273,22 @@ class MissionProgressQueryTest {
 		assertThat(missionRepository.findCompleted(userId, List.of(mission))).isEmpty();
 	}
 
+	// 검증: FR-EVENT-12
+	@Test
+	@DisplayName("행사 영상은 미션 진행도에 세어지지 않는다 — 격자 방문 증거가 아니다 (MSG-450)")
+	void 행사_영상은_미션_진행도에_세어지지_않는다() {
+		long mission = insertMission(nowUtc().minusDays(1), nowUtc().plusDays(1), 3);
+		String eventOnly = seedGrid(0);
+		String mixed = seedGrid(1);
+		insertMissionGrid(mission, eventOnly);
+		insertMissionGrid(mission, mixed);
+		EventVideoFixtures.linkEventVideo(em, seedVideo(userId, eventOnly, nowUtc(), "ACTIVE"));
+		EventVideoFixtures.linkEventVideo(em, seedVideo(userId, mixed, nowUtc(), "ACTIVE"));
+		seedVideo(userId, mixed, nowUtc(), "ACTIVE");   // 같은 격자의 일반 영상 — 이 한 칸만 세어진다
+
+		assertThat(single(mission).getFilledCount()).isEqualTo(1);
+	}
+
 	private MissionProgressProjection single(long missionId) {
 		List<MissionProgressProjection> rows = missionRepository.findProgress(userId, List.of(missionId));
 		assertThat(rows).hasSize(1);
@@ -323,7 +340,7 @@ class MissionProgressQueryTest {
 	}
 
 	/** videos.geom NOT NULL — 픽스처에 지오메트리 포함 필수 (MissionAwardQueryTest.seedVideo 선례). */
-	private void seedVideo(long ownerId, String gridId, LocalDateTime recordedAt, String status) {
+	private long seedVideo(long ownerId, String gridId, LocalDateTime recordedAt, String status) {
 		em.createNativeQuery("""
 				INSERT INTO videos (user_id, grid_id, geom, duration_sec, recorded_at, status)
 				VALUES (
@@ -337,5 +354,7 @@ class MissionProgressQueryTest {
 			.setParameter("recordedAt", recordedAt)
 			.setParameter("status", status)
 			.executeUpdate();
+		// 같은 커넥션의 직전 시퀀스 값 = 방금 넣은 영상 id (native INSERT 라 엔티티 id 를 못 받는다).
+		return ((Number) em.createNativeQuery("SELECT lastval()").getSingleResult()).longValue();
 	}
 }
