@@ -111,6 +111,52 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 	);
 
 	/**
+	 * 행정동 전체 보기 페이지.
+	 * 최근 업로드 시각, 영상 수, 격자 ID 내림차순의 마지막 행을 경계로
+	 * keyset 조회한다. 첫 페이지는 커서 성분 세 개를 모두 null로 넘긴다.
+	 */
+	@Query(value = """
+		SELECT
+			ug.grid_id            AS "gridId",
+			ug.first_collected_at AS "firstCollectedAt",
+			ug.last_uploaded_at   AS "lastUploadedAt",
+			ug.video_count        AS "videoCount",
+			ug.cover_video_id     AS "coverVideoId",
+			CASE WHEN v.processing_status = 'READY' THEN v.thumbnail_url END AS "coverThumbnailKey",
+			v.duration_sec        AS "coverDurationSec",
+			r.region_name         AS "regionName"
+		FROM user_grids ug
+		LEFT JOIN videos v ON v.id = ug.cover_video_id
+		JOIN grids g ON g.grid_id = ug.grid_id
+		LEFT JOIN regions r ON r.region_code = g.region_code
+		WHERE ug.user_id = :userId
+			AND g.region_code = :regionCode
+			AND (
+				CAST(:cursorLastUploadedAt AS timestamp) IS NULL
+				OR ug.last_uploaded_at < CAST(:cursorLastUploadedAt AS timestamp)
+				OR (
+					ug.last_uploaded_at = CAST(:cursorLastUploadedAt AS timestamp)
+					AND ug.video_count < CAST(:cursorVideoCount AS integer)
+				)
+				OR (
+					ug.last_uploaded_at = CAST(:cursorLastUploadedAt AS timestamp)
+					AND ug.video_count = CAST(:cursorVideoCount AS integer)
+					AND ug.grid_id < CAST(:cursorGridId AS varchar)
+				)
+			)
+		ORDER BY ug.last_uploaded_at DESC, ug.video_count DESC, ug.grid_id DESC
+		LIMIT :limit
+		""", nativeQuery = true)
+	List<CollectionGridProjection> getCollectionGridPage(
+		@Param("userId") long userId,
+		@Param("regionCode") String regionCode,
+		@Param("cursorLastUploadedAt") LocalDateTime cursorLastUploadedAt,
+		@Param("cursorVideoCount") Integer cursorVideoCount,
+		@Param("cursorGridId") String cursorGridId,
+		@Param("limit") int limit
+	);
+
+	/**
 	 * 동 단위 내 영상 — 그 행정동(grids.region_code) 격자들에 올린 내 ACTIVE 영상을 created_at 내림차순으로
 	 * 반환한다 (MSG-167 §D3, B-내부 read). 귀속은 격자 축(g.region_code) — 영상 좌표(videos.region_code,
 	 * 66 라벨러 유예로 전부 NULL)가 아니라 격자 소속 행정동 기준이라, 영상 좌표가 옆 동이어도 격자 소속 동으로
