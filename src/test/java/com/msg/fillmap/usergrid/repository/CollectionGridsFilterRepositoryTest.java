@@ -48,6 +48,9 @@ class CollectionGridsFilterRepositoryTest {
 	private UserGridRepository userGridRepository;
 
 	@Autowired
+	private CollectionGridPageRepository collectionGridPageRepository;
+
+	@Autowired
 	private UserRepository userRepository;
 
 	@Autowired
@@ -225,8 +228,76 @@ class CollectionGridsFilterRepositoryTest {
 		assertThat(row.getCoverDurationSec()).isNull();
 	}
 
+	@Test
+	// 검증: FR-COLLECT-13
+	@DisplayName("페이지는 최근 업로드 영상 수 gridId 내림차순이다")
+	void 페이지는_최근_업로드_영상_수_gridId_내림차순이다() {
+		long me = newUser();
+		seedRegions();
+		String older = labeledGrid(0);
+		String fewer = labeledGrid(1);
+		String smallerGridId = labeledGrid(2);
+		String largerGridId = labeledGrid(3);
+		occupy(me, older, BASE, BASE.minusHours(1), 9, null);
+		occupy(me, fewer, BASE, BASE, 1, null);
+		occupy(me, smallerGridId, BASE, BASE, 3, null);
+		occupy(me, largerGridId, BASE, BASE, 3, null);
+
+		assertThat(page(me, REGION_A, null, null, null, 21))
+			.extracting(CollectionGridProjection::getGridId)
+			.containsExactly(largerGridId, smallerGridId, fewer, older);
+	}
+
+	@Test
+	// 검증: FR-COLLECT-13
+	@DisplayName("다음 페이지는 마지막 세 정렬값 뒤의 행만 조회한다")
+	void 다음_페이지는_마지막_세_정렬값_뒤의_행만_조회한다() {
+		long me = newUser();
+		seedRegions();
+		for (int i = 0; i < 5; i++) {
+			occupy(me, labeledGrid(i), BASE, BASE.minusMinutes(i), 5 - i, null);
+		}
+		List<CollectionGridProjection> first = page(me, REGION_A, null, null, null, 3);
+		CollectionGridProjection boundary = first.get(2);
+
+		List<CollectionGridProjection> next = page(me, REGION_A, boundary.getLastUploadedAt(),
+			boundary.getVideoCount(), boundary.getGridId(), 3);
+
+		assertThat(first).extracting(CollectionGridProjection::getGridId)
+			.doesNotContainAnyElementsOf(next.stream().map(CollectionGridProjection::getGridId).toList());
+		assertThat(next).extracting(CollectionGridProjection::getGridId)
+			.containsExactly(labeledGridId(3), labeledGridId(4));
+	}
+
+	@Test
+	@DisplayName("페이지는 다른 사용자와 다른 행정동 격자를 제외한다")
+	void 페이지는_다른_사용자와_다른_행정동_격자를_제외한다() {
+		long me = newUser();
+		long other = newUser();
+		seedRegions();
+		String mine = labeledGrid(0);
+		String theirs = labeledGrid(1);
+		String otherRegion = labeledGrid(50);
+		occupy(me, mine, BASE, BASE, 1, null);
+		occupy(other, theirs, BASE, BASE, 1, null);
+		occupy(me, otherRegion, BASE, BASE, 1, null);
+
+		assertThat(page(me, REGION_A, null, null, null, 21))
+			.extracting(CollectionGridProjection::getGridId)
+			.containsExactly(mine);
+	}
+
 	private List<CollectionGridProjection> collect(long userId, String regionCode, String sort, Integer limit) {
 		return userGridRepository.getCollectionGrids(userId, regionCode, sort, limit);
+	}
+
+	private List<CollectionGridProjection> page(long userId, String regionCode, LocalDateTime cursorLastUploadedAt,
+		Integer cursorVideoCount, String cursorGridId, int limit) {
+		if (cursorLastUploadedAt == null) {
+			return collectionGridPageRepository.getPage(userId, regionCode, limit);
+		}
+		return collectionGridPageRepository.getPageAfter(
+			userId, regionCode, cursorLastUploadedAt, cursorVideoCount, cursorGridId, limit);
 	}
 
 	private long newUser() {
@@ -259,6 +330,10 @@ class CollectionGridsFilterRepositoryTest {
 			WHERE grid_id = :g
 			""").setParameter("g", gridId).executeUpdate();
 		return gridId;
+	}
+
+	private String labeledGridId(long dy) {
+		return (GY0 + dy) + "_" + GX0;
 	}
 
 	private GridPoint center(long dy) {

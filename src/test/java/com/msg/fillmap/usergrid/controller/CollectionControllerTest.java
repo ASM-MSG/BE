@@ -24,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.user.entity.UserRole;
 import com.msg.fillmap.usergrid.dto.CollectionGridSort;
+import com.msg.fillmap.usergrid.service.CollectionGridPage;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
 import com.msg.fillmap.usergrid.service.RegionVideoView;
@@ -177,6 +178,49 @@ class CollectionControllerTest {
 	@DisplayName("인증 없이 갤러리 목록을 조회하면 401 이다")
 	void 인증_없이_갤러리_목록을_조회하면_401이다() throws Exception {
 		mockMvc.perform(get("/api/collections/grids"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.developCode").value(2403));
+	}
+
+	@Test
+	// 검증: FR-COLLECT-13
+	@DisplayName("행정동 전체 보기는 카드 페이지와 다음 커서를 반환한다")
+	void 행정동_전체_보기는_카드_페이지와_다음_커서를_반환한다() throws Exception {
+		given(userGridQueryService.getCollectionGridPage(USER_ID, "1168051500", "current-cursor"))
+			.willReturn(new CollectionGridPage(List.of(view()), true, "next-cursor"));
+
+		mockMvc.perform(get("/api/collections/regions/1168051500/grids")
+				.param("cursor", "current-cursor")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.items.length()").value(1))
+			.andExpect(jsonPath("$.data.items[0].gridId").value("19422_9582"))
+			.andExpect(jsonPath("$.data.items[0].firstCollectedAt").value("2026-07-20T18:03:11Z"))
+			.andExpect(jsonPath("$.data.items[0].lastUploadedAt").value("2026-07-21T09:12:00Z"))
+			.andExpect(jsonPath("$.data.hasNext").value(true))
+			.andExpect(jsonPath("$.data.nextCursor").value("next-cursor"));
+	}
+
+	@Test
+	// 검증: FR-COLLECT-13
+	@DisplayName("행정동 전체 보기 첫 페이지는 cursor를 생략한다")
+	void 행정동_전체_보기_첫_페이지는_cursor를_생략한다() throws Exception {
+		given(userGridQueryService.getCollectionGridPage(USER_ID, "1168051500", null))
+			.willReturn(new CollectionGridPage(List.of(), false, null));
+
+		mockMvc.perform(get("/api/collections/regions/1168051500/grids")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.items.length()").value(0))
+			.andExpect(jsonPath("$.data.hasNext").value(false))
+			.andExpect(jsonPath("$.data.nextCursor").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("인증 없이 행정동 전체 보기를 조회하면 401 이다")
+	void 인증_없이_행정동_전체_보기를_조회하면_401이다() throws Exception {
+		mockMvc.perform(get("/api/collections/regions/1168051500/grids"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.developCode").value(2403));
 	}
