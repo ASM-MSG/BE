@@ -233,6 +233,14 @@ public class Video {
 		this.highlights = highlights;
 	}
 
+	/**
+	 * 블러 꺼짐 경로의 후행 하이라이트 저장 (MSG-456 D-1). applyBlurResult 는 블러본 키를 함께 세팅하므로
+	 * 재사용하지 않는다 — 여기서는 하이라이트만 채우고 상태·키는 건드리지 않는다.
+	 */
+	public void recordHighlights(List<List<Double>> highlights) {
+		this.highlights = highlights;
+	}
+
 	/** 공개 범위 전환 (MSG-162). 노출 조건(READY)은 read 경로가 게이트하므로 여기선 값만 바꾼다. */
 	public void changeVisibility(Visibility visibility) {
 		this.visibility = visibility;
