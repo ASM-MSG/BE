@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.event.EventVideoFixtures;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridFixtures;
@@ -126,6 +127,21 @@ class MissionVisitedGridQueryTest {
 		assertThat(missionGridRepository.findVisitedGridIds(mission, userId)).containsExactly(blinded);
 	}
 
+	// 검증: FR-EVENT-12
+	@Test
+	@DisplayName("행사 영상은 방문 스팟으로 표시되지 않는다 (MSG-450)")
+	void 행사_영상은_방문_스팟으로_표시되지_않는다() {
+		long mission = insertMission(nowUtc().minusDays(1), nowUtc().plusDays(1));
+		String eventOnly = seedGrid(0);
+		String visited = seedGrid(1);
+		insertMissionGrid(mission, eventOnly);
+		insertMissionGrid(mission, visited);
+		EventVideoFixtures.linkEventVideo(em, seedVideo(userId, eventOnly, nowUtc(), "ACTIVE"));
+		seedVideo(userId, visited, nowUtc(), "ACTIVE");
+
+		assertThat(missionGridRepository.findVisitedGridIds(mission, userId)).containsExactly(visited);
+	}
+
 	private LocalDateTime nowUtc() {
 		return LocalDateTime.now(ZoneOffset.UTC);
 	}
@@ -163,7 +179,7 @@ class MissionVisitedGridQueryTest {
 	}
 
 	/** videos.geom NOT NULL — 픽스처에 지오메트리 포함 필수 (MissionProgressQueryTest.seedVideo 선례). */
-	private void seedVideo(long ownerId, String gridId, LocalDateTime recordedAt, String status) {
+	private long seedVideo(long ownerId, String gridId, LocalDateTime recordedAt, String status) {
 		em.createNativeQuery("""
 				INSERT INTO videos (user_id, grid_id, geom, duration_sec, recorded_at, status)
 				VALUES (
@@ -177,5 +193,7 @@ class MissionVisitedGridQueryTest {
 			.setParameter("recordedAt", recordedAt)
 			.setParameter("status", status)
 			.executeUpdate();
+		// 같은 커넥션의 직전 시퀀스 값 = 방금 넣은 영상 id (native INSERT 라 엔티티 id 를 못 받는다).
+		return ((Number) em.createNativeQuery("SELECT lastval()").getSingleResult()).longValue();
 	}
 }

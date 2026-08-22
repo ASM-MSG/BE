@@ -131,6 +131,9 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	 * 판정은 내 영상만·DELETED 만 제외이고, 목록은 사용자 조건이 없고 게이트가 셋이라 화면에 보이는 수가
 	 * 판정 근거보다 작을 수 있다. 게이트 3종은 findGlobalCover·findGlobalVideos·countHourlyUploadsByGrid 와
 	 * <b>술어 동등</b>이다(조인이 있어 v. 별칭을 붙이므로 문자열은 다르다 — 판정은 조건 집합으로 한다).
+	 * 행사 영상 안티조인(NOT EXISTS event_videos)은 미션 계열 세 쿼리(이 쿼리·findMissionVideosAfter·
+	 * countMissionVideosByGrid)에만 있는 술어 동등 계약이다 — 행사 영상은 현장에 없어도 올릴 수 있어 미션
+	 * 비연계가 확정 계약이라 여기서 빠지고, 격자 전역 목록 쪽에는 그대로 남는다(MSG-450).
 	 * mission_grids PK 가 (mission_id, grid_id)이고 영상은 격자를 하나만 가리켜 조인 팬아웃이 없다 —
 	 * DISTINCT 불요. 기간은 IS NULL OR 형태라 무기간 미션(코스·지속형)이 코드 분기 없이 흡수되고 경계는
 	 * 양끝 포함이다. 활성 여부는 보지 않는다 — 끝난 미션도 목록은 열린다.
@@ -145,6 +148,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		JOIN missions m ON m.id = mg.mission_id
 		WHERE mg.mission_id = :missionId
 		  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		ORDER BY v.recorded_at DESC, v.id DESC
@@ -164,6 +168,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		JOIN missions m ON m.id = mg.mission_id
 		WHERE mg.mission_id = :missionId
 		  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		  AND (v.recorded_at, v.id) < (:cursorRecordedAt, :cursorId)
@@ -193,6 +198,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		  AND v.status = 'ACTIVE'
 		  AND v.visibility = 'PUBLIC'
 		  AND v.processing_status = 'READY'
+		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		GROUP BY v.grid_id
