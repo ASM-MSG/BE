@@ -526,25 +526,56 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	Optional<RegionExploreSummaryProjection> getRegionExploreSummary(@Param("regionCode") String regionCode);
 
 	/**
-	 * 전체 지역 리스트 — 행정동별 게이트 통과 격자 수 (MSG-238 §도메인 3). 게이트 통과 영상 ≥1 격자만
-	 * EXISTS(부분 인덱스 prefix LIMIT 1 프로브)로 세고, regions JOIN 에서 무라벨(NULL) 격자가 자연 탈락한다.
-	 * gridCount 는 §D1 동일 정의라 ①의 카드 집합 크기와 항상 일치. 콘텐츠 많은 지역 먼저
-	 * (gridCount DESC, region_code ASC — §D3 결정적), 행 상한 = 콘텐츠 있는 행정동 수 ≤ 3,558 이라 no-LIMIT.
-	 * grids 전수 스캔 — lazy insert 라 상한이 전역 등록 격자 총수(§D6 ceiling 참조, MVP 소량).
+	 * 검색 무입력 전체 지역 개인화 커서 페이지 (MSG-460). 전역 공개 콘텐츠 격자 집합은
+	 * MSG-238과 동일하고, 현재 사용자의 행정동별 마지막 업로드 시각만 정렬에 결합한다.
+	 * 공간 연산은 없다.
 	 */
 	@Query(value = """
+		WITH content_regions AS (
+			SELECT g.region_code, r.region_name, COUNT(*)::int AS grid_count
+			FROM grids g
+			JOIN regions r ON r.region_code = g.region_code
+			WHERE EXISTS (
+				SELECT 1 FROM videos v
+				WHERE v.grid_id = g.grid_id
+				  AND v.status = 'ACTIVE'
+				  AND v.visibility = 'PUBLIC'
+				  AND v.processing_status = 'READY')
+			GROUP BY g.region_code, r.region_name
+		), personal_regions AS (
+			SELECT g.region_code, MAX(ug.last_uploaded_at) AS last_uploaded_at
+			FROM user_grids ug
+			JOIN grids g ON g.grid_id = ug.grid_id
+			WHERE ug.user_id = :userId
+			GROUP BY g.region_code
+		)
 		SELECT
-			g.region_code AS "regionCode",
-			r.region_name AS "regionName",
-			COUNT(*)::int AS "gridCount"
-		FROM grids g
-		JOIN regions r ON r.region_code = g.region_code
-		WHERE EXISTS (
-			SELECT 1 FROM videos v
-			WHERE v.grid_id = g.grid_id
-			  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY')
-		GROUP BY g.region_code, r.region_name
-		ORDER BY COUNT(*) DESC, g.region_code
+			c.region_code AS "regionCode",
+			c.region_name AS "regionName",
+			c.grid_count AS "gridCount",
+			p.last_uploaded_at AS "personalLastUploadedAt"
+		FROM content_regions c
+		LEFT JOIN personal_regions p ON p.region_code = c.region_code
+		WHERE CAST(:hasCursor AS boolean) = false
+		   OR (CAST(:cursorPersonal AS boolean) = true AND (
+			p.last_uploaded_at IS NULL
+			OR p.last_uploaded_at < CAST(:cursorLastUploadedAt AS timestamp)
+			OR (p.last_uploaded_at = CAST(:cursorLastUploadedAt AS timestamp) AND c.grid_count < :cursorGridCount)
+			OR (p.last_uploaded_at = CAST(:cursorLastUploadedAt AS timestamp)
+				AND c.grid_count = :cursorGridCount AND c.region_code > :cursorRegionCode)))
+		   OR (CAST(:cursorPersonal AS boolean) = false AND p.last_uploaded_at IS NULL AND (
+			c.grid_count < :cursorGridCount
+			OR (c.grid_count = :cursorGridCount AND c.region_code > :cursorRegionCode)))
+		ORDER BY (p.last_uploaded_at IS NOT NULL) DESC,
+			p.last_uploaded_at DESC NULLS LAST, c.grid_count DESC, c.region_code ASC
+		LIMIT CAST(:limit AS bigint)
 		""", nativeQuery = true)
-	List<RegionGridCountProjection> getRegionGridCounts();
+	List<RegionExplorePageProjection> getRegionExplorePage(
+		@Param("userId") long userId,
+		@Param("hasCursor") boolean hasCursor,
+		@Param("cursorPersonal") boolean cursorPersonal,
+		@Param("cursorLastUploadedAt") LocalDateTime cursorLastUploadedAt,
+		@Param("cursorGridCount") Integer cursorGridCount,
+		@Param("cursorRegionCode") String cursorRegionCode,
+		@Param("limit") int limit);
 }
