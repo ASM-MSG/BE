@@ -3,6 +3,7 @@ package com.msg.fillmap.usergrid.service.impl;
 import java.time.ZoneOffset;
 import java.util.List;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,13 +82,7 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 	@Override
 	public CollectionGridPage getCollectionGridPage(long userId, String regionCode, String cursor) {
 		CollectionGridCursor decoded = decodeCursor(regionCode, cursor);
-		List<CollectionGridProjection> rows = userGridRepository.getCollectionGridPage(
-			userId,
-			regionCode,
-			decoded == null ? null : decoded.lastUploadedAt(),
-			decoded == null ? null : decoded.videoCount(),
-			decoded == null ? null : decoded.gridId(),
-			COLLECTION_GRID_LOOKAHEAD_SIZE);
+		List<CollectionGridProjection> rows = queryCollectionGridPage(userId, regionCode, decoded);
 		boolean hasNext = rows.size() > COLLECTION_GRID_PAGE_SIZE;
 		List<CollectionGridProjection> pageRows = hasNext
 			? rows.subList(0, COLLECTION_GRID_PAGE_SIZE)
@@ -103,6 +98,16 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 				regionCode, last.getLastUploadedAt(), last.getVideoCount(), last.getGridId());
 		}
 		return new CollectionGridPage(items, hasNext, nextCursor);
+	}
+
+	private List<CollectionGridProjection> queryCollectionGridPage(
+		long userId, String regionCode, CollectionGridCursor cursor) {
+		PageRequest pageRequest = PageRequest.of(0, COLLECTION_GRID_LOOKAHEAD_SIZE);
+		if (cursor == null) {
+			return userGridRepository.getCollectionGridPage(userId, regionCode, pageRequest);
+		}
+		return userGridRepository.getCollectionGridPageAfter(
+			userId, regionCode, cursor.lastUploadedAt(), cursor.videoCount(), cursor.gridId(), pageRequest);
 	}
 
 	private CollectionGridCursor decodeCursor(String regionCode, String cursor) {
@@ -123,7 +128,8 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 	}
 
 	/**
-	 * int와 Integer를 섞은 삼항 연산자의 null 언박싱 회귀를 피하려 분기로 기본 상한을 정한다.
+	 * int와 Integer를 섞은 삼항 연산자의 null 언박싱 회귀를 피하려
+	 * 분기로 기본 상한을 정한다.
 	 */
 	private static Integer resolveLimit(String regionCode, Integer limit) {
 		if (limit != null) {

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
 
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
@@ -243,7 +244,7 @@ class UserGridQueryServiceImplTest {
 			List<CollectionGridProjection> rows = IntStream.range(0, 21)
 				.mapToObj(i -> gridProjection("19422_" + (9582 - i), BASE_TIME.minusMinutes(i), 30 - i))
 				.toList();
-			given(userGridRepository.getCollectionGridPage(1L, "1168051500", null, null, null, 21))
+			given(userGridRepository.getCollectionGridPage(1L, "1168051500", PageRequest.of(0, 21)))
 				.willReturn(rows);
 
 			CollectionGridPage page = userGridQueryService.getCollectionGridPage(1L, "1168051500", null);
@@ -260,7 +261,7 @@ class UserGridQueryServiceImplTest {
 		@DisplayName("20개 이하면 다음 페이지가 없다")
 		void 이십_개_이하면_다음_페이지가_없다() {
 			givenSeomyeonZone();
-			given(userGridRepository.getCollectionGridPage(1L, "1168051500", null, null, null, 21))
+			given(userGridRepository.getCollectionGridPage(1L, "1168051500", PageRequest.of(0, 21)))
 				.willReturn(List.of(gridProjection("19422_9582", BASE_TIME, 1)));
 
 			CollectionGridPage page = userGridQueryService.getCollectionGridPage(1L, "1168051500", null);
@@ -276,13 +277,13 @@ class UserGridQueryServiceImplTest {
 			givenSeomyeonZone();
 			LocalDateTime uploadedAt = BASE_TIME.minusMinutes(3);
 			String cursor = CollectionGridCursor.encode("1168051500", uploadedAt, 7, "19422_9582");
-			given(userGridRepository.getCollectionGridPage(
-				1L, "1168051500", uploadedAt, 7, "19422_9582", 21)).willReturn(List.of());
+			given(userGridRepository.getCollectionGridPageAfter(
+				1L, "1168051500", uploadedAt, 7, "19422_9582", PageRequest.of(0, 21))).willReturn(List.of());
 
 			userGridQueryService.getCollectionGridPage(1L, "1168051500", cursor);
 
-			then(userGridRepository).should().getCollectionGridPage(
-				1L, "1168051500", uploadedAt, 7, "19422_9582", 21);
+			then(userGridRepository).should().getCollectionGridPageAfter(
+				1L, "1168051500", uploadedAt, 7, "19422_9582", PageRequest.of(0, 21));
 		}
 
 		@Test

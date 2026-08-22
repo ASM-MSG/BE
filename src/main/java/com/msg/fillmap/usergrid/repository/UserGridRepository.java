@@ -3,6 +3,7 @@ package com.msg.fillmap.usergrid.repository;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -113,47 +114,71 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 	/**
 	 * 행정동 전체 보기 페이지.
 	 * 최근 업로드 시각, 영상 수, 격자 ID 내림차순의 마지막 행을 경계로
-	 * keyset 조회한다. 첫 페이지는 커서 성분 세 개를 모두 null로 넘긴다.
+	 * 첫 페이지와 커서 이후 페이지를 분리해 nullable 커서 파라미터를 만들지 않는다.
 	 */
-	@Query(value = """
+	@Query("""
 		SELECT
-			ug.grid_id            AS "gridId",
-			ug.first_collected_at AS "firstCollectedAt",
-			ug.last_uploaded_at   AS "lastUploadedAt",
-			ug.video_count        AS "videoCount",
-			ug.cover_video_id     AS "coverVideoId",
-			CASE WHEN v.processing_status = 'READY' THEN v.thumbnail_url END AS "coverThumbnailKey",
-			v.duration_sec        AS "coverDurationSec",
-			r.region_name         AS "regionName"
-		FROM user_grids ug
-		LEFT JOIN videos v ON v.id = ug.cover_video_id
-		JOIN grids g ON g.grid_id = ug.grid_id
-		LEFT JOIN regions r ON r.region_code = g.region_code
-		WHERE ug.user_id = :userId
-			AND g.region_code = :regionCode
+			ug.id.gridId AS gridId,
+			ug.firstCollectedAt AS firstCollectedAt,
+			ug.lastUploadedAt AS lastUploadedAt,
+			ug.videoCount AS videoCount,
+			ug.coverVideoId AS coverVideoId,
+			CASE WHEN v.processingStatus = com.msg.fillmap.video.entity.ProcessingStatus.READY
+				THEN v.thumbnailUrl ELSE NULL END AS coverThumbnailKey,
+			CAST(v.durationSec AS integer) AS coverDurationSec,
+			r.regionName AS regionName
+		FROM UserGrid ug
+		JOIN Grid g ON g.gridId = ug.id.gridId
+		LEFT JOIN Video v ON v.id = ug.coverVideoId
+		LEFT JOIN Region r ON r.regionCode = g.regionCode
+		WHERE ug.id.userId = :userId
+			AND g.regionCode = :regionCode
+		ORDER BY ug.lastUploadedAt DESC, ug.videoCount DESC, ug.id.gridId DESC
+		""")
+	List<CollectionGridProjection> getCollectionGridPage(
+		@Param("userId") long userId,
+		@Param("regionCode") String regionCode,
+		Pageable pageable
+	);
+
+	@Query("""
+		SELECT
+			ug.id.gridId AS gridId,
+			ug.firstCollectedAt AS firstCollectedAt,
+			ug.lastUploadedAt AS lastUploadedAt,
+			ug.videoCount AS videoCount,
+			ug.coverVideoId AS coverVideoId,
+			CASE WHEN v.processingStatus = com.msg.fillmap.video.entity.ProcessingStatus.READY
+				THEN v.thumbnailUrl ELSE NULL END AS coverThumbnailKey,
+			CAST(v.durationSec AS integer) AS coverDurationSec,
+			r.regionName AS regionName
+		FROM UserGrid ug
+		JOIN Grid g ON g.gridId = ug.id.gridId
+		LEFT JOIN Video v ON v.id = ug.coverVideoId
+		LEFT JOIN Region r ON r.regionCode = g.regionCode
+		WHERE ug.id.userId = :userId
+			AND g.regionCode = :regionCode
 			AND (
-				CAST(:cursorLastUploadedAt AS timestamp) IS NULL
-				OR ug.last_uploaded_at < CAST(:cursorLastUploadedAt AS timestamp)
+				ug.lastUploadedAt < :cursorLastUploadedAt
 				OR (
-					ug.last_uploaded_at = CAST(:cursorLastUploadedAt AS timestamp)
-					AND ug.video_count < CAST(:cursorVideoCount AS integer)
+					ug.lastUploadedAt = :cursorLastUploadedAt
+					AND ug.videoCount < :cursorVideoCount
 				)
 				OR (
-					ug.last_uploaded_at = CAST(:cursorLastUploadedAt AS timestamp)
-					AND ug.video_count = CAST(:cursorVideoCount AS integer)
-					AND ug.grid_id < CAST(:cursorGridId AS varchar)
+					ug.lastUploadedAt = :cursorLastUploadedAt
+					AND ug.videoCount = :cursorVideoCount
+					AND ug.id.gridId < :cursorGridId
 				)
 			)
-		ORDER BY ug.last_uploaded_at DESC, ug.video_count DESC, ug.grid_id DESC
-		LIMIT :limit
-		""", nativeQuery = true)
-	List<CollectionGridProjection> getCollectionGridPage(
+		ORDER BY ug.lastUploadedAt DESC, ug.videoCount DESC, ug.id.gridId DESC
+		""")
+	List<CollectionGridProjection> getCollectionGridPageAfter(
 		@Param("userId") long userId,
 		@Param("regionCode") String regionCode,
 		@Param("cursorLastUploadedAt") LocalDateTime cursorLastUploadedAt,
 		@Param("cursorVideoCount") Integer cursorVideoCount,
 		@Param("cursorGridId") String cursorGridId,
-		@Param("limit") int limit
+		Pageable pageable
 	);
 
 	/**

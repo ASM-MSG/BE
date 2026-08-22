@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
@@ -288,8 +289,12 @@ class CollectionGridsFilterRepositoryTest {
 
 	private List<CollectionGridProjection> page(long userId, String regionCode, LocalDateTime cursorLastUploadedAt,
 		Integer cursorVideoCount, String cursorGridId, int limit) {
-		return userGridRepository.getCollectionGridPage(userId, regionCode, cursorLastUploadedAt,
-			cursorVideoCount, cursorGridId, limit);
+		PageRequest pageRequest = PageRequest.of(0, limit);
+		if (cursorLastUploadedAt == null) {
+			return userGridRepository.getCollectionGridPage(userId, regionCode, pageRequest);
+		}
+		return userGridRepository.getCollectionGridPageAfter(
+			userId, regionCode, cursorLastUploadedAt, cursorVideoCount, cursorGridId, pageRequest);
 	}
 
 	private long newUser() {
