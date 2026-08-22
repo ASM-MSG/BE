@@ -183,6 +183,7 @@ class CollectionControllerTest {
 	}
 
 	@Test
+	// 검증: FR-COLLECT-13
 	@DisplayName("행정동 전체 보기는 카드 페이지와 다음 커서를 반환한다")
 	void 행정동_전체_보기는_카드_페이지와_다음_커서를_반환한다() throws Exception {
 		given(userGridQueryService.getCollectionGridPage(USER_ID, "1168051500", "current-cursor"))
@@ -202,6 +203,7 @@ class CollectionControllerTest {
 	}
 
 	@Test
+	// 검증: FR-COLLECT-13
 	@DisplayName("행정동 전체 보기 첫 페이지는 cursor를 생략한다")
 	void 행정동_전체_보기_첫_페이지는_cursor를_생략한다() throws Exception {
 		given(userGridQueryService.getCollectionGridPage(USER_ID, "1168051500", null))

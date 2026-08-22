@@ -241,6 +241,7 @@ class UserGridQueryServiceImplTest {
 	class GetCollectionGridPage {
 
 		@Test
+		// 검증: FR-COLLECT-13
 		@DisplayName("21개를 읽으면 20개와 마지막 반환행 커서를 만든다")
 		void 이십일_개를_읽으면_이십_개와_마지막_반환행_커서를_만든다() {
 			givenSeomyeonZone();

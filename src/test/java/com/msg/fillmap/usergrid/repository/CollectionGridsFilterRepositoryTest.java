@@ -229,6 +229,7 @@ class CollectionGridsFilterRepositoryTest {
 	}
 
 	@Test
+	// 검증: FR-COLLECT-13
 	@DisplayName("페이지는 최근 업로드 영상 수 gridId 내림차순이다")
 	void 페이지는_최근_업로드_영상_수_gridId_내림차순이다() {
 		long me = newUser();
@@ -248,6 +249,7 @@ class CollectionGridsFilterRepositoryTest {
 	}
 
 	@Test
+	// 검증: FR-COLLECT-13
 	@DisplayName("다음 페이지는 마지막 세 정렬값 뒤의 행만 조회한다")
 	void 다음_페이지는_마지막_세_정렬값_뒤의_행만_조회한다() {
 		long me = newUser();
