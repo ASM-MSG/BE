@@ -10,12 +10,15 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.response.ErrorCode;
 import com.msg.fillmap.usergrid.dto.CollectionGridSort;
 import com.msg.fillmap.usergrid.repository.CollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.CollectionSummaryProjection;
 import com.msg.fillmap.usergrid.repository.FriendCollectionGridProjection;
 import com.msg.fillmap.usergrid.repository.RegionVideoProjection;
 import com.msg.fillmap.usergrid.repository.UserGridRepository;
+import com.msg.fillmap.usergrid.service.CollectionGridPage;
 import com.msg.fillmap.usergrid.service.CollectionGridView;
 import com.msg.fillmap.usergrid.service.CollectionSummaryView;
 import com.msg.fillmap.usergrid.service.FriendCollectionGridView;
@@ -23,6 +26,7 @@ import com.msg.fillmap.usergrid.service.GridOccupantView;
 import com.msg.fillmap.usergrid.service.RegionVideoView;
 import com.msg.fillmap.usergrid.service.UploadHistoryView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
+import com.msg.fillmap.usergrid.support.CollectionGridCursor;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.zone.service.ZoneCellName;
 import com.msg.fillmap.zone.service.ZoneNameQueryService;
@@ -35,6 +39,8 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 
 	/** 전국 갤러리 기본 상한 — 파라미터 없는 기존 호출의 계약값(MSG-153 D3). */
 	private static final int DEFAULT_GRID_LIMIT = 30;
+	private static final int COLLECTION_GRID_PAGE_SIZE = 20;
+	private static final int COLLECTION_GRID_LOOKAHEAD_SIZE = COLLECTION_GRID_PAGE_SIZE + 1;
 
 	private final UserGridRepository userGridRepository;
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
@@ -58,10 +64,8 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 	 * 항목마다 받으면 격자 수만큼 zones 를 다시 읽는 N+1 이 된다(FR-8). 리졸버 생성이 이 readOnly 트랜잭션
 	 * 안이라 zones 도 격자 목록과 같은 스냅샷이고, 페이지 중간에 zones 가 바뀌어 항목끼리 기준이 갈리지 않는다.
 	 *
-	 * limit 결정(MSG-388): 지정하면 그 값(1 미만은 1 로 보정 — 전역 탐색 선례), 생략하면 regionCode 유무로
-	 * 갈린다. 전국 조회는 기존 갤러리 계약 그대로 30이고(FR-7), 행정동 조회는 null 을 넘겨 그 동네 전부를
-	 * 받는다(PostgreSQL 이 LIMIT NULL 을 무제한으로 읽는다 — 한 동네의 내 격자 수는 개인 활동량에 비례하는
-	 * 작은 수라 조용한 절단보다 전부가 맞다). sort 는 리포지토리 경계에서 String 으로 좁힌다 — enum 을
+	 * limit 결정(MSG-460): 지정하면 그 값(1 미만은 1로 보정), 생략하면 전국 조회는 기존 계약대로 30이고
+	 * 행정동 조회는 20이다. sort 는 리포지토리 경계에서 String 으로 좁힌다. enum 을
 	 * 네이티브 쿼리에 직접 바인딩하면 Hibernate 6 가 ordinal 로 넘겨 텍스트 비교가 항상 실패한다.
 	 */
 	@Override
@@ -74,16 +78,59 @@ public class UserGridQueryServiceImpl implements UserGridQueryService {
 			.toList();
 	}
 
+	@Override
+	public CollectionGridPage getCollectionGridPage(long userId, String regionCode, String cursor) {
+		CollectionGridCursor decoded = decodeCursor(regionCode, cursor);
+		List<CollectionGridProjection> rows = userGridRepository.getCollectionGridPage(
+			userId,
+			regionCode,
+			decoded == null ? null : decoded.lastUploadedAt(),
+			decoded == null ? null : decoded.videoCount(),
+			decoded == null ? null : decoded.gridId(),
+			COLLECTION_GRID_LOOKAHEAD_SIZE);
+		boolean hasNext = rows.size() > COLLECTION_GRID_PAGE_SIZE;
+		List<CollectionGridProjection> pageRows = hasNext
+			? rows.subList(0, COLLECTION_GRID_PAGE_SIZE)
+			: rows;
+		ZoneNameResolver resolver = zoneNameQueryService.resolver();
+		List<CollectionGridView> items = pageRows.stream()
+			.map(projection -> toView(projection, resolver))
+			.toList();
+		String nextCursor = null;
+		if (hasNext) {
+			CollectionGridProjection last = pageRows.get(pageRows.size() - 1);
+			nextCursor = CollectionGridCursor.encode(
+				regionCode, last.getLastUploadedAt(), last.getVideoCount(), last.getGridId());
+		}
+		return new CollectionGridPage(items, hasNext, nextCursor);
+	}
+
+	private CollectionGridCursor decodeCursor(String regionCode, String cursor) {
+		if (cursor == null) {
+			return null;
+		}
+		try {
+			CollectionGridCursor decoded = CollectionGridCursor.decode(cursor);
+			if (!decoded.regionCode().equals(regionCode)) {
+				throw new ApiException(ErrorCode.BAD_REQUEST);
+			}
+			return decoded;
+		} catch (ApiException e) {
+			throw e;
+		} catch (RuntimeException e) {
+			throw new ApiException(ErrorCode.BAD_REQUEST, e);
+		}
+	}
+
 	/**
-	 * null 이 곧 "상한 없음"이라 삼항 연산자를 쓰지 않는다 — int 와 Integer 를 섞으면 자바가 양쪽을 int 로
-	 * 맞추려 null 을 언박싱해 NPE 가 난다(MSG-388 테스트 적발).
+	 * int와 Integer를 섞은 삼항 연산자의 null 언박싱 회귀를 피하려 분기로 기본 상한을 정한다.
 	 */
 	private static Integer resolveLimit(String regionCode, Integer limit) {
 		if (limit != null) {
 			return Math.max(limit, 1);
 		}
 		if (regionCode != null) {
-			return null;
+			return COLLECTION_GRID_PAGE_SIZE;
 		}
 		return DEFAULT_GRID_LIMIT;
 	}
