@@ -23,7 +23,8 @@ public class AsyncConfig {
 	 *
 	 * 반환 타입을 구체 ThreadPoolTaskExecutor 로 노출한다 — AiBlurPoller 가 썸네일 재추출을 이 풀에 태워
 	 * 인코딩과 직렬화하는데(MSG-149 P2-a), @Scheduled 가 만드는 taskScheduler 도 Executor 라 by-type 주입이
-	 * 모호해지기 때문이다. 구체 타입이면 유일하게 매칭된다. @Async(name)·bean 이름은 그대로다.
+	 * 모호해지기 때문이다. highlightExecutor(MSG-456)가 생겨 구체 타입도 둘이 됐으므로, 주입은 필드명=빈
+	 * 이름 매칭으로 갈린다. @Async(name)·bean 이름은 그대로다.
 	 */
 	@Bean(ENCODING_EXECUTOR)
 	public ThreadPoolTaskExecutor encodingExecutor() {
@@ -32,6 +33,25 @@ public class AsyncConfig {
 		executor.setMaxPoolSize(1);
 		executor.setQueueCapacity(50);
 		executor.setThreadNamePrefix("encoding-");
+		executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+		executor.initialize();
+		return executor;
+	}
+
+	/**
+	 * 블러 꺼짐 경로의 후행 하이라이트 계산 전용 풀 (MSG-456 D-1). ffmpeg 를 돌리지 않고 AI HTTP 응답 대기만
+	 * 하므로 인코딩 풀의 단일 프로세스 OOM 직렬화 전제와 무관하고, 인코딩 경로와 격리해 AI hang(최대 120초)이
+	 * 다음 업로드의 인코딩 시작을 밀지 못하게 한다(헤드오브라인 블로킹 차단). 큐 50은 상류 인코딩 큐(50)가
+	 * 쏟아낼 수 있는 최대 백로그와 맞춘 값 — 포화 거부(AbortPolicy)는 제출부가 catch 해 그 영상만 하이라이트
+	 * null 로 남긴다(FR-8 의 실패 null 과 같은 결).
+	 */
+	@Bean
+	public ThreadPoolTaskExecutor highlightExecutor() {
+		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+		executor.setCorePoolSize(1);
+		executor.setMaxPoolSize(1);
+		executor.setQueueCapacity(50);
+		executor.setThreadNamePrefix("highlight-");
 		executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
 		executor.initialize();
 		return executor;

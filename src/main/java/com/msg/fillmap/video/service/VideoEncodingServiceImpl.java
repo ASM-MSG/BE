@@ -4,10 +4,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.stream.Stream;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
@@ -19,6 +22,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import com.msg.fillmap.global.config.AwsProperties;
+import com.msg.fillmap.video.config.AiProperties;
 import com.msg.fillmap.video.config.AsyncConfig;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
@@ -44,11 +48,12 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 	// 인코딩 태스크 결과 계측 (MSG-343) — completed·failed_over_duration·failed_error. rejected 는
 	// 태스크 본문이 돌지 않는 submit 스레드의 일이라 VideoServiceImpl.submitEncoding 이 센다.
 	private final VideoProcessingMetrics videoProcessingMetrics;
-
-	// AI 활성이면 인코딩 완료가 READY 대신 BLURRING 으로 가서 폴러가 이어받는다 (MSG-149).
-	// RegionSeeder 게이트 관례처럼 @Value 로 읽어 기본 off — 비활성이면 오늘 흐름(READY) 그대로다.
-	@Value("${ai.enabled:false}")
-	private boolean aiEnabled;
+	// 실효 블러 활성(enabled && blurEnabled) 판정 재료 (MSG-456) — 플래그가 2개라 @Value 산발 대신 한 타입으로 읽는다.
+	private final AiProperties aiProperties;
+	// AiClient 는 ai.enabled 일 때만 뜨는 빈이라 직접 주입하면 비활성 환경에서 기동이 깨진다 (HighlightPreview 선례).
+	private final ObjectProvider<AiClient> aiClientProvider;
+	// 후행 하이라이트 계산 전용 풀 (MSG-456 D-1). 구체 타입이 둘이라 필드명=빈 이름 매칭으로 갈린다 (AsyncConfig).
+	private final ThreadPoolTaskExecutor highlightExecutor;
 
 	@Override
 	@Async(AsyncConfig.ENCODING_EXECUTOR)
@@ -88,8 +93,10 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			Path encoded = workDir.resolve("encoded.mp4");
 			Path thumbnail = workDir.resolve("thumb.jpg");
 			ffmpegRunner.encode720p(original, encoded);
-			// AI 활성이면 썸네일은 블러 후에 폴러가 뽑는다 — 여기선 만들지도 올리지도 않는다(P1, 미블러 노출 차단).
-			if (!aiEnabled) {
+			// 실효 블러 활성 (MSG-456) — 블러는 AiClient(ai.enabled 게이트)에 의존해 단독 플래그로는 못 켠다.
+			boolean blurActive = aiProperties.enabled() && aiProperties.blurEnabled();
+			// 블러 활성이면 썸네일은 블러 후에 폴러가 뽑는다 — 여기선 만들지도 올리지도 않는다(P1, 미블러 노출 차단).
+			if (!blurActive) {
 				ffmpegRunner.extractThumbnail(original, thumbnail, duration);
 			}
 
@@ -107,16 +114,22 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			String thumbnailKey = "videos/thumb/%d/%d.jpg".formatted(video.getUserId(), videoId);
 			upload(encodedKey, "video/mp4", encoded);
 
-			if (aiEnabled) {
+			if (blurActive) {
 				// 미블러 썸네일을 S3 에 올리지 않고 thumbnailUrl 도 기록하지 않는다(P1/R5 불변식) — 폴러가 완료 시
 				// 블러본에서 뽑아 결정적 키에 올린 뒤 그때 thumbnailUrl 을 기록한다. 교체돼도 미블러본이 공개 키에 안 닿는다.
 				statusWriter.markEncoded(videoId, originalKey, encodedKey);
+				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_COMPLETED);
+				resultCounted = true;
 			} else {
+				// 블러 꺼짐 경로. READY 전이와 완료 계측을 먼저 끝내고, 하이라이트는 전용 워커에 넘긴다 (MSG-456 D-1)
+				// — 계상 먼저(over_duration 경로와 같은 결). 워커 본문의 실패는 인코딩 태스크 계측과 무관하다.
 				upload(thumbnailKey, "image/jpeg", thumbnail);
 				statusWriter.markReady(videoId, originalKey, encodedKey, thumbnailKey);
+				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_COMPLETED);
+				resultCounted = true;
+				submitHighlightJob(videoId, originalKey, encodedKey);
 			}
-			videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_COMPLETED);
-			log.info("인코딩 완료: videoId={} duration={}s aiEnabled={}", videoId, duration, aiEnabled);
+			log.info("인코딩 완료: videoId={} duration={}s blurActive={}", videoId, duration, blurActive);
 		} catch (Exception e) {
 			// 비동기라 던져봐야 받을 곳이 없다. 기록만 남기고 재시도하지 않는다 (MSG-65 D8).
 			log.error("인코딩 실패: videoId={}", videoId, e);
@@ -143,6 +156,39 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 					|| fresh.getProcessingStatus() == ProcessingStatus.ENCODING)
 				&& originalKey.equals(fresh.getOriginalS3Key()))
 			.orElse(false);
+	}
+
+	/** 워커 제출 (MSG-456 FR-8, D-1). 큐 포화 거부는 폐기가 정책이다 — 그 영상은 하이라이트 null 로 남는다. */
+	private void submitHighlightJob(Long videoId, String originalKey, String encodedKey) {
+		if (aiClientProvider.getIfAvailable() == null) {
+			return;   // ai.enabled=false — 지금과 동일 (FR-5)
+		}
+		try {
+			highlightExecutor.execute(() -> computeAndRecordHighlights(videoId, originalKey, encodedKey));
+		} catch (RejectedExecutionException e) {
+			log.warn("하이라이트 큐 포화로 폐기. 하이라이트 없이 둔다: videoId={}", videoId);
+		}
+	}
+
+	/**
+	 * 워커 본문 (MSG-456 D-1). markReady 시점에 결정적 키로 이미 올라간 S3 인코딩본을 파일로 받아 분석한다 —
+	 * 인코딩 tmp 의 수명이 태스크 경계를 넘지 않도록 워커는 자기 임시 파일을 스스로 만들고 지운다.
+	 * 어떤 실패도 하이라이트 부재로만 남는다(예외 구분 없음) — catch 는 스레드 풀이 예외를 조용히 삼키는 것을
+	 * 막고 실패를 로그로 남기기 위한 것이기도 하다. 교체·삭제로 스테일이면 recordHighlights 가드가 버린다.
+	 */
+	private void computeAndRecordHighlights(Long videoId, String originalKey, String encodedKey) {
+		Path workDir = null;
+		try {
+			workDir = Files.createTempDirectory("highlight-" + videoId + "-");
+			Path encoded = workDir.resolve("encoded.mp4");
+			download(encodedKey, encoded);
+			List<List<Double>> highlights = aiClientProvider.getObject().analyzeHighlights(encoded);
+			statusWriter.recordHighlights(videoId, originalKey, highlights);
+		} catch (Exception e) {
+			log.warn("재생 하이라이트 계산 실패. 하이라이트 없이 둔다: videoId={}", videoId, e);
+		} finally {
+			deleteQuietly(workDir);
+		}
 	}
 
 	private void download(String s3Key, Path target) {
