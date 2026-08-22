@@ -91,7 +91,8 @@ class AiBlurPollerTest {
 		encodingExecutor.initialize();
 		AwsProperties awsProperties = new AwsProperties(
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
-		AiProperties aiProperties = new AiProperties(true, "http://ai.test", 타임아웃_상한, 30000L);
+		// 폴러는 실효 블러 활성(enabled && blurEnabled) 전제의 빈이므로 blurEnabled=true 여야 성립한다 (MSG-456)
+		AiProperties aiProperties = new AiProperties(true, true, "http://ai.test", 타임아웃_상한, 30000L);
 
 		meterRegistry = new SimpleMeterRegistry();
 		poller = new AiBlurPoller(videoRepository, statusWriter, aiClient, s3Client, awsProperties, aiProperties,

@@ -126,9 +126,12 @@ aws:
     max-highlight-upload-bytes: ${S3_MAX_HIGHLIGHT_UPLOAD_BYTES:2147483648}   # 2GiB
 
 # AI Highlight-Blur 서버 연동 (MSG-149). 기본 off — AI 서버가 붙는 환경에서만 AI_ENABLED=true 로 켠다.
-# 켜지면 인코딩 완료가 BLURRING 으로 가고 폴러가 base-url 서버에 제출·폴링한다. 꺼져 있으면 인코딩이 READY 로 끝난다.
+# 플래그 2개 체계 (MSG-456): enabled 는 AI 연동 전체(선분석·재생 하이라이트 계산), blur-enabled 는 블러
+# 파이프라인 전용. 둘 다 켜져야(실효 블러 활성) 인코딩 완료가 BLURRING 으로 가고 폴러가 base-url 서버에
+# 제출·폴링한다. enabled 만 켜면 인코딩이 READY 로 끝나되 하이라이트는 전용 워커가 후행 계산해 채운다.
 ai:
   enabled: ${AI_ENABLED:false}
+  blur-enabled: ${AI_BLUR_ENABLED:false}
   base-url: ${AI_BASE_URL:http://localhost:8000}
   timeout: ${AI_TIMEOUT:PT30M}          # 이 시간을 넘겨도 DONE/FAILED 가 안 오면 FAILED 로 수렴
   poll-interval-ms: ${AI_POLL_INTERVAL_MS:30000}
