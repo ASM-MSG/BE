@@ -19,6 +19,10 @@ import com.msg.fillmap.global.exception.ApiException;
 /**
  * 생명주기 가드 판정표 (MSG-442, PRD §4.2). 고정 Clock 단위 테스트로 4상태 × 2메서드와 경계 정각을
  * 전수 확인한다 — 440·441 은 호출 존재만 자기 테스트에서 확인하면 되도록 여기서 규칙 검증을 끝낸다.
+ * <p>
+ * 상호작용 규칙은 2026-08-21 에 "종료 정각부터 잠금"에서 <b>"아카이브 전환(종료 + 30일)부터 잠금"</b>으로
+ * 뒤집혔다(정민 확정, MSG-441 구현 중). 두 메서드가 이제 같은 창(시작 ~ 종료 + 30일)을 보므로 마감 정각
+ * 한 점에서 함께 닫힌다 — 업로드 규칙 자체는 바뀌지 않았다.
  */
 @DisplayName("EventLifecycleGuard 상태별 차단 규칙")
 class EventLifecycleGuardTest {
@@ -85,20 +89,21 @@ class EventLifecycleGuardTest {
 	class Interaction {
 
 		@Test
-		@DisplayName("예정과 진행 중에는 댓글과 도움돼요 변경이 허용된다")
-		void 예정과_진행_중에는_댓글과_도움돼요_변경이_허용된다() {
+		@DisplayName("예정과 진행 중과 업로드 유예에는 댓글과 도움돼요 변경이 허용된다")
+		void 예정과_진행_중과_업로드_유예에는_댓글과_도움돼요_변경이_허용된다() {
 			assertThatCode(상호작용(시작.minusNanos(1))).doesNotThrowAnyException();
 			assertThatCode(상호작용(시작)).doesNotThrowAnyException();
 			assertThatCode(상호작용(종료.minusNanos(1))).doesNotThrowAnyException();
+			// 2026-08-21 번복: 유예 기간은 "행사 다녀와서 나중에 올리기"용이라 그 영상이 반응을 못 받으면
+			// 유예의 목적과 결과가 서로 깎인다. 업로드 창과 같은 구간을 본다.
+			assertThatCode(상호작용(종료)).doesNotThrowAnyException();
+			assertThatCode(상호작용(마감.minusNanos(1))).doesNotThrowAnyException();
 		}
 
-		// 검증: FR-EVENT-10 — 종료 시점부터 상호작용 잠금 (PRD 요구 13)
+		// 검증: FR-EVENT-10 — 아카이브 전환부터 상호작용 잠금 (PRD 요구 13, 2026-08-21 번복)
 		@Test
-		@DisplayName("종료 시점부터 댓글과 도움돼요 변경이 잠긴다 — 유예·아카이브 양쪽")
-		void 종료_시점부터_댓글과_도움돼요_변경이_잠긴다() {
-			assertThatThrownBy(상호작용(종료))
-				.isInstanceOf(ApiException.class)
-				.hasFieldOrPropertyWithValue("errorCode", EventErrorCode.EVENT_INTERACTION_LOCKED);
+		@DisplayName("아카이브 전환부터 댓글과 도움돼요 변경이 잠긴다")
+		void 아카이브_전환부터_댓글과_도움돼요_변경이_잠긴다() {
 			assertThatThrownBy(상호작용(마감))
 				.isInstanceOf(ApiException.class)
 				.hasFieldOrPropertyWithValue("errorCode", EventErrorCode.EVENT_INTERACTION_LOCKED);
@@ -110,8 +115,9 @@ class EventLifecycleGuardTest {
 	@DisplayName("경계 정각은 다음 상태로 판정된다 — 시작·종료·마감 3점의 반개구간 규칙")
 	void 경계_정각은_다음_상태로_판정된다() {
 		assertThatCode(업로드(시작)).doesNotThrowAnyException();                  // 시작 정각 = LIVE
-		assertThatThrownBy(상호작용(종료)).isInstanceOf(ApiException.class);      // 종료 정각 = UPLOAD_GRACE
+		assertThatCode(상호작용(종료)).doesNotThrowAnyException();                // 종료 정각 = UPLOAD_GRACE
 		assertThatCode(업로드(종료)).doesNotThrowAnyException();
 		assertThatThrownBy(업로드(마감)).isInstanceOf(ApiException.class);        // 마감 정각 = ARCHIVED
+		assertThatThrownBy(상호작용(마감)).isInstanceOf(ApiException.class);      // 두 규칙이 같은 정각에서 닫힌다
 	}
 }

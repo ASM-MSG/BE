@@ -35,7 +35,12 @@ public enum EventErrorCode implements ErrorCodeIfs {
 	// 마감(13409)과 같은 창 위반이지만 FE 안내 문구가 달라야 해 코드를 가른다 (MSG-440, 2026-08-21 확정).
 	// MSG-442 초안의 13420·13421 은 440·442 레인 조정으로 이 두 코드에 통일됐다 (2026-08-21 합의).
 	EVENT_UPLOAD_NOT_STARTED(13410, HttpStatus.CONFLICT, "행사 시작 전에는 영상을 올릴 수 없습니다"),
-	EVENT_INTERACTION_LOCKED(13422, HttpStatus.CONFLICT, "종료된 행사에서는 변경할 수 없습니다"),
+	// 마감(13409)과 문구를 맞춘다 (2026-08-21 사용자 확정). 잠금 시점 번복으로 반응 창이 업로드 창과
+	// 같은 순간(종료 + 30일)에 닫히게 돼 두 코드가 같은 경계를 지키는 쌍이 됐는데, 한쪽만 "종료"라고
+	// 말하면 사용자가 같은 사건을 다른 사건으로 읽는다. 옛 문구는 실제 차단 사유(보관 전환)가 아니라
+	// 엉뚱한 경계(종료)를 지목해서, 종료 후 30일 동안 댓글을 달아 온 사용자가 31일째에 "종료돼서
+	// 안 된다"는 답을 듣는 모순도 있었다. developCode·HttpStatus 는 불변이고 표시 문자열만 바꿨다.
+	EVENT_INTERACTION_LOCKED(13422, HttpStatus.CONFLICT, "행사 영상 댓글·도움돼요가 마감되었습니다"),
 	;
 
 	private final Integer errorCode;

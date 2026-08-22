@@ -13,6 +13,8 @@ import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.msg.fillmap.event.EventTestFixtures;
 import com.msg.fillmap.event.dto.EventLocationVideoPageResponseDto;
 import com.msg.fillmap.event.dto.EventLocationVideoResponseDto;
+import com.msg.fillmap.event.dto.EventVideoCommentResponseDto;
 import com.msg.fillmap.event.dto.EventVideoDetailResponseDto;
 import com.msg.fillmap.event.entity.EventLocation;
 import com.msg.fillmap.event.entity.EventOccurrence;
@@ -35,6 +38,8 @@ import com.msg.fillmap.event.repository.EventLocationRepository;
 import com.msg.fillmap.event.repository.EventLocationVideoCount;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventSeriesRepository;
+import com.msg.fillmap.event.repository.EventVideoCommentRepository;
+import com.msg.fillmap.event.repository.EventVideoHelpfulRepository;
 import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.event.support.EventVideoCursor;
 import com.msg.fillmap.global.exception.ApiException;
@@ -88,6 +93,12 @@ class EventVideoQueryServiceTest {
 	private EventVideoRepository eventVideoRepository;
 
 	@Autowired
+	private EventVideoCommentRepository commentRepository;
+
+	@Autowired
+	private EventVideoHelpfulRepository helpfulRepository;
+
+	@Autowired
 	private VideoRepository videoRepository;
 
 	@Autowired
@@ -131,8 +142,18 @@ class EventVideoQueryServiceTest {
 
 	private EventVideoService service(LocalDateTime now) {
 		return new EventVideoServiceImpl(occurrenceRepository, locationRepository, eventVideoRepository,
-			videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em,
+			videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em, 반응서비스(now),
 			Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+	}
+
+	/** 상세·피드에 실릴 반응을 만들고 읽는 쪽 (MSG-441) — 상세 서비스가 읽기 목적으로 주입받는 것과 같은 빈이다. */
+	private EventVideoInteractionService 반응서비스() {
+		return 반응서비스(NOW);
+	}
+
+	private EventVideoInteractionService 반응서비스(LocalDateTime now) {
+		return new EventVideoInteractionServiceImpl(eventVideoRepository, commentRepository, helpfulRepository,
+			videoRepository, Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 
 	private String 격자(long dy) {
@@ -359,6 +380,40 @@ class EventVideoQueryServiceTest {
 				.extracting(e -> ((ApiException) e).getErrorCode())
 				.isEqualTo(EventErrorCode.EVENT_LOCATION_NOT_FOUND);
 		}
+
+		@Test
+		@DisplayName("피드 한 페이지의 집계는 항목 수와 무관하게 쿼리 왕복이 상수다")
+		void 피드_한_페이지의_집계는_항목_수와_무관하게_쿼리_왕복이_상수다() {
+			EventLocation 한개 = 위치(19);
+			노출영상(한개);
+			EventLocation 여러개 = 위치(20);
+			for (int i = 0; i < 10; i++) {
+				반응서비스().addHelpful(userId, 노출영상(여러개).getId());
+			}
+			em.flush();
+
+			// 반응 집계는 페이지의 영상 id 집합으로 도는 group by 두 번이라 항목 수와 무관하게 상수다 —
+			// 항목마다 세면 여기서 왕복이 9 늘어난다 (N+1 회귀 가드).
+			long 적은쪽 = 문장수(() -> 피드(한개, null, 0));
+			long 많은쪽 = 문장수(() -> 피드(여러개, null, 0));
+
+			assertThat(많은쪽).isEqualTo(적은쪽);
+		}
+
+		/** 한 호출이 실제로 보낸 JDBC 문장 수. 통계는 이 단언에서만 켜고 바로 되돌린다. */
+		private long 문장수(Runnable 호출) {
+			Statistics stats = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+			boolean 원래값 = stats.isStatisticsEnabled();
+			stats.setStatisticsEnabled(true);
+			try {
+				em.flush();
+				stats.clear();
+				호출.run();
+				return stats.getPrepareStatementCount();
+			} finally {
+				stats.setStatisticsEnabled(원래값);
+			}
+		}
 	}
 
 	@Nested
@@ -412,16 +467,25 @@ class EventVideoQueryServiceTest {
 
 		// 검증: FR-EVENT-10
 		@Test
-		@DisplayName("종료 시각부터 interactionLocked 가 참이다")
-		void 종료_시각부터_interactionLocked가_참이다() {
-			EventLocation location = 위치(NOW.minusDays(2), NOW, 14);   // 종료 정각이 지금이다
+		@DisplayName("아카이브 전환 시각부터 interactionLocked 가 참이다")
+		void 아카이브_전환_시각부터_interactionLocked가_참이다() {
+			// 마감(종료 + 30일) 정각이 지금이 되도록 종료를 30일 앞에 둔다.
+			LocalDateTime 종료 = NOW.minusDays(EventOccurrence.UPLOAD_GRACE_DAYS);
+			EventLocation location = 위치(종료.minusDays(2), 종료, 14);
 			Video video = 노출영상(location);
 			em.flush();
 
-			assertThat(service().getVideoDetail(video.getId(), userId).interactionLocked()).isTrue();
-			// 종료 1초 전이면 아직 열려 있다 — 경계는 종료 정각 포함의 반개구간이다.
-			assertThat(service(NOW.minusSeconds(1)).getVideoDetail(video.getId(), userId).interactionLocked())
-				.isFalse();
+			// 표시(이 필드)와 집행(MSG-441 변경 API 의 가드)이 같은 축이어야 한다 — 판정은 회차 상태
+			// ARCHIVED 하나이고, 경계 정각의 해석은 statusAt 의 반개구간 규칙에 위임된다.
+			EventVideoDetailResponseDto 마감정각 = service().getVideoDetail(video.getId(), userId);
+			assertThat(마감정각.occurrenceStatus()).isEqualTo("ARCHIVED");
+			assertThat(마감정각.interactionLocked()).isTrue();
+
+			// 유예 기간은 열려 있다 (2026-08-21 번복 — 종료 정각 기준이었다면 여기서 true 였다).
+			EventVideoDetailResponseDto 마감직전 = service(NOW.minusSeconds(1))
+				.getVideoDetail(video.getId(), userId);
+			assertThat(마감직전.occurrenceStatus()).isEqualTo("UPLOAD_GRACE");
+			assertThat(마감직전.interactionLocked()).isFalse();
 		}
 
 		@Test
@@ -471,6 +535,106 @@ class EventVideoQueryServiceTest {
 			service().getVideoDetail(video.getId(), 사용자());   // 타인
 			service().getVideoDetail(video.getId(), null);   // 비로그인
 			assertThat(조회수(video.getId())).isEqualTo(2);
+		}
+
+		// 검증: FR-EVENT-09
+		@Test
+		@DisplayName("상세의 도움돼요 수와 피드 카드의 하트 수가 같다")
+		void 상세의_도움돼요_수와_피드_카드의_하트_수가_같다() {
+			EventLocation location = 위치(21);
+			Video video = 노출영상(location);
+			em.flush();
+			반응서비스().addHelpful(userId, video.getId());
+			반응서비스().addHelpful(사용자(), video.getId());
+			em.flush();
+
+			// 원천 테이블 하나를 아무 부가 술어 없이 세므로 두 화면의 수가 갈릴 수 없다 (US-006).
+			assertThat(service().getVideoDetail(video.getId(), userId).helpfulCount()).isEqualTo(2);
+			assertThat(피드(location, null, 0).videos())
+				.singleElement()
+				.extracting(EventLocationVideoResponseDto::helpfulCount)
+				.isEqualTo(2L);
+		}
+
+		@Test
+		@DisplayName("상세의 댓글 수와 피드 카드의 댓글 수가 같다")
+		void 상세의_댓글_수와_피드_카드의_댓글_수가_같다() {
+			EventLocation location = 위치(22);
+			Video video = 노출영상(location);
+			em.flush();
+			반응서비스().createComment(userId, video.getId(), "첫 댓글");
+			반응서비스().createComment(userId, video.getId(), "둘째 댓글");
+			em.flush();
+
+			EventVideoDetailResponseDto detail = service().getVideoDetail(video.getId(), userId);
+			assertThat(detail.commentCount()).isEqualTo(2);
+			// 상세는 첫 페이지를 이미 품는다 — 화면이 목록 API 를 한 번 더 부르지 않는다.
+			assertThat(detail.comments().comments()).hasSize(2);
+			assertThat(detail.comments().hasNext()).isFalse();
+			assertThat(피드(location, null, 0).videos())
+				.singleElement()
+				.extracting(EventLocationVideoResponseDto::commentCount)
+				.isEqualTo(2L);
+		}
+
+		@Test
+		@DisplayName("상세의 helpfulByMe 는 내가 누른 경우에만 true 다")
+		void 상세의_helpfulByMe는_내가_누른_경우에만_true다() {
+			Video video = 노출영상(위치(23));
+			em.flush();
+			Long 남 = 사용자();
+			반응서비스().addHelpful(userId, video.getId());
+			em.flush();
+
+			assertThat(service().getVideoDetail(video.getId(), userId).helpfulByMe()).isTrue();
+			assertThat(service().getVideoDetail(video.getId(), 남).helpfulByMe()).isFalse();
+		}
+
+		@Test
+		@DisplayName("비로그인 상세 조회의 helpfulByMe 는 false 다")
+		void 비로그인_상세_조회의_helpfulByMe는_false다() {
+			Video video = 노출영상(위치(24));
+			em.flush();
+			반응서비스().addHelpful(userId, video.getId());
+			em.flush();
+
+			EventVideoDetailResponseDto detail = service().getVideoDetail(video.getId(), null);
+			assertThat(detail.helpfulByMe()).isFalse();
+			assertThat(detail.helpfulCount()).isEqualTo(1);   // 수는 그대로 보인다
+		}
+
+		@Test
+		@DisplayName("반응이 없는 영상의 두 수는 0이다")
+		void 반응이_없는_영상의_두_수는_0이다() {
+			EventLocation location = 위치(25);
+			Video video = 노출영상(location);
+			em.flush();
+
+			EventVideoDetailResponseDto detail = service().getVideoDetail(video.getId(), userId);
+			assertThat(detail.helpfulCount()).isZero();
+			assertThat(detail.commentCount()).isZero();
+			assertThat(detail.comments().comments()).isEmpty();
+			assertThat(피드(location, null, 0).videos()).singleElement().satisfies(card -> {
+				assertThat(card.helpfulCount()).isZero();
+				assertThat(card.commentCount()).isZero();
+			});
+		}
+
+		// 검증: FR-EVENT-07
+		@Test
+		@DisplayName("다른 회차 영상의 댓글이 섞이지 않는다")
+		void 다른_회차_영상의_댓글이_섞이지_않는다() {
+			Video 대상 = 노출영상(위치(26));
+			Video 다른회차 = 노출영상(위치(27));
+			em.flush();
+			반응서비스().createComment(userId, 대상.getId(), "대상 영상 댓글");
+			반응서비스().createComment(userId, 다른회차.getId(), "다른 회차 댓글");
+			em.flush();
+
+			assertThat(service().getVideoDetail(대상.getId(), userId).comments().comments())
+				.singleElement()
+				.extracting(EventVideoCommentResponseDto::content)
+				.isEqualTo("대상 영상 댓글");
 		}
 	}
 }

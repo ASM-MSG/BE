@@ -17,8 +17,8 @@ import com.msg.fillmap.global.exception.ApiException;
  * 갈라지므로 한 곳에 둔다.
  * <p>
  * 시각 비교식이 여기 없다. 경계 정의의 정본은 {@link EventOccurrence#statusAt} 하나이고 이 가드는 그
- * 결과를 상태별 허용 여부로 옮길 뿐이다. 유예 기간에 올라간 영상이 처음부터 댓글·도움돼요 불가인 것
- * (US-009)도 별도 로직이 아니다 — 잠금이 영상이 아니라 회차 상태의 파생이기 때문이다.
+ * 결과를 상태별 허용 여부로 옮길 뿐이다. 유예 기간에 올라간 영상도 그 회차가 아카이브로 넘어가는 순간
+ * 함께 잠기는 것(US-009)이 별도 로직이 아닌 이유도 같다 — 잠금이 영상이 아니라 회차 상태의 파생이다.
  * <p>
  * 조회 메서드가 없는 것도 규칙이다 (FR-14) — 어느 상태에서도 조회는 막지 않는다.
  */
@@ -67,10 +67,19 @@ public class EventLifecycleGuard {
 		}
 	}
 
-	/** 댓글·도움돼요 변경은 종료 시점부터 잠긴다 (FR-13). 예정 상태는 열려 있다 (PRD §4.2). */
+	/**
+	 * 댓글·도움돼요 변경은 <b>아카이브 전환(종료 + 30일)부터</b> 잠긴다 (FR-13). 예정·진행 중·유예 기간이
+	 * 전부 열려 있어 업로드 창(시작 ~ 종료 + 30일)과 구간이 정렬된다 — 두 규칙이 같은 창을 보므로 "올릴 수는
+	 * 있는데 아무도 반응 못 하는 영상"이 생기지 않는다.
+	 * <p>
+	 * <b>2026-08-21 정책 번복</b>(정민 확정, MSG-441 구현 중). 이 메서드는 MSG-442 가 "종료 정각부터 잠금"으로
+	 * 만들었고 그때 근거는 "종료 = 기록 확정"이었다. 유예 기간을 둔 목적이 "행사 다녀와서 나중에 올리기"인데
+	 * 그 영상이 처음부터 반응을 못 받으면 유예의 목적과 결과가 서로 깎인다는 지적으로 뒤집혔고, 기록 확정
+	 * 시점은 아카이브 전환으로 옮겨갔다. 옛 규칙을 정본으로 적은 MSG-442 스펙 서술은 그 문서의 작업 로그가
+	 * 무효를 표시한다.
+	 */
 	public static void checkInteractionOpen(EventOccurrence occurrence, LocalDateTime now) {
-		EventStatus status = occurrence.statusAt(now);
-		if (status == EventStatus.UPLOAD_GRACE || status == EventStatus.ARCHIVED) {
+		if (occurrence.statusAt(now) == EventStatus.ARCHIVED) {
 			throw new ApiException(EventErrorCode.EVENT_INTERACTION_LOCKED);
 		}
 	}
