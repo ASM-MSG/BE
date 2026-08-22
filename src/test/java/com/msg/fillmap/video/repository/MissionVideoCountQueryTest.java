@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.event.EventVideoFixtures;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridFixtures;
@@ -133,6 +134,26 @@ class MissionVideoCountQueryTest {
 		assertThat(rows.get(0).getGridId()).isEqualTo(filled);
 	}
 
+	// 검증: FR-EVENT-12
+	@Test
+	@DisplayName("행사 영상은 격자별 영상 수에 세어지지 않는다 (MSG-450)")
+	void 행사_영상은_격자별_영상_수에_세어지지_않는다() {
+		long mission = insertMission(at(1, 0), at(31, 23));
+		String eventOnly = seedGrid(0);
+		String mixed = seedGrid(1);
+		insertMissionGrid(mission, eventOnly);
+		insertMissionGrid(mission, mixed);
+		EventVideoFixtures.linkEventVideo(em, publicReady(eventOnly, at(10, 9)));
+		EventVideoFixtures.linkEventVideo(em, publicReady(mixed, at(11, 9)));
+		publicReady(mixed, at(12, 9));
+
+		List<MissionVideoCountProjection> rows = count(mission);
+
+		// 행사 영상뿐인 격자는 행 자체가 없고, 혼재 격자는 일반 영상 하나만 세어진다.
+		assertThat(rows).hasSize(1);
+		assertThat(countOf(rows, mixed)).isEqualTo(1);
+	}
+
 	private List<MissionVideoCountProjection> count(long missionId) {
 		em.flush();
 		em.clear();
@@ -178,11 +199,11 @@ class MissionVideoCountQueryTest {
 	}
 
 	/** 후보 술어 전 조건(ACTIVE·PUBLIC·READY)을 만족하는 영상. */
-	private void publicReady(String gridId, LocalDateTime recordedAt) {
-		insertVideo(gridId, recordedAt, "ACTIVE", "PUBLIC", "READY");
+	private long publicReady(String gridId, LocalDateTime recordedAt) {
+		return insertVideo(gridId, recordedAt, "ACTIVE", "PUBLIC", "READY");
 	}
 
-	private void insertVideo(String gridId, LocalDateTime recordedAt,
+	private long insertVideo(String gridId, LocalDateTime recordedAt,
 		String status, String visibility, String processingStatus) {
 		em.createNativeQuery("""
 				INSERT INTO videos (user_id, grid_id, geom, duration_sec, recorded_at,
@@ -200,5 +221,7 @@ class MissionVideoCountQueryTest {
 			.setParameter("visibility", visibility)
 			.setParameter("processingStatus", processingStatus)
 			.executeUpdate();
+		// 같은 커넥션의 직전 시퀀스 값 = 방금 넣은 영상 id (native INSERT 라 엔티티 id 를 못 받는다).
+		return ((Number) em.createNativeQuery("SELECT lastval()").getSingleResult()).longValue();
 	}
 }

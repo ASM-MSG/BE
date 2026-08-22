@@ -96,9 +96,13 @@ public class SecurityConfig {
 					"/api/grids/*/event-locations").permitAll()
 				// 행사 영상 조회(MSG-440) — 위 조회 4종과 같은 규칙이다. 피드 경로는 업로드 POST 와 URL 이
 				// 같아 메서드 무제한으로 열면 업로드까지 익명에 풀린다 — GET 한정이 계약의 일부다.
+				// 댓글 목록(MSG-441)도 같은 규칙이다 — 위 "/api/event-videos/*" 는 세그먼트 하나만 매치해
+				// 하위 경로를 덮지 않으므로 한 줄을 더 적는다. 여기서도 GET 한정이 계약이다: 문자열
+				// 패턴으로 열면 같은 경로의 댓글 작성 POST 가 익명에 함께 풀린다.
 				.requestMatchers(HttpMethod.GET,
 					"/api/event-occurrences/*/locations/*/videos",
-					"/api/event-videos/*").permitAll()
+					"/api/event-videos/*",
+					"/api/event-videos/*/comments").permitAll()
 				// 상세의 명시 HEAD 매핑(부수효과 없는 200)은 GET 한정 matcher 에 안 잡혀 익명 HEAD 가 401 이
 				// 된다 — 같은 경로를 HEAD 로도 연다. HEAD 응답은 전 id 동일이라 존재 오라클이 아니다.
 				.requestMatchers(HttpMethod.HEAD, "/api/event-videos/*").permitAll()

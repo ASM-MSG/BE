@@ -9,9 +9,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -31,10 +34,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.event.dto.EventLocationVideoPageResponseDto;
+import com.msg.fillmap.event.dto.EventVideoCommentPageResponseDto;
 import com.msg.fillmap.event.dto.EventVideoDetailResponseDto;
 import com.msg.fillmap.event.dto.EventVideoUploadRequestDto;
 import com.msg.fillmap.event.dto.EventVideoUploadResponseDto;
 import com.msg.fillmap.event.exception.EventErrorCode;
+import com.msg.fillmap.event.service.EventVideoInteractionService;
 import com.msg.fillmap.event.service.EventVideoService;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.entity.UserRole;
@@ -60,6 +65,12 @@ class EventVideoPublicAccessHttpTest {
 	private static final long UPLOADER_ID = 7007L;
 	private static final String FEED_PATH = "/api/event-occurrences/{occurrenceId}/locations/{locationId}/videos";
 	private static final String DETAIL_PATH = "/api/event-videos/{videoId}";
+	private static final String COMMENTS_PATH = "/api/event-videos/{videoId}/comments";
+	private static final String COMMENT_PATH = "/api/event-videos/{videoId}/comments/{commentId}";
+	private static final String HELPFUL_PATH = "/api/event-videos/{videoId}/helpful";
+	private static final long COMMENT_ID = 3021L;
+	private static final String COMMENT_BODY = """
+		{"content":"저도 어제 다녀왔어요"}""";
 	private static final String UPLOAD_BODY = """
 		{"s3Key":"videos/pending/7007/6f1c1f0e.mp4","durationSec":10,"recordedAt":"2026-10-06T12:00:00Z"}""";
 	/** durationSec 0 은 @Min(1) 위반 — @Valid 가 안 걸려 있으면 그대로 서비스까지 흘러간다. */
@@ -75,6 +86,9 @@ class EventVideoPublicAccessHttpTest {
 	@MockitoBean
 	private EventVideoService eventVideoService;
 
+	@MockitoBean
+	private EventVideoInteractionService eventVideoInteractionService;
+
 	private String bearer(long userId) {
 		return "Bearer " + tokenProvider.issueAccessToken(userId, UserRole.USER);
 	}
@@ -82,7 +96,12 @@ class EventVideoPublicAccessHttpTest {
 	private EventVideoDetailResponseDto 상세() {
 		return new EventVideoDetailResponseDto(VIDEO_ID, OCCURRENCE_ID, "LIVE", LOCATION_ID, "영화의전당",
 			"19422_9582", null, null, "부산광역시 부산진구 부전2동", "https://example.test/playback", (short) 10,
-			LocalDateTime.of(2026, 10, 6, 12, 0), LocalDateTime.of(2026, 10, 6, 12, 30), "필맵러", false);
+			LocalDateTime.of(2026, 10, 6, 12, 0), LocalDateTime.of(2026, 10, 6, 12, 30), "필맵러", false,
+			3L, false, 2L, 댓글페이지());
+	}
+
+	private EventVideoCommentPageResponseDto 댓글페이지() {
+		return new EventVideoCommentPageResponseDto(List.of(), false, null);
 	}
 
 	@Test
@@ -169,6 +188,32 @@ class EventVideoPublicAccessHttpTest {
 		mockMvc.perform(get("/api/videos/{videoId}", VIDEO_ID)).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/api/event-occurrences/{id}/locations/{lid}/videos/{vid}",
 			OCCURRENCE_ID, LOCATION_ID, VIDEO_ID)).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	@DisplayName("비로그인 댓글 목록 조회는 허용된다")
+	void 비로그인_댓글_목록_조회는_허용된다() throws Exception {
+		given(eventVideoInteractionService.getComments(anyLong(), any(), anyInt())).willReturn(댓글페이지());
+
+		// 기존 "/api/event-videos/*" 패턴은 세그먼트 하나만 매치해 이 하위 경로를 덮지 않는다.
+		mockMvc.perform(get(COMMENTS_PATH, VIDEO_ID)).andExpect(status().isOk());
+	}
+
+	@Test
+	@DisplayName("비로그인 댓글 작성과 도움돼요 변경은 401이다")
+	void 비로그인_댓글_작성과_도움돼요_변경은_401이다() throws Exception {
+		// GET 한정 매처라 같은 경로의 쓰기가 함께 풀리지 않는다 — 문자열 패턴으로 열면 여기가 200 이 된다.
+		mockMvc.perform(post(COMMENTS_PATH, VIDEO_ID)
+				.contentType(MediaType.APPLICATION_JSON).content(COMMENT_BODY))
+			.andExpect(status().isUnauthorized());
+		mockMvc.perform(patch(COMMENT_PATH, VIDEO_ID, COMMENT_ID)
+				.contentType(MediaType.APPLICATION_JSON).content(COMMENT_BODY))
+			.andExpect(status().isUnauthorized());
+		mockMvc.perform(delete(COMMENT_PATH, VIDEO_ID, COMMENT_ID)).andExpect(status().isUnauthorized());
+		mockMvc.perform(put(HELPFUL_PATH, VIDEO_ID)).andExpect(status().isUnauthorized());
+		mockMvc.perform(delete(HELPFUL_PATH, VIDEO_ID)).andExpect(status().isUnauthorized());
+
+		then(eventVideoInteractionService).shouldHaveNoInteractions();
 	}
 
 	@Test

@@ -3,6 +3,7 @@ package com.msg.fillmap.event.repository;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -76,4 +77,25 @@ public interface EventVideoRepository extends JpaRepository<EventVideo, Long> {
 		@Param("cursorCreatedAt") LocalDateTime cursorCreatedAt,
 		@Param("cursorId") Long cursorId,
 		Pageable pageable);
+
+	/**
+	 * 반응 경로(MSG-441)가 쓰는 단건 로딩 — 노출 술어는 <b>바로 위 두 쿼리와 동등 계약</b>이라 셋을 붙여 둔다.
+	 * 댓글·도움돼요 변경 다섯과 댓글 목록이 전부 이 하나로 대상을 연다 — 판정을 서비스마다 손으로 반복하면
+	 * 표현이 갈라지고, 갈라지는 순간 한쪽 경로로만 삭제·비공개 영상의 존재가 새어 나간다.
+	 * JOIN FETCH 로 위치와 회차를 함께 읽는 것은 호출자가 다음 줄에서 바로 잠금 가드에 회차를 넘기기
+	 * 때문이다(지연 로딩이면 왕복이 하나 더 생긴다). 회차의 노출 은닉 판정은 이 쿼리가 아니라
+	 * {@link com.msg.fillmap.event.entity.EventOccurrence#isVisibleAt} 이 한다 — MSG-442 가 조회 네 경로와
+	 * 공유하려고 엔티티에 올려 둔 술어다.
+	 */
+	@Query("""
+		SELECT ev FROM EventVideo ev
+		JOIN FETCH ev.location l
+		JOIN FETCH l.occurrence
+		JOIN ev.video v
+		WHERE ev.videoId = :videoId
+		  AND v.status = com.msg.fillmap.video.entity.VideoStatus.ACTIVE
+		  AND v.visibility = com.msg.fillmap.video.entity.Visibility.PUBLIC
+		  AND v.processingStatus = com.msg.fillmap.video.entity.ProcessingStatus.READY
+		""")
+	Optional<EventVideo> findVisibleWithOccurrence(@Param("videoId") Long videoId);
 }

@@ -96,8 +96,9 @@ public class EventVideoController {
 			+ "피드에 보이는 영상만 열린다 — 삭제·블라인드·비공개·처리 미완료 영상은 올린 본인에게도 404 + "
 			+ "developCode 13406 이다(본인 영상 확인은 GET /api/videos/{videoId}). 행사 영상이 아닌 영상 id 도 "
 			+ "같은 404 다.\n\n"
-			+ "interactionLocked 는 행사 종료 시각부터 true 이며 댓글·도움돼요 입력 UI 를 비활성화하는 재료다"
-			+ "(기존 수는 계속 표시). 재생 URL 을 발급받은 타인 조회는 조회수를 올린다 — 비로그인 조회도 "
+			+ "interactionLocked 는 아카이브 전환(행사 종료 + 30일)부터 true 이며 댓글·도움돼요 입력 UI 를 "
+			+ "비활성화하는 재료다(기존 수는 계속 표시. 유예 기간에는 반응을 계속 남길 수 있다). 재생 URL 을 "
+			+ "발급받은 타인 조회는 조회수를 올린다 — 비로그인 조회도 "
 			+ "포함이고 올린 본인은 제외다."
 	)
 	@GetMapping("/api/event-videos/{videoId}")

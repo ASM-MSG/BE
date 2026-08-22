@@ -8,12 +8,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 
+import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.video.dto.ExploreGridResponseDto;
 import com.msg.fillmap.video.dto.ExploreSort;
 import com.msg.fillmap.video.dto.RegionExploreResponseDto;
 import com.msg.fillmap.video.dto.RegionGridCountResponseDto;
+import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.ExploreGridProjection;
+import com.msg.fillmap.video.repository.RegionExplorePageProjection;
 import com.msg.fillmap.video.repository.VideoRepository;
+import com.msg.fillmap.video.support.RegionExploreCursor;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.zone.service.ZoneCellName;
 import com.msg.fillmap.zone.service.ZoneNameQueryService;
@@ -23,6 +27,9 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class RegionExploreServiceImpl implements RegionExploreService {
+
+	private static final int REGION_PAGE_SIZE = 20;
+	private static final int REGION_LOOKAHEAD_SIZE = REGION_PAGE_SIZE + 1;
 
 	private final VideoRepository videoRepository;
 	private final ThumbnailUrlPresigner thumbnailUrlPresigner;
@@ -63,9 +70,42 @@ public class RegionExploreServiceImpl implements RegionExploreService {
 	}
 
 	@Override
-	public List<RegionGridCountResponseDto> getExploreRegions() {
-		return videoRepository.getRegionGridCounts().stream()
+	public RegionExplorePage getExploreRegions(long userId, String cursor) {
+		RegionExploreCursor decoded = decodeCursor(userId, cursor);
+		List<RegionExplorePageProjection> rows = videoRepository.getRegionExplorePage(
+			userId,
+			decoded != null,
+			decoded != null && decoded.personalLastUploadedAt() != null,
+			decoded == null ? null : decoded.personalLastUploadedAt(),
+			decoded == null ? null : decoded.gridCount(),
+			decoded == null ? null : decoded.regionCode(),
+			REGION_LOOKAHEAD_SIZE);
+		boolean hasNext = rows.size() > REGION_PAGE_SIZE;
+		List<RegionExplorePageProjection> pageRows = hasNext ? rows.subList(0, REGION_PAGE_SIZE) : rows;
+		List<RegionGridCountResponseDto> items = pageRows.stream()
 			.map(RegionGridCountResponseDto::of)
 			.toList();
+		String nextCursor = null;
+		if (hasNext) {
+			RegionExplorePageProjection last = pageRows.get(pageRows.size() - 1);
+			nextCursor = RegionExploreCursor.encode(
+				userId, last.getPersonalLastUploadedAt(), last.getGridCount(), last.getRegionCode());
+		}
+		return new RegionExplorePage(items, hasNext, nextCursor);
+	}
+
+	private RegionExploreCursor decodeCursor(long userId, String cursor) {
+		if (cursor == null) {
+			return null;
+		}
+		try {
+			RegionExploreCursor decoded = RegionExploreCursor.decode(cursor);
+			if (decoded.userId() != userId) {
+				throw new IllegalArgumentException("다른 사용자의 커서입니다");
+			}
+			return decoded;
+		} catch (RuntimeException e) {
+			throw new ApiException(VideoErrorCode.INVALID_CURSOR, e);
+		}
 	}
 }
