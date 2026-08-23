@@ -99,12 +99,56 @@ public class OpenApiConfig {
 		if (data.get$ref() == null) {
 			return; // 현재 대상 전수가 $ref DTO 다. 원시 data 경로가 생기면 가드 테스트가 깨져 이 분기를 넓히게 된다
 		}
+		anyOfNull(data);
+	}
+
+	/**
+	 * {@code @Schema(nullable = true)} 가 붙은 $ref 속성의 표기 정정 (MSG-460). OpenAPI 3.1 산출물에서
+	 * 이런 속성은 {@code {"$ref": ..., "type": "null"}} 로 나가는데, $ref 에 형제 키가 붙으면
+	 * "그 DTO 이면서 동시에 null" 이라는 뜻이라 FE 코드 생성기가 타입을 null 로만 좁힌다. 원시 타입의
+	 * {@code "type": ["string", "null"]} 과 동치인 {@code anyOf: [{$ref}, {type: "null"}]} 로 바꾼다.
+	 *
+	 * <p>필드를 열거하지 않고 컴포넌트 스키마 전수를 훑는다 — 같은 표기가 나오는 자리는 앞으로도
+	 * 늘어나므로, 새 nullable $ref 필드가 생기면 애노테이션만으로 올바른 스키마가 나온다.
+	 */
+	@Bean
+	public OpenApiCustomizer nullableRefPropertyCustomizer() {
+		return openApi -> {
+			if (openApi.getComponents() == null || openApi.getComponents().getSchemas() == null) {
+				return;
+			}
+			openApi.getComponents().getSchemas().values().forEach(this::unwrapNullableRefs);
+		};
+	}
+
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	private void unwrapNullableRefs(Schema<?> schema) {
+		Map<String, Schema> properties = schema.getProperties();
+		if (properties == null) {
+			return;
+		}
+		properties.values().stream().filter(this::isNullableRef).forEach(this::anyOfNull);
+	}
+
+	@SuppressWarnings("rawtypes")
+	private boolean isNullableRef(Schema property) {
+		return property.get$ref() != null && property.getTypes() != null && property.getTypes().contains("null");
+	}
+
+	/**
+	 * $ref 와 형제 {@code type} 을 anyOf 두 분기로 내린다. 속성 객체를 새로 만들지 않고 제자리에서
+	 * 고치는 이유는 description 말고도 example·format·deprecated·확장(x-) 처럼 앞으로 붙을 수 있는
+	 * 메타데이터를 옮겨 적다 빠뜨리지 않기 위해서다 — 옮기는 대상은 두 키뿐이다.
+	 */
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	private void anyOfNull(Schema property) {
 		Schema nullType = new Schema<>();
 		nullType.addType("null");
-		Schema wrapped = new Schema<>();
-		wrapped.addAnyOfItem(new Schema<>().$ref(data.get$ref()));
-		wrapped.addAnyOfItem(nullType);
-		wrapped.setDescription(data.getDescription());
-		properties.put("data", wrapped);
+		Schema ref = new Schema<>().$ref(property.get$ref());
+		property.set$ref(null);
+		property.setTypes(null);
+		property.setType(null);
+		property.addAnyOfItem(ref);
+		property.addAnyOfItem(nullType);
 	}
 }
