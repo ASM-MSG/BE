@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -128,7 +129,10 @@ class MissionVideoUploadServiceTest {
 	}
 
 	private static LocalDateTime 지금() {
-		return LocalDateTime.now(ZoneOffset.UTC);
+		// PostgreSQL timestamp 는 마이크로초까지만 저장하며 그보다 잔 자리는 반올림한다 — Linux CI 의
+		// 나노초 클럭 값을 그대로 심으면 저장값이 심은 값보다 커질 수 있어 정각 경계 대조가 뒤집힌다
+		// (macOS 클럭은 마이크로초라 로컬에서 재현되지 않았다). 절단해 왕복이 항등이 되게 한다.
+		return LocalDateTime.now(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);
 	}
 
 	private String 격자(long dy, long dx) {
