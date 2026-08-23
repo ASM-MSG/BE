@@ -96,6 +96,18 @@ public interface VideoService {
 		LocalDateTime recordedAt);
 
 	/**
+	 * 미션·행사와 무관한 업로드 요청 검증 (MSG-459 D-10) — 미래 촬영 시각(3424)과 pending 키 형식·소유
+	 * 접두어(3401)만 본다. 문자열과 시각만 보는 순수 계산이라 S3 도 DB 도 건드리지 않는다.
+	 * <p>
+	 * 공개된 이유는 <b>호출자가 이 둘을 자기 도메인 조회보다 먼저 돌려야 하기 때문</b>이다. 미션 경유
+	 * 업로드가 미션 조회 뒤에 검증하면 "있는 미션에 무효 키"와 "없는 미션에 무효 키"의 응답이 갈려
+	 * 미션 존재 오라클이 열린다. 5분 허용 상수·Clock·pending 키 접두어 규칙이 이미 이 구현 안에 있어
+	 * 미션 쪽으로 복제하지 않으려는 것이고, 확정 코어가 나중에 같은 검사를 다시 해도 무해하다.
+	 * video 도 mission 도 Owner B 라 도메인 간 계약 인터페이스가 아니라 B 내부 확장이다.
+	 */
+	void validateUploadRequest(long userId, String s3Key, LocalDateTime recordedAt);
+
+	/**
 	 * pending 키에서 이미 확정된 영상 조회 (MSG-440 멱등 재시도 판정). 확정과 같은 advisory lock 을 먼저
 	 * 잡으므로 앞 시도가 커밋됐다면 반드시 보인다 — 호출자는 찾은 영상의 소유자·연결이 자기 요청과 같은지
 	 * 확인해 재시도(성공 재응답)와 도용(3401)을 가른다. 형식이 어긋난 키는 empty 다.
