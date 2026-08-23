@@ -221,7 +221,7 @@ class MissionVideoUploadServiceTest {
 	@DisplayName("대표 격자 저장과 판정")
 	class 저장 {
 
-		// 검증: FR-MISSION-12
+		// 검증: FR-MISSION-22
 		@Test
 		@DisplayName("축제_미션에_좌표_없이_올리면_대표_격자에_저장된다")
 		void 축제_미션에_좌표_없이_올리면_대표_격자에_저장된다() {
@@ -236,7 +236,7 @@ class MissionVideoUploadServiceTest {
 			assertThat(격자영상수(격자(1, 1))).isZero();
 		}
 
-		// 검증: FR-MISSION-12
+		// 검증: FR-MISSION-22
 		@Test
 		@DisplayName("팝업_미션에_올린_영상도_대표_격자에_저장된다")
 		void 팝업_미션에_올린_영상도_대표_격자에_저장된다() {
@@ -248,7 +248,7 @@ class MissionVideoUploadServiceTest {
 			assertThat(격자영상수(격자(20, 0))).isEqualTo(1);
 		}
 
-		// 검증: FR-MISSION-13
+		// 검증: FR-MISSION-22
 		@Test
 		@DisplayName("미션_경유_업로드는_대표_격자의_점령을_만든다")
 		void 미션_경유_업로드는_대표_격자의_점령을_만든다() {
@@ -260,7 +260,7 @@ class MissionVideoUploadServiceTest {
 			assertThat(카운트("SELECT count(*) FROM user_grids WHERE grid_id = :v", 격자(21, 0))).isEqualTo(1);
 		}
 
-		// 검증: FR-MISSION-16
+		// 검증: FR-MISSION-22
 		@Test
 		@DisplayName("미션_경유_업로드로_조건을_채우면_스탬프가_응답에_실린다")
 		void 미션_경유_업로드로_조건을_채우면_스탬프가_응답에_실린다() {
@@ -362,6 +362,25 @@ class MissionVideoUploadServiceTest {
 				.extracting("errorCode")
 				.isEqualTo(MissionErrorCode.MISSION_UPLOAD_UNAVAILABLE);
 		}
+
+		// 검증: FR-MISSION-24
+		@Test
+		@DisplayName("행사_업로드로_확정된_키를_미션에_재전송하면_스탬프가_없어_12409다")
+		void 행사_업로드로_확정된_키를_미션에_재전송하면_스탬프가_없어_12409다() {
+			long missionId = 진행중_팝업(34, 0);
+			String s3Key = 키(userId);
+			// 행사 업로드가 하는 일 그대로 — 확정 코어만 태우고 미션 판정(awardOnUpload)은 타지 않는다
+			// (MSG-438 제외 계약). 행사 대표 격자와 미션 대표 격자가 같은 칸이면 소유자·격자·촬영 시각이
+			// 전부 맞는데 스탬프만 없는 상태가 만들어진다.
+			videoService.confirmAtGrid(userId, 격자(34, 0), s3Key, (short) 10, 지금().minusHours(1));
+
+			// 스탬프 보유를 안 보면 여기서 성공이 나가고, 스탬프 없는 미션 영상이 남아 종료 정리가 미션을 지운다.
+			assertThatThrownBy(() -> 업로드(missionId, s3Key))
+				.isInstanceOf(ApiException.class)
+				.extracting("errorCode")
+				.isEqualTo(MissionErrorCode.MISSION_UPLOAD_UNAVAILABLE);
+			assertThat(스탬프수(missionId)).isZero();
+		}
 	}
 
 	@Nested
@@ -413,7 +432,7 @@ class MissionVideoUploadServiceTest {
 				.isEqualTo(MissionErrorCode.MISSION_UPLOAD_UNAVAILABLE);
 		}
 
-		// 검증: FR-MISSION-18
+		// 검증: FR-MISSION-23
 		@Test
 		@DisplayName("신고된_촬영_시각이_미션_기간_밖이면_12409로_거절한다")
 		void 신고된_촬영_시각이_미션_기간_밖이면_12409로_거절한다() {
@@ -427,7 +446,7 @@ class MissionVideoUploadServiceTest {
 			assertThat(격자영상수(격자(43, 0))).isZero();
 		}
 
-		// 검증: FR-MISSION-18
+		// 검증: FR-MISSION-23
 		@Test
 		@DisplayName("신고된_촬영_시각이_미션_시작_정각이면_업로드가_통과한다")
 		void 신고된_촬영_시각이_미션_시작_정각이면_업로드가_통과한다() {
@@ -441,7 +460,7 @@ class MissionVideoUploadServiceTest {
 			assertThat(response.completedMissions()).hasSize(1);
 		}
 
-		// 검증: FR-MISSION-18
+		// 검증: FR-MISSION-23
 		@Test
 		@DisplayName("신고된_촬영_시각이_미션_종료_정각이면_업로드가_통과한다")
 		void 신고된_촬영_시각이_미션_종료_정각이면_업로드가_통과한다() {
@@ -506,6 +525,7 @@ class MissionVideoUploadServiceTest {
 
 		private static final long 없는_미션 = -1L;
 
+		// 검증: FR-MISSION-26
 		@Test
 		@DisplayName("코스_미션과_없는_미션의_실패_응답이_같다")
 		void 코스_미션과_없는_미션의_실패_응답이_같다() {
@@ -577,6 +597,7 @@ class MissionVideoUploadServiceTest {
 	@DisplayName("종료 미션 보존 (FR-17)")
 	class 보존 {
 
+		// 검증: FR-MISSION-24
 		@Test
 		@DisplayName("미션_경유_업로드가_성공하면_같은_트랜잭션에서_스탬프가_찍힌다")
 		void 미션_경유_업로드가_성공하면_같은_트랜잭션에서_스탬프가_찍힌다() {
@@ -589,6 +610,7 @@ class MissionVideoUploadServiceTest {
 			assertThat(스탬프수(missionId)).isEqualTo(1);
 		}
 
+		// 검증: FR-MISSION-24
 		@Test
 		@DisplayName("영상이_올라온_축제는_종료_정리에서_지워지지_않는다")
 		void 영상이_올라온_축제는_종료_정리에서_지워지지_않는다() {

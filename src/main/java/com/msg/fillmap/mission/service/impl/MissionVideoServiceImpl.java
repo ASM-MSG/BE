@@ -96,7 +96,7 @@ public class MissionVideoServiceImpl implements MissionVideoService {
 		// 3. 멱등 재시도 판정 — 저장 컬럼을 새로 만들지 않고 pending 키 클레임(videos.original_s3_key)을 쓴다.
 		Optional<Video> alreadyConfirmed = videoService.findConfirmedByPendingKey(request.s3Key());
 		if (alreadyConfirmed.isPresent()) {
-			return replay(userId, found, alreadyConfirmed.get());
+			return replay(userId, missionId, found, alreadyConfirmed.get());
 		}
 
 		// 4. 미션 판정 다섯 — 없음·유형·대표 격자 없음·활성 기간 밖·신고된 촬영 시각이 기간 밖.
@@ -169,14 +169,21 @@ public class MissionVideoServiceImpl implements MissionVideoService {
 	 * <p>
 	 * 소유자가 다르면 미션과 무관한 도용이라 3401 이고, 격자가 다르거나 저장된 촬영 시각이 기간 밖이면
 	 * 12409 다 — 두 판정 모두 미션을 알아야 성립해 응답을 수렴시킨다.
+	 * <p>
+	 * 여기에 <b>스탬프 보유</b>가 넷째 조건으로 붙는다. 앞의 셋만 보면 행사 업로드로 확정된 키가 통과할 수
+	 * 있다 — 행사 업로드는 미션 판정을 타지 않으므로(MSG-438 제외 계약), 행사 대표 격자와 미션 대표 격자가
+	 * 같은 칸이면 소유자·격자·촬영 시각이 모두 맞는데 스탬프만 없는 상태가 된다. 그 요청에 성공을 돌려주면
+	 * 스탬프 없는 미션 영상이 생겨 종료 정리가 그 미션을 지운다(FR-17 위반). 정당한 재시도는 7번 보존
+	 * 확인이 같은 트랜잭션에서 스탬프를 보장했고 스탬프는 비회수라, 이 조건에 걸리지 않는다.
 	 */
-	private MissionVideoUploadResponseDto replay(long userId, Optional<Mission> found, Video video) {
+	private MissionVideoUploadResponseDto replay(long userId, long missionId, Optional<Mission> found, Video video) {
 		if (video.getUserId() != userId) {
 			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
 		}
 		found
 			.filter(mission -> video.getGridId().equals(mission.getRepresentativeGridId()))
 			.filter(mission -> within(mission, video.getRecordedAt()))
+			.filter(mission -> userMissionRepository.existsById(new UserMissionId(userId, missionId)))
 			.orElseThrow(() -> new ApiException(MissionErrorCode.MISSION_UPLOAD_UNAVAILABLE));
 		// 첫 응답 전용 필드는 재시도에서 비운다 — 복원할 저장 컬럼이 없다(행사 업로드와 같은 규칙).
 		return new MissionVideoUploadResponseDto(video.getId(), video.getGridId(),
