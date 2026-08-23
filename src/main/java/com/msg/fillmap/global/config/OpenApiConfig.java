@@ -99,7 +99,7 @@ public class OpenApiConfig {
 		if (data.get$ref() == null) {
 			return; // 현재 대상 전수가 $ref DTO 다. 원시 data 경로가 생기면 가드 테스트가 깨져 이 분기를 넓히게 된다
 		}
-		properties.put("data", anyOfNull(data));
+		anyOfNull(data);
 	}
 
 	/**
@@ -127,7 +127,7 @@ public class OpenApiConfig {
 		if (properties == null) {
 			return;
 		}
-		properties.replaceAll((name, property) -> isNullableRef(property) ? anyOfNull(property) : property);
+		properties.values().stream().filter(this::isNullableRef).forEach(this::anyOfNull);
 	}
 
 	@SuppressWarnings("rawtypes")
@@ -135,15 +135,20 @@ public class OpenApiConfig {
 		return property.get$ref() != null && property.getTypes() != null && property.getTypes().contains("null");
 	}
 
-	/** $ref 와 설명은 살리고 형제 {@code type} 은 anyOf 분기로 옮긴 스키마. */
+	/**
+	 * $ref 와 형제 {@code type} 을 anyOf 두 분기로 내린다. 속성 객체를 새로 만들지 않고 제자리에서
+	 * 고치는 이유는 description 말고도 example·format·deprecated·확장(x-) 처럼 앞으로 붙을 수 있는
+	 * 메타데이터를 옮겨 적다 빠뜨리지 않기 위해서다 — 옮기는 대상은 두 키뿐이다.
+	 */
 	@SuppressWarnings({"rawtypes", "unchecked"})
-	private Schema anyOfNull(Schema property) {
+	private void anyOfNull(Schema property) {
 		Schema nullType = new Schema<>();
 		nullType.addType("null");
-		Schema wrapped = new Schema<>();
-		wrapped.addAnyOfItem(new Schema<>().$ref(property.get$ref()));
-		wrapped.addAnyOfItem(nullType);
-		wrapped.setDescription(property.getDescription());
-		return wrapped;
+		Schema ref = new Schema<>().$ref(property.get$ref());
+		property.set$ref(null);
+		property.setTypes(null);
+		property.setType(null);
+		property.addAnyOfItem(ref);
+		property.addAnyOfItem(nullType);
 	}
 }

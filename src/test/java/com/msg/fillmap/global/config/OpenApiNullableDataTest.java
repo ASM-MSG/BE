@@ -101,8 +101,8 @@ class OpenApiNullableDataTest {
 	void nullable_ref_속성은_anyOf로_나간다() throws Exception {
 		JsonNode schemas = fetchApiDocs().path("components").path("schemas");
 		List<String[]> targets = List.of(
-			new String[] {"MissionDetailResponseDto", "progress"},
-			new String[] {"GridAggregationResponseDto", "currentRegion"});
+			new String[] {"MissionDetailResponseDto", "progress", "MissionProgressResponseDto"},
+			new String[] {"GridAggregationResponseDto", "currentRegion", "CurrentRegionResponseDto"});
 		for (String[] target : targets) {
 			JsonNode property = schemas.path(target[0]).path("properties").path(target[1]);
 			assertThat(property.isObject()).as("%s.%s 속성이 없다", target[0], target[1]).isTrue();
@@ -112,9 +112,18 @@ class OpenApiNullableDataTest {
 			assertThat(property.has("type"))
 				.as("%s.%s 에 형제 type 이 남아 있다", target[0], target[1])
 				.isFalse();
+			// 두 분기를 다 확인한다 — null 분기만 보면 $ref 를 통째로 잃은 스키마도 통과한다
+			List<String> refs = new ArrayList<>();
+			property.path("anyOf").forEach(branch -> refs.add(branch.path("$ref").asString("")));
+			assertThat(refs)
+				.as("%s.%s 의 anyOf 에 원래 참조(%s)가 없다", target[0], target[1], target[2])
+				.contains("#/components/schemas/" + target[2]);
 			assertThat(hasNullType(property.path("anyOf")))
 				.as("%s.%s 의 anyOf 에 {type: \"null\"} 분기가 없다", target[0], target[1])
 				.isTrue();
+			assertThat(property.path("description").asString(""))
+				.as("%s.%s 의 설명문이 재작성에서 사라졌다", target[0], target[1])
+				.isNotEmpty();
 		}
 	}
 
