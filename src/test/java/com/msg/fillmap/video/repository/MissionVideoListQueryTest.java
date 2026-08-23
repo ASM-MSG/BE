@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.event.EventVideoFixtures;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridFixtures;
@@ -319,6 +320,33 @@ class MissionVideoListQueryTest {
 		assertThat(listAfter(mission, at(20, 18), newest, 20)).containsExactly(tieNew, tieOld, oldest);
 	}
 
+	// 검증: FR-EVENT-12
+	@Test
+	@DisplayName("행사 영상은 미션 영상 목록에 나오지 않는다 — 게이트 3종을 다 통과해도 (MSG-450)")
+	void 행사_영상은_미션_영상_목록에_나오지_않는다() {
+		long mission = insertMission(at(1, 0), at(31, 23));
+		String gridId = seedGrid(0);
+		insertMissionGrid(mission, gridId);
+		EventVideoFixtures.linkEventVideo(em, publicReady(gridId, at(10, 9)));
+		long normal = publicReady(gridId, at(11, 9));
+
+		assertThat(list(mission, 20)).containsExactly(normal);
+	}
+
+	// 검증: FR-EVENT-12
+	@Test
+	@DisplayName("행사 영상은 커서 이후 페이지에도 나오지 않는다 (MSG-450)")
+	void 행사_영상은_커서_이후_페이지에도_나오지_않는다() {
+		long mission = insertMission(at(1, 0), at(31, 23));
+		String gridId = seedGrid(0);
+		insertMissionGrid(mission, gridId);
+		long newest = publicReady(gridId, at(20, 18));
+		EventVideoFixtures.linkEventVideo(em, publicReady(gridId, at(15, 12)));   // 커서 뒤쪽 행사 영상
+		long oldest = publicReady(gridId, at(10, 9));
+
+		assertThat(listAfter(mission, at(20, 18), newest, 20)).containsExactly(oldest);
+	}
+
 	// --- 정합 (술어 동등 확인, 문자열 대조 아님)
 
 	@Test
@@ -349,6 +377,7 @@ class MissionVideoListQueryTest {
 				JOIN missions m ON m.id = mg.mission_id
 				WHERE mg.mission_id = :missionId
 				  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+				  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 				  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 				  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 				""")

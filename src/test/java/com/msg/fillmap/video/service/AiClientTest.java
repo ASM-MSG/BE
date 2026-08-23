@@ -55,7 +55,8 @@ class AiClientTest {
 		// 선분석 전용 RestClient(MSG-351 D-5)는 별도 builder 로 조립되므로 서버도 따로 바인딩한다.
 		RestClient.Builder highlightBuilder = RestClient.builder();
 		highlightServer = MockRestServiceServer.bindTo(highlightBuilder).build();
-		AiProperties properties = new AiProperties(true, BASE_URL, Duration.ofMinutes(30), 30000L);
+		// AiClient 는 블러 플래그와 무관한 빈이라 blurEnabled=false 로 둔다 (MSG-456)
+		AiProperties properties = new AiProperties(true, false, BASE_URL, Duration.ofMinutes(30), 30000L);
 		aiClient = new AiClient(builder, highlightBuilder, properties);
 	}
 

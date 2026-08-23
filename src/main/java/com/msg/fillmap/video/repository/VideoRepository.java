@@ -131,6 +131,9 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	 * 판정은 내 영상만·DELETED 만 제외이고, 목록은 사용자 조건이 없고 게이트가 셋이라 화면에 보이는 수가
 	 * 판정 근거보다 작을 수 있다. 게이트 3종은 findGlobalCover·findGlobalVideos·countHourlyUploadsByGrid 와
 	 * <b>술어 동등</b>이다(조인이 있어 v. 별칭을 붙이므로 문자열은 다르다 — 판정은 조건 집합으로 한다).
+	 * 행사 영상 안티조인(NOT EXISTS event_videos)은 미션 계열 세 쿼리(이 쿼리·findMissionVideosAfter·
+	 * countMissionVideosByGrid)에만 있는 술어 동등 계약이다 — 행사 영상은 현장에 없어도 올릴 수 있어 미션
+	 * 비연계가 확정 계약이라 여기서 빠지고, 격자 전역 목록 쪽에는 그대로 남는다(MSG-450).
 	 * mission_grids PK 가 (mission_id, grid_id)이고 영상은 격자를 하나만 가리켜 조인 팬아웃이 없다 —
 	 * DISTINCT 불요. 기간은 IS NULL OR 형태라 무기간 미션(코스·지속형)이 코드 분기 없이 흡수되고 경계는
 	 * 양끝 포함이다. 활성 여부는 보지 않는다 — 끝난 미션도 목록은 열린다.
@@ -145,6 +148,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		JOIN missions m ON m.id = mg.mission_id
 		WHERE mg.mission_id = :missionId
 		  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		ORDER BY v.recorded_at DESC, v.id DESC
@@ -164,6 +168,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		JOIN missions m ON m.id = mg.mission_id
 		WHERE mg.mission_id = :missionId
 		  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
+		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		  AND (v.recorded_at, v.id) < (:cursorRecordedAt, :cursorId)
@@ -193,6 +198,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		  AND v.status = 'ACTIVE'
 		  AND v.visibility = 'PUBLIC'
 		  AND v.processing_status = 'READY'
+		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		GROUP BY v.grid_id
@@ -202,8 +208,9 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	/**
 	 * 미션별 영상 개수 배치 조회 (MSG-459 — 격자 역조회 응답의 videoCount). 위 countMissionVideosByGrid 의
 	 * 술어를 글자 그대로 두고 GROUP BY 만 미션 단위로 바꾼 것이다 — 같은 술어라야 역조회 카드의 숫자와
-	 * 미션 상세의 videoCount 가 어긋나지 않는다. 미션 id 목록을 한 번에 받는 이유는 항목마다 세면 N+1
-	 * 이라서다. 영상이 없는 미션은 결과 행이 없고 0 채움은 서비스 몫이다.
+	 * 미션 상세의 videoCount 가 어긋나지 않는다. 행사 영상 제외 안티조인(MSG-450)도 그 계약의 일부라
+	 * 함께 싣는다(develop 머지 동기화에서 반영). 미션 id 목록을 한 번에 받는 이유는 항목마다 세면
+	 * N+1 이라서다. 영상이 없는 미션은 결과 행이 없고 0 채움은 서비스 몫이다.
 	 */
 	@Query(value = """
 		SELECT m.id AS "missionId", COUNT(*) AS "videoCount"
@@ -214,6 +221,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		  AND v.status = 'ACTIVE'
 		  AND v.visibility = 'PUBLIC'
 		  AND v.processing_status = 'READY'
+		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		GROUP BY m.id
@@ -541,25 +549,56 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	Optional<RegionExploreSummaryProjection> getRegionExploreSummary(@Param("regionCode") String regionCode);
 
 	/**
-	 * 전체 지역 리스트 — 행정동별 게이트 통과 격자 수 (MSG-238 §도메인 3). 게이트 통과 영상 ≥1 격자만
-	 * EXISTS(부분 인덱스 prefix LIMIT 1 프로브)로 세고, regions JOIN 에서 무라벨(NULL) 격자가 자연 탈락한다.
-	 * gridCount 는 §D1 동일 정의라 ①의 카드 집합 크기와 항상 일치. 콘텐츠 많은 지역 먼저
-	 * (gridCount DESC, region_code ASC — §D3 결정적), 행 상한 = 콘텐츠 있는 행정동 수 ≤ 3,558 이라 no-LIMIT.
-	 * grids 전수 스캔 — lazy insert 라 상한이 전역 등록 격자 총수(§D6 ceiling 참조, MVP 소량).
+	 * 검색 무입력 전체 지역 개인화 커서 페이지 (MSG-460). 전역 공개 콘텐츠 격자 집합은
+	 * MSG-238과 동일하고, 현재 사용자의 행정동별 마지막 업로드 시각만 정렬에 결합한다.
+	 * 공간 연산은 없다.
 	 */
 	@Query(value = """
+		WITH content_regions AS (
+			SELECT g.region_code, r.region_name, COUNT(*)::int AS grid_count
+			FROM grids g
+			JOIN regions r ON r.region_code = g.region_code
+			WHERE EXISTS (
+				SELECT 1 FROM videos v
+				WHERE v.grid_id = g.grid_id
+				  AND v.status = 'ACTIVE'
+				  AND v.visibility = 'PUBLIC'
+				  AND v.processing_status = 'READY')
+			GROUP BY g.region_code, r.region_name
+		), personal_regions AS (
+			SELECT g.region_code, MAX(ug.last_uploaded_at) AS last_uploaded_at
+			FROM user_grids ug
+			JOIN grids g ON g.grid_id = ug.grid_id
+			WHERE ug.user_id = :userId
+			GROUP BY g.region_code
+		)
 		SELECT
-			g.region_code AS "regionCode",
-			r.region_name AS "regionName",
-			COUNT(*)::int AS "gridCount"
-		FROM grids g
-		JOIN regions r ON r.region_code = g.region_code
-		WHERE EXISTS (
-			SELECT 1 FROM videos v
-			WHERE v.grid_id = g.grid_id
-			  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY')
-		GROUP BY g.region_code, r.region_name
-		ORDER BY COUNT(*) DESC, g.region_code
+			c.region_code AS "regionCode",
+			c.region_name AS "regionName",
+			c.grid_count AS "gridCount",
+			p.last_uploaded_at AS "personalLastUploadedAt"
+		FROM content_regions c
+		LEFT JOIN personal_regions p ON p.region_code = c.region_code
+		WHERE CAST(:hasCursor AS boolean) = false
+		   OR (CAST(:cursorPersonal AS boolean) = true AND (
+			p.last_uploaded_at IS NULL
+			OR p.last_uploaded_at < CAST(:cursorLastUploadedAt AS timestamp)
+			OR (p.last_uploaded_at = CAST(:cursorLastUploadedAt AS timestamp) AND c.grid_count < :cursorGridCount)
+			OR (p.last_uploaded_at = CAST(:cursorLastUploadedAt AS timestamp)
+				AND c.grid_count = :cursorGridCount AND c.region_code > :cursorRegionCode)))
+		   OR (CAST(:cursorPersonal AS boolean) = false AND p.last_uploaded_at IS NULL AND (
+			c.grid_count < :cursorGridCount
+			OR (c.grid_count = :cursorGridCount AND c.region_code > :cursorRegionCode)))
+		ORDER BY (p.last_uploaded_at IS NOT NULL) DESC,
+			p.last_uploaded_at DESC NULLS LAST, c.grid_count DESC, c.region_code ASC
+		LIMIT CAST(:limit AS bigint)
 		""", nativeQuery = true)
-	List<RegionGridCountProjection> getRegionGridCounts();
+	List<RegionExplorePageProjection> getRegionExplorePage(
+		@Param("userId") long userId,
+		@Param("hasCursor") boolean hasCursor,
+		@Param("cursorPersonal") boolean cursorPersonal,
+		@Param("cursorLastUploadedAt") LocalDateTime cursorLastUploadedAt,
+		@Param("cursorGridCount") Integer cursorGridCount,
+		@Param("cursorRegionCode") String cursorRegionCode,
+		@Param("limit") int limit);
 }

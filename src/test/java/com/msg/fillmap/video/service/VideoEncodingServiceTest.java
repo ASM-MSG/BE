@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -24,9 +25,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import com.msg.fillmap.global.config.AwsProperties;
+import com.msg.fillmap.video.config.AiProperties;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
@@ -53,22 +56,24 @@ class VideoEncodingServiceTest {
 	private FfmpegRunner ffmpegRunner;
 	private S3Client s3Client;
 	private SimpleMeterRegistry meterRegistry;
+	private ObjectProvider<AiClient> aiClientProvider;
+	private ThreadPoolTaskExecutor highlightExecutor;
 	private VideoEncodingService encodingService;
 	private Video video;
 
 	@BeforeEach
+	@SuppressWarnings("unchecked")
 	void setUp() {
 		videoRepository = mock(VideoRepository.class);
 		statusWriter = mock(VideoStatusWriter.class);
 		ffmpegRunner = mock(FfmpegRunner.class);
 		s3Client = mock(S3Client.class);
 		meterRegistry = new SimpleMeterRegistry();
-		AwsProperties properties = new AwsProperties(
-			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
+		// getIfAvailable() 기본 null — 비 AI 환경 그대로라 하이라이트 워커 제출이 조기 반환한다 (FR-5)
+		aiClientProvider = mock(ObjectProvider.class);
+		highlightExecutor = mock(ThreadPoolTaskExecutor.class);
 
-		encodingService = new VideoEncodingServiceImpl(
-			videoRepository, statusWriter, ffmpegRunner, s3Client, properties,
-			new VideoProcessingMetrics(meterRegistry));
+		encodingService = service(false, false);
 
 		video = Video.create(1L, "19495_9607", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
@@ -79,6 +84,21 @@ class VideoEncodingServiceTest {
 			video.markEncoding();
 			return true;
 		});
+	}
+
+	/**
+	 * 플래그 조합별 서비스 조립 (MSG-456) — @Value 필드가 AiProperties 생성자 주입으로 바뀌어
+	 * ReflectionTestUtils 대신 record 직접 생성으로 분기를 정한다. meterRegistry 는 필드를 재사용하므로
+	 * 재조립해도 계측 카운터는 같은 레지스트리에 쌓인다.
+	 */
+	private VideoEncodingService service(boolean aiEnabled, boolean blurEnabled) {
+		AwsProperties properties = new AwsProperties(
+			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
+		return new VideoEncodingServiceImpl(
+			videoRepository, statusWriter, ffmpegRunner, s3Client, properties,
+			new VideoProcessingMetrics(meterRegistry),
+			new AiProperties(aiEnabled, blurEnabled, "http://ai.test", Duration.ofMinutes(30), 30000L),
+			aiClientProvider, highlightExecutor);
 	}
 
 	// 검증: FR-MEDIA-01, FR-MEDIA-02
@@ -189,7 +209,7 @@ class VideoEncodingServiceTest {
 	// 검증: FR-MEDIA-04
 	@Test
 	void AI_활성이면_인코딩_단계에서_미블러_썸네일을_올리지_않는다() {
-		ReflectionTestUtils.setField(encodingService, "aiEnabled", true);
+		encodingService = service(true, true);   // 실효 블러 활성 (MSG-456)
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 
@@ -216,11 +236,11 @@ class VideoEncodingServiceTest {
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // aiEnabled=false → markReady 경로
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // 블러 비활성 → markReady 경로
 		assertThat(taskCount("completed")).isEqualTo(1.0);
 
-		ReflectionTestUtils.setField(encodingService, "aiEnabled", true);
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // aiEnabled=true → markEncoded 경로도 completed (스펙 표)
+		encodingService = service(true, true);
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // 실효 블러 활성 → markEncoded 경로도 completed (스펙 표)
 		assertThat(taskCount("completed")).isEqualTo(2.0);
 		assertThat(taskCount("failed_over_duration")).isZero();
 		assertThat(taskCount("failed_error")).isZero();

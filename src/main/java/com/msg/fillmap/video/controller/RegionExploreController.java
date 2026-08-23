@@ -1,11 +1,10 @@
 package com.msg.fillmap.video.controller;
 
-import java.util.List;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -13,17 +12,19 @@ import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
+import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.video.dto.ExploreSort;
 import com.msg.fillmap.video.dto.RegionExploreResponseDto;
-import com.msg.fillmap.video.dto.RegionGridCountResponseDto;
+import com.msg.fillmap.video.dto.RegionExplorePageResponseDto;
 import com.msg.fillmap.video.service.RegionExploreService;
 
 /**
- * 전역 탐색 = 행정동 축 전역 공개 콘텐츠 조회 (MSG-238). 경로 접두사는 /api/regions 지만 게이트·커버·
- * presigner 등 videos 자산을 다루는 Owner B 코드라 video 패키지에 둔다(§D5 — 127/87 "경로 접두사가
- * 소유권을 강제하지 않음" 선례). RegionController(A)의 리터럴 경로들과 충돌 없음. 전역 축이라 결과가
- * userId 무관 — @AuthenticationPrincipal 을 두지 않는다(인증 자체는 SecurityConfig 가 강제, 87 선례).
+ * 전역 탐색 = 행정동 축 전역 공개 콘텐츠 조회 (MSG-238). 경로 접두사는 /api/regions 지만
+ * 게이트·커버·presigner 등 videos 자산을 다루는 Owner B 코드라 video 패키지에 둔다
+ * (§D5 — 127/87 "경로 접두사가 소유권을 강제하지 않음" 선례). RegionController(A)의
+ * 리터럴 경로들과 충돌 없음. 전체 지역 목록은
+ * MSG-460부터 로그인 사용자의 최근 업로드 지역을 정렬에 반영한다.
  */
 @Tag(name = "전역 탐색 (Region Explore)", description = "행정동 축으로 전역 공개 콘텐츠를 탐색하는 API — "
 	+ "지도 홈 패널·전체 보기 격자 썸네일 뷰·검색 무입력 전체 지역 리스트.")
@@ -60,12 +61,18 @@ public class RegionExploreController {
 
 	@Operation(
 		summary = "전체 지역 리스트 조회",
-		description = "전역 공개 콘텐츠가 있는 행정동만 격자 수 내림차순으로 반환한다(검색 무입력 드롭다운). "
-			+ "각 항목의 gridCount 는 그 행정동 격자 카드 조회의 gridCount 와 같은 정의다. "
-			+ "전역 공개 콘텐츠가 하나도 없으면 빈 배열이다."
+		description = "전역 공개 콘텐츠가 있는 행정동을 20개씩 반환한다. 로그인 사용자가 직접 최근 "
+			+ "업로드한 지역이 먼저 나오고 나머지는 격자 수 내림차순이다. hasNext가 true면 nextCursor를 "
+			+ "다음 요청의 "
+			+ "cursor에 그대로 전달한다."
 	)
 	@GetMapping("/api/regions/explore")
-	public SuccessResponse<List<RegionGridCountResponseDto>> getExploreRegions() {
-		return SuccessResponse.of(regionExploreService.getExploreRegions());
+	public SuccessResponse<RegionExplorePageResponseDto> getExploreRegions(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Parameter(description = "직전 응답의 nextCursor. 첫 페이지는 생략")
+		@RequestParam(required = false) String cursor
+	) {
+		return SuccessResponse.of(RegionExplorePageResponseDto.from(
+			regionExploreService.getExploreRegions(principal.userId(), cursor)));
 	}
 }

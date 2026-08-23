@@ -1,6 +1,7 @@
 package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -8,8 +9,10 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,13 +23,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.video.dto.ExploreSort;
 import com.msg.fillmap.video.dto.RegionExploreResponseDto;
 import com.msg.fillmap.video.dto.RegionGridCountResponseDto;
+import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.ExploreGridProjection;
+import com.msg.fillmap.video.repository.RegionExplorePageProjection;
 import com.msg.fillmap.video.repository.RegionExploreSummaryProjection;
-import com.msg.fillmap.video.repository.RegionGridCountProjection;
 import com.msg.fillmap.video.repository.VideoRepository;
+import com.msg.fillmap.video.support.RegionExploreCursor;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.zone.entity.Zone;
 import com.msg.fillmap.zone.service.ZoneNameQueryService;
@@ -118,8 +124,9 @@ class RegionExploreServiceTest {
 		};
 	}
 
-	private RegionGridCountProjection countProjection(String regionCode, String regionName, int gridCount) {
-		return new RegionGridCountProjection() {
+	private RegionExplorePageProjection countProjection(
+		String regionCode, String regionName, int gridCount, LocalDateTime personalLastUploadedAt) {
+		return new RegionExplorePageProjection() {
 			@Override
 			public String getRegionCode() {
 				return regionCode;
@@ -133,6 +140,11 @@ class RegionExploreServiceTest {
 			@Override
 			public Integer getGridCount() {
 				return gridCount;
+			}
+
+			@Override
+			public LocalDateTime getPersonalLastUploadedAt() {
+				return personalLastUploadedAt;
 			}
 		};
 	}
@@ -295,23 +307,60 @@ class RegionExploreServiceTest {
 		@Test
 		@DisplayName("전체 지역 행을 순서 그대로 DTO로 매핑한다")
 		void 전체_지역_행을_순서_그대로_DTO로_매핑한다() {
-			given(videoRepository.getRegionGridCounts()).willReturn(List.of(
-				countProjection("2644056000", "부산광역시 부산진구 부전2동", 5),
-				countProjection("1168051500", "서울특별시 강남구 역삼1동", 3)));
+			given(videoRepository.getRegionExplorePage(1L, false, false, null, null, null, 21)).willReturn(List.of(
+				countProjection("2644056000", "부산광역시 부산진구 부전2동", 5, LocalDateTime.now()),
+				countProjection("1168051500", "서울특별시 강남구 역삼1동", 3, null)));
 
-			List<RegionGridCountResponseDto> result = regionExploreService.getExploreRegions();
+			RegionExplorePage result = regionExploreService.getExploreRegions(1L, null);
 
-			assertThat(result).containsExactly(
+			assertThat(result.items()).containsExactly(
 				new RegionGridCountResponseDto("2644056000", "부산광역시 부산진구 부전2동", 5),
 				new RegionGridCountResponseDto("1168051500", "서울특별시 강남구 역삼1동", 3));
+			assertThat(result.hasNext()).isFalse();
+			assertThat(result.nextCursor()).isNull();
 		}
 
 		@Test
-		@DisplayName("전역 콘텐츠가 없으면 빈 리스트다")
-		void 전역_콘텐츠가_없으면_빈_리스트다() {
-			given(videoRepository.getRegionGridCounts()).willReturn(List.of());
+		@DisplayName("전역 콘텐츠가 없으면 빈 페이지다")
+		void 전역_콘텐츠가_없으면_빈_페이지다() {
+			given(videoRepository.getRegionExplorePage(1L, false, false, null, null, null, 21))
+				.willReturn(List.of());
 
-			assertThat(regionExploreService.getExploreRegions()).isEmpty();
+			assertThat(regionExploreService.getExploreRegions(1L, null).items()).isEmpty();
+		}
+
+		@Test
+		// 검증: FR-SEARCH-15
+		@DisplayName("21행이면 20행과 마지막 반환행 커서를 만든다")
+		void 이십일_행이면_이십_행과_마지막_반환행_커서를_만든다() {
+			LocalDateTime uploadedAt = LocalDateTime.of(2026, 8, 22, 9, 30);
+			List<RegionExplorePageProjection> rows = IntStream.range(0, 21)
+				.mapToObj(i -> countProjection(String.format("%010d", i + 1), "지역" + i, 30 - i,
+					i < 3 ? uploadedAt.minusMinutes(i) : null))
+				.toList();
+			given(videoRepository.getRegionExplorePage(1L, false, false, null, null, null, 21))
+				.willReturn(rows);
+
+			RegionExplorePage page = regionExploreService.getExploreRegions(1L, null);
+
+			assertThat(page.items()).hasSize(20);
+			assertThat(page.hasNext()).isTrue();
+			RegionExplorePageProjection last = rows.get(19);
+			assertThat(RegionExploreCursor.decode(page.nextCursor())).isEqualTo(new RegionExploreCursor(
+				1L, last.getPersonalLastUploadedAt(), last.getGridCount(), last.getRegionCode()));
+		}
+
+		@Test
+		@DisplayName("다른 사용자의 커서와 깨진 커서는 BAD_REQUEST다")
+		void 다른_사용자의_커서와_깨진_커서는_BAD_REQUEST다() {
+			String otherUser = RegionExploreCursor.encode(2L, null, 3, "1168051500");
+
+			assertThatThrownBy(() -> regionExploreService.getExploreRegions(1L, otherUser))
+				.isInstanceOfSatisfying(ApiException.class,
+					exception -> assertThat(exception.getErrorCode()).isEqualTo(VideoErrorCode.INVALID_CURSOR));
+			assertThatThrownBy(() -> regionExploreService.getExploreRegions(1L, "broken"))
+				.isInstanceOfSatisfying(ApiException.class,
+					exception -> assertThat(exception.getErrorCode()).isEqualTo(VideoErrorCode.INVALID_CURSOR));
 		}
 	}
 }

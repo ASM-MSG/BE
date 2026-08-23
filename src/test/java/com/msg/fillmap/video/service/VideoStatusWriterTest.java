@@ -374,6 +374,49 @@ class VideoStatusWriterTest {
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
 	}
 
+	// ── 후행 하이라이트 저장 가드 (MSG-456 D-1) ──
+	// 워커가 READY 전이 뒤에 돌므로 가드도 READY 국면 + 원본 키 일치를 요구한다 — encoded 키는 결정적이라
+	// 교체 후 새 시도의 READY 와 구분되지 않지만 원본 키는 교체마다 새 attemptUuid 키라 시도를 유일 식별한다.
+
+	// 검증: FR-MEDIA-18
+	@Test
+	void READY_행에_같은_원본_키면_하이라이트가_저장된다() {
+		Video video = ready();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.recordHighlights(VIDEO_ID, K1, List.of(List.of(0.0, 3.33)));
+
+		assertThat(video.getHighlights()).isEqualTo(List.of(List.of(0.0, 3.33)));
+	}
+
+	@Test
+	void 교체로_원본_키가_바뀐_행에는_하이라이트를_저장하지_않는다() {
+		// 옛 시도(K1)의 워커가 도는 사이 교체 → 새 시도(K2)가 이미 READY 까지 감 — encoded 키가 같아도
+		// 원본 키 불일치로 옛 하이라이트가 새 시도에 붙지 않는다
+		Video video = ready();
+		video.replaceFile(K2, (short) 8, LocalDateTime.now());
+		video.markEncoding();
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.recordHighlights(VIDEO_ID, K1, List.of(List.of(0.0, 3.33)));
+
+		assertThat(video.getHighlights()).isNull();
+	}
+
+	@Test
+	void READY가_아닌_행에는_하이라이트를_저장하지_않는다() {
+		// 워커가 도는 사이 교체로 UPLOADED 복귀한 창 — READY 국면 요구가 거른다
+		Video video = ready();
+		video.replaceFile(K2, (short) 8, LocalDateTime.now());
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.recordHighlights(VIDEO_ID, K1, List.of(List.of(0.0, 3.33)));
+
+		assertThat(video.getHighlights()).isNull();
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.UPLOADED);   // 새 파일 흐름 유지
+	}
+
 	@Test
 	void 블러_국면으로_넘어간_뒤_중복_인코딩_완료가_블러_시도를_다시_시작하지_못한다() {
 		Video video = attempt();   // K1 시도가 markEncoded 로 BLURRING + 넌스가 찍힌 상태

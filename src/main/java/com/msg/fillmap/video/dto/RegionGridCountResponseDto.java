@@ -5,9 +5,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import com.msg.fillmap.video.repository.RegionGridCountProjection;
 
 /**
- * 전체 지역 리스트 항목 (MSG-238). 게이트 통과 격자가 1개 이상인 행정동 하나 — 검색 무입력 드롭다운의
- * "어디에 콘텐츠가 많은가" 발견용이다(§D3 gridCount DESC). gridCount 는 ①의 카드 집합 크기와 동일
- * 정의(§D1)라 선택해 들어간 화면과 숫자가 어긋나지 않는다.
+ * 전체 지역 리스트 항목 (MSG-238). 게이트 통과 격자가 1개 이상인 행정동 하나다.
+ * 검색 무입력 드롭다운의 "어디에 콘텐츠가 많은가" 발견용이다. MSG-460부터 응답 바깥 페이지가
+ * 개인 최근 업로드 지역을 먼저 정렬하며, 이 항목의 gridCount 정의는 기존 전역 공개 게이트를 유지한다.
  */
 @Schema(description = "전체 지역 리스트 항목 (행정동별 격자 수)",
 	requiredProperties = {"regionCode", "regionName", "gridCount"})
