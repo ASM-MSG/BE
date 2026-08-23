@@ -178,11 +178,11 @@
 | FR-MISSION-18 | 진행 중 | MissionControllerTest, MissionDetailConsistencyTest, MissionDetailServiceTest, MissionProgressQueryTest, MissionProgressServiceTest, MissionPublicAccessHttpTest, MissionVisitedGridQueryTest |
 | FR-MISSION-19 | 계획 | (없음) |
 | FR-MISSION-21 | 구현됨 | FestivalMissionSeederIntegrationTest, PopupMissionSeederIntegrationTest |
-| FR-MISSION-22 | 진행 중 | MissionVideoUploadServiceTest |
+| FR-MISSION-22 | 진행 중 | MissionVideoControllerTest, MissionVideoUploadServiceTest |
 | FR-MISSION-23 | 구현됨 | MissionVideoUploadServiceTest |
 | FR-MISSION-24 | 구현됨 | MissionVideoUploadServiceTest |
 | FR-MISSION-25 | 진행 중 | MissionGridLookupServiceTest, MissionPublicAccessHttpTest |
-| FR-MISSION-26 | 구현됨 | MissionVideoUploadServiceTest |
+| FR-MISSION-26 | 구현됨 | MissionVideoControllerTest, MissionVideoUploadServiceTest |
 | FR-EVENT-01 | 구현됨 | EventQueryServiceTest |
 | FR-EVENT-02 | 구현됨 | EventQueryServiceTest |
 | FR-EVENT-03 | 폐기됨 | (없음) |
