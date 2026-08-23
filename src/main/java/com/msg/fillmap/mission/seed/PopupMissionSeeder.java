@@ -170,10 +170,14 @@ public class PopupMissionSeeder implements ApplicationRunner {
 				}
 				// 격자는 스냅샷 좌표의 40m 산출로 차등 교체한다 (MSG-385 D3, 완료 조건 ②) — 팝가에서
 				// 좌표가 수정된 팝업도 이 경로가 새 자리로 옮겨 심는다.
-				if (regrid(existingMission, judgeGrids(record.latitude(), record.longitude()),
+				List<String> judgeGrids = judgeGrids(record.latitude(), record.longitude());
+				if (regrid(existingMission, judgeGrids,
 					gridsByMission.getOrDefault(existingMission.getId(), List.of()))) {
 					regridded++;
 				}
+				// 격자가 옮겨졌으면 옛 대표 격자가 새 집합 밖일 수 있다 — 그대로 두면 지연 FK 가 커밋 시점에
+				// 주간 갱신 전체를 롤백시킨다 (MSG-459 D-6).
+				reassignRepresentativeGrid(existingMission, judgeGrids);
 				continue;
 			}
 			insertMission(record);
@@ -215,9 +219,12 @@ public class PopupMissionSeeder implements ApplicationRunner {
 			if (matchedIds.contains(mission.getId()) || grids.size() <= 4) {
 				continue;
 			}
-			if (regrid(mission, List.of(centroidGrid(grids)), grids)) {
+			String target = centroidGrid(grids);
+			if (regrid(mission, List.of(target), grids)) {
 				shrunk++;
 			}
+			// 축소는 집합을 한 칸으로 줄이므로 옛 대표 격자가 거의 항상 밖이 된다 (MSG-459 D-6).
+			reassignRepresentativeGrid(mission, List.of(target));
 		}
 		if (shrunk > 0) {
 			log.warn("스냅샷에 없는 미종료 팝업 {} 건을 센트로이드 셀 1칸으로 축소 — 작업 로그 기록·보고 대상 (MSG-385 D4)",
@@ -295,8 +302,24 @@ public class PopupMissionSeeder implements ApplicationRunner {
 	}
 
 	/**
+	 * 대표 격자 유지 (MSG-459 D-6) — 비어 있거나 새 집합 밖일 때만 다시 산출한다. 행사방처럼 예외로 막지
+	 * 않는 이유는 팝업 스냅샷의 좌표 정정이 정상 입력이고, 던지면 주간 갱신 전체가 롤백돼 노출 공백이 나기
+	 * 때문이다. 대신 옛 값이 있던 자리를 바꿨을 때 경고를 남겨 운영자가 세도록 한다 — 이미 옛 격자에 붙은
+	 * 영상은 옮기지 않으므로(소급 이동은 비목표) 그 영상이 미션 영상 목록에서 빠진다.
+	 */
+	private void reassignRepresentativeGrid(Mission mission, List<String> gridIds) {
+		String previous = mission.getRepresentativeGridId();
+		if (MissionRepresentativeGrids.reassignIfOutside(mission, gridIds) && previous != null) {
+			log.warn("팝업 미션 {} 의 대표 격자를 {} → {} 로 다시 산출 — 판정 격자 집합이 바뀌어 옛 값이 집합 밖이다 "
+					+ "(MSG-459 D-6). 옛 격자에 이미 붙은 영상은 그대로 남는다",
+				mission.getId(), previous, mission.getRepresentativeGridId());
+		}
+	}
+
+	/**
 	 * 미션 1건 + mission_grids 1~4행(40m 산출, seq NULL) INSERT — target_count=1(관대함으로만 작용),
 	 * source_key=팝가 id 문자열화 (FR-1·2·7, D3). 시간 변환은 축제 static 헬퍼 호출(MSG-235 D2, 복제 금지).
+	 * 대표 격자는 그 1~4칸에서 리졸버가 정한다 (MSG-459) — 짝수 사각형이면 무게중심 동률이라 남서 칸이다.
 	 */
 	private void insertMission(PopupRecord record) {
 		Mission mission = missionRepository.save(Mission.builder()
@@ -309,9 +332,11 @@ public class PopupMissionSeeder implements ApplicationRunner {
 			.sourceKey(String.valueOf(record.id()))
 			.metadata(metadataOf(record))
 			.build());
-		missionGridRepository.saveAll(judgeGrids(record.latitude(), record.longitude()).stream()
+		List<String> gridIds = judgeGrids(record.latitude(), record.longitude());
+		missionGridRepository.saveAll(gridIds.stream()
 			.map(gridId -> new MissionGrid(mission.getId(), gridId))
 			.toList());
+		MissionRepresentativeGrids.reassignIfOutside(mission, gridIds);
 	}
 
 	/** 좌표 사방 40m가 걸치는 판정 격자 1, 2, 4칸 (MSG-385 D1·D2). y 오름차순, x 오름차순으로 결정적. */

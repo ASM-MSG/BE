@@ -75,6 +75,14 @@ public class Mission {
 	@Column(name = "source_key", length = 30)
 	private String sourceKey;
 
+	/**
+	 * 미션 경유 업로드가 영상을 붙일 격자 (V42, MSG-459). 축제·팝업이고 목표 칸수가 1인 행만 값을 갖는다
+	 * (chk_missions_rep_grid_type) — 값이 있다는 것이 곧 "미션 경유 업로드 대상"이라는 뜻이다.
+	 * 판정 격자 집합(mission_grids) 소속은 지연 FK 가 커밋 시점에 보장한다.
+	 */
+	@Column(name = "representative_grid_id", length = 20)
+	private String representativeGridId;
+
 	/** insertable=false — DB DEFAULT(CURRENT_TIMESTAMP) 위임. save 직후엔 null, 재조회 시 채워진다(MSG-224). */
 	@Column(name = "created_at", nullable = false, insertable = false, updatable = false)
 	private LocalDateTime createdAt;
@@ -141,6 +149,15 @@ public class Mission {
 		}
 		assign(metadata);
 		return true;
+	}
+
+	/**
+	 * 대표 격자 반영 (MSG-459) — 시더가 산출값을 넣으면 더티 체킹이 커밋 시점에 UPDATE 를 내보낸다.
+	 * setter 를 열지 않는 상태 전이 메서드다(applyMetadata 선례). 언제 부르는지(비었거나 판정 집합 밖일
+	 * 때만)는 호출자인 시더 쪽 규칙이라 여기서 판정하지 않는다.
+	 */
+	public void assignRepresentativeGrid(String gridId) {
+		this.representativeGridId = gridId;
 	}
 
 	private MissionMetadata currentMetadata() {
