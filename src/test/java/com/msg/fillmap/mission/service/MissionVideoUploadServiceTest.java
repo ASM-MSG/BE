@@ -28,6 +28,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
+import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
@@ -271,6 +272,21 @@ class MissionVideoUploadServiceTest {
 			assertThat(response.completedMissions()).extracting(CompletedMissionResponseDto::missionId)
 				.containsExactly(missionId);
 			assertThat(스탬프수(missionId)).isEqualTo(1);
+		}
+
+		// 검증: FR-MISSION-22
+		@Test
+		@DisplayName("미션_경유_업로드로_받은_미션_뱃지가_응답에_실린다")
+		void 미션_경유_업로드로_받은_미션_뱃지가_응답에_실린다() {
+			// 첫 팝업 스탬프가 종류별 임계 1(팝업 입문, V29 POPUP_1)을 넘긴다. 그 뱃지는 확정 코어가 아니라
+			// 미션 판정이 발급하므로, 두 목록을 합치지 않으면 DB 에만 남고 응답에서 빠진다.
+			long missionId = 진행중_팝업(25, 0);
+
+			MissionVideoUploadResponseDto response = 업로드(missionId, 키(userId));
+
+			assertThat(response.newBadges()).extracting(EarnedBadgeResponseDto::code).contains("POPUP_1");
+			assertThat(카운트("SELECT count(*) FROM user_badges ub JOIN badges b ON b.id = ub.badge_id "
+				+ "WHERE b.code = 'POPUP_1' AND ub.user_id = :v", userId)).isEqualTo(1);
 		}
 
 		@Test

@@ -2,6 +2,7 @@ package com.msg.fillmap.mission.service.impl;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.mission.dto.MissionAwardResult;
 import com.msg.fillmap.mission.dto.MissionVideoUploadRequestDto;
@@ -111,9 +113,14 @@ public class MissionVideoServiceImpl implements MissionVideoService {
 		// 7. 보존 확인.
 		requireStamped(userId, missionId, award);
 
+		// 확정 코어가 준 뱃지(업로드 수·수집·꾸준함)에 미션 판정이 준 종류별 미션 뱃지를 합류시킨다 —
+		// 일반 업로드(saveVideo)와 같은 모양이다. 합치지 않으면 스탬프로 딴 뱃지가 DB 에만 남고 응답에서
+		// 빠져 클라이언트가 획득 연출을 놓친다.
 		Video video = confirmed.video();
+		List<EarnedBadgeResponseDto> newBadges = new ArrayList<>(confirmed.newBadges());
+		newBadges.addAll(award.newBadges());
 		return new MissionVideoUploadResponseDto(video.getId(), video.getGridId(),
-			video.getProcessingStatus().name(), confirmed.occupied(), confirmed.newBadges(),
+			video.getProcessingStatus().name(), confirmed.occupied(), List.copyOf(newBadges),
 			award.completedMissions());
 	}
 
