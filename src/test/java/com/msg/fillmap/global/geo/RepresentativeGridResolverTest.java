@@ -1,4 +1,4 @@
-package com.msg.fillmap.event.seed;
+package com.msg.fillmap.global.geo;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
