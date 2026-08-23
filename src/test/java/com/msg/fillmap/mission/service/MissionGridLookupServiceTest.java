@@ -142,7 +142,7 @@ class MissionGridLookupServiceTest {
 		assertThat(found.get(0).videoCount()).isZero();
 	}
 
-	// 검증: FR-MISSION-15
+	// 검증: FR-MISSION-25
 	@Test
 	@DisplayName("기간이_끝난_축제도_역조회에_나온다")
 	void 기간이_끝난_축제도_역조회에_나온다() {
@@ -181,7 +181,7 @@ class MissionGridLookupServiceTest {
 		assertThat(missionQueryService.getMissionsByGrid("not-a-grid")).isEmpty();
 	}
 
-	// 검증: FR-MISSION-15
+	// 검증: FR-MISSION-25
 	@Test
 	@DisplayName("판정_범위에만_걸친_격자는_역조회에_나오지_않는다")
 	void 판정_범위에만_걸친_격자는_역조회에_나오지_않는다() {

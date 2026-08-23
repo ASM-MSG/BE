@@ -494,7 +494,7 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(countByTitle(survivor)).isZero();
 	}
 
-	// 검증: FR-MISSION-14
+	// 검증: FR-MISSION-21
 	@Test
 	@DisplayName("축제_81칸_미션은_대표_격자가_9x9_정중앙이다 — 리졸버 1단 (MSG-459)")
 	void 축제_81칸_미션은_대표_격자가_9x9_정중앙이다() throws IOException {
@@ -510,7 +510,7 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(findByTitle(name).getRepresentativeGridId()).isEqualTo(GridEncoder.encode(lat, 합성_LON));
 	}
 
-	// 검증: FR-MISSION-11
+	// 검증: FR-MISSION-21
 	@Test
 	@DisplayName("같은_시드를_다시_적재해도_대표_격자가_바뀌지_않는다 — 산출이 결정적이라 재적재가 곧 멱등 (MSG-459)")
 	void 같은_시드를_다시_적재해도_대표_격자가_바뀌지_않는다() throws IOException {
@@ -528,7 +528,7 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(findByTitle(name).getRepresentativeGridId()).isEqualTo(first);
 	}
 
-	// 검증: FR-MISSION-14
+	// 검증: FR-MISSION-21
 	@Test
 	@DisplayName("대표_격자가_비어_있는_기존_미션은_시더_재실행이_채운다 — 백필에서 빠진 행의 회수 경로 (MSG-459)")
 	void 대표_격자가_비어_있는_기존_미션은_시더_재실행이_채운다() throws IOException {
@@ -546,7 +546,7 @@ class FestivalMissionSeederIntegrationTest {
 			.isEqualTo(GridEncoder.encode(lat, 합성_LON));
 	}
 
-	// 검증: FR-MISSION-14
+	// 검증: FR-MISSION-21
 	@Test
 	@DisplayName("목표_칸수가_2_이상인_미션은_시더가_대표_격자를_채우지_않는다 — CHECK 위반으로 시딩 전체가 롤백되는 걸 막는다")
 	void 목표_칸수가_2_이상인_미션은_시더가_대표_격자를_채우지_않는다() throws IOException {

@@ -746,7 +746,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(countByKey(survivorId)).isZero();
 	}
 
-	// 검증: FR-MISSION-14
+	// 검증: FR-MISSION-21
 	@Test
 	@DisplayName("팝업_1칸_미션은_그_칸이_대표_격자다 — 1×1 은 리졸버 1단 (MSG-459)")
 	void 팝업_1칸_미션은_그_칸이_대표_격자다() throws IOException {
@@ -760,7 +760,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(findByKey(id).getRepresentativeGridId()).isEqualTo(gridId(기준_셀.gridY(), 기준_셀.gridX()));
 	}
 
-	// 검증: FR-MISSION-14
+	// 검증: FR-MISSION-21
 	@Test
 	@DisplayName("팝업_4칸_미션은_대표_격자가_남서_칸이다 — 짝수 사각형은 무게중심 동률이라 리졸버 3단의 남서 우선 (MSG-459)")
 	void 팝업_4칸_미션은_대표_격자가_남서_칸이다() throws IOException {
@@ -774,7 +774,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(findByKey(id).getRepresentativeGridId()).isEqualTo(gridId(기준_셀.gridY(), 기준_셀.gridX()));
 	}
 
-	// 검증: FR-MISSION-14
+	// 검증: FR-MISSION-21
 	@Test
 	@DisplayName("팝업_좌표가_옮겨져_격자가_바뀌면_대표_격자도_새_집합에서_다시_산출된다 (MSG-459 D-6)")
 	void 팝업_좌표가_옮겨져_격자가_바뀌면_대표_격자도_새_집합에서_다시_산출된다() throws IOException {
@@ -797,7 +797,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(PopupMissionSeeder.judgeGrids(movedLat, 합성_LON)).contains(after);
 	}
 
-	// 검증: FR-MISSION-11
+	// 검증: FR-MISSION-21
 	@Test
 	@DisplayName("팝업_격자가_바뀌어도_대표_격자가_새_집합_안이면_그대로_둔다 — 집합 밖일 때만 재산출 (MSG-459 D-6)")
 	void 팝업_격자가_바뀌어도_대표_격자가_새_집합_안이면_그대로_둔다() throws IOException {
@@ -821,7 +821,7 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(findByKey(id).getRepresentativeGridId()).isEqualTo(before);
 	}
 
-	// 검증: FR-MISSION-11
+	// 검증: FR-MISSION-21
 	@Test
 	@DisplayName("대표_격자가_NULL인_팝업도_축소_경로에서_터지지_않는다 — V42 백필이 비직사각형 블록을 NULL 로 남긴다 (MSG-459)")
 	void 대표_격자가_NULL인_팝업도_축소_경로에서_터지지_않는다() throws IOException {

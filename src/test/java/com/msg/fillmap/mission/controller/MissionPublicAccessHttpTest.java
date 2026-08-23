@@ -109,7 +109,7 @@ class MissionPublicAccessHttpTest {
 			.andExpect(status().isUnauthorized());
 	}
 
-	// 검증: FR-MISSION-15
+	// 검증: FR-MISSION-25
 	@Test
 	@DisplayName("비로그인으로도_역조회할_수_있다 — 격자가 대표 격자인 미션 조회 (MSG-459)")
 	void 비로그인으로도_역조회할_수_있다() throws Exception {
