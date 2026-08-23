@@ -109,10 +109,22 @@ class MissionPublicAccessHttpTest {
 			.andExpect(status().isUnauthorized());
 	}
 
+	// 검증: FR-MISSION-15
+	@Test
+	@DisplayName("비로그인으로도_역조회할_수_있다 — 격자가 대표 격자인 미션 조회 (MSG-459)")
+	void 비로그인으로도_역조회할_수_있다() throws Exception {
+		given(missionQueryService.getMissionsByGrid(any())).willReturn(List.of());
+
+		mockMvc.perform(get("/api/grids/{gridId}/missions", "19443_9582"))
+			.andExpect(status().isOk());
+	}
+
 	// 검증: FR-MISSION-17
 	@Test
-	@DisplayName("무인증 비GET 미션 경로는 401로 거절된다 (쓰기 API 선반영 방지)")
-	void 무인증_비GET_미션_경로는_401로_거절된다() throws Exception {
+	@DisplayName("비로그인 미션 경유 업로드는 401이다 (같은 경로에서 GET 만 열려 있다)")
+	void 비로그인_업로드는_401이다() throws Exception {
+		// MSG-459 로 이 경로에 실제 업로드 POST 가 생겼다 — GET 한정 matcher 가 계약이라는 기존 주석이
+		// 여기서 값을 한다. 문자열 패턴으로 열려 있었다면 업로드가 익명에 함께 풀렸을 자리다.
 		mockMvc.perform(post("/api/missions/{missionId}/videos", MISSION_ID))
 			.andExpect(status().isUnauthorized());
 	}

@@ -5,6 +5,7 @@ import java.util.Set;
 
 import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.mission.dto.GridMissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
 import com.msg.fillmap.mission.dto.MissionProgressResponseDto;
 import com.msg.fillmap.mission.dto.MissionRegionAggregateResponseDto;
@@ -63,4 +64,17 @@ public interface MissionQueryService {
 	 * 스팟 방문 여부는 전부 false 다. 미션 정보·영상 수는 로그인 조회와 같다.
 	 */
 	MissionDetailResponseDto getMissionDetail(long missionId, Long userId);
+
+	/**
+	 * 격자로 미션 되짚기 (MSG-459 FR-15). 그 격자를 대표 격자로 갖는 축제·팝업을 <b>기간과 무관하게</b>
+	 * 돌려준다 — 끝난 축제도 담기므로 영상이 모인 자리를 눌러 무슨 축제였는지 확인할 수 있다.
+	 * 판정 범위(mission_grids)에만 걸친 격자는 나오지 않는다: 나와야 하는 것은 영상이 모인 자리로
+	 * 지목된 미션이다(D-4).
+	 *
+	 * <p>배열 첫 항목이 화면 진입 기본값이 되도록 진행 중 → 시작 전(임박한 순) → 종료(최근 종료 순)로
+	 * 정렬한다. 응답에 사용자별 값이 없어 누가 부르든 같고 비로그인도 조회한다.
+	 * 어느 미션의 대표 격자도 아닌 격자와 격자 포맷이 아닌 문자열은 오류가 아니라 빈 배열이다.
+	 * 1시간 스냅샷 캐시를 읽지 않는다 — 방금 시작하거나 방금 끝난 미션이 누락되면 안 된다.
+	 */
+	List<GridMissionResponseDto> getMissionsByGrid(String gridId);
 }

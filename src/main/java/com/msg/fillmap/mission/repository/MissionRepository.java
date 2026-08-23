@@ -113,6 +113,20 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 	);
 
 	/**
+	 * 격자 역조회 (MSG-459 FR-15) — 그 격자를 <b>대표 격자로 갖는</b> 미션. 역방향 인덱스
+	 * idx_mission_grids_grid 를 쓰지 않는 것이 계약이다: 그 인덱스는 "이 격자를 판정 범위로 갖는 미션"을
+	 * 찾는 물건이라 축제 하나가 81칸 전부에 걸린다. 격자를 눌렀을 때 나와야 하는 것은 판정 범위에 걸린
+	 * 미션이 아니라 영상이 모인 자리로 지목된 미션이므로 조인 없이 컬럼 하나로 찾는다(D-4).
+	 * 접근 경로는 부분 인덱스 idx_missions_representative_grid 다.
+	 * <p>
+	 * 기간 조건이 없다 — 끝난 축제도 나와야 그 격자를 눌러 무슨 축제였는지 되짚을 수 있다(FR-15).
+	 * 어느 미션의 대표 격자도 아닌 값과 격자 포맷이 아닌 문자열은 빈 목록이다(예외 아님).
+	 * 표시 정렬(진행 중 → 시작 전 → 종료)은 서비스가 잡는다 — 서버 시각과 견주는 순위라 SQL 에 굳히지
+	 * 않는다. id 정렬은 그 앞의 결정성 확보다(findBySource 와 같은 이유).
+	 */
+	List<Mission> findByRepresentativeGridIdOrderById(String representativeGridId);
+
+	/**
 	 * 시더 dedupe DB 대조용 (MSG-224 D3·D7) — 해당 러너 산출물만 기간과 함께 로드해 메모리 대조한다.
 	 * type 조회 금지: EVENT 는 팝업(MSG-235, 1격자)과 공유 타입이라 1격자 미션의 min+4 가 가짜 중심 키를
 	 * 만들어 실축제를 오스킵한다(Codex 리뷰 파생).

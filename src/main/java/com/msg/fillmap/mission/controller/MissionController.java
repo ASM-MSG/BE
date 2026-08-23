@@ -20,6 +20,7 @@ import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.mission.dto.GridMissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
 import com.msg.fillmap.mission.dto.MissionProgressResponseDto;
 import com.msg.fillmap.mission.dto.MissionRegionAggregateResponseDto;
@@ -157,6 +158,27 @@ public class MissionController {
 		@Parameter(description = "미션 ID", example = "412") @PathVariable long missionId
 	) {
 		return SuccessResponse.of(missionQueryService.getMissionDetail(missionId, userId(principal)));
+	}
+
+	@Operation(
+		summary = "격자가 대표 격자인 미션 조회",
+		description = "지도에서 누른 격자가 어느 축제·팝업 미션의 자리인지 되짚는다. 미션 경유로 올린 영상은 "
+			+ "그 미션의 대표 격자 한 칸에만 저장되므로, 영상이 모인 칸을 눌러 무슨 미션이었는지 확인하는 "
+			+ "경로다.\n\n"
+			+ "기간 필터가 없다 — 끝난 축제도 담긴다. 진행 중인지 시작 전인지 끝났는지는 startAt·endAt 을 "
+			+ "서버 시각과 견주어 화면이 판정한다. 배열 첫 항목이 화면 진입 기본값이 되도록 진행 중 → 시작 전"
+			+ "(임박한 순) → 종료(최근 종료 순)로 정렬한다.\n\n"
+			+ "판정 범위(축제 9×9)에만 걸친 격자는 나오지 않는다 — 나오는 것은 영상이 모인 자리로 지목된 "
+			+ "미션뿐이다. 어떤 미션의 대표 격자도 아닌 격자와 격자 형식이 아닌 문자열은 오류가 아니라 빈 "
+			+ "배열이다. videoCount 는 미션 상세의 videoCount 와 같은 술어라 두 화면의 숫자가 어긋나지 않는다. "
+			+ "비로그인으로도 조회할 수 있다."
+	)
+	@GetMapping("/api/grids/{gridId}/missions")
+	public SuccessResponse<List<GridMissionResponseDto>> getMissionsByGrid(
+		@Parameter(description = "격자 id — \"{gridY}_{gridX}\" 포맷", example = "19443_9582")
+		@PathVariable String gridId
+	) {
+		return SuccessResponse.of(missionQueryService.getMissionsByGrid(gridId));
 	}
 
 	/** 비로그인 상세 요청은 principal 이 없다 — 개인화 필드(진행도·방문)의 조회 키라 null 을 그대로 넘긴다. */
