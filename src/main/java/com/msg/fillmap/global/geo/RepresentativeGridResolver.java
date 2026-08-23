@@ -1,4 +1,4 @@
-package com.msg.fillmap.event.seed;
+package com.msg.fillmap.global.geo;
 
 import java.util.Set;
 
@@ -10,6 +10,9 @@ import java.util.Set;
  * 조합으로 그렸든 집합이 같으면 결과가 같아야 하므로 판정을 표현이 아니라 기하에 건다.
  * <p>
  * 세 경로 모두 결정적이라 매 시딩 재계산이 곧 멱등이다.
+ * <p>
+ * MSG-459 부터 축제·팝업 미션의 대표 격자도 이 규칙 하나를 쓴다 — 그래서 자리가 event.seed 가 아니라
+ * 어느 도메인에도 속하지 않는 global.geo 다(MSG-459 D-1). 로직은 이동 시점에 바뀌지 않았다.
  */
 public final class RepresentativeGridResolver {
 

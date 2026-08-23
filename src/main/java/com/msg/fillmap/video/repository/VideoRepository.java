@@ -206,6 +206,29 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	List<MissionVideoCountProjection> countMissionVideosByGrid(@Param("missionId") long missionId);
 
 	/**
+	 * 미션별 영상 개수 배치 조회 (MSG-459 — 격자 역조회 응답의 videoCount). 위 countMissionVideosByGrid 의
+	 * 술어를 글자 그대로 두고 GROUP BY 만 미션 단위로 바꾼 것이다 — 같은 술어라야 역조회 카드의 숫자와
+	 * 미션 상세의 videoCount 가 어긋나지 않는다. 행사 영상 제외 안티조인(MSG-450)도 그 계약의 일부라
+	 * 함께 싣는다(develop 머지 동기화에서 반영). 미션 id 목록을 한 번에 받는 이유는 항목마다 세면
+	 * N+1 이라서다. 영상이 없는 미션은 결과 행이 없고 0 채움은 서비스 몫이다.
+	 */
+	@Query(value = """
+		SELECT m.id AS "missionId", COUNT(*) AS "videoCount"
+		FROM videos v
+		JOIN mission_grids mg ON mg.grid_id = v.grid_id
+		JOIN missions m ON m.id = mg.mission_id
+		WHERE m.id IN (:missionIds)
+		  AND v.status = 'ACTIVE'
+		  AND v.visibility = 'PUBLIC'
+		  AND v.processing_status = 'READY'
+		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
+		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
+		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
+		GROUP BY m.id
+		""", nativeQuery = true)
+	List<MissionTotalVideoCountProjection> countVideosByMissionIds(@Param("missionIds") Collection<Long> missionIds);
+
+	/**
 	 * 격자 전역 시간대 분포 (MSG-372). findGlobalVideos 와 같은 후보 집합을 세어 업로드 시각의 KST 시로
 	 * 접는다 — WHERE 게이트 줄은 findGlobalCover·findGlobalVideos 와 <b>글자 단위로 같은 문자열</b>이라
 	 * 카드에 보이는 영상과 차트에 세어지는 영상이 항상 일치한다(정합 요구). created_at 은 타임존 없는

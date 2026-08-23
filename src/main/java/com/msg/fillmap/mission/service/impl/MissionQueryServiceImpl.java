@@ -3,6 +3,7 @@ package com.msg.fillmap.mission.service.impl;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -34,6 +35,7 @@ import com.msg.fillmap.grid.GridEncoder.GridRange;
 import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.mission.config.MissionViewportProperties;
+import com.msg.fillmap.mission.dto.GridMissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto.SpotStats;
 import com.msg.fillmap.mission.dto.MissionProgressResponseDto;
@@ -57,6 +59,7 @@ import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.MissionQueryService;
 import com.msg.fillmap.region.exception.RegionErrorCode;
 import com.msg.fillmap.region.service.RegionQueryService;
+import com.msg.fillmap.video.repository.MissionTotalVideoCountProjection;
 import com.msg.fillmap.video.repository.MissionVideoCountProjection;
 import com.msg.fillmap.video.repository.VideoRepository;
 
@@ -315,6 +318,72 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 		MissionResponseDto missionDto = MissionResponseDto.of(mission, buildShape(mission, grids));
 		return new MissionDetailResponseDto(missionDto, progress, videoCount,
 			spotStats(mission, grids, visitedGridIds, videoCountByGrid));
+	}
+
+	/**
+	 * 격자 역조회 (MSG-459 §API 2). 대표 격자 컬럼 하나로 찾고(D-4), 영상 수는 미션 id 목록으로 한 번에
+	 * 센다 — 항목마다 세면 N+1 이다. 캐시를 읽지 않는 것은 방금 시작하거나 방금 끝난 미션이 누락되면 안
+	 * 되기 때문이고, awardOnUpload 가 같은 이유로 캐시를 우회하는 것과 같다.
+	 */
+	@Override
+	public List<GridMissionResponseDto> getMissionsByGrid(String gridId) {
+		List<Mission> missions = missionRepository.findByRepresentativeGridIdOrderById(gridId);
+		if (missions.isEmpty()) {
+			return List.of();
+		}
+		Map<Long, Long> videoCounts = videoRepository
+			.countVideosByMissionIds(missions.stream().map(Mission::getId).toList()).stream()
+			.collect(Collectors.toMap(
+				MissionTotalVideoCountProjection::getMissionId, MissionTotalVideoCountProjection::getVideoCount));
+		LocalDateTime now = LocalDateTime.now(clock);
+		return missions.stream()
+			.sorted(reverseLookupOrder(now))
+			.map(mission -> new GridMissionResponseDto(
+				mission.getId(),
+				mission.getType().name(),
+				mission.getTitle(),
+				mission.getStartAt(),
+				mission.getEndAt(),
+				videoCounts.getOrDefault(mission.getId(), 0L)))
+			.toList();
+	}
+
+	/**
+	 * 역조회 표시 순서 (§API 2) — 진행 중 → 시작 전(임박한 순) → 종료(최근 종료 순). 배열 첫 항목이
+	 * 화면 진입 기본값이 되므로 이 순서가 계약이다. 무리 안에서 시각이 같으면 id 로 갈라 결정적이다.
+	 */
+	private Comparator<Mission> reverseLookupOrder(LocalDateTime now) {
+		return Comparator.comparingInt((Mission mission) -> phase(mission, now))
+			.thenComparingLong(mission -> phaseKey(mission, now))
+			.thenComparing(Mission::getId);
+	}
+
+	/**
+	 * 0 진행 중 · 1 시작 전 · 2 종료. startAt·endAt 이 둘 다 없으면 무기간이며(시더는 축제·팝업에 기간을
+	 * 항상 채우므로 수동 삽입 한정) 진행 중으로 본다 — 업로드 경로의 within() 이 NULL 을 상시 활성으로
+	 * 읽는 것과 같은 해석이다. chk_missions_rep_grid_type 은 유형과 목표 칸수만 걸고 기간은 보지 않으니
+	 * 그런 행이 여기 올 수 있고, 아래 null 검사가 그래서 필요하다.
+	 */
+	private int phase(Mission mission, LocalDateTime now) {
+		if (mission.getStartAt() != null && mission.getStartAt().isAfter(now)) {
+			return 1;
+		}
+		if (mission.getEndAt() != null && mission.getEndAt().isBefore(now)) {
+			return 2;
+		}
+		return 0;
+	}
+
+	/**
+	 * 무리 안 정렬 키 — 시작 전은 시작이 이른 것이 먼저(임박한 순)고, 종료는 늦게 끝난 것이 먼저라
+	 * 부호를 뒤집는다. 진행 중은 키가 없어 id 순으로만 갈린다.
+	 */
+	private long phaseKey(Mission mission, LocalDateTime now) {
+		return switch (phase(mission, now)) {
+			case 1 -> mission.getStartAt().toEpochSecond(ZoneOffset.UTC);
+			case 2 -> -mission.getEndAt().toEpochSecond(ZoneOffset.UTC);
+			default -> 0L;
+		};
 	}
 
 	/**

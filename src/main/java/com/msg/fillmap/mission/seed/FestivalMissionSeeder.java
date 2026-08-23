@@ -143,21 +143,26 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 				+ " — 파일 내용과 수집 스냅샷(전부 종료된 축제인지)을 확인하세요");
 		}
 
-		Map<DedupeKey, Mission> existing = existingFestivals();
+		Map<DedupeKey, ExistingFestival> existing = existingFestivals();
 		int loaded = 0;
 		int updated = 0;
 		List<Long> updatedIds = new ArrayList<>();
 		for (FestivalRecord record : dedupeSource(parsed.records())) {
 			DedupeKey key = keyOf(record);
-			Mission existingMission = existing.get(key);
-			if (existingMission != null) {
+			ExistingFestival found = existing.get(key);
+			if (found != null) {
 				// 재실행이 곧 백필 (MSG-383 D6) — 메타데이터만 더티 체킹으로 갱신하고 제목·기간·격자는 둔다.
+				Mission existingMission = found.mission();
 				updatedIds.add(existingMission.getId());
 				// 이미지 보존은 갱신 경로에서만 명시적으로 고른다 (MSG-384 D2 · MSG-394 D4).
 				if (existingMission.applyMetadata(
 					metadataOf(record).withImageFallback(existingMission.getImageUrl()))) {
 					updated++;
 				}
+				// 대표 격자 백필 (MSG-459 D-6) — 축제는 격자를 다시 심지 않으므로 비어 있는 행만 채워진다.
+				// 저장된 격자를 그대로 넘기는 것이 중요하다: 중심에서 81칸을 다시 전개해 넘기면 V28 로
+				// 깨진 블록에서 판정 집합에 없는 칸이 뽑혀 지연 FK 가 커밋 때 시딩 전체를 롤백시킨다.
+				MissionRepresentativeGrids.reassignIfOutside(existingMission, found.gridIds());
 				continue;
 			}
 			insertMission(record, key);
@@ -174,9 +179,10 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 	 * 멱등, D3). 이 러너 산출물만 조회하므로 9×9 블록(중심±4)이 보장돼 min+4 복원이 결정적이다 —
 	 * type 조회는 공유 EVENT(팝업 1격자)의 가짜 중심 키 때문에 금지(D7). 키가 아니라 미션 자체를 담는
 	 * 이유는 skip 경로에서 그 미션의 메타데이터를 갱신하기 때문이다(MSG-383 D6) — 영속 상태 엔티티라
-	 * 필드 변경이 커밋 시점 UPDATE 가 된다.
+	 * 필드 변경이 커밋 시점 UPDATE 가 된다. 저장된 격자 id 를 함께 담는 것은 MSG-459 의 대표 격자
+	 * 백필이 그 집합에서 산출하기 때문이다 — 중심에서 다시 전개한 81칸이 아니라 실제 저장분이어야 한다.
 	 */
-	private Map<DedupeKey, Mission> existingFestivals() {
+	private Map<DedupeKey, ExistingFestival> existingFestivals() {
 		List<Mission> festivals = missionRepository.findBySource(SOURCE_FESTIVAL);
 		if (festivals.isEmpty()) {
 			return Map.of();
@@ -185,7 +191,7 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 			.findByMissionIds(festivals.stream().map(Mission::getId).toList()).stream()
 			.collect(Collectors.groupingBy(MissionGrid::getMissionId));
 
-		Map<DedupeKey, Mission> byKey = new HashMap<>();
+		Map<DedupeKey, ExistingFestival> byKey = new HashMap<>();
 		for (Mission mission : festivals) {
 			List<MissionGrid> grids = gridsByMission.get(mission.getId());
 			if (grids == null) {
@@ -195,7 +201,8 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 			// 같은 키가 이미 있으면 id 가 가장 작은 미션을 남긴다 — 부분 유니크가 없는 축제는 이론상 동키
 			// 중복이 가능하고, 그때 갱신 대상이 실행마다 바뀌면 안 된다. findBySource 의 ORDER BY m.id 가
 			// 첫 원소를 최소 id 로 고정하는 것이 이 결정성의 근거다.
-			byKey.putIfAbsent(new DedupeKey(restoreCenter(grids), mission.getStartAt(), mission.getEndAt()), mission);
+			byKey.putIfAbsent(new DedupeKey(restoreCenter(grids), mission.getStartAt(), mission.getEndAt()),
+				new ExistingFestival(mission, grids.stream().map(MissionGrid::getGridId).toList()));
 		}
 		return byKey;
 	}
@@ -211,9 +218,13 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 			.source(SOURCE_FESTIVAL)
 			.metadata(metadataOf(record))
 			.build());
-		missionGridRepository.saveAll(expandGrids(key.centerGridId()).stream()
+		List<String> gridIds = expandGrids(key.centerGridId());
+		missionGridRepository.saveAll(gridIds.stream()
 			.map(gridId -> new MissionGrid(mission.getId(), gridId))
 			.toList());
+		// 대표 격자 (MSG-459) — 9×9 홀수 직사각형이라 리졸버 1단이 정중앙, 곧 key.centerGridId() 를 낸다.
+		// 그래도 중심을 그대로 쓰지 않고 리졸버를 지나는 것은 규칙을 유형별로 갈라 두지 않기 위해서다.
+		MissionRepresentativeGrids.reassignIfOutside(mission, gridIds);
 	}
 
 	/**
@@ -289,6 +300,10 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 	}
 
 	record DedupeKey(String centerGridId, LocalDateTime startAt, LocalDateTime endAt) {
+	}
+
+	/** 이미 적재된 축제와 그 판정 격자 id — 갱신 경로가 메타데이터와 대표 격자를 둘 다 봐야 해서 함께 든다. */
+	private record ExistingFestival(Mission mission, List<String> gridIds) {
 	}
 
 	/**

@@ -39,6 +39,8 @@ import com.msg.fillmap.event.repository.EventNotificationSubscriptionRepository;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventSeriesRepository;
 import com.msg.fillmap.event.repository.EventVideoRepository;
+import com.msg.fillmap.global.geo.AreaCell;
+import com.msg.fillmap.global.geo.RepresentativeGridResolver;
 import com.msg.fillmap.notification.entity.NotificationCategory;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 

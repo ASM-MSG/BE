@@ -746,6 +746,103 @@ class PopupMissionSeederIntegrationTest {
 		assertThat(countByKey(survivorId)).isZero();
 	}
 
+	// 검증: FR-MISSION-21
+	@Test
+	@DisplayName("팝업_1칸_미션은_그_칸이_대표_격자다 — 1×1 은 리졸버 1단 (MSG-459)")
+	void 팝업_1칸_미션은_그_칸이_대표_격자다() throws IOException {
+		long id = uniqueId();
+		double[] point = cellPoint(50, 50);
+
+		seeder().seed(writeJsonl("rep-one.jsonl", activeRow(id, unique("한 칸 팝업"), point[0], point[1])));
+
+		em.flush();
+		em.clear();
+		assertThat(findByKey(id).getRepresentativeGridId()).isEqualTo(gridId(기준_셀.gridY(), 기준_셀.gridX()));
+	}
+
+	// 검증: FR-MISSION-21
+	@Test
+	@DisplayName("팝업_4칸_미션은_대표_격자가_남서_칸이다 — 짝수 사각형은 무게중심 동률이라 리졸버 3단의 남서 우선 (MSG-459)")
+	void 팝업_4칸_미션은_대표_격자가_남서_칸이다() throws IOException {
+		long id = uniqueId();
+		// 북동 모서리 20m 앞 — 사방 40m 가 두 경계에 걸쳐 2×2 가 된다.
+		double[] point = cellPoint(80, 80);
+
+		seeder().seed(writeJsonl("rep-four.jsonl", activeRow(id, unique("네 칸 팝업"), point[0], point[1])));
+
+		assertThat(gridIdsOf(id)).hasSize(4);
+		assertThat(findByKey(id).getRepresentativeGridId()).isEqualTo(gridId(기준_셀.gridY(), 기준_셀.gridX()));
+	}
+
+	// 검증: FR-MISSION-21
+	@Test
+	@DisplayName("팝업_좌표가_옮겨져_격자가_바뀌면_대표_격자도_새_집합에서_다시_산출된다 (MSG-459 D-6)")
+	void 팝업_좌표가_옮겨져_격자가_바뀌면_대표_격자도_새_집합에서_다시_산출된다() throws IOException {
+		long id = uniqueId();
+		String name = unique("대표 격자 이사");
+		seeder().seed(writeJsonl("rep-move-first.jsonl", activeRow(id, name, 합성_LAT, 합성_LON)));
+		em.flush();
+		em.clear();
+		String before = findByKey(id).getRepresentativeGridId();
+		// 약 1.1km 북쪽 — 구 산출과 셀이 전혀 겹치지 않아 옛 대표 격자가 새 집합 밖이 된다.
+		double movedLat = 합성_LAT + 0.01;
+
+		seeder().seed(writeJsonl("rep-move-second.jsonl", activeRow(id, name, movedLat, 합성_LON)));
+
+		em.flush();
+		em.clear();
+		String after = findByKey(id).getRepresentativeGridId();
+		assertThat(after).isNotEqualTo(before);
+		// 새 값은 새 판정 집합 안이다 — 지연 FK 가 커밋 시점에 요구하는 성질이 바로 이것이다.
+		assertThat(PopupMissionSeeder.judgeGrids(movedLat, 합성_LON)).contains(after);
+	}
+
+	// 검증: FR-MISSION-21
+	@Test
+	@DisplayName("팝업_격자가_바뀌어도_대표_격자가_새_집합_안이면_그대로_둔다 — 집합 밖일 때만 재산출 (MSG-459 D-6)")
+	void 팝업_격자가_바뀌어도_대표_격자가_새_집합_안이면_그대로_둔다() throws IOException {
+		long id = uniqueId();
+		String name = unique("대표 격자 유지");
+		// 모서리 20m 앞(2×2) → 남서 칸, 곧 기준 셀이 대표 격자다.
+		double[] corner = cellPoint(80, 80);
+		seeder().seed(writeJsonl("rep-keep-first.jsonl", activeRow(id, name, corner[0], corner[1])));
+		em.flush();
+		em.clear();
+		String before = findByKey(id).getRepresentativeGridId();
+		// 같은 셀 가운데로 좌표만 정정 — 집합이 1칸으로 줄지만 그 1칸이 곧 옛 대표 격자다.
+		double[] center = cellPoint(50, 50);
+
+		PopupMissionSeeder.SeedResult result = seeder()
+			.seed(writeJsonl("rep-keep-second.jsonl", activeRow(id, name, center[0], center[1])));
+
+		assertThat(result.regridded()).isEqualTo(1);
+		em.flush();
+		em.clear();
+		assertThat(findByKey(id).getRepresentativeGridId()).isEqualTo(before);
+	}
+
+	// 검증: FR-MISSION-21
+	@Test
+	@DisplayName("대표_격자가_NULL인_팝업도_축소_경로에서_터지지_않는다 — V42 백필이 비직사각형 블록을 NULL 로 남긴다 (MSG-459)")
+	void 대표_격자가_NULL인_팝업도_축소_경로에서_터지지_않는다() throws IOException {
+		long orphanId = uniqueId();
+		long missionId = insertPopga(orphanId, unique("대표 격자 없는 깨진 블록"),
+			FestivalMissionSeeder.toUtcStart(시작일), FestivalMissionSeeder.toUtcEnd(종료일));
+		insertBrokenBlock(missionId);
+		Path file = writeJsonl("rep-null-shrink.jsonl",
+			activeRow(uniqueId(), unique("무관한 진행 팝업"), 합성_LAT, 합성_LON));
+
+		PopupMissionSeeder.SeedResult result = shrinkScopedSeeder(Set.of(missionId)).seed(file);
+
+		// 축소가 돌고, 비어 있던 대표 격자는 축소된 한 칸으로 채워진다 — 판정 집합 소속이라 지연 FK 도 만족한다.
+		assertThat(result.shrunk()).isEqualTo(1);
+		em.flush();
+		em.clear();
+		assertThat(missionRepository.findById(missionId)).get()
+			.extracting(Mission::getRepresentativeGridId)
+			.isEqualTo(gridId(기준_셀.gridY(), 기준_셀.gridX()));
+	}
+
 	private String unique(String tag) {
 		return "MSG235-it-" + tag + "-" + System.nanoTime();
 	}

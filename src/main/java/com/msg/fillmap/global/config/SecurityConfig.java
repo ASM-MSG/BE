@@ -112,12 +112,15 @@ public class SecurityConfig {
 				// /api/missions/* 는 progress 같은 리터럴 형제와 미래의 한 세그먼트 GET 경로까지 기본
 				// 공개로 만드는 fail-open 이라서다. 숫자 제약이면 문자 경로는 이 matcher 에 안 잡혀
 				// anyRequest().authenticated() 로 떨어진다(기본이 인증 쪽, NFR-SEC-01).
+				// 격자 미션 역조회(MSG-459)도 같은 열람 계열이다. 경로를 정확히 한 줄만 적는 것은 위
+				// 행사 역조회와 같은 이유다 — /api/grids/** 로 넓히면 격자 단일 조회의 인증이 함께 풀린다.
 				.requestMatchers(HttpMethod.GET,
 					"/api/hotzones",
 					"/api/missions/active",
 					"/api/missions/aggregation",
 					"/api/missions/{missionId:[0-9]+}",
-					"/api/missions/{missionId:[0-9]+}/videos").permitAll()
+					"/api/missions/{missionId:[0-9]+}/videos",
+					"/api/grids/*/missions").permitAll()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.

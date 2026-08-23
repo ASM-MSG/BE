@@ -494,6 +494,104 @@ class FestivalMissionSeederIntegrationTest {
 		assertThat(countByTitle(survivor)).isZero();
 	}
 
+	// 검증: FR-MISSION-21
+	@Test
+	@DisplayName("축제_81칸_미션은_대표_격자가_9x9_정중앙이다 — 리졸버 1단 (MSG-459)")
+	void 축제_81칸_미션은_대표_격자가_9x9_정중앙이다() throws IOException {
+		String name = unique("대표 격자 축제");
+		double lat = 합성_LAT + 0.6;
+		Path file = writeJsonl("rep-grid.jsonl", activeRow(name, lat, 합성_LON));
+
+		seeder().seed(file);
+
+		em.flush();
+		em.clear();
+		// 9×9 의 정중앙은 중심 좌표가 속한 셀 그 자체다 — 시더가 아는 값이지만 산출은 리졸버를 지난다.
+		assertThat(findByTitle(name).getRepresentativeGridId()).isEqualTo(GridEncoder.encode(lat, 합성_LON));
+	}
+
+	// 검증: FR-MISSION-21
+	@Test
+	@DisplayName("같은_시드를_다시_적재해도_대표_격자가_바뀌지_않는다 — 산출이 결정적이라 재적재가 곧 멱등 (MSG-459)")
+	void 같은_시드를_다시_적재해도_대표_격자가_바뀌지_않는다() throws IOException {
+		String name = unique("멱등 대표 격자");
+		Path file = writeJsonl("rep-idem.jsonl", activeRow(name, 합성_LAT + 0.7, 합성_LON));
+		seeder().seed(file);
+		em.flush();
+		em.clear();
+		String first = findByTitle(name).getRepresentativeGridId();
+
+		seeder().seed(file);
+
+		em.flush();
+		em.clear();
+		assertThat(findByTitle(name).getRepresentativeGridId()).isEqualTo(first);
+	}
+
+	// 검증: FR-MISSION-21
+	@Test
+	@DisplayName("대표_격자가_비어_있는_기존_미션은_시더_재실행이_채운다 — 백필에서 빠진 행의 회수 경로 (MSG-459)")
+	void 대표_격자가_비어_있는_기존_미션은_시더_재실행이_채운다() throws IOException {
+		String name = unique("대표 격자 미백필");
+		double lat = 합성_LAT + 0.8;
+		// V42 백필 조건을 통과하지 못해 NULL 로 남은 행을 모사한다 — 격자·기간은 시드 레코드와 같은 키다.
+		long missionId = insertFestivalWithGrids(name, lat, 합성_LON, 1);
+
+		seeder().seed(writeJsonl("rep-backfill.jsonl", activeRow(name, lat, 합성_LON)));
+
+		em.flush();
+		em.clear();
+		assertThat(missionRepository.findById(missionId)).get()
+			.extracting(Mission::getRepresentativeGridId)
+			.isEqualTo(GridEncoder.encode(lat, 합성_LON));
+	}
+
+	// 검증: FR-MISSION-21
+	@Test
+	@DisplayName("목표_칸수가_2_이상인_미션은_시더가_대표_격자를_채우지_않는다 — CHECK 위반으로 시딩 전체가 롤백되는 걸 막는다")
+	void 목표_칸수가_2_이상인_미션은_시더가_대표_격자를_채우지_않는다() throws IOException {
+		String skipped = unique("목표 2 축제");
+		double lat = 합성_LAT + 0.9;
+		long missionId = insertFestivalWithGrids(skipped, lat, 합성_LON, 2);
+		String loaded = unique("정상 적재 축제");
+
+		FestivalMissionSeeder.SeedResult result = seeder().seed(writeJsonl("rep-target2.jsonl",
+			activeRow(skipped, lat, 합성_LON),
+			activeRow(loaded, 합성_LAT + 1.0, 합성_LON)));
+
+		// 목표 2 행은 NULL 로 남고, 같은 실행의 나머지 적재는 정상 커밋된다(플러시가 통과하는 것이 그 증거).
+		assertThat(result.loaded()).isEqualTo(1);
+		em.flush();
+		em.clear();
+		assertThat(missionRepository.findById(missionId)).get()
+			.extracting(Mission::getRepresentativeGridId)
+			.isNull();
+		assertThat(findByTitle(loaded).getRepresentativeGridId()).isNotNull();
+	}
+
+	/**
+	 * 대표 격자가 비어 있는 기존 축제 픽스처 — 미션 1행 + 중심 기준 81칸. dedupe 키(중심 격자 + 기간)가
+	 * {@code activeRow(name, lat, lon)} 과 같아 시더 재실행이 이 행을 갱신 경로로 잡는다.
+	 */
+	private long insertFestivalWithGrids(String title, double lat, double lon, int targetCount) {
+		em.createNativeQuery("""
+				INSERT INTO missions (type, title, start_at, end_at, target_count, source)
+				VALUES ('EVENT', :title, :startAt, :endAt, :targetCount, :source)
+				""")
+			.setParameter("title", title)
+			.setParameter("startAt", FestivalMissionSeeder.toUtcStart(시작일))
+			.setParameter("endAt", FestivalMissionSeeder.toUtcEnd(종료일))
+			.setParameter("targetCount", targetCount)
+			.setParameter("source", FestivalMissionSeeder.SOURCE_FESTIVAL)
+			.executeUpdate();
+		long missionId = ((Number) em.createNativeQuery("SELECT id FROM missions WHERE title = :title")
+			.setParameter("title", title)
+			.getSingleResult()).longValue();
+		FestivalMissionSeeder.expandGrids(GridEncoder.encode(lat, lon))
+			.forEach(gridId -> insertMissionGrid(missionId, gridId));
+		return missionId;
+	}
+
 	private String unique(String tag) {
 		return "MSG224-it-" + tag + "-" + System.nanoTime();
 	}

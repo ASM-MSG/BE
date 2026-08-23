@@ -797,6 +797,28 @@ public class VideoServiceImpl implements VideoService {
 	}
 
 	/**
+	 * 미션 경유 업로드가 미션 조회보다 앞에서 쓰는 순수 검증 (MSG-459 D-10) — 확정 코어가 도는 검사 중
+	 * S3 도 DB 도 건드리지 않는 둘만 골라 먼저 돌린다. 확정이 나중에 같은 검사를 다시 해도 무해하다.
+	 */
+	@Override
+	public void validateUploadRequest(long userId, String s3Key, LocalDateTime recordedAt) {
+		validateRecordedAt(recordedAt);
+		validatePendingKey(userId, s3Key);
+	}
+
+	/**
+	 * pending 키가 형식에 맞고 내 접두어를 달았는지 보고 클레임 prefix 를 돌려준다 (MSG-459 에서 추출).
+	 * 확정(confirmUpload)과 선행 검증(validateUploadRequest)이 같은 정의를 봐야, 앞에서 통과한 키가
+	 * 뒤에서 3401 로 떨어지는 어긋남이 생기지 않는다.
+	 */
+	private String validatePendingKey(long userId, String pendingKey) {
+		if (!pendingKey.startsWith("%s%d/".formatted(PENDING_PREFIX, userId))) {
+			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
+		}
+		return claimPrefix(pendingKey).orElseThrow(() -> new ApiException(VideoErrorCode.INVALID_S3_KEY));
+	}
+
+	/**
 	 * 확정 요청의 pending 키가 "내가 실제로 올린, 아직 안 쓴 파일"인지 확인하고(MSG-132)
 	 * 이번 시도의 original 키를 발급해 돌려준다(MSG-133 · MSG-247 2R).
 	 *
@@ -815,14 +837,10 @@ public class VideoServiceImpl implements VideoService {
 	 * (구형 결정 파생 키로 이미 확정된 pending 은 정확 매치가 마저 걸러낸다 — 배포 전 데이터 호환.)
 	 */
 	private String confirmUpload(long userId, String pendingKey) {
-		if (!pendingKey.startsWith("%s%d/".formatted(PENDING_PREFIX, userId))) {
-			throw new ApiException(VideoErrorCode.INVALID_S3_KEY);
-		}
+		// 형식·소유 접두어 검사가 먼저다 — 그 검사를 지나야 아래 substring 이 안전하다.
+		String claimPrefix = validatePendingKey(userId, pendingKey);
 		String stem = pendingKey.substring(PENDING_PREFIX.length());   // "{userId}/{uuid}.{ext}"
 		int extAt = stem.lastIndexOf('.');
-		// presign 발급 키는 항상 확장자를 가진다 — 확장자 없는 키는 클레임 파생이 비어 여기서 걸린다.
-		String claimPrefix = claimPrefix(pendingKey)
-			.orElseThrow(() -> new ApiException(VideoErrorCode.INVALID_S3_KEY));
 
 		videoRepository.acquirePendingKeyConfirmLock(pendingKey);
 		// 영상 1개로 좌표만 바꿔가며 무한 점령하는 걸 막는다(이중 확정 차단). prefix 매치가 시도별 키를,
