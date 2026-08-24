@@ -18,4 +18,11 @@ public interface PlaceSearchService {
 	 * 유효한 검색어는 카카오 호출 전에 집계로 접수된다 — 집계 실패는 검색 결과에 영향을 주지 않는다(MSG-258 FR-1·6).
 	 */
 	List<PlaceSearchResponseDto> searchPlaces(long userId, String q);
+
+	/**
+	 * 집계 없는 장소명 검색 (MSG-457 계약 변경). 경로 추천이 기계 조립한 검색어 전용 — 사용자가 입력창에 친
+	 * 검색어가 아니므로 검색어 집계(인기 검색어 재료, MSG-258)에 접수하지 않는다. trim 가드·카카오 호출·검증·
+	 * 매핑 등 결과 규칙은 {@link #searchPlaces(long, String)} 와 동일하다.
+	 */
+	List<PlaceSearchResponseDto> searchPlaces(String q);
 }
