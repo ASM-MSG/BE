@@ -1,9 +1,9 @@
 package com.msg.fillmap.badge.service;
 
+import static com.msg.fillmap.video.support.S3VideoObjectStub.givenUploadedVideoObject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
@@ -27,8 +27,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
 import com.msg.fillmap.badge.entity.BadgeConditionType;
@@ -83,7 +81,7 @@ class BadgeAwardServiceIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
-		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		givenUploadedVideoObject(s3Client);
 		String email = "badge-award-" + System.nanoTime() + "@example.com";
 		userId = userRepository.save(User.createLocalUser(email, "hash", "뱃지테스터")).getId();
 	}

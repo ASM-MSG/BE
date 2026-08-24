@@ -1,8 +1,8 @@
 package com.msg.fillmap.video.service;
 
+import static com.msg.fillmap.video.support.S3VideoObjectStub.givenUploadedVideoObject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 
@@ -21,8 +21,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
@@ -81,7 +79,7 @@ class VideoBlindIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
-		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		givenUploadedVideoObject(s3Client);
 		given(thumbnailUrlPresigner.presign(anyString())).willReturn("https://signed");
 		given(thumbnailUrlPresigner.ttlSeconds()).willReturn(600L);
 		userId = userRepository.save(User.createLocalUser("blind-owner@example.com", "hash", "주인")).getId();

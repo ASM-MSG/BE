@@ -1,8 +1,7 @@
 package com.msg.fillmap.video.service;
 
+import static com.msg.fillmap.video.support.S3VideoObjectStub.givenUploadedVideoObject;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -19,8 +18,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.user.entity.User;
@@ -57,7 +54,7 @@ class VideoHotScoreIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
-		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		givenUploadedVideoObject(s3Client);
 		String email = "video-hotscore-" + System.nanoTime() + "@example.com";
 		userId = userRepository.save(User.createLocalUser(email, "hash", "핫스코어훅테스터")).getId();
 	}

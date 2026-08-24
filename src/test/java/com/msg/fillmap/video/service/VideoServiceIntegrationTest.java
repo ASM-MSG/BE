@@ -1,9 +1,9 @@
 package com.msg.fillmap.video.service;
 
+import static com.msg.fillmap.video.support.S3VideoObjectStub.givenUploadedVideoObject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 
@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.geo.KoreaCoordinates;
@@ -66,7 +65,7 @@ class VideoServiceIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
-		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		givenUploadedVideoObject(s3Client);
 		User user = userRepository.save(User.createLocalUser("video-tester@example.com", "hash", "테스터"));
 		userId = user.getId();
 	}

@@ -33,6 +33,9 @@ public enum VideoErrorCode implements ErrorCodeIfs {
 	HIGHLIGHT_SOURCE_UNREADABLE(3426, HttpStatus.BAD_REQUEST, "영상 파일을 읽을 수 없습니다. 다른 파일로 시도해주세요"),
 	// 행사 영상은 공개 전제라 PUBLIC 고정 — 공개범위 전환 API 가 event_videos 행이면 거부한다 (MSG-440)
 	EVENT_VIDEO_VISIBILITY_FIXED(3427, HttpStatus.BAD_REQUEST, "행사 영상의 공개 범위는 변경할 수 없습니다"),
+	// 확정 시점 내용 검증 실패 (MSG-392) — 3415 는 presign 발급 때의 선언값 검증이라 발생 시점이 다르다.
+	// 사용자가 실제로 마주치는 상황은 업로드가 끊겨 앞부분만 올라간 경우라 메시지도 재업로드 유도다.
+	NOT_A_VIDEO_FILE(3428, HttpStatus.BAD_REQUEST, "영상 파일이 아닙니다. mp4 또는 mov 파일로 다시 올려주세요"),
 	// 동시 선분석 허용치 초과 즉시 거부 — FE 대응은 3502 와 같은 직접 지정 폴백 (MSG-351 교차 리뷰 P1-A)
 	HIGHLIGHT_BUSY(3429, HttpStatus.TOO_MANY_REQUESTS, "선분석이 붐빕니다. 잠시 후 다시 시도해 주세요"),
 	// AI 연결 실패·타임아웃·5xx·파싱 불능·비활성 환경 단일 수렴 — SEARCH_UPSTREAM_ERROR(5502) 선례 (MSG-351)

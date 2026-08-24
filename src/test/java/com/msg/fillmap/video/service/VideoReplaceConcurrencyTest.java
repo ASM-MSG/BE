@@ -1,5 +1,6 @@
 package com.msg.fillmap.video.service;
 
+import static com.msg.fillmap.video.support.S3VideoObjectStub.givenUploadedVideoObject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -35,8 +36,6 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 
 import com.msg.fillmap.global.exception.ApiException;
@@ -117,7 +116,7 @@ class VideoReplaceConcurrencyTest {
 
 	@BeforeEach
 	void setUp() {
-		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		givenUploadedVideoObject(s3Client);
 		// 커밋이 실제 발생하므로 afterCommit 의 deleteQuietly 가 목을 호출한다 — 빈 응답(에러 없음)으로 스텁.
 		given(s3Client.deleteObjects(any(DeleteObjectsRequest.class)))
 			.willReturn(DeleteObjectsResponse.builder().build());

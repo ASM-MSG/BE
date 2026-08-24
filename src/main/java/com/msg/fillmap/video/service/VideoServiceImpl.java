@@ -33,6 +33,7 @@ import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -85,6 +86,7 @@ import com.msg.fillmap.video.support.GeoSupport;
 import com.msg.fillmap.video.support.MissionVideoCursor;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
 import com.msg.fillmap.video.support.VideoCursor;
+import com.msg.fillmap.video.support.VideoSignature;
 import com.msg.fillmap.zone.service.ZoneCellName;
 import com.msg.fillmap.zone.service.ZoneNameQueryService;
 
@@ -103,6 +105,17 @@ public class VideoServiceImpl implements VideoService {
 
 	// 미래 recordedAt 허용 오차 (MSG-278 PRD §8) — 단말 시계 스큐 커버. 상수 고정, 설정화하지 않는다.
 	private static final Duration RECORDED_AT_TOLERANCE = Duration.ofMinutes(5);
+
+	// 확정 시점 컨테이너 판별용 범위 요청 크기 (MSG-392) — 판별에 필요한 건 박스 헤더 몇 개라 수십 바이트면
+	// 충분하지만, 비용은 바이트 수가 아니라 왕복 1회가 지배하므로 여유 있게 잡는다.
+	private static final int SIGNATURE_HEAD_BYTES = 4096;
+
+	// 박스 헤더 하나(크기 4 + 타입 4)도 못 담는 크기 — 이 미만은 본문을 읽지 않고 거부한다.
+	private static final int SIGNATURE_MIN_BYTES = 8;
+
+	// 본문 4KB 호출은 전송량이 아니라 왕복만 드는 호출이라 다운로드 시한과 다른 급으로 잡는다
+	// (HighlightPreviewServiceImpl.HEAD_TIMEOUT 과 같은 값·같은 이유). 설정 키로 빼지 않는다.
+	private static final Duration SIGNATURE_READ_TIMEOUT = Duration.ofSeconds(10);
 
 	// 발급은 pending 으로, 확정되면 original 로 옮긴다 — pending 만 라이프사이클로 만료시키기 위해서다(MSG-133).
 	// 한 prefix 를 쓰면 고아와 정상 영상이 섞여 만료 규칙을 걸 수 없다.
@@ -859,7 +872,60 @@ public class VideoServiceImpl implements VideoService {
 		if (contentLength != null && contentLength > awsProperties.s3().maxUploadBytes()) {
 			throw new ApiException(VideoErrorCode.FILE_TOO_LARGE);
 		}
+		requireVideoContainer(pendingKey, contentLength);
 		return claimPrefix + UUID.randomUUID() + stem.substring(extAt);
+	}
+
+	/**
+	 * 확정 시점 내용 검증 (MSG-392) — 앞 4KB 만 읽어 ISO BMFF 컨테이너 구조인지 본다. 여기서 거부하면
+	 * 아무 것도 쓰기 전이라 점령·뱃지·스트릭·미션 스탬프가 하나도 남지 않는다(fail-closed).
+	 * saveVideo·confirmAtGrid(행사·미션)·replaceVideo 가 confirmUpload 를 공유하므로 네 경로가 함께 닫힌다.
+	 */
+	private void requireVideoContainer(String pendingKey, Long contentLength) {
+		// 박스 헤더 하나도 못 담는 객체(빈 객체·1바이트 치팅 파일)는 본문을 읽을 가치가 없다 — S3 호출 0회.
+		// contentLength 가 null 이면 지름길을 건너뛰고 범위 요청으로 판정한다 (크기 재검증의 null 처리와 같은 모양).
+		if (contentLength != null && contentLength < SIGNATURE_MIN_BYTES) {
+			throw new ApiException(VideoErrorCode.NOT_A_VIDEO_FILE);
+		}
+		byte[] headBytes = readObjectHead(pendingKey);
+		// 창 소진과 파일 끝(EOF)은 다른 사건이라 결과가 갈린다. contentLength 를 먼저 쓰는 이유는, 받은
+		// 바이트 수로만 판정하면 객체 크기가 정확히 4096 일 때 창 소진으로 오분류돼 잘린 구조가 통째로
+		// 빠져나가기 때문이다.
+		boolean wholeObject = contentLength != null
+			? contentLength <= SIGNATURE_HEAD_BYTES
+			: headBytes.length < SIGNATURE_HEAD_BYTES;
+		if (!VideoSignature.looksLikeVideoContainer(headBytes, wholeObject)) {
+			throw new ApiException(VideoErrorCode.NOT_A_VIDEO_FILE);
+		}
+	}
+
+	/**
+	 * 객체 앞부분 범위 요청 — 파일을 내려받지 않으므로 100MB 든 1MB 든 전송량이 같다.
+	 * 실패 갈래는 셋이다. 404 는 존재 확인과 같은 3402, 416 은 3428, 나머지 S3·인프라 오류는 전파해
+	 * 공통 핸들러가 500 으로 바꾸게 둔다 — 장애를 "영상 파일이 아닙니다"로 잘못 안내하지 않기 위해서다.
+	 */
+	private byte[] readObjectHead(String pendingKey) {
+		try {
+			return s3Client.getObjectAsBytes(GetObjectRequest.builder()
+				.bucket(awsProperties.s3().bucket())
+				.key(pendingKey)
+				.range("bytes=0-" + (SIGNATURE_HEAD_BYTES - 1))
+				.overrideConfiguration(o -> o.apiCallTimeout(SIGNATURE_READ_TIMEOUT))
+				.build()).asByteArray();
+		} catch (NoSuchKeyException e) {
+			// headObject 와 이 호출 사이에 키가 지워진 경합 — 존재 확인이 같은 사건에 쓰는 코드로 맞춘다.
+			// 빈 객체 덮어쓰기(416)와 같은 창의 변종인데 한쪽만 500 이 되면 정상 경합이 서버 결함으로 보인다.
+			throw new ApiException(VideoErrorCode.UPLOAD_NOT_FOUND, e);
+		} catch (S3Exception e) {
+			if (e.statusCode() == 404) {
+				throw new ApiException(VideoErrorCode.UPLOAD_NOT_FOUND, e);
+			}
+			// 빈 객체에 범위를 걸면 416 이다. 위 지름길 덕에 정상 흐름에선 나올 수 없다.
+			if (e.statusCode() == 416) {
+				throw new ApiException(VideoErrorCode.NOT_A_VIDEO_FILE, e);
+			}
+			throw e;
+		}
 	}
 
 	/**
