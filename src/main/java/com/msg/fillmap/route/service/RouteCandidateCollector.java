@@ -238,8 +238,9 @@ public class RouteCandidateCollector {
 			&& (end == null || !kstDate(end).isBefore(from));
 	}
 
-	/** naive UTC 시각의 KST 날짜 — 저장 관례(UTC)와 사용자 일 경계(KST)의 변환 한 곳. */
-	private static LocalDate kstDate(LocalDateTime utc) {
+	/** naive UTC 시각의 KST 날짜 — 저장 관례(UTC)와 사용자 일 경계(KST)의 변환 한 곳. 기간 필터와
+	 * facts 기간 표기(RouteRecommendServiceImpl)가 같이 쓴다 — 변환 지점을 흩지 않는다. */
+	static LocalDate kstDate(LocalDateTime utc) {
 		return utc.atOffset(ZoneOffset.UTC).atZoneSameInstant(KST).toLocalDate();
 	}
 

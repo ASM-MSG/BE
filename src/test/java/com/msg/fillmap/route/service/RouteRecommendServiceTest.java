@@ -193,6 +193,24 @@ class RouteRecommendServiceTest {
 
 		// 검증: FR-ROUTE-05
 		@Test
+		@DisplayName("facts 기간은 KST 날짜로 표기된다 — 시더의 전날 15:00 UTC 저장이 전날 날짜로 새지 않는다")
+		void facts_기간은_KST_날짜로_표기된다() {
+			// KST 8월 1일 00:00 ~ 8월 31일 23:59 를 UTC 로 저장한 값 — UTC 날짜 그대로면 "2026-07-31~"이 된다.
+			given(collector.collect(any(), any())).willReturn(List.of(new RouteCandidate(
+				"빛축제", Kind.MISSION_FESTIVAL, 35.15, 129.08, GridEncoder.encode(35.15, 129.08), 12L, null,
+				LocalDateTime.of(2026, 7, 31, 15, 0), LocalDateTime.of(2026, 8, 31, 14, 59), null)));
+			parse는_빈해석을_준다();
+			server.expect(requestTo(EXPLAIN_URL))
+				.andExpect(jsonPath("$.points[0].facts[1]", is("2026-08-01~2026-08-31 진행 중")))
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+
+			service.recommend(USER_ID, 요청());
+
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-05
+		@Test
 		@DisplayName("200자 제목 미션이 후보여도 성공한다 — explain 요청 name 은 100자 절단, 응답 name 은 원문")
 		void 이백자_제목_미션이_후보여도_성공한다() {
 			String 제목 = "가".repeat(200);

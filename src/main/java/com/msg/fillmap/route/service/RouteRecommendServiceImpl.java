@@ -140,7 +140,7 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	private RouteRecommendResponseDto doRecommend(RouteIntentClient intentClient, RouteRecommendRequestDto request,
 		long[] spans) {
 		ViewportDto viewport = request.viewport();
-		String text = request.text().trim();	// 캐시 키와 AI 전송 모두 trim 본문 기준 (검증 규칙과 동일)
+		String text = request.text();	// DTO 컴팩트 생성자가 trim 정규화를 보장한다 — 캐시 키·AI 전송 동일 본문
 
 		long parseStart = clock.millis();
 		ParsedIntent intent = cachedParse(intentClient, text, viewport);
@@ -219,8 +219,9 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		List<String> facts = new ArrayList<>();
 		facts.add(sourceFact(candidate.kind()));
 		if (candidate.periodStart() != null && candidate.periodEnd() != null) {
-			facts.add(truncate(
-				candidate.periodStart().toLocalDate() + "~" + candidate.periodEnd().toLocalDate() + " 진행 중"));
+			// 시더가 KST 자정을 전날 15:00 UTC 로 저장한다 — UTC 날짜 그대로면 8월 축제가 "07-31~"로 나간다.
+			facts.add(truncate(RouteCandidateCollector.kstDate(candidate.periodStart())
+				+ "~" + RouteCandidateCollector.kstDate(candidate.periodEnd()) + " 진행 중"));
 		}
 		if (candidate.matchedInterest() != null) {
 			facts.add(truncate("관심사 '" + candidate.matchedInterest() + "' 일치"));

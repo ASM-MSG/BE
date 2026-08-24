@@ -34,6 +34,11 @@ public record RouteRecommendRequestDto(
 	OriginDto origin
 ) {
 
+	/** 스펙 "trim 후 1~500자" — 여기서 정규화해야 @NotBlank·@Size 가 trim 후 값을 잰다 (공백 딸린 유효 문장 오거부 방지). */
+	public RouteRecommendRequestDto {
+		text = text == null ? null : text.trim();
+	}
+
 	/** 좌표 의미 검증(14400·14401)은 서비스 몫이라 여기서는 누락만 잡는다 — 원시 double 이면 누락이 0.0 이 된다. */
 	@Schema(description = "WGS84 뷰포트 사각형")
 	public record ViewportDto(

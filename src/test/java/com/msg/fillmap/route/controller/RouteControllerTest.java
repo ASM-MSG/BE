@@ -56,6 +56,20 @@ class RouteControllerTest {
 
 	// 검증: FR-ROUTE-01
 	@Test
+	@DisplayName("공백 딸린 500자 문장은 거부되지 않는다 — 길이 검증은 trim 후 값 기준이다 (스펙 \"trim 후 1~500자\")")
+	void 공백_딸린_500자_문장은_거부되지_않는다() throws Exception {
+		String text = "  " + "가".repeat(500) + "  ";	// trim 후 정확히 500자 — 원문 기준이면 504자로 400 이 난다
+
+		mockMvc.perform(post(URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"text\": \"" + text + "\", \"viewport\": " + 유효한_뷰포트 + "}"))
+			.andExpect(status().isServiceUnavailable())	// 검증을 통과해 서비스(플래그 게이트 14503)까지 도달했다
+			.andExpect(jsonPath("$.developCode").value(14503));
+	}
+
+	// 검증: FR-ROUTE-01
+	@Test
 	@DisplayName("범위 밖 origin 은 공통 400 이다 — 필드 단위 @Valid 라 text 와 같은 경로 (§API)")
 	void 범위_밖_origin은_공통_400이다() throws Exception {
 		mockMvc.perform(post(URL)
