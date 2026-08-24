@@ -29,4 +29,12 @@ public class Grid {
 
 	@Column(name = "grid_x", nullable = false)
 	private Integer gridX;
+
+	/**
+	 * 격자 중심점이 속한 행정동 라벨 (MSG-167 저장 컬럼, MSG-466 에서 읽기 전용 매핑). 쓰기는 종전대로
+	 * native upsert 경로가 하므로 insert·update 에서 뺀다 — 이 매핑은 행정 단위 집계의 그룹핑 키를
+	 * JPQL 로 읽기 위한 것뿐이다. 무귀속(해상 등)은 NULL 이다.
+	 */
+	@Column(name = "region_code", length = 10, insertable = false, updatable = false)
+	private String regionCode;
 }

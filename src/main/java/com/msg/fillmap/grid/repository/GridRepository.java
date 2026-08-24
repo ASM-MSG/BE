@@ -174,6 +174,23 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 	List<GridRegionNameProjection> findRegionNames(@Param("gridIds") Collection<String> gridIds);
 
 	/**
+	 * 격자 여러 개의 행정동 코드와 전체 경로 이름을 한 번에 읽는다 (MSG-466, 핫구역 상위 K ≤ 50건).
+	 * 접두 그룹핑에는 이름이 아니라 코드 원값이 키라서 findRegionNames 로는 모자란다.
+	 * 신규 조회라 JPQL 이다 — id 동등 조인 하나에 PostgreSQL 전용 기능이 없어 native 요건이 없다
+	 * (project-conventions "영속 계층" 4항). Grid 에 연관관계를 달지 않고 Hibernate 6 엔티티 조인으로 잇는다.
+	 * regions 는 LEFT JOIN 이다 — 격자에 라벨이 있는데 regions 행이 없으면(데이터 엣지) INNER 로는
+	 * 묶음이 통째로 무귀속으로 떨어진다. 코드는 있고 이름만 비는 항목이 되는 쪽이 도감 집계와 같은 동작이다.
+	 * 라벨이 없는 격자는 결과에 없고 호출부에서 맵 miss(무귀속)로 처리된다.
+	 * 빈 목록 호출은 물을 것이 없어 호출부가 생략한다.
+	 */
+	@Query("""
+		SELECT g.gridId AS gridId, g.regionCode AS regionCode, r.regionName AS regionName
+		FROM Grid g LEFT JOIN Region r ON r.regionCode = g.regionCode
+		WHERE g.gridId IN :gridIds AND g.regionCode IS NOT NULL
+		""")
+	List<GridRegionCodeNameProjection> findRegionCodeNames(@Param("gridIds") Collection<String> gridIds);
+
+	/**
 	 * 접근 B — GIST 공간 쿼리. ST_MakeEnvelope 인자는 (경도, 위도) 순서다(PostGIS 축 순서).
 	 * bbox_geom 이 GEOGRAPHY 라 envelope 도 ::geography 로 캐스트해 idx_grids_bbox(GIST) 를 태운다.
 	 */
