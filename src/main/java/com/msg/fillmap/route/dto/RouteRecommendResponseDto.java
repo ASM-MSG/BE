@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * (FR-ROUTE-07). 시각 필드가 없어 시각 컨벤션(MSG-376) 검사 대상이 아니다 — 기간 정보는 reason 문장에
  * 녹아 나간다.
  */
-@Schema(description = "AI 경로 추천 응답")
+@Schema(description = "AI 경로 추천 응답", requiredProperties = {"points", "notice"})
 public record RouteRecommendResponseDto(
 
 	@Schema(description = "방문 순서대로 정렬된 지점 목록 (최대 8개)")
@@ -20,7 +20,9 @@ public record RouteRecommendResponseDto(
 ) {
 
 	/** 추천 지점 하나 — 좌표·격자·표시명 재료만으로 FE 가 지도에 점과 선을 그린다 (FR-ROUTE-02). */
-	@Schema(description = "추천 지점")
+	@Schema(description = "추천 지점",
+		requiredProperties = {"order", "name", "kind", "lat", "lng", "gridId", "zoneName", "zoneCell",
+			"regionName", "reason", "missionId", "occurrenceId"})
 	public record RoutePointDto(
 
 		@Schema(description = "방문 순서 (1부터 연속)", example = "1")
