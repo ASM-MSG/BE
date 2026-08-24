@@ -1,5 +1,6 @@
 package com.msg.fillmap.video.service;
 
+import static com.msg.fillmap.video.support.S3VideoObjectStub.givenUploadedVideoObject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -68,7 +69,7 @@ class VideoS3KeyValidationTest {
 		userId = userRepository.save(User.createLocalUser("s3key@example.com", "hash", "검증")).getId();
 		gridId = GridEncoder.encode(강남_LAT, 강남_LON);
 		// 기본값: 객체가 S3 에 존재한다 (정상 업로드를 마친 상태)
-		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		givenUploadedVideoObject(s3Client);
 	}
 
 	private VideoUploadRequestDto request(String s3Key) {

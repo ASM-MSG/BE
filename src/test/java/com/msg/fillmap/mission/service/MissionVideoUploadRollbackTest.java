@@ -1,9 +1,8 @@
 package com.msg.fillmap.mission.service;
 
+import static com.msg.fillmap.video.support.S3VideoObjectStub.givenUploadedVideoObject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -26,8 +25,6 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
@@ -103,7 +100,7 @@ class MissionVideoUploadRollbackTest {
 
 	@BeforeEach
 	void setUp() {
-		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		givenUploadedVideoObject(s3Client);
 		tx = new TransactionTemplate(transactionManager);
 		userId = tx.execute(status -> userRepository.save(User.createLocalUser(
 			"msg459-rollback-" + UUID.randomUUID() + "@example.com", "hash", "롤백테스터")).getId());

@@ -1,5 +1,6 @@
 package com.msg.fillmap.video.service;
 
+import static com.msg.fillmap.video.support.S3VideoObjectStub.givenUploadedVideoObject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -43,8 +44,6 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsResponse;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
@@ -212,7 +211,7 @@ class VideoProcessingMetricsTest {
 		MissionAwardService missionAwardService = mock(MissionAwardService.class);
 		given(missionAwardService.awardOnUpload(anyLong(), anyString())).willReturn(MissionAwardResult.EMPTY);
 		S3Client s3Client = mock(S3Client.class);
-		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		givenUploadedVideoObject(s3Client);
 		given(s3Client.deleteObjects(any(DeleteObjectsRequest.class)))
 			.willReturn(DeleteObjectsResponse.builder().build());
 		return new VideoServiceImpl(videoRepository, mock(VideoEncodingService.class), statusWriter,

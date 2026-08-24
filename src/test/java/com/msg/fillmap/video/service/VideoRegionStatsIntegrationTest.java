@@ -3,9 +3,8 @@ package com.msg.fillmap.video.service;
 import static com.msg.fillmap.region.RegionTestFixtures.CELL_AREA_M2;
 import static com.msg.fillmap.region.RegionTestFixtures.cellBlockPolygonJson;
 import static com.msg.fillmap.region.RegionTestFixtures.syntheticCode;
+import static com.msg.fillmap.video.support.S3VideoObjectStub.givenUploadedVideoObject;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -23,8 +22,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
-import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
@@ -73,7 +70,7 @@ class VideoRegionStatsIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
-		given(s3Client.headObject(any(HeadObjectRequest.class))).willReturn(HeadObjectResponse.builder().build());
+		givenUploadedVideoObject(s3Client);
 		userId = userRepository.save(User.createLocalUser("region-stats@example.com", "hash", "수집자")).getId();
 		regionCode = syntheticCode("155");
 		seedRegion(regionCode);
