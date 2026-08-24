@@ -91,12 +91,12 @@
 | FR-HOTZONE-13 | 진행 중 | GridRepositoryTest, HotZoneAggregateServiceImplTest, HotZoneAggregationHttpTest |
 | FR-VIDEO-01 | 구현됨 | VideoControllerTest |
 | FR-VIDEO-02 | 구현됨 | VideoPresignTest |
-| FR-VIDEO-03 | 구현됨 | VideoPresignTest |
+| FR-VIDEO-03 | 구현됨 | VideoPresignTest, VideoSignatureIntegrationTest |
 | FR-VIDEO-04 | 구현됨 | VideoPresignTest, VideoS3KeyValidationTest |
 | FR-VIDEO-05 | 구현됨 | VideoServiceIntegrationTest |
 | FR-VIDEO-06 | 구현됨 | (없음) |
 | FR-VIDEO-07 | 구현됨 | VideoRecordedAtValidationTest |
-| FR-VIDEO-08 | 구현됨 | VideoReplaceIntegrationTest, VideoS3KeyValidationTest |
+| FR-VIDEO-08 | 구현됨 | VideoReplaceIntegrationTest, VideoS3KeyValidationTest, VideoSignatureIntegrationTest |
 | FR-VIDEO-09 | 구현됨 | VideoReplaceConcurrencyTest, VideoUploadRollbackCompensationTest |
 | FR-VIDEO-10 | 구현됨 | VideoReplaceIntegrationTest |
 | FR-VIDEO-11 | 구현됨 | VideoDeleteIntegrationTest, VideoS3CleanupTest |
