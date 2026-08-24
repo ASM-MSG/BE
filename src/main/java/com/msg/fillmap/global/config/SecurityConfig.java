@@ -122,6 +122,14 @@ public class SecurityConfig {
 					"/api/missions/{missionId:[0-9]+}",
 					"/api/missions/{missionId:[0-9]+}/videos",
 					"/api/grids/*/missions").permitAll()
+				// 행정동 조회(MSG-467): 위 핫구역·미션 개방(MSG-454)과 같은 "상단 칩은 비로그인" 원칙의
+				// 잔여분이다(정본 docs/prd/mission-map-explore.md 8절 2026-08-24). 칩 좌측 패널이 위치줄과
+				// 지역 필터를 이 둘로 그린다. GET 한정과 경로 열거가 계약의 일부다: /api/regions/** 로 넓히면
+				// 내 수집률 stats 계열 4종의 인증이 함께 풀리고, 그 넷은 principal.userId() 를 바로 부르므로
+				// 익명 유입 시 NPE 500 이 된다. 둘 다 사용자 무관 값이라(FR-REGION-02·15) 응답 계약은 불변.
+				.requestMatchers(HttpMethod.GET,
+					"/api/regions/reverse-geocode",
+					"/api/regions/districts").permitAll()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.

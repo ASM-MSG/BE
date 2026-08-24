@@ -47,20 +47,20 @@
 | FR-ZONE-13 | 구현됨 | ZoneNamingContractTest |
 | FR-ZONE-14 | 구현됨 | (없음) |
 | FR-REGION-01 | 구현됨 | RegionGeoJsonReaderTest, RegionGridCountTest, RegionRepositoryTest, RegionSeederTest |
-| FR-REGION-02 | 구현됨 | RegionControllerTest, RegionQueryServiceImplTest, RegionReverseGeocodeTest |
+| FR-REGION-02 | 구현됨 | RegionControllerTest, RegionPublicAccessHttpTest, RegionQueryServiceImplTest, RegionReverseGeocodeTest |
 | FR-REGION-03 | 구현됨 | GridRegionCodeBackfillTest, RegionStatsPointGridQueryServiceTest, RegionStatsRecomputeTest |
 | FR-REGION-04 | 구현됨 | RegionStatsPointGridQueryServiceTest, RegionStatsQueryTest, RegionStatsRecomputeTest |
 | FR-REGION-05 | 구현됨 | RegionStatsCommandServiceTest, RegionStatsConcurrencyTest, RegionStatsRecomputeTest |
-| FR-REGION-06 | 구현됨 | RegionControllerTest, RegionStatsQueryServiceTest, RegionStatsQueryTest |
-| FR-REGION-07 | 구현됨 | RegionControllerTest, RegionStatsPointGridQueryServiceTest |
+| FR-REGION-06 | 구현됨 | RegionControllerTest, RegionPublicAccessHttpTest, RegionStatsQueryServiceTest, RegionStatsQueryTest |
+| FR-REGION-07 | 구현됨 | RegionControllerTest, RegionPublicAccessHttpTest, RegionStatsPointGridQueryServiceTest |
 | FR-REGION-08 | 구현됨 | GridControllerTest, GridQueryServiceIntegrationTest, GridRepositoryTest, HotZoneControllerTest, HotZoneServiceImplTest |
 | FR-REGION-09 | 구현됨 | GridQueryServiceIntegrationTest |
 | FR-REGION-10 | 구현됨 | GridQueryServiceIntegrationTest, GridRegionCodeBackfillTest, GridRepositoryTest, HotZoneServiceImplTest |
 | FR-REGION-11 | 구현됨 | GridQueryServiceIntegrationTest |
 | FR-REGION-12 | 구현됨 | GridQueryServiceIntegrationTest, GridRepositoryTest, RegionStatsQueryTest, RegionStatsRecomputeTest |
 | FR-REGION-13 | 계획 | (없음) |
-| FR-REGION-14 | 구현됨 | RegionControllerTest, RegionNationalStatQueryTest, RegionStatsQueryServiceTest |
-| FR-REGION-15 | 구현됨 | RegionControllerTest, RegionDistrictQueryTest, RegionDistrictServiceTest |
+| FR-REGION-14 | 구현됨 | RegionControllerTest, RegionNationalStatQueryTest, RegionPublicAccessHttpTest, RegionStatsQueryServiceTest |
+| FR-REGION-15 | 구현됨 | RegionControllerTest, RegionDistrictQueryTest, RegionDistrictServiceTest, RegionPublicAccessHttpTest |
 | FR-SEARCH-01 | 구현됨 | KakaoLocalClientTest, PlaceSearchControllerTest, PlaceSearchServiceTest |
 | FR-SEARCH-02 | 구현됨 | KakaoLocalClientTest, PlaceSearchAggregationIntegrationTest, PlaceSearchControllerTest, PlaceSearchServiceTest |
 | FR-SEARCH-03 | 구현됨 | KakaoLocalClientTest |

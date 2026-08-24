@@ -334,12 +334,4 @@ class RegionControllerTest {
 			.andExpect(jsonPath("$.data[0].gridCount").value(4102))
 			.andExpect(jsonPath("$.data[1].parentCode").value("11440"));
 	}
-
-	// 검증: FR-REGION-15
-	@Test
-	@DisplayName("districts 미인증 요청은 401 이다")
-	void districts_미인증_요청은_401이다() throws Exception {
-		mockMvc.perform(get("/api/regions/districts"))
-			.andExpect(status().isUnauthorized());
-	}
 }
