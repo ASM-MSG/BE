@@ -1,5 +1,6 @@
 package com.msg.fillmap.event.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -7,6 +8,8 @@ import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.msg.fillmap.event.entity.EventLocation;
 
@@ -34,4 +37,17 @@ public interface EventLocationRepository extends JpaRepository<EventLocation, Lo
 	 * 같은 표시 순서를 준 위치가 둘이어도 응답 순서가 흔들리지 않는다.
 	 */
 	List<EventLocation> findByOccurrenceIdOrderByDisplayOrderAscIdAsc(Long occurrenceId);
+
+	/**
+	 * 여러 회차의 위치 일괄 (MSG-457 getLocationsBulk). 회차 노출 판정에 occurrence 가 필요해 fetch join 으로
+	 * 한 번에 당긴다 — 위치 루프 안 지연 로딩은 N+1 이라 금지다. 정렬은 단건 조회 계약(display_order → id)에
+	 * 회차 id 1차 키만 얹은 것이라 그룹핑 뒤에도 회차 안 순서가 유지된다.
+	 */
+	@Query("""
+		SELECT l FROM EventLocation l
+		JOIN FETCH l.occurrence
+		WHERE l.occurrence.id IN :occurrenceIds
+		ORDER BY l.occurrence.id ASC, l.displayOrder ASC, l.id ASC
+		""")
+	List<EventLocation> findWithOccurrenceByOccurrenceIdIn(@Param("occurrenceIds") Collection<Long> occurrenceIds);
 }

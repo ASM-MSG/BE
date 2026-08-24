@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.jupiter.api.DisplayName;
@@ -780,6 +781,45 @@ class EventQueryServiceTest {
 			assertThat(found.zoneName()).isEqualTo("테스트구역");
 			assertThat(found.zoneCell()).isEqualTo("A-1");
 			assertThat(found.regionName()).isNull();
+		}
+	}
+
+	@Nested
+	@DisplayName("회차 위치 일괄 조회 (MSG-457 route 소비)")
+	class LocationsBulk {
+
+		// 검증: FR-ROUTE-03
+		@Test
+		@DisplayName("여러 회차의 위치를 단건 조회와 같은 정렬 계약으로 한 번에 준다")
+		void 여러_회차의_위치를_정렬_계약대로_한_번에_준다() {
+			EventSeries series = 시리즈();
+			EventOccurrence 첫회차 = 회차(series, "행사 A", "부산", NOW.minusDays(1), NOW.plusDays(1));
+			EventOccurrence 둘째회차 = 회차(series, "행사 B", "부산", NOW.minusDays(1), NOW.plusDays(1));
+			위치(첫회차, "본무대", 2, 격자(0, 0));
+			위치(첫회차, "먹거리존", 1, 격자(1, 1));
+			위치(둘째회차, "포토존", 1, 격자(2, 2));
+
+			Map<Long, List<EventQueryService.LocationPoint>> locations =
+				service().getLocationsBulk(List.of(첫회차.getId(), 둘째회차.getId(), -1L));
+
+			// 없는 회차(-1)는 키 자체가 없다 — 실패가 아니다.
+			assertThat(locations.keySet()).containsExactlyInAnyOrder(첫회차.getId(), 둘째회차.getId());
+			// display_order 오름차순 — 첫 항목이 진입 기본값이라는 단건 조회(getLocations)와 같은 계약이다.
+			assertThat(locations.get(첫회차.getId()))
+				.extracting(EventQueryService.LocationPoint::name)
+				.containsExactly("먹거리존", "본무대");
+			assertThat(locations.get(둘째회차.getId())).containsExactly(
+				new EventQueryService.LocationPoint("포토존", 격자(2, 2)));
+		}
+
+		// 검증: FR-ROUTE-03
+		@Test
+		@DisplayName("미노출 예정 회차는 키 자체가 빠진다 — 단건 조회의 13404 존재 은닉과 같은 결")
+		void 미노출_예정_회차는_키_자체가_빠진다() {
+			EventOccurrence 미노출 = 회차(시리즈(), "미노출 행사", "부산", NOW.plusDays(15), NOW.plusDays(16));
+			위치(미노출, "미노출 위치", 1, 격자(0, 0));
+
+			assertThat(service().getLocationsBulk(List.of(미노출.getId()))).isEmpty();
 		}
 	}
 }
