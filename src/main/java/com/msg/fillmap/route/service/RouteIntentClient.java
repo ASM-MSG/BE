@@ -110,7 +110,7 @@ public class RouteIntentClient {
 		}
 	}
 
-	/** parse 응답 형태 검증 — 정의 밖 필드는 거부한다 (계약의 "미정의 필드는 나오지 않는다"를 BE 도 지킨다). */
+	/** parse 응답 형태 검증 — 정의 밖 필드와 필수 필드(네 키) 누락을 모두 거부한다 (계약과 1:1, NFR-SEC-08). */
 	private ParsedIntent toParsedIntent(JsonNode response) {
 		if (response == null || !response.isObject()) {
 			throw contractViolation("parse 응답이 JSON 객체가 아님");
@@ -118,6 +118,12 @@ public class RouteIntentClient {
 		for (Map.Entry<String, JsonNode> property : response.properties()) {
 			if (!PARSE_FIELDS.contains(property.getKey())) {
 				throw contractViolation("parse 응답에 정의 밖 필드");
+			}
+		}
+		// 계약은 "네 필드는 항상 온다"다 — 누락도 형태 위반이라 채택하지 않는다 (NFR-SEC-08, Codex 교차 리뷰).
+		for (String field : PARSE_FIELDS) {
+			if (!response.has(field)) {
+				throw contractViolation("parse 응답 필수 필드 누락");
 			}
 		}
 		return new ParsedIntent(

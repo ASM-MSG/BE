@@ -95,7 +95,8 @@ class RouteIntentClientTest {
 						{"text": "해운대 가자",
 						 "viewport": {"min_lat": 35.05, "min_lng": 128.95, "max_lat": 35.25, "max_lng": 129.20}}
 						""", JsonCompareMode.STRICT))
-					.andRespond(json("{}")));
+					.andRespond(json(
+						"{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": []}")));
 
 			client.parse("해운대 가자", 부산_뷰포트);
 		}
@@ -141,6 +142,8 @@ class RouteIntentClientTest {
 		@Test
 		@DisplayName("형태를 벗어난 parse 응답은 채택하지 않는다 — BE 검증 목록의 각 규칙 위반이 전부 14502")
 		void 형태를_벗어난_parse_응답은_채택하지_않는다() {
+			parse가_거부된다("{}");                                                          // 전 필드 누락 (Codex P2)
+			parse가_거부된다("{\"region\": null, \"period\": null, \"interests\": []}");    // preferred_order 누락
 			parse가_거부된다("{\"region\": \"해운대\", \"bogus\": 1}");                       // 정의 밖 필드
 			parse가_거부된다("{\"region\": \"" + "가".repeat(51) + "\"}");                   // region 51자
 			parse가_거부된다("{\"region\": 123}");                                          // region 비문자열

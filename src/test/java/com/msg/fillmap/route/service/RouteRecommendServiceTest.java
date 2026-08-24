@@ -66,7 +66,8 @@ class RouteRecommendServiceTest {
 	private static final String PARSE_URL = BASE_URL + "/route/parse";
 	private static final String EXPLAIN_URL = BASE_URL + "/route/explain";
 	private static final ViewportDto 뷰포트 = new ViewportDto(35.05, 128.95, 35.25, 129.20);
-	private static final String 빈_해석_응답 = "{}";
+	private static final String 빈_해석_응답 =
+		"{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": []}";
 
 	private final RouteCandidateCollector collector = mock(RouteCandidateCollector.class);
 	private final ZoneNameQueryService zoneNameQueryService = mock(ZoneNameQueryService.class);
