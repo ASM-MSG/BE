@@ -62,6 +62,7 @@ public SuccessResponse<SignupResponseDto> signup(@Valid @RequestBody SignupReque
 | `11xxx` | moderation | `11409 DUPLICATE_REPORT` (MSG-192) |
 | `12xxx` | mission | `12400 INVALID_VIEWPORT` (MSG-398) |
 | `13xxx` | event | `13404 EVENT_NOT_FOUND` (MSG-438 대역 배정 — 행사방 도메인. 439 조회·440 업로드·442 생명주기·441 댓글이 11개 상수를 채움, 조회 은닉 응답 포함) |
+| `14xxx` | route | MSG-457 대역 배정 — AI 경로 추천 (`RouteErrorCode`) |
 
 새 도메인 에러 enum 추가 시:
 - 상수명은 `SCREAMING_SNAKE_CASE`
