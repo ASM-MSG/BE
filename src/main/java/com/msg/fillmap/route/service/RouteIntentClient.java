@@ -42,7 +42,7 @@ import com.msg.fillmap.route.exception.RouteErrorCode;
 public class RouteIntentClient {
 
 	// AiClient highlightRequestFactory 선례 — readTimeout 은 교환 전체(전송+처리+수신)의 단일 시한이라
-	// 트리클 응답에도 timeout(PT5S)이 하드 상한이다. connect 는 내부망 전제의 짧은 고정값.
+	// 트리클 응답에도 timeout(PT10S)이 하드 상한이다. connect 는 내부망 전제의 짧은 고정값.
 	private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
 
 	// AI 계약(MSG-458)의 형태 상한 — parse 문자열 필드 50자, 배열 10개, explain reason 1~120자.

@@ -48,7 +48,7 @@ class RouteIntentClientTest {
 		new ExplainPoint("광안리 해변", "place", List.of("장소 검색 결과")));
 
 	private RouteAiProperties properties() {
-		return new RouteAiProperties(true, BASE_URL, Duration.ofSeconds(5));
+		return new RouteAiProperties(true, BASE_URL, Duration.ofSeconds(10));
 	}
 
 	/** 케이스 전용 클라이언트 — 서버 기대를 걸고 호출 하나를 실행한 뒤 verify 까지 한다. */

@@ -141,7 +141,7 @@ route:
   ai:
     enabled: ${ROUTE_AI_ENABLED:false}      # 기본 꺼짐(NFR-OPS-06 관례). 꺼지면 호출은 14503
     base-url: ${ROUTE_AI_BASE_URL:http://localhost:8000}
-    timeout: ${ROUTE_AI_TIMEOUT:PT5S}       # AI 호출당 교환 전체 시한 — 실측 근거는 MSG-457 상한 확정 절
+    timeout: ${ROUTE_AI_TIMEOUT:PT10S}      # AI 호출당 교환 전체 시한 — 실측 근거는 MSG-457 상한 확정 절
 
 server:
   port: 8080

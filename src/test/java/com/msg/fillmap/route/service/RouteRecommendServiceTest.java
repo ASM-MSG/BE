@@ -82,7 +82,7 @@ class RouteRecommendServiceTest {
 		RestClient.Builder builder = RestClient.builder();
 		server = MockRestServiceServer.bindTo(builder).build();
 		RouteIntentClient intentClient = new RouteIntentClient(builder,
-			new RouteAiProperties(true, BASE_URL, Duration.ofSeconds(5)));
+			new RouteAiProperties(true, BASE_URL, Duration.ofSeconds(10)));
 
 		@SuppressWarnings("unchecked")
 		ObjectProvider<RouteIntentClient> provider = mock(ObjectProvider.class);
