@@ -35,6 +35,7 @@ import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.service.MissionQueryService;
 import com.msg.fillmap.route.service.RouteCandidate.Kind;
 import com.msg.fillmap.route.service.RouteIntentClient.ParsedIntent;
+import com.msg.fillmap.search.dto.PlaceSearchResponseDto;
 import com.msg.fillmap.search.exception.SearchErrorCode;
 import com.msg.fillmap.search.service.PlaceSearchService;
 
@@ -79,6 +80,10 @@ class RouteCandidateCollectorTest {
 
 	private MissionResponseDto 진행중_축제(long id, String title, double lat, double lng) {
 		return 미션(id, MissionType.EVENT, title, NOW.minusDays(3), NOW.plusDays(3), 박스(lat, lng));
+	}
+
+	private PlaceSearchResponseDto 장소(String name, double lat, double lng) {
+		return new PlaceSearchResponseDto(name, "부산 어딘가", lat, lng, GridEncoder.encode(lat, lng), null, null);
 	}
 
 	private EventOccurrenceChipResponseDto 진행중_행사(long id, String title) {
@@ -219,6 +224,52 @@ class RouteCandidateCollectorTest {
 			.willReturn(List.of(진행중_축제(1L, "중심이 밖인 축제", 35.30, 129.05)));
 
 		assertThat(collector.collect(뷰포트, 빈해석)).isEmpty();
+	}
+
+	// 검증: FR-ROUTE-06
+	@Test
+	@DisplayName("뷰포트 밖 장소 검색 결과는 후보가 되지 않는다 — 거른 뒤 상위 3건이라 자리도 뺏지 않는다")
+	void 뷰포트_밖_장소_검색_결과는_후보가_되지_않는다() {
+		// 카카오 키워드 검색은 지역 제한이 없다 — 첫 결과가 뷰포트 밖이어도 안 결과 3건이 그대로 후보가 된다.
+		given(placeSearchService.searchPlaces("해운대 맛집")).willReturn(List.of(
+			장소("먼 맛집", 34.0, 125.0),
+			장소("안 맛집1", 35.15, 129.05),
+			장소("안 맛집2", 35.15, 129.06),
+			장소("안 맛집3", 35.15, 129.07)));
+		ParsedIntent 해석 = new ParsedIntent("해운대", null, List.of("맛집"), List.of());
+
+		assertThat(collector.collect(뷰포트, 해석))
+			.extracting(RouteCandidate::name)
+			.containsExactlyInAnyOrder("안 맛집1", "안 맛집2", "안 맛집3");
+	}
+
+	// 검증: FR-ROUTE-04
+	@Test
+	@DisplayName("기간 경계는 KST 날짜로 판정한다 — UTC 저녁 종료(KST 자정 직후)가 전날로 오판정되지 않는다")
+	void 기간_경계는_KST_날짜로_판정한다() {
+		// 해석 기간 06-10~06-12(KST) → 여유 창 06-08~06-14. 종료가 06-07T20:00 UTC = KST 06-08 05:00 이라
+		// KST 날짜로는 창의 첫날이다 — UTC 날짜(06-07)로 비교하면 하루 이르게 잘려 나간다.
+		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.EVENT)).willReturn(List.of(
+			미션(1L, MissionType.EVENT, "자정 직후 종료 축제", NOW.minusDays(3),
+				NOW.plusDays(6).plusHours(20), 박스(35.15, 129.05))));
+		ParsedIntent 해석 = new ParsedIntent(null,
+			new ParsedIntent.Period(NOW.toLocalDate().plusDays(9), NOW.toLocalDate().plusDays(11)),
+			List.of(), List.of());
+
+		assertThat(collector.collect(뷰포트, 해석))
+			.extracting(RouteCandidate::name).containsExactly("자정 직후 종료 축제");
+	}
+
+	// 검증: FR-ROUTE-03
+	@Test
+	@DisplayName("빈 문자열 관심사는 장소 검색을 유발하지 않는다 — region 단독 광역 검색 차단")
+	void 빈_문자열_관심사는_장소_검색을_유발하지_않는다() {
+		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.EVENT))
+			.willReturn(List.of(진행중_축제(1L, "빛축제", 35.15, 129.08)));
+		ParsedIntent 해석 = new ParsedIntent("부산", null, List.of(" "), List.of());
+
+		assertThat(collector.collect(뷰포트, 해석)).extracting(RouteCandidate::name).containsExactly("빛축제");
+		verifyNoInteractions(placeSearchService);
 	}
 
 	// 검증: FR-ROUTE-02

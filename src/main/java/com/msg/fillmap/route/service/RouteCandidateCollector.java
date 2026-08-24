@@ -3,6 +3,8 @@ package com.msg.fillmap.route.service;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -52,6 +54,9 @@ public class RouteCandidateCollector {
 
 	/** 해석 기간 겹침 판정의 앞뒤 여유(일) — 모델의 "이번 주말" 해석이 이틀 어긋난 실측(MSG-458 리포트). */
 	private static final long PERIOD_SLACK_DAYS = 2;
+
+	/** 해석 period 의 일 경계 — KST 날짜 라벨(AI 계약, glossary 스트릭 일 경계와 동일). */
+	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
 	/** 추천 후보가 되는 미션 유형 — 화면 칩이 있는 세 종류만(§도메인 로직 1). */
 	private static final List<MissionType> CANDIDATE_MISSION_TYPES =
@@ -169,6 +174,7 @@ public class RouteCandidateCollector {
 		// 품는 경우 둘째 관심사가 미충족으로 보여 검색이 한 번 더 유발될 수 있는데, 결과가 늘어나는 쪽
 		// 오차라 수용한다 (상한 8 선별은 그대로).
 		String unmet = intent.interests().stream()
+			.filter(interest -> !interest.isBlank())	// 빈 항목이 region 단독 광역 검색을 유발하지 않게 (Codex P2)
 			.filter(interest -> existing.stream()
 				.noneMatch(candidate -> interest.equals(candidate.matchedInterest())))
 			.findFirst()
@@ -182,6 +188,9 @@ public class RouteCandidateCollector {
 		String query = region == null ? unmet : region + " " + unmet;
 		try {
 			return placeSearchService.searchPlaces(query).stream()
+				// 카카오 키워드 검색은 지역 제한이 없다 — 뷰포트 밖 장소는 미션·행사와 같은 이유로 제외한다
+				// (FR-ROUTE-06). 거른 뒤 상위 3건이라 밖 결과가 안 결과의 자리를 뺏지 않는다 (Codex P1).
+				.filter(place -> contains(bounds, place.lat(), place.lng()))
 				.limit(PLACE_RESULT_LIMIT)
 				.map(place -> new RouteCandidate(place.name(), Kind.PLACE, place.lat(), place.lng(),
 					place.gridId(), null, null, null, null, unmet))
@@ -215,7 +224,9 @@ public class RouteCandidateCollector {
 
 	/**
 	 * 해석 기간과의 겹침 판정 — 앞뒤 2일 여유(엄격 일치 필터를 쓰지 않는 근거는 §선별 규칙). 해석 기간이
-	 * 없으면 전부 통과, 후보 기간의 null 쪽은 무기한으로 본다.
+	 * 없으면 전부 통과, 후보 기간의 null 쪽은 무기한으로 본다. 해석 period 는 KST 날짜 라벨(AI 계약)이고
+	 * 후보 시각은 naive UTC 관례라, KST 로 변환해 날짜를 얻어야 KST 00~09시 구간이 전날로 오판정되지
+	 * 않는다 (시각 컨벤션 MSG-376 전제 — 스트릭의 AT TIME ZONE 'Asia/Seoul' 판정과 같은 결, Codex P2).
 	 */
 	private static boolean periodOverlaps(LocalDateTime start, LocalDateTime end, ParsedIntent.Period period) {
 		if (period == null) {
@@ -223,8 +234,13 @@ public class RouteCandidateCollector {
 		}
 		LocalDate from = period.start().minusDays(PERIOD_SLACK_DAYS);
 		LocalDate to = period.end().plusDays(PERIOD_SLACK_DAYS);
-		return (start == null || !start.toLocalDate().isAfter(to))
-			&& (end == null || !end.toLocalDate().isBefore(from));
+		return (start == null || !kstDate(start).isAfter(to))
+			&& (end == null || !kstDate(end).isBefore(from));
+	}
+
+	/** naive UTC 시각의 KST 날짜 — 저장 관례(UTC)와 사용자 일 경계(KST)의 변환 한 곳. */
+	private static LocalDate kstDate(LocalDateTime utc) {
+		return utc.atOffset(ZoneOffset.UTC).atZoneSameInstant(KST).toLocalDate();
 	}
 
 	/**
