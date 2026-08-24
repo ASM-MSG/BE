@@ -1,5 +1,8 @@
 package com.msg.fillmap.hotzone.controller;
 
+import java.util.List;
+import java.util.Locale;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -11,8 +14,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
 
+import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.hotzone.dto.HotZoneListResponseDto;
+import com.msg.fillmap.hotzone.dto.HotZoneRegionAggregateResponseDto;
+import com.msg.fillmap.hotzone.exception.HotZoneErrorCode;
 import com.msg.fillmap.hotzone.service.HotZoneService;
 import com.msg.fillmap.response.SuccessResponse;
 
@@ -49,5 +56,62 @@ public class HotZoneController {
 	) {
 		ViewportBounds bounds = new ViewportBounds(swLat, swLng, neLat, neLng);
 		return SuccessResponse.of(HotZoneListResponseDto.from(hotZoneService.getHotZones(bounds)));
+	}
+
+	@Operation(
+		summary = "뷰포트 내 핫구역 행정 단위 집계 조회",
+		description = "축소 화면용 — 뷰포트 안 핫구역을 행정 단위(동·구·시)로 묶어 지역 이름과 핫 격자 수로 "
+			+ "반환한다. 묶음 대상은 개별 조회(GET /api/hotzones)와 완전히 같은 판정 집합이라 두 화면을 "
+			+ "갈아타도 세는 대상이 달라지지 않는다.\n\n"
+			+ "항목마다 gridIds 가 함께 온다 — 묶음 마커를 눌러 줌인한 뒤 개별 조회 결과와 교집합으로 목록을 "
+			+ "좁히는 재료다. count 는 핫 격자 수이고 핫스코어 합산이 아니다. 행정동이 판정되지 않은 격자는 "
+			+ "제외가 아니라 regionCode·name 이 null 인 항목 하나로 묶여 마지막에 온다. 범위 안에 핫 격자가 "
+			+ "없으면 빈 배열이다.\n\n"
+			+ "bbox span 상한은 단위별로 다르다(DONG 1도, SIGUNGU 4도, SIDO 10도 — 위도·경도 각 변에 따로 적용, "
+			+ "정확히 상한값은 허용). 초과 시 400 + developCode 8401, 좌표가 WGS84 범위를 벗어나거나 bbox 가 "
+			+ "누락·뒤집히면 8400, unit 이 없거나 미지원 값이면 8405 다. 응답에 사용자별 값은 없다."
+	)
+	@GetMapping("/aggregation")
+	public SuccessResponse<List<HotZoneRegionAggregateResponseDto>> getHotZoneAggregates(
+		@Parameter(description = "집계 단위 — DONG(동), SIGUNGU(시군구), SIDO(시도). 대소문자 무관",
+			required = true, example = "SIGUNGU")
+		@RequestParam(required = false) String unit,
+		@Parameter(description = "남서 모서리 위도", required = true, example = "35.10")
+		@RequestParam(required = false) Double swLat,
+		@Parameter(description = "남서 모서리 경도", required = true, example = "128.90")
+		@RequestParam(required = false) Double swLng,
+		@Parameter(description = "북동 모서리 위도", required = true, example = "35.30")
+		@RequestParam(required = false) Double neLat,
+		@Parameter(description = "북동 모서리 경도", required = true, example = "129.20")
+		@RequestParam(required = false) Double neLng
+	) {
+		// 검증 순서가 곧 응답 코드다 (§API 명세) — bbox 누락 8400 → unit 8405 →
+		// 좌표 정의역·뒤집힘 8400 → span 상한 8401(서비스 validateBounds).
+		ViewportBounds bounds = toBounds(swLat, swLng, neLat, neLng);
+		return SuccessResponse.of(hotZoneService.getHotZoneAggregates(bounds, toUnit(unit)));
+	}
+
+	/**
+	 * bbox 는 required = false 로 받아 여기서 검증한다 — Spring 의 필수 파라미터 예외는 도메인 developCode 를
+	 * 못 싣기 때문이다(@Parameter(required = true) 가 문서 쪽 계약을 지킨다, MissionController.toBounds 동일 패턴).
+	 * 위 개별 조회는 종전대로 @RequestParam 필수 기본이다 — 기존 계약을 바꾸지 않는다 (MSG-466 D5).
+	 */
+	private ViewportBounds toBounds(Double swLat, Double swLng, Double neLat, Double neLng) {
+		if (swLat == null || swLng == null || neLat == null || neLng == null) {
+			throw new ApiException(HotZoneErrorCode.INVALID_VIEWPORT);
+		}
+		return new ViewportBounds(swLat, swLng, neLat, neLng);
+	}
+
+	/** unit 도 같은 이유로 required = false 로 받는다 — 누락과 미지원 값을 8405 하나로 수렴시킨다. */
+	private RegionUnit toUnit(String unit) {
+		if (unit == null) {
+			throw new ApiException(HotZoneErrorCode.INVALID_AGGREGATION_UNIT);
+		}
+		try {
+			return RegionUnit.valueOf(unit.toUpperCase(Locale.ROOT));
+		} catch (IllegalArgumentException e) {
+			throw new ApiException(HotZoneErrorCode.INVALID_AGGREGATION_UNIT, e);
+		}
 	}
 }
