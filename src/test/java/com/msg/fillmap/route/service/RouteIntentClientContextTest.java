@@ -31,7 +31,7 @@ class RouteIntentClientContextTest {
 
 	// 검증: 비기능(운영·성능)
 	@Test
-	@DisplayName("플래그를 켜면 조건부 빈이 뜨고 yml 바인딩값(PT5S)이 교환 전체 시한으로 걸린다")
+	@DisplayName("플래그를 켜면 조건부 빈이 뜨고 yml 바인딩값(PT10S)이 교환 전체 시한으로 걸린다")
 	void 플래그를_켜면_클라이언트_빈이_뜨고_타임아웃이_설정값으로_걸린다() {
 		// ① @ConditionalOnProperty — 주입 자체가 증명이다 (빈이 없으면 컨텍스트 로드부터 실패한다)
 		assertThat(routeIntentClient).isNotNull();
@@ -39,12 +39,12 @@ class RouteIntentClientContextTest {
 		// ② yml 기본값 → record 바인딩 (enabled 만 테스트 프로퍼티로 켰다)
 		assertThat(properties.enabled()).isTrue();
 		assertThat(properties.baseUrl()).isEqualTo("http://localhost:8000");
-		assertThat(properties.timeout()).isEqualTo(Duration.ofSeconds(5));
+		assertThat(properties.timeout()).isEqualTo(Duration.ofSeconds(10));
 
 		// ③ readTimeout = properties.timeout() — HttpRequest.timeout() 이라 교환 전체의 단일 시한이다
 		// (AiClientTest 의 highlightRequestFactory 단언 선례. connect 2초는 내부망 전제 고정값)
 		JdkClientHttpRequestFactory factory = RouteIntentClient.requestFactory(properties.timeout());
-		assertThat(ReflectionTestUtils.getField(factory, "readTimeout")).isEqualTo(Duration.ofSeconds(5));
+		assertThat(ReflectionTestUtils.getField(factory, "readTimeout")).isEqualTo(Duration.ofSeconds(10));
 		HttpClient httpClient = (HttpClient) ReflectionTestUtils.getField(factory, "httpClient");
 		assertThat(httpClient.connectTimeout()).contains(Duration.ofSeconds(2));
 	}

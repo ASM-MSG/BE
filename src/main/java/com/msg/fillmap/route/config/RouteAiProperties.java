@@ -17,6 +17,6 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record RouteAiProperties(
 	@DefaultValue("false") boolean enabled,
 	@DefaultValue("http://localhost:8000") String baseUrl,
-	@DefaultValue("PT5S") Duration timeout
+	@DefaultValue("PT10S") Duration timeout
 ) {
 }
