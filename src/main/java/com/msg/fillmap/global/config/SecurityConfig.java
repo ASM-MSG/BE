@@ -116,6 +116,7 @@ public class SecurityConfig {
 				// 행사 역조회와 같은 이유다 — /api/grids/** 로 넓히면 격자 단일 조회의 인증이 함께 풀린다.
 				.requestMatchers(HttpMethod.GET,
 					"/api/hotzones",
+					"/api/hotzones/aggregation",
 					"/api/missions/active",
 					"/api/missions/aggregation",
 					"/api/missions/{missionId:[0-9]+}",

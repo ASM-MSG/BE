@@ -183,6 +183,23 @@ class GridRepositoryTest {
 		assertThat(rows.get(0).getRegionName()).isEqualTo(REGION_NAME);
 	}
 
+	// 검증: FR-HOTZONE-13
+	@Test
+	@DisplayName("여러 격자의 행정동 코드와 이름을 한 번에 읽는다 — 라벨 없는 격자는 결과에서 빠진다 (MSG-466 집계용)")
+	void 여러_격자의_행정동_코드와_이름을_한_번에_읽는다() {
+		label(g00);
+		label(g11, OTHER_REGION_CODE, OTHER_REGION_NAME);
+
+		List<GridRegionCodeNameProjection> rows = gridRepository.findRegionCodeNames(List.of(g00, g11, g22));
+
+		// 접두 그룹핑 키가 코드 원값(10자리)이라 이름과 함께 코드가 실려야 한다. 라벨 없는 g22 는 행이 없다.
+		assertThat(rows).extracting(GridRegionCodeNameProjection::getGridId).containsExactlyInAnyOrder(g00, g11);
+		assertThat(rows).extracting(GridRegionCodeNameProjection::getRegionCode)
+			.containsExactlyInAnyOrder(REGION_CODE, OTHER_REGION_CODE);
+		assertThat(rows).extracting(GridRegionCodeNameProjection::getRegionName)
+			.containsExactlyInAnyOrder(REGION_NAME, OTHER_REGION_NAME);
+	}
+
 	// 검증: FR-REGION-10
 	@Test
 	@DisplayName("무귀속 격자는 regionName 이 null 이어도 항목에서 빠지지 않는다 (LEFT JOIN)")
