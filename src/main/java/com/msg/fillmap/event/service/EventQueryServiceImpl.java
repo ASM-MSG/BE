@@ -2,6 +2,7 @@ package com.msg.fillmap.event.service;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -183,6 +184,22 @@ public class EventQueryServiceImpl implements EventQueryService {
 		return locations.stream()
 			.map(location -> toLocationDto(location, gridIds, videoCounts, displayNames))
 			.toList();
+	}
+
+	@Override
+	public Map<Long, List<LocationPoint>> getLocationsBulk(Collection<Long> occurrenceIds) {
+		if (occurrenceIds.isEmpty()) {
+			return Map.of();
+		}
+		LocalDateTime now = LocalDateTime.now(clock);
+		// 미노출 회차는 키 자체가 빠진다 — 단건 조회의 13404 은닉과 같은 결이다. occurrence 는 fetch join 으로
+		// 이미 로딩돼 있어 노출 판정·그룹핑이 추가 쿼리를 만들지 않는다.
+		return locationRepository.findWithOccurrenceByOccurrenceIdIn(occurrenceIds).stream()
+			.filter(location -> isVisible(location.getOccurrence(), now))
+			.collect(Collectors.groupingBy(location -> location.getOccurrence().getId(), LinkedHashMap::new,
+				Collectors.mapping(
+					location -> new LocationPoint(location.getName(), location.getRepresentativeGridId()),
+					Collectors.toList())));
 	}
 
 	@Override

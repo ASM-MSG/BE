@@ -149,6 +149,29 @@ class PlaceSearchServiceTest {
 		assertThat(results).extracting(PlaceSearchResponseDto::zoneCell).containsExactly("A-1", null);
 	}
 
+	// 검증: FR-ROUTE-03 (계약 변경, Owner A)
+	@Test
+	void 집계없는_검색도_트림_후_빈_검색어면_카카오_호출이_되지_않는다() {
+		// 오버로드가 자체 trim 가드를 갖는다 — 위임하는 2인자 경로 테스트로는 이 가드가 검증되지 않는다
+		assertThat(placeSearchService.searchPlaces("   ")).isEmpty();
+
+		verifyNoInteractions(kakaoLocalClient);
+	}
+
+	// 검증: FR-ROUTE-03 (계약 변경, Owner A)
+	@Test
+	void 경로추천의_장소검색은_검색어_집계에_잡히지_않는다() {
+		// 경로 추천의 검색어는 기계 조립 문자열 — 집계에 흘리면 인기 검색어가 오염된다 (MSG-457 계약 변경)
+		given(kakaoLocalClient.search("서면 축제")).willReturn(List.of(place("서면역", 35.15790, 129.05930)));
+
+		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces("서면 축제");
+
+		// 결과 규칙(카카오 호출·gridId 합성·표시명)은 기존 경로와 동일하다
+		assertThat(results).extracting(PlaceSearchResponseDto::gridId).containsExactly("16858_11420");
+		assertThat(results).extracting(PlaceSearchResponseDto::zoneName).containsExactly(ZONE_NAME);
+		verifyNoInteractions(searchKeywordCommandService);
+	}
+
 	// 검증: FR-SEARCH-01
 	@Test
 	void 도로명주소가_있으면_도로명을_없으면_지번을_address로_쓴다() {
