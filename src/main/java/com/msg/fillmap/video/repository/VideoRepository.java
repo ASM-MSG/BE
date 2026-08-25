@@ -552,19 +552,37 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	 * 검색 무입력 전체 지역 개인화 커서 페이지 (MSG-460). 전역 공개 콘텐츠 격자 집합은
 	 * MSG-238과 동일하고, 현재 사용자의 행정동별 마지막 업로드 시각만 정렬에 결합한다.
 	 * 공간 연산은 없다.
+	 * <p>
+	 * <b>regions 조인은 반드시 content_regions 밖에 둔다 (MSG-461).</b> 안에 두면 조인이 접기 전에
+	 * 일어나 행정동 조회가 격자 수만큼 돌고(dev 실측 Memoize loops=144536), 그룹 키가
+	 * (region_code, region_name)으로 넓어져 144,542행 정렬이 work_mem을 넘겨 디스크로 샌다
+	 * (external merge Disk 2312kB). region_code로만 접어 1,339행을 만든 뒤 이름을 붙이면
+	 * 조인이 1,339번으로 줄고 정렬도 메모리에서 끝난다 (quicksort Memory 110kB). 6,810ms → 272ms.
+	 * region_code가 regions의 기본키라 코드로만 묶어도 무더기가 같게 나뉘고, 조인이 INNER 그대로라
+	 * regions에 없거나 region_code가 NULL인 격자가 빠지는 동작도 변하지 않는다.
+	 * <p>
+	 * CTE의 {@code region_code IS NOT NULL}은 그 INNER 조인이 어차피 버릴 무라벨 격자(해안 등)를
+	 * 세기 전에 걷어낸다. 없으면 NULL 한 무더기를 만들어 놓고 바깥 조인에서 버린다(dev 실측 무라벨
+	 * 7,470개, 전체 144,542의 5.2%). CTE만 떼어 재면 343ms → 257ms지만 전체 쿼리는 266ms로
+	 * 붙이기 전(267ms)과 오차 범위다 — 버릴 것을 안 세는 게 옳아서 넣은 것이지 응답이 빨라져서가
+	 * 아니다. 결과 집합은 어느 쪽이든 같다.
+	 * <p>
+	 * 남는 한계: 집계는 여전히 요청마다 돌고 격자 수에 비례한다(그 부분 257ms). 페이지 깊이에는
+	 * 안 늘지만, 격자 50만 초과 또는 p95 1초 초과 시 머티리얼라이즈드 뷰로 승격한다
+	 * (docs/spec/MSG-461.md 승격 조건).
 	 */
 	@Query(value = """
 		WITH content_regions AS (
-			SELECT g.region_code, r.region_name, COUNT(*)::int AS grid_count
+			SELECT g.region_code, COUNT(*)::int AS grid_count
 			FROM grids g
-			JOIN regions r ON r.region_code = g.region_code
-			WHERE EXISTS (
+			WHERE g.region_code IS NOT NULL
+			  AND EXISTS (
 				SELECT 1 FROM videos v
 				WHERE v.grid_id = g.grid_id
 				  AND v.status = 'ACTIVE'
 				  AND v.visibility = 'PUBLIC'
 				  AND v.processing_status = 'READY')
-			GROUP BY g.region_code, r.region_name
+			GROUP BY g.region_code
 		), personal_regions AS (
 			SELECT g.region_code, MAX(ug.last_uploaded_at) AS last_uploaded_at
 			FROM user_grids ug
@@ -574,10 +592,11 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		)
 		SELECT
 			c.region_code AS "regionCode",
-			c.region_name AS "regionName",
+			r.region_name AS "regionName",
 			c.grid_count AS "gridCount",
 			p.last_uploaded_at AS "personalLastUploadedAt"
 		FROM content_regions c
+		JOIN regions r ON r.region_code = c.region_code
 		LEFT JOIN personal_regions p ON p.region_code = c.region_code
 		WHERE CAST(:hasCursor AS boolean) = false
 		   OR (CAST(:cursorPersonal AS boolean) = true AND (
