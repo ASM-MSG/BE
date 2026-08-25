@@ -17,8 +17,8 @@ import com.msg.fillmap.search.service.TrendingKeywordQueryService;
 
 /**
  * 인기 검색어 순위 API (MSG-258). 3-layer 얇게 — 서비스 호출 + SuccessResponse 변환만.
- * 전역 집계라 @AuthenticationPrincipal 미사용(개인화 없음)이고, 인증은 SecurityConfig anyRequest 로
- * 강제된다(미인증 401 — SecurityConfig 무변경). 요청 파라미터가 없어 신규 에러 코드도 없다(§D7).
+ * 전역 집계라 @AuthenticationPrincipal 미사용(개인화 없음)이고, 응답이 사용자 무관이라 비로그인 열람을
+ * 허용한다(SecurityConfig permitAll, MSG-469). 요청 파라미터가 없어 신규 에러 코드도 없다(§D7).
  */
 @Tag(name = "인기 검색어 (Trending)", description = "사용자 검색어 일별 집계 기반 인기 검색어 순위 — 오늘+어제 합산 TOP 10.")
 @RestController

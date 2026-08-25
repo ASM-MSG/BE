@@ -73,11 +73,4 @@ class ZoneControllerTest {
 			.andExpect(jsonPath("$.developCode").value(200))
 			.andExpect(jsonPath("$.data", hasSize(0)));
 	}
-
-	@Test
-	@DisplayName("미인증 요청은 401 이다")
-	void 미인증_요청은_401이다() throws Exception {
-		mockMvc.perform(get("/api/zones"))
-			.andExpect(status().isUnauthorized());
-	}
 }

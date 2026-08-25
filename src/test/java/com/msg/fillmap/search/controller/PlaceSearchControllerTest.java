@@ -34,6 +34,7 @@ import com.msg.fillmap.user.entity.UserRole;
 class PlaceSearchControllerTest {
 
 	private static final long USER_ID = 42L;
+	private static final String SEARCHER_KEY = String.valueOf(USER_ID);
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -52,7 +53,7 @@ class PlaceSearchControllerTest {
 	@Test
 	@DisplayName("성공은 SuccessResponse 포맷으로 장소 리스트를 반환한다")
 	void 성공은_SuccessResponse_포맷으로_장소_리스트를_반환한다() throws Exception {
-		given(placeSearchService.searchPlaces(USER_ID, "부산대")).willReturn(List.of(new PlaceSearchResponseDto(
+		given(placeSearchService.searchPlaces(SEARCHER_KEY, "부산대")).willReturn(List.of(new PlaceSearchResponseDto(
 			"부산대학교", "부산 금정구 부산대학로 63번길 2", 35.23272, 129.08246, "39147_112245", "부산대", "B-3")));
 
 		mockMvc.perform(get("/api/search/places")
@@ -74,7 +75,7 @@ class PlaceSearchControllerTest {
 	@Test
 	@DisplayName("q 가 공백이면 에러가 아니라 200 과 빈 배열이다 (§D3 trim 가드는 서비스 단위 테스트가 검증)")
 	void q가_공백이면_200과_빈_배열이다() throws Exception {
-		given(placeSearchService.searchPlaces(USER_ID, "   ")).willReturn(List.of());
+		given(placeSearchService.searchPlaces(SEARCHER_KEY, "   ")).willReturn(List.of());
 
 		mockMvc.perform(get("/api/search/places")
 				.param("q", "   ")
@@ -94,18 +95,11 @@ class PlaceSearchControllerTest {
 			.andExpect(jsonPath("$.developCode").value(400));
 	}
 
-	@Test
-	@DisplayName("미인증 요청은 401 이다 (SecurityConfig anyRequest — 무변경)")
-	void 미인증_요청은_401이다() throws Exception {
-		mockMvc.perform(get("/api/search/places").param("q", "부산대"))
-			.andExpect(status().isUnauthorized());
-	}
-
 	// 검증: FR-SEARCH-04
 	@Test
 	@DisplayName("업스트림 실패면 502 와 developCode 5502 다 (§D3 단일 수렴)")
 	void 업스트림_실패면_502와_developCode_5502다() throws Exception {
-		given(placeSearchService.searchPlaces(USER_ID, "부산대"))
+		given(placeSearchService.searchPlaces(SEARCHER_KEY, "부산대"))
 			.willThrow(new ApiException(SearchErrorCode.SEARCH_UPSTREAM_ERROR));
 
 		mockMvc.perform(get("/api/search/places")
