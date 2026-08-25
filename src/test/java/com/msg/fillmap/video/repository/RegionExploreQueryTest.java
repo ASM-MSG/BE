@@ -587,6 +587,27 @@ class RegionExploreQueryTest {
 		assertThat(syntheticRows(me)).isEmpty();
 	}
 
+	// 검증: FR-SEARCH-15
+	@Test
+	@DisplayName("region_code가_NULL인_격자는_전체_지역_목록에_영향을_주지_않는다")
+	void region_code가_NULL인_격자는_전체_지역_목록에_영향을_주지_않는다() {
+		long me = newUser();
+		seedRegionA();
+		String labeled = seedLabeledGrid(GY0, GX0, REGION_A);
+		String coastal = GridFixtures.seedGrid(em, GY0, GX0 + 1);   // region_code NULL — 해안
+		gated(me, labeled, "thumbs/m461-labeled.jpg", 5L, BASE);
+		gated(me, coastal, "thumbs/m461-coastal.jpg", 9L, BASE);
+
+		List<RegionExplorePageProjection> rows = syntheticRows(me);
+
+		// MSG-461 이 regions 조인을 집계 뒤로 옮겼지만 INNER 조인이라 무라벨 격자는 그대로 탈락한다.
+		// 행으로도 안 나오고(무라벨은 귀속 행정동이 없다), A 의 gridCount 도 안 올린다(1 이지 2 가 아니다).
+		// grids.region_code 에 regions FK 가 걸려 있어(V5__grids_region_code.sql:10) regions 에 없는
+		// 코드를 가진 격자는 애초에 만들 수 없다 — NULL 이 이 성질을 검증할 수 있는 유일한 입력이다.
+		assertThat(rows).extracting(RegionExplorePageProjection::getRegionCode).containsExactly(REGION_A);
+		assertThat(rows).extracting(RegionExplorePageProjection::getGridCount).containsExactly(1);
+	}
+
 	@Test
 	@DisplayName("전체_지역_쿼리에_ST__geospatial_연산이_없다")
 	void 전체_지역_쿼리에_ST__geospatial_연산이_없다() throws Exception {
