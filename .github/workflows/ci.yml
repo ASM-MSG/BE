@@ -69,6 +69,15 @@ jobs:
           fi
           echo "V 파일에 신규 추가(A) 외 변경 없음"
 
+      # 실 ffmpeg 테스트(FfmpegRunnerTest·VideoEncodingDurationRealFfmpegTest)는 바이너리가 없으면
+      # assumeTrue 로 조용히 skip 된다. 그러면 rtm.md 에는 검증이 있는 것처럼 남고 CI 에서는 한 번도
+      # 안 도는 상태가 되므로, 러너에 설치해 실제로 돌게 한다 (MSG-470 Codex 지적).
+      - name: ffmpeg 설치 (실 ffmpeg 테스트용)
+        run: |
+          command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null \
+            || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+          ffprobe -version | head -1
+
       # rtm.md 는 generate-rtm.sh 가 SRS FR 표·테스트 검증 마커에서 생성한다. 원천을 고치고 재생성을
       # 잊으면 커밋본이 조용히 낡는다 — 재생성이 강제될 때만 "낡지 않는다"는 약속이 성립한다. (MSG-375)
       - name: RTM 신선도 검사

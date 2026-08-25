@@ -42,17 +42,23 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
- * 실제 ffmpeg 로 만든 영상을 실제 ffprobe 로 재서 저장 길이가 맞는지 본다 (MSG-470).
+ * 실제 ffmpeg 로 만든 영상을 실제 ffprobe 로 재서 길이 계산이 맞는지 본다 (MSG-470).
  *
  * {@link VideoEncodingServiceTest} 는 {@code probeDurationSec} 을 목으로 스텁하므로 "우리가 정한 값이
  * 그대로 흘러가는지"만 검증한다. 신고값을 버리고 실측을 쓰기로 한 이 티켓에서 정작 확인이 필요한 것은
- * **진짜 파일의 진짜 길이가 맞게 저장되는가**인데, 스텁으로는 그 질문에 답할 수 없다. ffprobe 출력 형식,
- * 파싱, 반올림, 클램프, 초과 판정 순서가 한 줄로 이어지는 것은 여기서만 검증된다.
+ * <b>진짜 파일의 진짜 길이가 맞게 계산되는가</b>인데, 스텁으로는 그 질문에 답할 수 없다. ffprobe 출력
+ * 형식, 파싱, 반올림, 클램프, 초과 판정 순서가 한 줄로 이어지는 것은 여기서만 검증된다.
  *
- * ffmpeg 가 없는 환경(CI)에서는 통째로 skip 된다 — {@link com.msg.fillmap.video.support.FfmpegRunnerTest}
- * 와 같은 방식이다.
+ * <p><b>이 테스트가 확인하는 것은 "전이에 실리는 값"까지다.</b> 라이터를 목으로 두므로 실제로
+ * {@code videos.duration_sec} 행이 갱신되는지는 보지 않는다. 그 구간은 {@code VideoStatusWriterTest}
+ * (가드·전이 적용)와 {@code VideoStatusTransitionTest}(엔티티 필드 갱신)가 덮는다. 여기서 목을 쓰는
+ * 이유는 DB 왕복 없이 실 ffmpeg 왕복만 떼어 보기 위해서다.
+ *
+ * <p>ffmpeg 가 없으면 통째로 skip 된다 ({@link com.msg.fillmap.video.support.FfmpegRunnerTest} 와 같은
+ * 방식). CI 는 ffmpeg 를 설치하므로 실제로 돈다 — 설치를 빼면 이 클래스가 조용히 건너뛰어지면서
+ * {@code docs/rtm.md} 만 검증이 있는 것처럼 남는다.
  */
-@DisplayName("영상 길이 저장 (실 ffmpeg)")
+@DisplayName("영상 길이 계산 (실 ffmpeg)")
 class VideoEncodingDurationRealFfmpegTest {
 
 	private static final long VIDEO_ID = 7L;
@@ -113,7 +119,7 @@ class VideoEncodingDurationRealFfmpegTest {
 
 	// 검증: FR-MEDIA-19
 	@Test
-	void 십이점칠초_영상은_십삼초로_저장된다(@TempDir Path dir) throws Exception {
+	void 십이점칠초_영상은_십삼초가_전이에_실린다(@TempDir Path dir) throws Exception {
 		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
 
 		encodeReal(dir, "12.7");
@@ -123,7 +129,7 @@ class VideoEncodingDurationRealFfmpegTest {
 
 	// 검증: FR-MEDIA-19
 	@Test
-	void 영점삼초_영상은_하한에_걸려_일초로_저장된다(@TempDir Path dir) throws Exception {
+	void 영점삼초_영상은_하한에_걸려_일초가_전이에_실린다(@TempDir Path dir) throws Exception {
 		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
 
 		encodeReal(dir, "0.3");
@@ -132,9 +138,9 @@ class VideoEncodingDurationRealFfmpegTest {
 		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 1);
 	}
 
-	// 검증: FR-MEDIA-19, FR-VIDEO-01
+	// 검증: FR-MEDIA-19
 	@Test
-	void 삼십점육초_영상은_상한에_걸려_삼십초로_저장된다(@TempDir Path dir) throws Exception {
+	void 삼십점육초_영상은_상한에_걸려_삼십초가_전이에_실린다(@TempDir Path dir) throws Exception {
 		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
 
 		encodeReal(dir, "30.6");
@@ -159,7 +165,7 @@ class VideoEncodingDurationRealFfmpegTest {
 	/** 신고값과 무관하게 실측이 이긴다는 것이 이 티켓의 요지다. */
 	// 검증: FR-MEDIA-19
 	@Test
-	void 신고값이_틀려도_실측이_저장된다(@TempDir Path dir) throws Exception {
+	void 신고값이_틀려도_실측이_전이에_실린다(@TempDir Path dir) throws Exception {
 		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
 		assertThat(video.getDurationSec()).isEqualTo(신고값);   // 확정 시점엔 신고값 30 이 들어 있다
 
