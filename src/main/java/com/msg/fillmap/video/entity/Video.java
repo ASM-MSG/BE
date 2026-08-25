@@ -147,10 +147,15 @@ public class Video {
 		this.processingStatus = ProcessingStatus.ENCODING;
 	}
 
-	/** ENCODING → READY. 인자는 URL 이 아니라 S3 key 다 (encodedUrl 필드 주석 참조). */
-	public void markReady(String encodedKey, String thumbnailKey) {
+	/**
+	 * ENCODING → READY. 인자는 URL 이 아니라 S3 key 다 (encodedUrl 필드 주석 참조).
+	 * durationSec 은 서버가 ffprobe 로 실측한 길이로 덮어쓴다 (MSG-470) — 확정 시점 값은 클라 신고값이라
+	 * 실제 재생 길이와 어긋날 수 있고, 화면에 뜨는 길이의 정본은 파일에서 잰 값이다.
+	 */
+	public void markReady(String encodedKey, String thumbnailKey, short durationSec) {
 		this.encodedUrl = encodedKey;
 		this.thumbnailUrl = thumbnailKey;
+		this.durationSec = durationSec;
 		this.processingStatus = ProcessingStatus.READY;
 	}
 
@@ -160,9 +165,12 @@ public class Video {
 	 * "thumbnailUrl non-null ⇔ S3 객체 실존" 불변식을 지키려면 BLURRING 동안 null 이어야 한다. 썸네일 키는
 	 * 폴러가 완료 시 블러본에서 뽑아 올린 뒤 markReadyFromBlurring 에서 기록한다.
 	 * 인자는 URL 이 아니라 S3 key 다 (encodedUrl 필드 주석 참조).
+	 * durationSec 실측 덮어쓰기는 markReady 와 같다 (MSG-470) — 블러본은 원본과 길이가 같으므로
+	 * 이후 markReadyFromBlurring 은 길이를 다시 건드리지 않는다.
 	 */
-	public void markEncoded(String encodedKey) {
+	public void markEncoded(String encodedKey, short durationSec) {
 		this.encodedUrl = encodedKey;
+		this.durationSec = durationSec;
 		this.processingStatus = ProcessingStatus.BLURRING;
 		this.blurringStartedAt = LocalDateTime.now(ZoneOffset.UTC);
 	}

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyShort;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willDoNothing;
@@ -50,6 +51,8 @@ class VideoEncodingServiceTest {
 
 	private static final long VIDEO_ID = 7L;
 	private static final String ORIGINAL_KEY = "videos/original/1/x.mp4";
+	/** 대부분의 케이스가 스텁하는 실측 10.0 초의 저장값 (MSG-470) — 신고값 10 과 우연히 같다. */
+	private static final short MEASURED = 10;
 
 	private VideoRepository videoRepository;
 	private VideoStatusWriter statusWriter;
@@ -112,7 +115,8 @@ class VideoEncodingServiceTest {
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
 		verify(statusWriter).markEncoding(VIDEO_ID, ORIGINAL_KEY);
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg",
+			MEASURED);
 		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
 	}
 
@@ -135,7 +139,7 @@ class VideoEncodingServiceTest {
 
 		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
 		verify(ffmpegRunner, never()).encode720p(any(), any());
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any());
+		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
 	}
 
 	// 검증: FR-MEDIA-03
@@ -148,7 +152,8 @@ class VideoEncodingServiceTest {
 
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg",
+			(short) 30);   // 반올림 31 이 스키마 상한 30 으로 눌린다 (MSG-470)
 		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
 	}
 
@@ -160,7 +165,7 @@ class VideoEncodingServiceTest {
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
 		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any());
+		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
 	}
 
 	// 검증: FR-MEDIA-02
@@ -221,7 +226,76 @@ class VideoEncodingServiceTest {
 		assertThat(captor.getValue().key()).isEqualTo("videos/encoded/1/7.mp4");
 		verify(ffmpegRunner, never()).extractThumbnail(any(), any(), anyDouble());
 		// thumbnail 키는 폴러가 완료 시 기록(R5)
-		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4");
+		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", MEASURED);
+	}
+
+	// ── 실측 길이 저장 (MSG-470) ──
+	// 저장되는 길이는 클라 신고값(픽스처 10 초)이 아니라 ffprobe 실측의 반올림·1~30 클램프 값이다.
+
+	// 검증: FR-MEDIA-19
+	@Test
+	void 실측_길이가_반올림되어_성공_전이에_실린다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(12.7);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg",
+			(short) 13);
+	}
+
+	// 검증: FR-MEDIA-19
+	@Test
+	void 여유_구간_실측은_30으로_클램프된다() {
+		// 반올림하면 31 이라 스키마 CHECK(duration_sec <= 30)를 위반한다 — FAILED 가 아니라 30 으로 저장한다.
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(30.6);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg",
+			(short) 30);
+		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
+	}
+
+	// 검증: FR-MEDIA-19
+	@Test
+	void 실측이_1초_미만이면_1로_클램프된다() {
+		// 반올림하면 0 이라 같은 CHECK 의 하한(duration_sec > 0)을 위반한다.
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(0.3);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg",
+			(short) 1);
+	}
+
+	// 검증: FR-MEDIA-19
+	@Test
+	void 블러_활성이면_markEncoded에_실측_길이가_실린다() {
+		encodingService = service(true, true);
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(12.7);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", (short) 13);
+	}
+
+	// 검증: FR-MEDIA-03, FR-MEDIA-19
+	@Test
+	void 길이_초과_판정은_클램프_전_원값으로_한다() {   // 자바 식별자는 숫자로 시작할 수 없어 "31초" 를 풀어 썼다
+		// 클램프가 판정보다 앞서면 31.4 가 30 으로 뭉개져 초과 영상이 통과한다 — 판정은 double 원값으로 끝낸다.
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.4);
+
+		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+
+		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
 	}
 
 	// ── 인코딩 태스크 계측 (MSG-343 모듈 2) ──
@@ -312,6 +386,6 @@ class VideoEncodingServiceTest {
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
 		verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any());
+		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
 	}
 }
