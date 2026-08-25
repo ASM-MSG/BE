@@ -1,5 +1,6 @@
 package com.msg.fillmap.region.service.impl;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -9,7 +10,9 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.geo.KoreaCoordinates;
+import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.region.exception.RegionErrorCode;
+import com.msg.fillmap.region.repository.RegionMentionProjection;
 import com.msg.fillmap.region.repository.RegionProjection;
 import com.msg.fillmap.region.repository.RegionRepository;
 import com.msg.fillmap.region.service.RegionQueryService;
@@ -32,6 +35,15 @@ public class RegionQueryServiceImpl implements RegionQueryService {
 		return regionRepository.findContainingRegion(lat, lon).map(RegionQueryServiceImpl::toView);
 	}
 
+	@Override
+	public List<MentionedRegionMatch> matchMentionedRegions(String name, ViewportBounds viewport) {
+		return regionRepository.matchMentionedRegions(
+				name, viewport.swLat(), viewport.swLng(), viewport.neLat(), viewport.neLng())
+			.stream()
+			.map(RegionQueryServiceImpl::toMatch)
+			.toList();
+	}
+
 	private void validateCoordinate(double lat, double lon) {
 		if (KoreaCoordinates.isOutOfService(lat, lon)) {
 			throw new ApiException(RegionErrorCode.INVALID_COORDINATE);
@@ -40,5 +52,12 @@ public class RegionQueryServiceImpl implements RegionQueryService {
 
 	private static RegionView toView(RegionProjection projection) {
 		return new RegionView(projection.getRegionCode(), projection.getRegionName(), projection.getParentCode());
+	}
+
+	private static MentionedRegionMatch toMatch(RegionMentionProjection projection) {
+		return new MentionedRegionMatch(
+			projection.getName(), projection.getCenterLat(), projection.getCenterLng(),
+			projection.getMinLat(), projection.getMinLng(), projection.getMaxLat(), projection.getMaxLng(),
+			projection.getOverlapsViewport());
 	}
 }

@@ -82,6 +82,71 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	int backfillGridRegionCodes();
 
 	/**
+	 * 언급 지명 대조 (MSG-468): 시도·시군구·동 세 단위를 UNION ALL 로 훑어 완전 일치 그룹을 낸다.
+	 * 시도 분기는 첫 토큰이 입력 그대로거나 입력+행정 접미 5종(특별시·광역시·특별자치시·도·특별자치도)이면
+	 * 매칭("부산"→"부산광역시" 접미 보정, 문법 규칙이지 별칭 사전 아님 — "충북" 류 축약은 대조 실패로 흘림).
+	 * 시군구는 둘째, 동은 셋째 토큰 완전 일치만. split_part 위치는 리터럴로 박는다 — 파라미터 자리로 빼면
+	 * 플랜이 갈라지는 MSG-356 실측(findDistricts 주석) 선례. 토큰 번호·코드 접두 길이(동 10/3, 시군구 5/2,
+	 * 시도 2/1)의 정본은 RegionUnit 이다. 그룹은 단위별 코드 접두(left)로 묶고 이름은 매칭 토큰의 MIN 단일화
+	 * (그룹 안 토큰은 WHERE 일치로 전부 같아 값 선택이 아니라 집계 자리 채우기다). 중심은
+	 * ST_Centroid(ST_Collect) 무게중심 — 외접 사각형 중점은 섬(백령도·울릉도)이 사각형을 늘리는 시도에서
+	 * 바다에 떨어진다. 외접 사각형은 ST_Extent, 뷰포트 겹침은 실경계 ST_Intersects 의 BOOL_OR — 외접
+	 * 사각형 겹침으로 하면 김해 뷰포트가 부산 사각형에 들어 종류 판정(MOVE/ZOOM_OUT)이 틀린다.
+	 * regions 3,558행 순차 스캔 한 문장으로 충분해 토큰 인덱스 없음(스펙 데이터 모델 절).
+	 */
+	@Query(value = """
+		SELECT
+			MIN(split_part(region_name, ' ', 1))                    AS "name",
+			ST_Y(ST_Centroid(ST_Collect(boundary_geom::geometry)))  AS "centerLat",
+			ST_X(ST_Centroid(ST_Collect(boundary_geom::geometry)))  AS "centerLng",
+			ST_YMin(ST_Extent(boundary_geom::geometry))             AS "minLat",
+			ST_XMin(ST_Extent(boundary_geom::geometry))             AS "minLng",
+			ST_YMax(ST_Extent(boundary_geom::geometry))             AS "maxLat",
+			ST_XMax(ST_Extent(boundary_geom::geometry))             AS "maxLng",
+			BOOL_OR(ST_Intersects(boundary_geom,
+				ST_MakeEnvelope(:swLng, :swLat, :neLng, :neLat, 4326)::geography)) AS "overlapsViewport"
+		FROM regions
+		WHERE split_part(region_name, ' ', 1) IN (:name,
+			:name || '특별시', :name || '광역시', :name || '특별자치시', :name || '도', :name || '특별자치도')
+		GROUP BY left(region_code, 2)
+		UNION ALL
+		SELECT
+			MIN(split_part(region_name, ' ', 2)),
+			ST_Y(ST_Centroid(ST_Collect(boundary_geom::geometry))),
+			ST_X(ST_Centroid(ST_Collect(boundary_geom::geometry))),
+			ST_YMin(ST_Extent(boundary_geom::geometry)),
+			ST_XMin(ST_Extent(boundary_geom::geometry)),
+			ST_YMax(ST_Extent(boundary_geom::geometry)),
+			ST_XMax(ST_Extent(boundary_geom::geometry)),
+			BOOL_OR(ST_Intersects(boundary_geom,
+				ST_MakeEnvelope(:swLng, :swLat, :neLng, :neLat, 4326)::geography))
+		FROM regions
+		WHERE split_part(region_name, ' ', 2) = :name
+		GROUP BY left(region_code, 5)
+		UNION ALL
+		SELECT
+			MIN(split_part(region_name, ' ', 3)),
+			ST_Y(ST_Centroid(ST_Collect(boundary_geom::geometry))),
+			ST_X(ST_Centroid(ST_Collect(boundary_geom::geometry))),
+			ST_YMin(ST_Extent(boundary_geom::geometry)),
+			ST_XMin(ST_Extent(boundary_geom::geometry)),
+			ST_YMax(ST_Extent(boundary_geom::geometry)),
+			ST_XMax(ST_Extent(boundary_geom::geometry)),
+			BOOL_OR(ST_Intersects(boundary_geom,
+				ST_MakeEnvelope(:swLng, :swLat, :neLng, :neLat, 4326)::geography))
+		FROM regions
+		WHERE split_part(region_name, ' ', 3) = :name
+		GROUP BY left(region_code, 10)
+		""", nativeQuery = true)
+	List<RegionMentionProjection> matchMentionedRegions(
+		@Param("name") String name,
+		@Param("swLat") double swLat,
+		@Param("swLng") double swLng,
+		@Param("neLat") double neLat,
+		@Param("neLng") double neLng
+	);
+
+	/**
 	 * 사용자 단위 advisory 트랜잭션 잠금 (MSG-155). 같은 사용자의 점령/롤백 트랜잭션이 겹칠 때
 	 * recompute COUNT 가 서로의 미커밋 user_grids 를 못 봐 낮은 값으로 덮어쓰는 lost update 를 막는다 —
 	 * 잠금 대기 후 실행되는 recompute 문장은 새 스냅샷(READ COMMITTED)으로 커밋된 진값을 센다.
