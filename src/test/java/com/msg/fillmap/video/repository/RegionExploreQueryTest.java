@@ -587,6 +587,7 @@ class RegionExploreQueryTest {
 		assertThat(syntheticRows(me)).isEmpty();
 	}
 
+	// 검증: FR-SEARCH-15
 	@Test
 	@DisplayName("region_code가_NULL인_격자는_전체_지역_목록에_영향을_주지_않는다")
 	void region_code가_NULL인_격자는_전체_지역_목록에_영향을_주지_않는다() {
