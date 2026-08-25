@@ -19,6 +19,7 @@ import com.msg.fillmap.friend.dto.FriendCollectionGridResponseDto;
 import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
 import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
 import com.msg.fillmap.friend.dto.FriendProfileResponseDto;
+import com.msg.fillmap.friend.dto.FriendRelation;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.entity.Friendship;
@@ -91,10 +92,20 @@ public class FriendServiceImpl implements FriendService {
 		return new FriendCodeResponseDto(findUser(userId).getFriendCode());
 	}
 
+	/**
+	 * 코드 미리보기 (MSG-391). 판정 순서는 request 와 동일 — 9404 → SELF(쌍 조회 생략, D-4) → 쌍 판정.
+	 * 쌍 조회는 무잠금 findPairWithoutLock — findPair 는 PESSIMISTIC_WRITE 라 이 readOnly 트랜잭션에서
+	 * PostgreSQL 이 거부한다 (D-1).
+	 */
 	@Override
 	@Transactional(readOnly = true)
-	public FriendPreviewResponseDto preview(String friendCode) {
-		return new FriendPreviewResponseDto(findByCode(friendCode).getNickname());
+	public FriendPreviewResponseDto preview(Long userId, String friendCode) {
+		User target = findByCode(friendCode);
+		if (target.getId().equals(userId)) {
+			return new FriendPreviewResponseDto(target.getNickname(), FriendRelation.SELF);
+		}
+		Friendship pair = friendshipRepository.findPairWithoutLock(userId, target.getId()).orElse(null);
+		return new FriendPreviewResponseDto(target.getNickname(), FriendRelation.of(userId, pair));
 	}
 
 	@Override
@@ -115,28 +126,31 @@ public class FriendServiceImpl implements FriendService {
 		// 늦은 INSERT 는 유니크 위반 500 1회, 재시도가 역방향 PENDING 을 보고 자동 수락으로 수렴.
 		// 방치 시 findPair 의 Optional 단건 계약이 영구 깨져 앱 검증만으론 부족했다 (Codex 리뷰 반영).
 		Optional<Friendship> pair = friendshipRepository.findPair(userId, target.getId());
-		if (pair.isEmpty()) {
-			friendshipRepository.save(Friendship.request(userId, target.getId()));
-			// 요청 도착 알림 (MSG-416 D1·D2) — KST 날짜 키가 "같은 상대 하루 1건" 상한(FR-8)을 겸한다.
-			// 같은 날 재요청은 ON CONFLICT DO NOTHING 흡수, 날이 바뀌면 새 키라 새 행 (FR-7).
-			String eventKey = "FRIEND_REQ:" + userId + ":"
-				+ LocalDate.now(clock.withZone(KST)).format(DateTimeFormatter.BASIC_ISO_DATE);
-			notificationCommandService.record(target.getId(), NotificationCategory.FRIEND, eventKey,
-				"새 친구 요청", findUser(userId).getNickname() + "님이 친구 요청을 보냈어요");
-			return new FriendRequestCreateResponseDto(FriendshipStatus.PENDING);
-		}
-		Friendship existing = pair.get();
-		if (existing.getStatus() == FriendshipStatus.ACCEPTED) {
-			throw new ApiException(FriendErrorCode.ALREADY_FRIENDS);
-		}
-		if (existing.getRequesterId().equals(userId)) {
-			throw new ApiException(FriendErrorCode.FRIEND_REQUEST_ALREADY_PENDING);
-		}
-		// 역방향 대기 = 양쪽 다 추가 의사 표명 — 기존 행을 승격해 "최대 1행" 불변식을 유지한다 (FR-8).
-		existing.accept();
-		// 수락 알림은 먼저 요청했던 쪽에만 — 나중 요청자(userId)는 응답 body 로 이미 ACCEPTED 를 받는다 (MSG-416 FR-3).
-		recordAcceptedNotification(existing.getRequesterId(), userId);
-		return new FriendRequestCreateResponseDto(FriendshipStatus.ACCEPTED);
+		// 관계 판정은 preview 와 같은 FriendRelation.of 하나다 (MSG-391 D-2) — 두 API 가 같은 관계에서
+		// 다른 답을 내지 않는 것(FR-10)을 구조로 보장한다. 판정 순서·에러 코드·자동 수락은 기존 그대로.
+		return switch (FriendRelation.of(userId, pair.orElse(null))) {
+			case NONE -> {
+				friendshipRepository.save(Friendship.request(userId, target.getId()));
+				// 요청 도착 알림 (MSG-416 D1·D2) — KST 날짜 키가 "같은 상대 하루 1건" 상한(FR-8)을 겸한다.
+				// 같은 날 재요청은 ON CONFLICT DO NOTHING 흡수, 날이 바뀌면 새 키라 새 행 (FR-7).
+				String eventKey = "FRIEND_REQ:" + userId + ":"
+					+ LocalDate.now(clock.withZone(KST)).format(DateTimeFormatter.BASIC_ISO_DATE);
+				notificationCommandService.record(target.getId(), NotificationCategory.FRIEND, eventKey,
+					"새 친구 요청", findUser(userId).getNickname() + "님이 친구 요청을 보냈어요");
+				yield new FriendRequestCreateResponseDto(FriendshipStatus.PENDING);
+			}
+			case FRIENDS -> throw new ApiException(FriendErrorCode.ALREADY_FRIENDS);
+			case OUTGOING_PENDING -> throw new ApiException(FriendErrorCode.FRIEND_REQUEST_ALREADY_PENDING);
+			case INCOMING_PENDING -> {
+				// 역방향 대기 = 양쪽 다 추가 의사 표명 — 기존 행을 승격해 "최대 1행" 불변식을 유지한다 (FR-8).
+				Friendship existing = pair.orElseThrow();
+				existing.accept();
+				// 수락 알림은 먼저 요청했던 쪽에만 — 나중 요청자(userId)는 응답 body 로 이미 ACCEPTED 를 받는다 (MSG-416 FR-3).
+				recordAcceptedNotification(existing.getRequesterId(), userId);
+				yield new FriendRequestCreateResponseDto(FriendshipStatus.ACCEPTED);
+			}
+			case SELF -> throw new IllegalStateException("unreachable"); // self 는 앞에서 9400 (D-4)
+		};
 	}
 
 	@Override

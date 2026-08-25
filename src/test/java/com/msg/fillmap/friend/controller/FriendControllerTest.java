@@ -31,6 +31,7 @@ import com.msg.fillmap.friend.dto.FriendCollectionGridResponseDto;
 import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
 import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
 import com.msg.fillmap.friend.dto.FriendProfileResponseDto;
+import com.msg.fillmap.friend.dto.FriendRelation;
 import com.msg.fillmap.friend.dto.FriendRequestCreateResponseDto;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.entity.FriendshipStatus;
@@ -81,17 +82,19 @@ class FriendControllerTest {
 			.andExpect(jsonPath("$.data.friendCode").value("AB3DE7GH"));
 	}
 
-	// 검증: FR-FRIEND-02
+	// 검증: FR-FRIEND-02, FR-FRIEND-14
 	@Test
-	@DisplayName("코드 미리보기는 닉네임을 반환한다 (FR-3)")
-	void 코드_미리보기는_닉네임을_반환한다() throws Exception {
-		given(friendService.preview("AB3DE7GH")).willReturn(new FriendPreviewResponseDto("채우미"));
+	@DisplayName("코드 미리보기는 닉네임과 관계 상태를 반환한다 — relation 은 문자열 직렬화 (FR-3·MSG-391)")
+	void 코드_미리보기는_닉네임과_관계_상태를_반환한다() throws Exception {
+		given(friendService.preview(USER_ID, "AB3DE7GH"))
+			.willReturn(new FriendPreviewResponseDto("채우미", FriendRelation.NONE));
 
 		mockMvc.perform(get("/api/friends/preview")
 				.param("code", "AB3DE7GH")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.data.nickname").value("채우미"));
+			.andExpect(jsonPath("$.data.nickname").value("채우미"))
+			.andExpect(jsonPath("$.data.relation").value("NONE"));
 	}
 
 	// 검증: FR-FRIEND-02
