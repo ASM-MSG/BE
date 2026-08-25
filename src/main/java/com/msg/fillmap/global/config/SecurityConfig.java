@@ -130,6 +130,23 @@ public class SecurityConfig {
 				.requestMatchers(HttpMethod.GET,
 					"/api/regions/reverse-geocode",
 					"/api/regions/districts").permitAll()
+				// 비로그인 지도의 나머지 조회(MSG-469): 위 행정동 개방(MSG-467)과 같은 "상단 칩은 비로그인,
+				// 업로드는 로그인" 원칙의 마지막 잔여분이다(정본 docs/prd/mission-map-explore.md 8절 2026-08-25).
+				// 구역 목록은 검색바에서 구역 이름("서면")으로 지도를 옮기는 기능의 재료이고(MSG-234 §D6,
+				// FR-ZONE-11), 격자 커버와 전역 영상 목록과 시간대 분포는 격자를 눌렀을 때 화면을 채우는
+				// 값이다(셋의 노출 자리가 같아 하나만 빠지면 그 자리만 빈다). 여섯 다 사용자 무관 값이라 응답
+				// 계약은 불변이다(FR-ZONE-11, FR-SEARCH-01·07, FR-VIDEO-17·18, FR-MAP-09).
+				// GET 한정과 경로 열거가 계약의 일부다. /api/grids/** 로 넓히면 단일 격자와 뷰포트 도감과 도감
+				// 집계와 내 영상 목록까지 함께 풀리는데, 그 넷은 principal.userId() 를 null 가드 없이 부르므로
+				// 익명 유입이 401 이 아니라 NPE 500 이 된다. /api/search/** 로 넓히는 것도 같은 이유로 금지다 —
+				// 지금 search 하위가 둘뿐이라 안전해 보여도 다음에 붙는 경로가 기본 공개가 되는 fail-open 이 된다.
+				.requestMatchers(HttpMethod.GET,
+					"/api/zones",
+					"/api/search/places",
+					"/api/search/trending",
+					"/api/grids/*/cover",
+					"/api/grids/*/videos",
+					"/api/grids/*/hourly-uploads").permitAll()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.

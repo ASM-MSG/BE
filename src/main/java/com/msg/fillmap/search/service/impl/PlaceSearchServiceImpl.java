@@ -31,14 +31,16 @@ public class PlaceSearchServiceImpl implements PlaceSearchService {
 	private final ZoneNameQueryService zoneNameQueryService;
 
 	@Override
-	public List<PlaceSearchResponseDto> searchPlaces(long userId, String q) {
+	public List<PlaceSearchResponseDto> searchPlaces(String searcherKey, String q) {
 		String query = q.trim();
 		if (query.isEmpty()) {
 			// 빈 검색어는 집계 접수 전에 자른다 — 카카오 호출 0 은 위임받는 오버로드의 가드가 재보장한다
 			return List.of();
 		}
 		// 카카오 호출 전 접수 — 호출 성공 여부와 무관하게 검색 의도를 집계한다 (MSG-258 §D1, FR-1)
-		searchKeywordCommandService.recordSearch(userId, query);
+		if (searcherKey != null) {   // 식별값 없는 익명. 검색은 하고 집계만 건너뛴다 (MSG-469 D6)
+			searchKeywordCommandService.recordSearch(searcherKey, query);
+		}
 		return searchPlaces(query);
 	}
 

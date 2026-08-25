@@ -10,6 +10,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.only;
+import static org.mockito.Mockito.times;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -41,16 +42,20 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.service.GridQueryService;
+import com.msg.fillmap.region.service.RegionQueryService;
+import com.msg.fillmap.region.service.RegionQueryService.MentionedRegionMatch;
 import com.msg.fillmap.route.config.RouteAiProperties;
 import com.msg.fillmap.route.dto.RouteRecommendRequestDto;
 import com.msg.fillmap.route.dto.RouteRecommendRequestDto.ViewportDto;
 import com.msg.fillmap.route.dto.RouteRecommendResponseDto;
+import com.msg.fillmap.route.dto.RouteRecommendResponseDto.MentionedAreaDto;
 import com.msg.fillmap.route.dto.RouteRecommendResponseDto.RoutePointDto;
 import com.msg.fillmap.route.exception.RouteErrorCode;
 import com.msg.fillmap.route.service.RouteCandidate.Kind;
 import com.msg.fillmap.zone.entity.Zone;
 import com.msg.fillmap.zone.service.ZoneNameQueryService;
 import com.msg.fillmap.zone.service.ZoneNameResolver;
+import com.msg.fillmap.zone.service.ZoneQueryService;
 
 /**
  * 추천 플로우 통합 검증 (MSG-457 §도메인 로직). AI 두 호출(parse·explain)은 MockRestServiceServer 스텁,
@@ -72,6 +77,10 @@ class RouteRecommendServiceTest {
 	private final RouteCandidateCollector collector = mock(RouteCandidateCollector.class);
 	private final ZoneNameQueryService zoneNameQueryService = mock(ZoneNameQueryService.class);
 	private final GridQueryService gridQueryService = mock(GridQueryService.class);
+	// 언급 지역 신호(MSG-468)의 데이터 출처 두 계약은 mock, 판정 합성(리졸버)은 실물이다 — 기본 스텁(빈 목록)은
+	// 대조 실패라 기존 시나리오는 전부 무신호로 흐른다.
+	private final ZoneQueryService zoneQueryService = mock(ZoneQueryService.class);
+	private final RegionQueryService regionQueryService = mock(RegionQueryService.class);
 	private final SteppingClock clock = new SteppingClock();
 
 	private MockRestServiceServer server;
@@ -88,7 +97,8 @@ class RouteRecommendServiceTest {
 		ObjectProvider<RouteIntentClient> provider = mock(ObjectProvider.class);
 		given(provider.getIfAvailable()).willReturn(intentClient);
 		given(zoneNameQueryService.resolver()).willReturn(new ZoneNameResolver(List.of()));
-		service = new RouteRecommendServiceImpl(provider, collector, zoneNameQueryService, gridQueryService, clock);
+		service = new RouteRecommendServiceImpl(provider, collector, zoneNameQueryService, gridQueryService,
+			new RouteMentionedAreaResolver(zoneQueryService, regionQueryService), clock);
 	}
 
 	/* ---------- 픽스처 ---------- */
@@ -341,6 +351,137 @@ class RouteRecommendServiceTest {
 			RouteRecommendResponseDto second = service.recommend(USER_ID, 요청());
 
 			assertThat(second).isEqualTo(first);
+			server.verify();
+		}
+	}
+
+	@Nested
+	@DisplayName("언급 지역 신호 (MSG-468)")
+	class MentionedArea {
+
+		private static final ViewportDto 서울_뷰포트 = new ViewportDto(37.45, 126.85, 37.65, 127.10);
+
+		/** 부산광역시 매칭 그룹 — 이름·좌표가 서버 데이터(regions) 출처라는 정합 검증의 기준값. */
+		private MentionedRegionMatch 부산_매칭(boolean overlapsViewport) {
+			return new MentionedRegionMatch("부산광역시", 35.1985, 129.0538,
+				35.0512, 128.7602, 35.3891, 129.2723, overlapsViewport);
+		}
+
+		private void parse는_지역을_준다(String region) {
+			server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
+				"{\"region\": \"" + region + "\", \"period\": null, \"interests\": [], \"preferred_order\": []}",
+				MediaType.APPLICATION_JSON));
+		}
+
+		private RouteRecommendRequestDto 서울에서_요청(String text) {
+			return new RouteRecommendRequestDto(text, 서울_뷰포트, null);
+		}
+
+		// 검증: FR-ROUTE-14
+		@Test
+		@DisplayName("화면 밖 지역을 말하면 이동 신호가 실린다 — name 은 서버 정식 표기지 AI 반환 문자열이 아니다")
+		void 화면_밖_지역을_말하면_이동_신호가_실린다() {
+			given(collector.collect(any(), any())).willReturn(List.of(장소후보("카페", 37.55, 126.99)));
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_지역을_준다("부산");
+			explain은_이유를_준다("r1");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+
+			MentionedAreaDto area = response.mentionedArea();
+			assertThat(area.name()).isEqualTo("부산광역시");	// AI 가 준 "부산"이 아니다 (데이터 정합)
+			assertThat(area.kind()).isEqualTo("MOVE");
+			assertThat(area.centerLat()).isEqualTo(35.1985);
+			assertThat(area.centerLng()).isEqualTo(129.0538);
+		}
+
+		// 검증: FR-ROUTE-14
+		@Test
+		@DisplayName("후보가 없어도 신호는 실린다 — 빈 후보 조기 반환 경로에도 mentionedArea 동봉")
+		void 후보가_없어도_신호는_실린다() {
+			given(collector.collect(any(), any())).willReturn(List.of());
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_지역을_준다("부산");	// explain 기대는 걸지 않는다 — 빈 후보는 explain 을 부르지 않는다
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+
+			assertThat(response.points()).isEmpty();
+			assertThat(response.notice()).isNotNull();
+			assertThat(response.mentionedArea()).isNotNull();	// 후보 0 응답이야말로 이동 제안이 가장 필요한 지점
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-14
+		@Test
+		@DisplayName("신호가 있어도 추천 결과는 그대로다 — points·notice 는 신호 유무와 무관하게 동일")
+		void 신호가_있어도_추천_결과는_그대로다() {
+			given(collector.collect(any(), any()))
+				.willReturn(List.of(장소후보("카페", 37.55, 126.99), 장소후보("서점", 37.56, 127.00)));
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_빈해석을_준다();	// 첫 요청 — 지역 무언급
+			explain은_이유를_준다("r1", "r2");
+			parse는_지역을_준다("부산");	// 둘째 요청 — 문장이 달라 캐시 미스
+			explain은_이유를_준다("r1", "r2");
+
+			RouteRecommendResponseDto 무신호 = service.recommend(USER_ID, 서울에서_요청("축제 보고 싶어"));
+			clock.advance(Duration.ofSeconds(10));
+			RouteRecommendResponseDto 신호 = service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+
+			assertThat(무신호.mentionedArea()).isNull();
+			assertThat(신호.mentionedArea()).isNotNull();
+			assertThat(신호.points()).isEqualTo(무신호.points());
+			assertThat(신호.notice()).isEqualTo(무신호.notice());
+		}
+
+		// 검증: FR-ROUTE-14
+		@Test
+		@DisplayName("모르는 지역 이름은 신호 없이 정상 추천된다 — 대조 실패는 무신호일 뿐 실패가 아니다")
+		void 모르는_지역_이름은_신호_없이_정상_추천된다() {
+			given(collector.collect(any(), any())).willReturn(List.of(장소후보("카페", 37.55, 126.99)));
+			// zones·regions 는 기본 스텁(빈 목록) — 오타·해외 지명·미등재 통칭 전부 이 경로다 (FR-3)
+			parse는_지역을_준다("샌프란시스코");
+			explain은_이유를_준다("r1");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 서울에서_요청("샌프란시스코 가고 싶어"));
+
+			assertThat(response.points()).hasSize(1);
+			assertThat(response.mentionedArea()).isNull();
+		}
+
+		// 검증: FR-ROUTE-14
+		@Test
+		@DisplayName("판정 조회가 실패해도 추천은 성공한다 — 신호는 부가 정보라 실패를 전파하지 않는다")
+		void 판정_조회가_실패해도_추천은_성공한다() {
+			given(collector.collect(any(), any())).willReturn(List.of(장소후보("카페", 37.55, 126.99)));
+			given(regionQueryService.matchMentionedRegions(any(), any()))
+				.willThrow(new IllegalStateException("region 조회 실패"));
+			parse는_지역을_준다("부산");
+			explain은_이유를_준다("r1");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+
+			assertThat(response.points()).hasSize(1);	// 추천은 그대로 성공
+			assertThat(response.mentionedArea()).isNull();	// 예외는 무신호로 삼켜진다
+		}
+
+		// 검증: FR-ROUTE-14
+		@Test
+		@DisplayName("캐시 창 안 재요청은 같은 신호를 받는다 — 판정은 캐시된 해석 위에서 재현된다")
+		void 캐시_창_안_재요청은_같은_신호를_받는다() {
+			given(collector.collect(any(), any())).willReturn(List.of(장소후보("카페", 37.55, 126.99)));
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_지역을_준다("부산");	// parse 기대는 한 번뿐 — 둘째 요청이 parse 를 사면 verify 가 실패한다
+			explain은_이유를_준다("r1");
+			explain은_이유를_준다("r1");
+
+			RouteRecommendResponseDto first = service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+			clock.advance(Duration.ofSeconds(10));	// 요청 제한 창은 넘고 캐시 TTL(10분) 안이다
+			RouteRecommendResponseDto second = service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+
+			assertThat(first.mentionedArea()).isNotNull();
+			assertThat(second.mentionedArea()).isEqualTo(first.mentionedArea());
+			// 판정은 캐시 히트에도 재실행된다 — 저장된 신호 재사용이 아니라 같은 region 문자열의 재현이다.
+			then(regionQueryService).should(times(2)).matchMentionedRegions(any(), any());
 			server.verify();
 		}
 	}

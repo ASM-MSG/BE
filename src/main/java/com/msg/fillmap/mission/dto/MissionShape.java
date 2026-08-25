@@ -40,7 +40,7 @@ public sealed interface MissionShape
 		requiredProperties = {"spots", "line"})
 	record PathShape(
 		@Schema(description = "코스 라인 GeoJSON LineString 원문 — missions.path 는 NULL 허용 컬럼이라 없을 수 있다",
-			type = "object", nullable = true)
+			types = {"object", "null"})
 		@JsonRawValue String line,
 		List<Spot> spots
 	) implements MissionShape {

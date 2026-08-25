@@ -24,6 +24,7 @@ import com.msg.fillmap.grid.service.GridQueryService;
 import com.msg.fillmap.route.dto.RouteRecommendRequestDto;
 import com.msg.fillmap.route.dto.RouteRecommendRequestDto.ViewportDto;
 import com.msg.fillmap.route.dto.RouteRecommendResponseDto;
+import com.msg.fillmap.route.dto.RouteRecommendResponseDto.MentionedAreaDto;
 import com.msg.fillmap.route.dto.RouteRecommendResponseDto.RoutePointDto;
 import com.msg.fillmap.route.exception.RouteErrorCode;
 import com.msg.fillmap.route.service.RouteCandidate.Kind;
@@ -35,7 +36,7 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * AI 경로 추천 구현 (MSG-457). 처리 순서는 입력 검증 → 플래그 게이트 → 요청 제한 원자 선점 → parse(캐시)
- * → 후보 수집 → 순서 배열 → facts 조립 → explain → 응답 조립이다. 요청 제한이 검증·플래그 뒤인 것은
+ * → 언급 지역 판정(MSG-468) → 후보 수집 → 순서 배열 → facts 조립 → explain → 응답 조립이다. 요청 제한이 검증·플래그 뒤인 것은
  * FR-ROUTE-12 의 근거가 "호출마다 외부 비용"이라 비용이 안 나가는 400·14400·14503 거부는 창을 소모하지
  * 않기 때문이다(2026-08-24 확정). 전 구간 읽기 전용 — 저장 의존이 주입되지 않아 스탬프·미션 진행이
  * 구조적으로 변하지 않는다(FR-ROUTE-09).
@@ -79,6 +80,7 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	private final RouteCandidateCollector candidateCollector;
 	private final ZoneNameQueryService zoneNameQueryService;
 	private final GridQueryService gridQueryService;
+	private final RouteMentionedAreaResolver mentionedAreaResolver;
 	private final Clock clock;
 
 	// ponytail: 요청 제한·parse 캐시 모두 단일 인스턴스 전제의 메모리 구조다(스펙 명시 단순화) —
@@ -97,17 +99,19 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	@Autowired
 	public RouteRecommendServiceImpl(ObjectProvider<RouteIntentClient> intentClientProvider,
 		RouteCandidateCollector candidateCollector, ZoneNameQueryService zoneNameQueryService,
-		GridQueryService gridQueryService) {
-		this(intentClientProvider, candidateCollector, zoneNameQueryService, gridQueryService, Clock.systemUTC());
+		GridQueryService gridQueryService, RouteMentionedAreaResolver mentionedAreaResolver) {
+		this(intentClientProvider, candidateCollector, zoneNameQueryService, gridQueryService, mentionedAreaResolver,
+			Clock.systemUTC());
 	}
 
 	public RouteRecommendServiceImpl(ObjectProvider<RouteIntentClient> intentClientProvider,
 		RouteCandidateCollector candidateCollector, ZoneNameQueryService zoneNameQueryService,
-		GridQueryService gridQueryService, Clock clock) {
+		GridQueryService gridQueryService, RouteMentionedAreaResolver mentionedAreaResolver, Clock clock) {
 		this.intentClientProvider = intentClientProvider;
 		this.candidateCollector = candidateCollector;
 		this.zoneNameQueryService = zoneNameQueryService;
 		this.gridQueryService = gridQueryService;
+		this.mentionedAreaResolver = mentionedAreaResolver;
 		this.clock = clock;
 	}
 
@@ -125,14 +129,14 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 			claimRateLimitWindow(userId, startMillis);
 			RouteRecommendResponseDto response = doRecommend(intentClient, request, spans);
 			logMetrics(response.points().size() >= NOTICE_THRESHOLD ? "ok" : "insufficient",
-				startMillis, spans, response.points().size());
+				startMillis, spans, response.points().size(), signalOf(response));
 			return response;
 		} catch (ApiException e) {
-			logMetrics(outcomeOf(e), startMillis, spans, 0);
+			logMetrics(outcomeOf(e), startMillis, spans, 0, "none");
 			throw e;
 		} catch (RuntimeException e) {
 			// ApiException 밖 실패(NPE류)도 지표 없이 새면 실패율이 과소 계상된다 — 지표만 남기고 그대로 올린다.
-			logMetrics("error", startMillis, spans, 0);
+			logMetrics("error", startMillis, spans, 0, "none");
 			throw e;
 		}
 	}
@@ -148,11 +152,15 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 
 		ViewportBounds bounds = new ViewportBounds(
 			viewport.minLat(), viewport.minLng(), viewport.maxLat(), viewport.maxLng());
+		// 언급 지역 판정 (MSG-468) — parse(캐시 경유) 직후: 캐시 창 안 재요청도 같은 region 으로 같은 판정을
+		// 재현한다. 결과는 아래 두 반환 경로(빈 후보 조기 반환·정상 assemble) 모두에 실린다 (§판정 위치).
+		MentionedAreaDto mentionedArea = mentionedAreaResolver.resolve(intent.region(), bounds);
 		List<RouteCandidate> candidates = candidateCollector.collect(bounds, intent);
 		if (candidates.isEmpty()) {
 			// 빈 후보는 explain 을 부르지 않는다 (FR-ROUTE-07) — AI 계약이 points 0개를 422 로 거부하므로
 			// 태우면 성공이어야 할 응답이 14502 실패로 뒤집힌다 (§도메인 로직 도입부 분기).
-			return new RouteRecommendResponseDto(List.of(), EMPTY_NOTICE);
+			// 신호는 여기에도 싣는다 — 화면 안에 후보조차 없는 응답이야말로 이동 제안이 가장 필요한 지점이다.
+			return new RouteRecommendResponseDto(List.of(), EMPTY_NOTICE, mentionedArea);
 		}
 		List<RouteCandidate> ordered = RouteOrderPlanner.order(candidates, intent.preferredOrder(), request.origin(),
 			(viewport.minLat() + viewport.maxLat()) / 2, (viewport.minLng() + viewport.maxLng()) / 2);
@@ -161,7 +169,7 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		List<String> reasons = intentClient.explain(explainPoints(ordered));
 		spans[1] = clock.millis() - explainStart;
 
-		return assemble(ordered, reasons);
+		return assemble(ordered, reasons, mentionedArea);
 	}
 
 	/**
@@ -250,7 +258,8 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	 * 응답 조립 — 표시명 재료는 리졸버 요청당 1회 로드 후 지점마다 순수 계산, 행정동 이름은 일괄 1회 조회다
 	 * (둘 다 N+1 봉쇄 계약, §계약 변경). reasons 는 explain 검증을 통과한 값이라 points 와 개수·순서가 같다.
 	 */
-	private RouteRecommendResponseDto assemble(List<RouteCandidate> ordered, List<String> reasons) {
+	private RouteRecommendResponseDto assemble(List<RouteCandidate> ordered, List<String> reasons,
+		MentionedAreaDto mentionedArea) {
 		ZoneNameResolver resolver = zoneNameQueryService.resolver();
 		Map<String, String> regionNames = gridQueryService.resolveRegionNames(
 			ordered.stream().map(RouteCandidate::gridId).distinct().toList());
@@ -265,17 +274,26 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 				candidate.missionId(), candidate.occurrenceId()));
 		}
 		return new RouteRecommendResponseDto(points,
-			points.size() >= NOTICE_THRESHOLD ? null : INSUFFICIENT_NOTICE);
+			points.size() >= NOTICE_THRESHOLD ? null : INSUFFICIENT_NOTICE, mentionedArea);
 	}
 
 	private static String truncate(String value) {
 		return value.length() <= MAX_AI_TEXT_LENGTH ? value : value.substring(0, MAX_AI_TEXT_LENGTH);
 	}
 
-	/** 지표 로그 (비기능 운영) — 사용자 문장 원문과 AI 응답 원문은 남기지 않는다. 집계는 이 라인으로 한다. */
-	private void logMetrics(String outcome, long startMillis, long[] spans, int points) {
-		log.info("[route] outcome={} total_ms={} parse_ms={} explain_ms={} points={}",
-			outcome, clock.millis() - startMillis, spans[0], spans[1], points);
+	/**
+	 * 지표 로그 (비기능 운영) — 사용자 문장 원문과 AI 응답 원문은 남기지 않는다. 집계는 이 라인으로 한다.
+	 * signal 은 언급 지역 신호 발화 빈도의 실측 재료다 (MSG-468 §지표 로그) — 지역 이름 자체는 남기지 않는다.
+	 */
+	private void logMetrics(String outcome, long startMillis, long[] spans, int points, String signal) {
+		log.info("[route] outcome={} total_ms={} parse_ms={} explain_ms={} points={} signal={}",
+			outcome, clock.millis() - startMillis, spans[0], spans[1], points, signal);
+	}
+
+	/** 신호 지표 값 — none·move·zoom_out (MSG-468 §지표 로그). */
+	private static String signalOf(RouteRecommendResponseDto response) {
+		MentionedAreaDto area = response.mentionedArea();
+		return area == null ? "none" : area.kind().toLowerCase(Locale.ROOT);
 	}
 
 	private static String outcomeOf(ApiException e) {

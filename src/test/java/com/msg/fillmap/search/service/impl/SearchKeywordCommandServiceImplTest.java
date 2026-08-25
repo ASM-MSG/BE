@@ -56,6 +56,10 @@ class SearchKeywordCommandServiceImplTest {
 	private static final String NEXT_DEDUPE_KEY = "searchdedupe:20000102";
 	private static final long USER_ID = 42L;
 	private static final long OTHER_USER_ID = 43L;
+	private static final String SEARCHER_KEY = String.valueOf(USER_ID);
+	private static final String OTHER_SEARCHER_KEY = String.valueOf(OTHER_USER_ID);
+	/** 익명 검색자 키 — 컨트롤러가 방문자 세션 값 앞에 s: 를 붙여 만든다 (MSG-469 D3). */
+	private static final String ANON_KEY = "s:sess-1";
 
 	private static LettuceConnectionFactory connectionFactory;
 	private static StringRedisTemplate redisTemplate;
@@ -91,7 +95,7 @@ class SearchKeywordCommandServiceImplTest {
 	// 검증: FR-SEARCH-05
 	@Test
 	void 유효한_검색어_1건은_오늘_날짜의_카운트를_올린다() {
-		service.recordSearch(USER_ID, "부산대");
+		service.recordSearch(SEARCHER_KEY, "부산대");
 
 		verify(repository).upsertIncrement(KST_DATE, "부산대");
 	}
@@ -99,8 +103,8 @@ class SearchKeywordCommandServiceImplTest {
 	// 검증: FR-SEARCH-06
 	@Test
 	void 연속_공백과_대소문자가_다른_검색어는_같은_검색어로_정규화되어_합산된다() {
-		service.recordSearch(USER_ID, "  홍대   Cafe  ");
-		service.recordSearch(OTHER_USER_ID, "홍대 cafe");
+		service.recordSearch(SEARCHER_KEY, "  홍대   Cafe  ");
+		service.recordSearch(OTHER_SEARCHER_KEY, "홍대 cafe");
 
 		verify(repository, times(2)).upsertIncrement(KST_DATE, "홍대 cafe");
 	}
@@ -108,8 +112,8 @@ class SearchKeywordCommandServiceImplTest {
 	// 검증: FR-SEARCH-06
 	@Test
 	void 같은_사용자가_같은_날_같은_검색어를_두번_검색해도_카운트는_한번만_오른다() {
-		service.recordSearch(USER_ID, "부산대");
-		service.recordSearch(USER_ID, "부산대");
+		service.recordSearch(SEARCHER_KEY, "부산대");
+		service.recordSearch(SEARCHER_KEY, "부산대");
 
 		verify(repository, times(1)).upsertIncrement(KST_DATE, "부산대");
 	}
@@ -117,15 +121,57 @@ class SearchKeywordCommandServiceImplTest {
 	// 검증: FR-SEARCH-06
 	@Test
 	void 다른_사용자의_같은_검색어는_각각_카운트된다() {
-		service.recordSearch(USER_ID, "부산대");
-		service.recordSearch(OTHER_USER_ID, "부산대");
+		service.recordSearch(SEARCHER_KEY, "부산대");
+		service.recordSearch(OTHER_SEARCHER_KEY, "부산대");
 
 		verify(repository, times(2)).upsertIncrement(KST_DATE, "부산대");
 	}
 
+	// 검증: FR-SEARCH-06
+	@Test
+	void 익명_방문자는_같은_날_같은_검색어를_두_번_쳐도_한_번만_센다() {
+		service.recordSearch(ANON_KEY, "부산대");
+		service.recordSearch(ANON_KEY, "부산대");
+
+		verify(repository, times(1)).upsertIncrement(KST_DATE, "부산대");
+	}
+
+	// 검증: FR-SEARCH-06
+	@Test
+	void 서로_다른_방문자_식별값은_따로_센다() {
+		service.recordSearch("s:a", "부산대");
+		service.recordSearch("s:b", "부산대");
+
+		verify(repository, times(2)).upsertIncrement(KST_DATE, "부산대");
+
+		// 사용자 42 와 세션값 "42" 는 서로 다른 member 로 들어간다 — 로그인 키는 숫자로, 익명 키는 s 로
+		// 시작하므로 두 공간은 구조적으로 겹치지 않는다 (D4 충돌 불가 불변)
+		service.recordSearch(SEARCHER_KEY, "부산대");
+		service.recordSearch("s:42", "부산대");
+
+		assertThat(redisTemplate.opsForSet().members(DEDUPE_KEY))
+			.contains("42:부산대", "s:42:부산대");
+	}
+
+	// 검증: FR-SEARCH-06
+	@Test
+	void 익명_키도_레디스_장애면_카운트를_올리지_않는다() {
+		LettuceConnectionFactory deadFactory = new LettuceConnectionFactory("localhost", 6390);
+		deadFactory.afterPropertiesSet();
+		StringRedisTemplate deadTemplate = new StringRedisTemplate(deadFactory);
+		deadTemplate.afterPropertiesSet();
+		SearchKeywordCommandServiceImpl deadService = new SearchKeywordCommandServiceImpl(deadTemplate, repository,
+			Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC), Runnable::run);
+
+		assertThatCode(() -> deadService.recordSearch(ANON_KEY, "부산대")).doesNotThrowAnyException();
+
+		verifyNoInteractions(repository);   // 익명이라고 dedupe 없이 세는 경로는 만들지 않는다 (MSG-258 D4)
+		deadFactory.destroy();
+	}
+
 	@Test
 	void 정규화_후_255자를_넘는_검색어는_집계에서_제외된다() {
-		service.recordSearch(USER_ID, "가".repeat(256));
+		service.recordSearch(SEARCHER_KEY, "가".repeat(256));
 
 		verifyNoInteractions(repository);
 		assertThat(redisTemplate.hasKey(DEDUPE_KEY)).isFalse();
@@ -135,7 +181,7 @@ class SearchKeywordCommandServiceImplTest {
 	void 정규화_후_255자인_검색어는_집계된다() {
 		String keyword = "가".repeat(255);
 
-		service.recordSearch(USER_ID, keyword);
+		service.recordSearch(SEARCHER_KEY, keyword);
 
 		verify(repository).upsertIncrement(KST_DATE, keyword);
 	}
@@ -164,7 +210,7 @@ class SearchKeywordCommandServiceImplTest {
 		SearchKeywordCommandServiceImpl delayedService =
 			new SearchKeywordCommandServiceImpl(redisTemplate, repository, mutableClock, deferred::add);
 
-		delayedService.recordSearch(USER_ID, "부산대");
+		delayedService.recordSearch(SEARCHER_KEY, "부산대");
 		now.set(FIXED_INSTANT.plus(Duration.ofHours(2)));   // 워커 실행 전에 KST 자정을 넘긴다
 		deferred.forEach(Runnable::run);
 
@@ -174,7 +220,7 @@ class SearchKeywordCommandServiceImplTest {
 
 	@Test
 	void dedupe_키에_26시간_TTL이_설정된다() {
-		service.recordSearch(USER_ID, "부산대");
+		service.recordSearch(SEARCHER_KEY, "부산대");
 
 		Long expireSeconds = redisTemplate.getExpire(DEDUPE_KEY);
 
@@ -183,9 +229,9 @@ class SearchKeywordCommandServiceImplTest {
 
 	@Test
 	void dedupe_표식은_사용자와_정규화_검색어로_구성된다() {
-		service.recordSearch(USER_ID, "  부산대  ");
+		service.recordSearch(SEARCHER_KEY, "  부산대  ");
 
-		assertThat(redisTemplate.opsForSet().members(DEDUPE_KEY)).containsExactly(USER_ID + ":부산대");
+		assertThat(redisTemplate.opsForSet().members(DEDUPE_KEY)).containsExactly(SEARCHER_KEY + ":부산대");
 	}
 
 	// 검증: FR-SEARCH-10
@@ -198,7 +244,7 @@ class SearchKeywordCommandServiceImplTest {
 		SearchKeywordCommandServiceImpl deadService = new SearchKeywordCommandServiceImpl(deadTemplate, repository,
 			Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC), Runnable::run);
 
-		assertThatCode(() -> deadService.recordSearch(USER_ID, "부산대")).doesNotThrowAnyException();
+		assertThatCode(() -> deadService.recordSearch(SEARCHER_KEY, "부산대")).doesNotThrowAnyException();
 
 		verifyNoInteractions(repository);   // dedupe 판정 없이 카운트하면 도배 방어가 뚫린다 (D4)
 		deadFactory.destroy();
@@ -215,14 +261,22 @@ class SearchKeywordCommandServiceImplTest {
 		Logger logger = (Logger) LoggerFactory.getLogger(SearchKeywordCommandServiceImpl.class);
 		logger.addAppender(logAppender);
 		try {
-			service.recordSearch(USER_ID, "부산대");
+			service.recordSearch(SEARCHER_KEY, "부산대");
 
 			ILoggingEvent event = logAppender.list.get(0);
 			assertThat(event.getThrowableProxy()).isNull();   // 스택·예외 메시지 자체를 로그에 싣지 않는다
 			assertThat(event.getFormattedMessage())
 				.doesNotContain("부산대")
-				.contains("userId=" + USER_ID)
+				.contains("searcherKey=" + SEARCHER_KEY)
 				.contains("causeType=RuntimeException");   // 원인 구분 손잡이는 클래스명으로 유지
+
+			// 익명 세션 값은 클라이언트 입력이라 접두만 남긴다 (MSG-469 D5, MSG-342 D-2)
+			logAppender.list.clear();
+			service.recordSearch(ANON_KEY, "부산대");
+
+			assertThat(logAppender.list.get(0).getFormattedMessage())
+				.doesNotContain("sess-1")
+				.contains("searcherKey=s:(masked)");
 		} finally {
 			logger.detachAppender(logAppender);
 		}
@@ -232,7 +286,7 @@ class SearchKeywordCommandServiceImplTest {
 	void 집계_DB_장애에도_예외를_전파하지_않는다() {
 		when(repository.upsertIncrement(any(), anyString())).thenThrow(new RuntimeException("DB 장애"));
 
-		assertThatCode(() -> service.recordSearch(USER_ID, "부산대")).doesNotThrowAnyException();
+		assertThatCode(() -> service.recordSearch(SEARCHER_KEY, "부산대")).doesNotThrowAnyException();
 	}
 
 	// 검증: FR-SEARCH-10
@@ -244,7 +298,7 @@ class SearchKeywordCommandServiceImplTest {
 				throw new RejectedExecutionException("큐 포화");
 			});
 
-		assertThatCode(() -> saturatedService.recordSearch(USER_ID, "부산대")).doesNotThrowAnyException();
+		assertThatCode(() -> saturatedService.recordSearch(SEARCHER_KEY, "부산대")).doesNotThrowAnyException();
 
 		verifyNoInteractions(repository);
 	}
@@ -290,7 +344,7 @@ class SearchKeywordCommandServiceImplTest {
 		SearchKeywordCommandServiceImpl defaultService = new SearchKeywordCommandServiceImpl(deadTemplate, repository);
 
 		// 죽은 포트 템플릿 — 워커 스레드는 실제로 생성·실행되지만 실서비스 dedupe 키를 오염시키지 않는다
-		defaultService.recordSearch(USER_ID, "부산대");
+		defaultService.recordSearch(SEARCHER_KEY, "부산대");
 
 		assertThatCode(defaultService::shutdown).doesNotThrowAnyException();
 

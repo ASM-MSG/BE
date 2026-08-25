@@ -16,7 +16,7 @@
 | FR-MAP-05 | 폐기됨 | (없음) |
 | FR-MAP-06 | 계획 | (없음) |
 | FR-MAP-08 | 계획 | (없음) |
-| FR-MAP-09 | 구현됨 | GridHourlyUploadControllerTest, VideoHourlyUploadQueryTest, VideoHourlyUploadServiceTest |
+| FR-MAP-09 | 구현됨 | AnonymousReadAccessHttpTest, GridHourlyUploadControllerTest, VideoHourlyUploadQueryTest, VideoHourlyUploadServiceTest |
 | FR-MAP-07 | 계획 | (없음) |
 | FR-MAP-10 | 구현됨 | CollectionControllerTest, CollectionGridsFilterRepositoryTest, UserGridQueryServiceImplTest |
 | FR-GRID-01 | 구현됨 | GridEncoderTest |
@@ -24,7 +24,7 @@
 | FR-GRID-03 | 구현됨 | GridEncoderTest |
 | FR-GRID-04 | 구현됨 | VideoServiceIntegrationTest |
 | FR-GRID-05 | 구현됨 | GridEncoderTest, GridSampleFixtureTest |
-| FR-GRID-06 | 구현됨 | GridControllerTest, GridQueryServiceIntegrationTest, GridRepositoryTest |
+| FR-GRID-06 | 구현됨 | AnonymousReadAccessHttpTest, GridControllerTest, GridQueryServiceIntegrationTest, GridRepositoryTest |
 | FR-GRID-07 | 구현됨 | GridQueryServiceIntegrationTest, GridRepositoryTest |
 | FR-GRID-08 | 구현됨 | GridControllerTest, GridCursorTest, GridQueryServiceIntegrationTest, GridRepositoryTest |
 | FR-GRID-09 | 구현됨 | GridControllerTest, GridCursorTest, GridQueryServiceIntegrationTest |
@@ -42,7 +42,7 @@
 | FR-ZONE-08 | 구현됨 | ZoneNameQueryServiceIntegrationTest |
 | FR-ZONE-09 | 구현됨 | GridQueryServiceIntegrationTest |
 | FR-ZONE-10 | 구현됨 | ZoneNamingContractTest |
-| FR-ZONE-11 | 구현됨 | ZoneControllerTest, ZoneQueryServiceTest |
+| FR-ZONE-11 | 구현됨 | AnonymousReadAccessHttpTest, ZoneControllerTest, ZoneQueryServiceTest |
 | FR-ZONE-12 | 구현됨 | ZoneRepositoryTest, ZoneSeederTest |
 | FR-ZONE-13 | 구현됨 | ZoneNamingContractTest |
 | FR-ZONE-14 | 구현됨 | (없음) |
@@ -61,13 +61,13 @@
 | FR-REGION-13 | 계획 | (없음) |
 | FR-REGION-14 | 구현됨 | RegionControllerTest, RegionNationalStatQueryTest, RegionPublicAccessHttpTest, RegionStatsQueryServiceTest |
 | FR-REGION-15 | 구현됨 | RegionControllerTest, RegionDistrictQueryTest, RegionDistrictServiceTest, RegionPublicAccessHttpTest |
-| FR-SEARCH-01 | 구현됨 | KakaoLocalClientTest, PlaceSearchControllerTest, PlaceSearchServiceTest |
+| FR-SEARCH-01 | 구현됨 | AnonymousReadAccessHttpTest, KakaoLocalClientTest, PlaceSearchAggregationIntegrationTest, PlaceSearchControllerTest, PlaceSearchServiceTest |
 | FR-SEARCH-02 | 구현됨 | KakaoLocalClientTest, PlaceSearchAggregationIntegrationTest, PlaceSearchControllerTest, PlaceSearchServiceTest |
 | FR-SEARCH-03 | 구현됨 | KakaoLocalClientTest |
 | FR-SEARCH-04 | 구현됨 | KakaoLocalClientTest, PlaceSearchControllerTest |
 | FR-SEARCH-05 | 구현됨 | PlaceSearchAggregationIntegrationTest, PlaceSearchServiceTest, SearchKeywordCommandServiceImplTest, SearchKeywordCommandTransactionTest, SearchKeywordDailyCountRepositoryTest |
-| FR-SEARCH-06 | 구현됨 | PlaceSearchServiceTest, SearchKeywordCommandServiceImplTest |
-| FR-SEARCH-07 | 구현됨 | TrendingKeywordControllerTest, TrendingKeywordQueryServiceImplTest |
+| FR-SEARCH-06 | 구현됨 | PlaceSearchAggregationIntegrationTest, PlaceSearchServiceTest, SearchKeywordCommandServiceImplTest |
+| FR-SEARCH-07 | 구현됨 | AnonymousReadAccessHttpTest, TrendingKeywordControllerTest, TrendingKeywordQueryServiceImplTest |
 | FR-SEARCH-08 | 구현됨 | TrendingKeywordControllerTest |
 | FR-SEARCH-09 | 구현됨 | TrendingKeywordControllerTest, TrendingKeywordQueryServiceImplTest |
 | FR-SEARCH-10 | 구현됨 | SearchKeywordCommandServiceImplTest |
@@ -105,8 +105,8 @@
 | FR-VIDEO-14 | 구현됨 | VideoGlobalListViewCountIntegrationTest, VideoPlaybackControllerTest, VideoPlaybackServiceTest, VideoPlaybackViewCountIntegrationTest, VideoViewCountQueryTest |
 | FR-VIDEO-15 | 구현됨 | VideoServiceIntegrationTest, VideoVisibilityControllerTest, VideoVisibilityIntegrationTest |
 | FR-VIDEO-16 | 구현됨 | VideoPlaybackServiceTest |
-| FR-VIDEO-17 | 구현됨 | RegionExploreQueryTest, VideoGlobalCoverQueryTest, VideoGlobalListQueryTest, VideoServiceIntegrationTest, VideoVisibilityIntegrationTest |
-| FR-VIDEO-18 | 구현됨 | VideoAuthorNicknameIntegrationTest, VideoGlobalCoverServiceTest, VideoPlaybackServiceTest |
+| FR-VIDEO-17 | 구현됨 | AnonymousReadAccessHttpTest, RegionExploreQueryTest, VideoGlobalCoverQueryTest, VideoGlobalListQueryTest, VideoServiceIntegrationTest, VideoVisibilityIntegrationTest |
+| FR-VIDEO-18 | 구현됨 | AnonymousReadAccessHttpTest, VideoAuthorNicknameIntegrationTest, VideoGlobalCoverServiceTest, VideoPlaybackServiceTest |
 | FR-MEDIA-01 | 구현됨 | FfmpegRunnerTest, VideoEncodingServiceTest |
 | FR-MEDIA-02 | 구현됨 | AiBlurPollerTest, VideoBlurTransitionTest, VideoEncodingAiTriggerTest, VideoEncodingServiceTest, VideoEncodingTriggerTest, VideoGridQueryServiceTest, VideoPlaybackServiceTest, VideoStatusTransitionTest, VideoStatusWriterTest |
 | FR-MEDIA-03 | 구현됨 | VideoEncodingServiceTest |
@@ -197,7 +197,7 @@
 | FR-EVENT-10 | 구현됨 | EventInteractionLockTest, EventLifecycleGuardTest, EventNotificationSubscriptionRepositoryTest, EventSeederScheduleChangeTest, EventVideoQueryServiceTest, EventVideoUploadConcurrencyTest, EventVideoUploadServiceTest |
 | FR-EVENT-11 | 구현됨 | EventViewerCacheFailureControllerTest, EventViewerControllerTest, EventViewerServiceImplTest |
 | FR-EVENT-12 | 구현됨 | MissionAwardQueryTest, MissionProgressQueryTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVisitedGridQueryTest |
-| FR-ROUTE-01 | 진행 중 | RouteCandidateCollectorTest, RouteControllerTest, RouteIntentClientTest, RouteRecommendServiceTest |
+| FR-ROUTE-01 | 진행 중 | AnonymousReadAccessHttpTest, RouteCandidateCollectorTest, RouteControllerTest, RouteIntentClientTest, RouteRecommendServiceTest |
 | FR-ROUTE-02 | 진행 중 | RouteCandidateCollectorTest, RouteRecommendServiceTest |
 | FR-ROUTE-03 | 구현됨 | EventQueryServiceTest, PlaceSearchServiceTest, RouteCandidateCollectorTest, RouteOrderPlannerTest |
 | FR-ROUTE-04 | 구현됨 | RouteCandidateCollectorTest |
@@ -210,6 +210,7 @@
 | FR-ROUTE-11 | 진행 중 | RouteOrderPlannerTest |
 | FR-ROUTE-12 | 구현됨 | RouteRecommendServiceTest |
 | FR-ROUTE-13 | 구현됨 | RouteCandidateCollectorTest |
+| FR-ROUTE-14 | 진행 중 | RegionMentionMatchTest, RouteMentionedAreaResolverTest, RouteRecommendServiceTest |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
 | FR-NOTI-02 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest, NotificationRelayTest |
 | FR-NOTI-03 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest |

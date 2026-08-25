@@ -29,7 +29,10 @@ import com.msg.fillmap.search.service.SearchKeywordCommandService;
 
 /**
  * 검색어 집계 구현 (MSG-258). dedupe 는 Redis SET {@code searchdedupe:{yyyyMMdd}}(KST 날짜),
- * member={userId}:{정규화 검색어}, TTL 26h 는 청소 전용이다 — 판정은 키의 날짜가 담당한다(§D4).
+ * member={검색자 키}:{정규화 검색어}, TTL 26h 는 청소 전용이다 — 판정은 키의 날짜가 담당한다(§D4).
+ * 검색자 키는 로그인이면 사용자 id 의 문자열 표현이고 비로그인이면 {@code s:{방문자 세션 값}} 이다
+ * (MSG-469 D4). 로그인 쪽 포맷을 그대로 둔 것은 접두를 새로 붙이면 배포 당일 이미 검색한 사용자가
+ * 한 번 더 세어지기 때문이다 — 두 공간은 첫 글자(십진수 vs s)로 이미 겹치지 않는다.
  * SADD 가 1(오늘 첫 검색)일 때만 DB 카운트를 +1 하고, 0이면 스킵한다(FR-2).
  *
  * Redis·DB 호출은 자체 단일 데몬 스레드로 분리한다 — 동기면 검색 응답에 왕복 2회가 붙고 저장소 장애 시
@@ -75,7 +78,7 @@ public class SearchKeywordCommandServiceImpl implements SearchKeywordCommandServ
 	}
 
 	@Override
-	public void recordSearch(long userId, String rawQuery) {
+	public void recordSearch(String searcherKey, String rawQuery) {
 		try {
 			String keyword = normalize(rawQuery);
 			if (keyword.length() > MAX_KEYWORD_LENGTH) {
@@ -83,31 +86,37 @@ public class SearchKeywordCommandServiceImpl implements SearchKeywordCommandServ
 			}
 			// 날짜는 접수 시각(요청 스레드)에 확정 — 큐가 밀려 워커가 KST 자정을 넘겨 실행돼도 검색 시각의 날짜에 기록
 			LocalDate date = LocalDate.now(clock.withZone(KST));
-			executor.execute(() -> aggregate(date, userId, keyword));
+			executor.execute(() -> aggregate(date, searcherKey, keyword));
 		} catch (Exception e) {
 			// 큐 포화(RejectedExecutionException) 포함 — 폐기하고 warn 만 남긴다 (FR-6)
 			// 예외 메시지·스택엔 입력값이 에코될 수 있어 싣지 않는다 — 원인 구분은 클래스명으로 (MSG-342 D-2)
-			log.warn("검색어 집계 접수 실패 — 신호 1건 유실 허용: userId={}, causeType={}", userId,
+			log.warn("검색어 집계 접수 실패 — 신호 1건 유실 허용: searcherKey={}, causeType={}", logKey(searcherKey),
 				e.getClass().getSimpleName());
 		}
 	}
 
 	/** 워커 스레드 실행 — clock 을 읽지 않는다(날짜는 접수 시각에 이미 확정). */
-	private void aggregate(LocalDate date, long userId, String keyword) {
+	private void aggregate(LocalDate date, String searcherKey, String keyword) {
 		try {
 			Long added = redisTemplate.execute(DEDUPE_SCRIPT, List.of(KEY_PREFIX + date.format(KEY_DATE_FORMAT)),
-				userId + ":" + keyword, String.valueOf(DEDUPE_TTL_SECONDS));
+				searcherKey + ":" + keyword, String.valueOf(DEDUPE_TTL_SECONDS));
 			if (added == null || added == 0L) {
-				return;   // 오늘 이 사용자가 이미 검색한 검색어 (FR-2)
+				return;   // 오늘 이 검색자가 이미 검색한 검색어 (FR-2)
 			}
 			searchKeywordDailyCountRepository.upsertIncrement(date, keyword);
 		} catch (Exception e) {
 			// Redis 실패면 카운트도 진행하지 않는다 — dedupe 없이 세면 도배 방어가 뚫린다 (§D4)
 			// 예외 메시지에 바인딩 값(검색어)이 에코될 수 있다(Postgres UNIQUE DETAIL 등) — 스택·메시지 없이
-			// userId 와 클래스명만 남긴다 (MSG-342 D-2). 집계는 부수 경로라 원인 구분은 이걸로 충분하다.
-			log.warn("검색어 집계 실패 — 신호 1건 유실 허용: userId={}, causeType={}", userId,
+			// 검색자 키와 클래스명만 남긴다 (MSG-342 D-2). 집계는 부수 경로라 원인 구분은 이걸로 충분하다.
+			log.warn("검색어 집계 실패 — 신호 1건 유실 허용: searcherKey={}, causeType={}", logKey(searcherKey),
 				e.getClass().getSimpleName());
 		}
+	}
+
+	/** 로그인 키는 서버 발급값이라 그대로, 익명 세션 값은 클라이언트 입력이라 접두만 남긴다 (MSG-342 D-2). */
+	private static String logKey(String searcherKey) {
+		// null 가드 — 여기는 예외를 삼키는 catch 안이라 NPE 가 나면 fire-and-forget 계약이 뒤집힌다
+		return searcherKey != null && searcherKey.startsWith("s:") ? "s:(masked)" : searcherKey;
 	}
 
 	/** trim → 연속 공백 1칸 압축 → 소문자(Locale.ROOT — 기본 로케일 의존, 터키 i 문제 차단) (§D3). */
