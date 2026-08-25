@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyShort;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willAnswer;
@@ -107,8 +108,8 @@ class VideoEncodingAiTriggerTest {
 		service(true, true).encode(VIDEO_ID, ORIGINAL_KEY);
 
 		// thumbnail 은 폴러가 완료 시 기록(R5)
-		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY);
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any());
+		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, (short) 10);
+		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
 		verify(highlightExecutor, never()).execute(any(Runnable.class));
 	}
 
@@ -123,14 +124,14 @@ class VideoEncodingAiTriggerTest {
 
 		// D-1 핵심: READY 전이가 워커 제출보다 먼저다
 		InOrder readyFirst = inOrder(statusWriter, highlightExecutor);
-		readyFirst.verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY);
+		readyFirst.verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 		readyFirst.verify(highlightExecutor).execute(any(Runnable.class));
 		// 워커 입력은 tmp 가 아니라 S3 인코딩본 — 원본(1번째)에 이어 2번째 다운로드가 encoded 키 대상이다
 		ArgumentCaptor<GetObjectRequest> downloads = ArgumentCaptor.forClass(GetObjectRequest.class);
 		verify(s3Client, times(2)).getObject(downloads.capture(), any(Path.class));
 		assertThat(downloads.getAllValues().get(1).key()).isEqualTo(ENCODED_KEY);
 		verify(statusWriter).recordHighlights(VIDEO_ID, ORIGINAL_KEY, 하이라이트_구간);
-		verify(statusWriter, never()).markEncoded(eq(VIDEO_ID), any(), any());
+		verify(statusWriter, never()).markEncoded(eq(VIDEO_ID), any(), any(), anyShort());
 	}
 
 	// 검증: FR-MEDIA-18
@@ -143,7 +144,7 @@ class VideoEncodingAiTriggerTest {
 
 		service(true, false).encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY);
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 		verify(statusWriter, never()).recordHighlights(anyLong(), any(), any());
 		verify(statusWriter, never()).markFailed(anyLong(), any());
 		// 계측 선행 확인 — 워커 본문의 실패는 인코딩 태스크 계측과 무관하다
@@ -161,7 +162,7 @@ class VideoEncodingAiTriggerTest {
 		service(true, false).encode(VIDEO_ID, ORIGINAL_KEY);
 
 		// 거부가 인코딩 경로로 새지 않는다 — 그 영상만 하이라이트 null 로 남는다
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY);
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 		verify(statusWriter, never()).recordHighlights(anyLong(), any(), any());
 		verify(statusWriter, never()).markFailed(anyLong(), any());
 	}
@@ -172,7 +173,7 @@ class VideoEncodingAiTriggerTest {
 		// ObjectProvider 는 빈 값 — getIfAvailable() 이 null (목 기본 동작). ai.enabled=false 는 지금과 동일 (FR-5)
 		service(false, false).encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY);
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 		verify(highlightExecutor, never()).execute(any(Runnable.class));
 		verify(statusWriter, never()).recordHighlights(anyLong(), any(), any());
 	}

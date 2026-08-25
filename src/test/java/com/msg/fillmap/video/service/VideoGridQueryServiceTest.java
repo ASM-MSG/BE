@@ -77,7 +77,7 @@ class VideoGridQueryServiceTest {
 	private Video readyVideo(long id, String thumbKey, LocalDateTime createdAt) {
 		Video video = Video.create(USER_ID, GRID_ID, "videos/original/x.mp4", null, (short) 12, createdAt,
 			Visibility.PRIVATE);
-		video.markReady("videos/encoded/" + id + ".mp4", thumbKey);
+		video.markReady("videos/encoded/" + id + ".mp4", thumbKey, video.getDurationSec());
 		ReflectionTestUtils.setField(video, "id", id);
 		ReflectionTestUtils.setField(video, "createdAt", createdAt);
 		return video;

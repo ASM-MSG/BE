@@ -100,7 +100,7 @@ class VideoGlobalListServiceTest {
 	private Video readyVideo(long id, long authorId, long viewCount, LocalDateTime createdAt) {
 		Video video = Video.create(authorId, GRID_ID, "videos/original/" + id + ".mp4", null, (short) 12,
 			LocalDateTime.of(2026, 7, 20, 18, 3, 11), Visibility.PRIVATE);
-		video.markReady("videos/encoded/" + id + ".mp4", "videos/thumb/" + id + ".jpg");
+		video.markReady("videos/encoded/" + id + ".mp4", "videos/thumb/" + id + ".jpg", video.getDurationSec());
 		ReflectionTestUtils.setField(video, "id", id);
 		ReflectionTestUtils.setField(video, "viewCount", viewCount);
 		ReflectionTestUtils.setField(video, "createdAt", createdAt);   // 생성자 시각을 검증용 고정값으로 교체

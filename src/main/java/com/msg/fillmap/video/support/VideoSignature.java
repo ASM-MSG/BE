@@ -34,6 +34,20 @@ public final class VideoSignature {
 	/** size 필드가 1이면 헤더 뒤 8바이트가 64비트 largesize 다. */
 	private static final int LARGESIZE_HEADER_BYTES = 16;
 
+	/**
+	 * 기본 헤더를 쓴 ftyp 의 최소 크기 — 헤더 8 + major_brand 4 + minor_version 4. 이보다 작은 ftyp 는
+	 * 브랜드가 들어갈 자리가 없어 형식 위반이다. 이 검사가 없으면 {@code 00000008ftyp} 8바이트 파일이
+	 * 타입만 보고 통과한다.
+	 */
+	private static final int MIN_FTYP_BYTES = 16;
+
+	/**
+	 * 확장 헤더(size 필드 1)를 쓴 ftyp 의 최소 크기 — 헤더 16 + major_brand 4 + minor_version 4. 헤더가
+	 * 8바이트 더 크므로 최소치도 그만큼 올라간다. 하나로 두면 largesize 를 정확히 16 으로 적은 ftyp 가
+	 * 브랜드 자리 0 인 채로 통과한다.
+	 */
+	private static final int MIN_LARGE_FTYP_BYTES = LARGESIZE_HEADER_BYTES + 8;
+
 	/** 최상위 박스를 훑는 상한 — 넘어가면 판정 불가로 보고 통과시킨다. */
 	private static final int MAX_BOXES = 4;
 
@@ -64,8 +78,11 @@ public final class VideoSignature {
 			}
 
 			long next;
+			long declaredBoxBytes;   // 이 박스가 선언한 길이. -1 은 창이 모자라 알 수 없다는 뜻이다
+			int minFtypBytes = MIN_FTYP_BYTES;   // 이 박스가 쓴 헤더 종류에 맞는 ftyp 최소치
 			if (size == 0) {
 				next = head.length;   // 파일 끝까지 이어지는 마지막 박스
+				declaredBoxBytes = wholeObject ? head.length - p : -1;   // 파일 끝을 알아야 길이가 정해진다
 			} else if (size == 1) {
 				if (head.length - p < LARGESIZE_HEADER_BYTES) {
 					return !wholeObject;   // 잘린 largesize(거부) vs 창 소진(통과)
@@ -75,10 +92,13 @@ public final class VideoSignature {
 					return false;
 				}
 				next = nextOffset(p, largesize, head.length);
+				declaredBoxBytes = largesize;
+				minFtypBytes = MIN_LARGE_FTYP_BYTES;   // 헤더가 16바이트라 브랜드 자리가 그 뒤에 온다
 			} else if (size < BOX_HEADER_BYTES) {
 				return false;   // 헤더보다 작은 박스는 형식 위반
 			} else {
 				next = nextOffset(p, size, head.length);
+				declaredBoxBytes = size;
 			}
 			// 크기 타당성 검사가 ftyp/moov 통과 판정보다 앞이다 — 순서를 뒤집으면 크기 24 를 선언한
 			// 8바이트짜리 ftyp 객체가 타입만 보고 통과한다.
@@ -86,12 +106,19 @@ public final class VideoSignature {
 				return false;   // 박스가 선언한 크기가 파일 밖을 가리킨다
 			}
 
+			// 재는 값이 next - p 가 아니라 선언 길이다 — next 는 창 밖 한 칸으로 포화된 값이라 창 길이가
+			// 판정에 섞여 들고, 그러면 뒤가 더 있는(wholeObject 가 거짓인) 정상 ftyp 가 창이 짧다는 이유로
+			// 오거부된다. 길이를 모르는 경우(-1)는 판정 불가라 통과 쪽으로 둔다.
+			if ("ftyp".equals(type) && declaredBoxBytes >= 0 && declaredBoxBytes < minFtypBytes) {
+				return false;   // 브랜드가 못 들어가는 ftyp — 크기만 맞춘 위장 파일이 여기서 걸린다
+			}
 			if ("ftyp".equals(type) || "moov".equals(type)) {
 				return true;
 			}
 			if (next >= head.length) {
-				// wholeObject 면 박스가 파일을 빈틈없이 덮은 정확 종료, 아니면 창 소진이다.
-				return true;
+				// 창 소진이면 뒤에 moov 가 더 있을 수 있어 판정 불가로 통과하지만, wholeObject 면 파일 끝까지
+				// ftyp·moov 를 한 번도 못 봤다는 뜻이라 거부한다 — 빈 mdat 하나로 끝나는 파일은 재생할 수 없다.
+				return !wholeObject;
 			}
 			p = (int) next;
 		}

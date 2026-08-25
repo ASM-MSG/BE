@@ -142,7 +142,8 @@ class EventVideoHelpfulServiceTest {
 		Video video = videoRepository.save(Video.create(userId, gridId,
 			"videos/original/" + UUID.randomUUID() + ".mp4", GeoSupport.toPoint(center.lat(), center.lon()),
 			(short) 10, NOW, Visibility.PUBLIC));
-		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg");
+		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg",
+			video.getDurationSec());
 		eventVideoRepository.save(new EventVideo(video, location, location.getOccurrence().getId()));
 		em.flush();
 		return video;

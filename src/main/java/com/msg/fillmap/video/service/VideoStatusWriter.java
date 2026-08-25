@@ -64,8 +64,13 @@ public class VideoStatusWriter {
 		return true;
 	}
 
+	/**
+	 * measuredDurationSec 은 인코더가 ffprobe 로 잰 길이(1~30 보정 완료, MSG-470)다. 스테일 가드에 걸려
+	 * 전이가 skip 되면 길이 덮어쓰기도 함께 skip 된다 — 옛 파일의 실측값이 새 파일에 붙지 않는다.
+	 */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void markReady(Long videoId, String expectedOriginalKey, String encodedKey, String thumbnailKey) {
+	public void markReady(Long videoId, String expectedOriginalKey, String encodedKey, String thumbnailKey,
+		short measuredDurationSec) {
 		if (!lockUploaderFirst(videoId)) {
 			return;
 		}
@@ -74,7 +79,7 @@ public class VideoStatusWriter {
 				logStaleSkip("인코딩 완료", videoId, expectedOriginalKey, video);
 				return;
 			}
-			video.markReady(encodedKey, thumbnailKey);
+			video.markReady(encodedKey, thumbnailKey, measuredDurationSec);
 			recordOutcomeNotification(video, true);
 			videoProcessingMetrics.recordOutcome(videoId, true, VideoProcessingMetrics.PATH_ENCODING);
 		});
@@ -101,9 +106,13 @@ public class VideoStatusWriter {
 		});
 	}
 
-	/** AI 활성 인코딩 완료 지점 (MSG-149) — READY 대신 BLURRING. thumbnailUrl 은 폴러가 완료 시 기록한다(P2). */
+	/**
+	 * AI 활성 인코딩 완료 지점 (MSG-149) — READY 대신 BLURRING. thumbnailUrl 은 폴러가 완료 시 기록한다(P2).
+	 * measuredDurationSec 은 markReady 와 같은 실측 길이다 (MSG-470).
+	 */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
-	public void markEncoded(Long videoId, String expectedOriginalKey, String encodedKey) {
+	public void markEncoded(Long videoId, String expectedOriginalKey, String encodedKey,
+		short measuredDurationSec) {
 		videoRepository.findWithLockById(videoId).ifPresent(video -> {
 			if (!isCurrentEncodingAttempt(video, expectedOriginalKey)) {
 				// 스테일 markEncoded 는 blurringStartedAt 을 새로 찍어 폴러 가드를 정상 통과시키므로(MSG-241)
@@ -111,7 +120,7 @@ public class VideoStatusWriter {
 				logStaleSkip("인코딩 완료(AI)", videoId, expectedOriginalKey, video);
 				return;
 			}
-			video.markEncoded(encodedKey);
+			video.markEncoded(encodedKey, measuredDurationSec);
 		});
 	}
 

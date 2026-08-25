@@ -27,7 +27,7 @@ class VideoBlurTransitionTest {
 		Video video = newVideo();
 		video.markEncoding();
 
-		video.markEncoded("videos/encoded/1/7.mp4");
+		video.markEncoded("videos/encoded/1/7.mp4", video.getDurationSec());
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.BLURRING);
 		assertThat(video.getEncodedUrl()).isEqualTo("videos/encoded/1/7.mp4");
@@ -40,7 +40,7 @@ class VideoBlurTransitionTest {
 	void markReadyFromBlurring은_thumbnailUrl을_채우며_BLURRING에서_READY로_바뀐다() {
 		Video video = newVideo();
 		video.markEncoding();
-		video.markEncoded("videos/encoded/1/7.mp4");
+		video.markEncoded("videos/encoded/1/7.mp4", video.getDurationSec());
 
 		video.markReadyFromBlurring("videos/thumb/1/7.jpg");
 
@@ -53,7 +53,7 @@ class VideoBlurTransitionTest {
 	void 교체하면_실패_사유가_초기화된다() {
 		Video video = newVideo();
 		video.markEncoding();
-		video.markEncoded("videos/encoded/1/7.mp4");
+		video.markEncoded("videos/encoded/1/7.mp4", video.getDurationSec());
 		video.markFailed("too_dark");   // 프리체크 탈락 (MSG-286)
 
 		video.replaceFile("videos/original/1/y.mp4", (short) 8, LocalDateTime.now());
@@ -67,7 +67,7 @@ class VideoBlurTransitionTest {
 	void recordAiJob은_job_id를_기록한다() {
 		Video video = newVideo();
 		video.markEncoding();
-		video.markEncoded("videos/encoded/1/7.mp4");
+		video.markEncoded("videos/encoded/1/7.mp4", video.getDurationSec());
 
 		video.recordAiJob("job-42");
 

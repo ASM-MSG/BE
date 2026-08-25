@@ -425,7 +425,7 @@ class AdminReportIntegrationTest {
 	@DisplayName("BLINDED 영상에도 재생 URL 이 발급되고, 블러본이 있으면 블러본을 서명한다 (FR-3)")
 	void BLINDED_영상에도_재생_URL이_발급된다() {
 		Video video = videoRepository.findById(videoId).orElseThrow();
-		video.markReady("videos/encoded/m195.mp4", "videos/thumb/m195.jpg");
+		video.markReady("videos/encoded/m195.mp4", "videos/thumb/m195.jpg", video.getDurationSec());
 		video.applyBlurResult("videos/blurred/m195.mp4", null);
 		video.markBlinded();
 		em.flush();
@@ -447,7 +447,7 @@ class AdminReportIntegrationTest {
 	void PRIVATE_영상도_관리자는_확인할_수_있다() {
 		Video video = videoRepository.findById(videoId).orElseThrow();
 		video.changeVisibility(Visibility.PRIVATE);
-		video.markReady("videos/encoded/m195.mp4", "videos/thumb/m195.jpg");
+		video.markReady("videos/encoded/m195.mp4", "videos/thumb/m195.jpg", video.getDurationSec());
 		em.flush();
 		stubPresignEcho();
 
@@ -461,7 +461,8 @@ class AdminReportIntegrationTest {
 	@Test
 	@DisplayName("관리자 확인은 조회수를 올리지 않는다 (FR-3)")
 	void 관리자_확인은_조회수를_올리지_않는다() {
-		videoRepository.findById(videoId).orElseThrow().markReady("videos/encoded/m195.mp4", "videos/thumb/m195.jpg");
+		Video video = videoRepository.findById(videoId).orElseThrow();
+		video.markReady("videos/encoded/m195.mp4", "videos/thumb/m195.jpg", video.getDurationSec());
 		em.flush();
 		stubPresignEcho();
 

@@ -181,14 +181,16 @@ class EventQueryServiceTest {
 	/** 전역 노출 게이트(ACTIVE·PUBLIC·READY)를 통과하는 행사 영상 하나. */
 	private void 노출영상(EventLocation location) {
 		Video video = 영상(location.getRepresentativeGridId(), Visibility.PUBLIC);
-		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg");
+		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg",
+			video.getDurationSec());
 		연결(video, location);
 	}
 
 	/** 게이트 밖 영상 3종 — 비공개·인코딩 미완·삭제. 피드(MSG-440)에도 안 나오므로 카운트에서도 빠져야 한다. */
 	private void 비공개영상(EventLocation location) {
 		Video video = 영상(location.getRepresentativeGridId(), Visibility.PRIVATE);
-		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg");
+		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg",
+			video.getDurationSec());
 		연결(video, location);
 	}
 
@@ -198,7 +200,8 @@ class EventQueryServiceTest {
 
 	private void 삭제영상(EventLocation location) {
 		Video video = 영상(location.getRepresentativeGridId(), Visibility.PUBLIC);
-		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg");
+		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg",
+			video.getDurationSec());
 		video.markDeleted();
 		연결(video, location);
 	}
