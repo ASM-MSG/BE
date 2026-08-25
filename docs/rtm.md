@@ -89,7 +89,7 @@
 | FR-HOTZONE-11 | 구현됨 | HotScoreCommandServiceImplTest |
 | FR-HOTZONE-12 | 구현됨 | (없음) |
 | FR-HOTZONE-13 | 진행 중 | GridRepositoryTest, HotZoneAggregateServiceImplTest, HotZoneAggregationHttpTest |
-| FR-VIDEO-01 | 구현됨 | VideoControllerTest |
+| FR-VIDEO-01 | 구현됨 | VideoControllerTest, VideoEncodingDurationRealFfmpegTest |
 | FR-VIDEO-02 | 구현됨 | VideoPresignTest |
 | FR-VIDEO-03 | 구현됨 | VideoPresignTest, VideoSignatureIntegrationTest |
 | FR-VIDEO-04 | 구현됨 | VideoPresignTest, VideoS3KeyValidationTest |
@@ -109,7 +109,7 @@
 | FR-VIDEO-18 | 구현됨 | AnonymousReadAccessHttpTest, VideoAuthorNicknameIntegrationTest, VideoGlobalCoverServiceTest, VideoPlaybackServiceTest |
 | FR-MEDIA-01 | 구현됨 | FfmpegRunnerTest, VideoEncodingServiceTest |
 | FR-MEDIA-02 | 구현됨 | AiBlurPollerTest, VideoBlurTransitionTest, VideoEncodingAiTriggerTest, VideoEncodingServiceTest, VideoEncodingTriggerTest, VideoGridQueryServiceTest, VideoPlaybackServiceTest, VideoStatusTransitionTest, VideoStatusWriterTest |
-| FR-MEDIA-03 | 구현됨 | VideoEncodingServiceTest |
+| FR-MEDIA-03 | 구현됨 | VideoEncodingDurationRealFfmpegTest, VideoEncodingServiceTest |
 | FR-MEDIA-04 | 구현됨 | AiBlurPollerTest, VideoBlurTransitionTest, VideoEncodingServiceTest, VideoPlaybackServiceTest |
 | FR-MEDIA-05 | 구현됨 | AiEnabledContextTest, VideoEncodingAiTriggerTest |
 | FR-MEDIA-17 | 구현됨 | (없음) |
@@ -124,7 +124,7 @@
 | FR-MEDIA-14 | 구현됨 | HighlightPreviewServiceTest, VideoPresignTest, VideoS3KeyValidationTest |
 | FR-MEDIA-15 | 구현됨 | HighlightPreviewServiceTest |
 | FR-MEDIA-16 | 구현됨 | (없음) |
-| FR-MEDIA-19 | 구현됨 | VideoEncodingServiceTest, VideoStatusTransitionTest, VideoStatusWriterTest |
+| FR-MEDIA-19 | 구현됨 | VideoEncodingDurationRealFfmpegTest, VideoEncodingServiceTest, VideoStatusTransitionTest, VideoStatusWriterTest |
 | FR-MEDIA-18 | 구현됨 | AiEnabledContextTest, VideoEncodingAiTriggerTest, VideoStatusWriterTest |
 | FR-COLLECT-01 | 구현됨 | BadgeAwardServiceIntegrationTest |
 | FR-COLLECT-02 | 구현됨 | BadgeAwardServiceIntegrationTest |
