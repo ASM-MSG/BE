@@ -56,25 +56,37 @@ class VideoSignatureTest {
 			assertThat(VideoSignature.looksLikeVideoContainer(head, true)).isTrue();
 		}
 
+		// 검증: FR-VIDEO-03
 		@Test
-		void 크기가_0인_마지막_박스도_통과한다() {
-			byte[] head = Arrays.copyOf(header(0, "mdat"), 64);
+		void 크기가_0인_박스는_파일_끝까지_이어지는_것으로_읽는다() {
+			// 두 입력의 차이는 파일 길이뿐이고, 그 길이는 "크기 0이면 파일 끝까지"를 계산해야만 ftyp 최소
+			// 크기 판정에 들어온다. 크기 0을 헤더보다 작은 박스로 보거나 길이를 0으로 계산하면 둘 다 거부로
+			// 붙어 이 대조가 깨진다.
+			byte[] 브랜드_자리가_있다 = Arrays.copyOf(header(0, "ftyp"), 64);
+			byte[] 브랜드_자리가_없다 = Arrays.copyOf(header(0, "ftyp"), 12);
 
-			assertThat(VideoSignature.looksLikeVideoContainer(head, true)).isTrue();
+			assertThat(VideoSignature.looksLikeVideoContainer(브랜드_자리가_있다, true)).isTrue();
+			assertThat(VideoSignature.looksLikeVideoContainer(브랜드_자리가_없다, true)).isFalse();
 		}
 
+		// 검증: FR-VIDEO-03
 		@Test
 		void 크기_필드가_1이면_64비트_largesize를_읽는다() {
-			byte[] 정상 = Arrays.copyOf(largeHeader("mdat", 32), 32);
-			byte[] 헤더보다_작은_largesize = Arrays.copyOf(largeHeader("mdat", 8), 32);
+			// largesize 32 를 제자리에서 정확히 읽어야 오프셋 32 의 moov 에 닿는다 — 8바이트를 4바이트로
+			// 읽거나 덜 건너뛰면 0 패딩 위에 착지해 타입 자리가 인쇄 불가능한 바이트로 읽히고 거부된다.
+			byte[] 정상 = concat(Arrays.copyOf(largeHeader("mdat", 32), 32), box(16, "moov"));
+			byte[] 헤더보다_작은_largesize = concat(Arrays.copyOf(largeHeader("mdat", 8), 32), box(16, "moov"));
 
 			assertThat(VideoSignature.looksLikeVideoContainer(정상, true)).isTrue();
 			assertThat(VideoSignature.looksLikeVideoContainer(헤더보다_작은_largesize, true)).isFalse();
 		}
 
+		// 검증: FR-VIDEO-03
 		@Test
-		void 창보다_짧아도_박스가_파일_끝에_정확히_맞으면_통과한다() {
-			byte[] head = box(200, "mdat");
+		void 선언한_크기만큼_정확히_건너뛰어야_뒤의_moov에_닿는다() {
+			// 216바이트라 읽기 창(4096)보다 짧다 — 200 을 199 나 208 로 읽으면 moov 헤더 중간이나 그 앞
+			// 패딩에 착지해 거부된다.
+			byte[] head = concat(box(200, "mdat"), box(16, "moov"));
 
 			assertThat(VideoSignature.looksLikeVideoContainer(head, true)).isTrue();
 		}
@@ -127,6 +139,30 @@ class VideoSignatureTest {
 
 			assertThat(VideoSignature.looksLikeVideoContainer(head, true)).isFalse();
 		}
+
+		// 검증: FR-VIDEO-03
+		@Test
+		void 브랜드_자리가_없는_ftyp는_거부된다() {
+			// 헤더 8바이트로 선언이 끝나 major_brand 와 minor_version 자리가 없다 (MSG-471 D1).
+			byte[] head = box(8, "ftyp");
+
+			// 창 사정과 무관한 형식 위반이라 뒤에 무엇이 더 있든 결과가 같다.
+			assertThat(VideoSignature.looksLikeVideoContainer(head, true)).isFalse();
+			assertThat(VideoSignature.looksLikeVideoContainer(head, false)).isFalse();
+		}
+
+		// 검증: FR-VIDEO-03
+		@Test
+		void largesize로_적은_ftyp는_헤더가_커진_만큼_더_요구한다() {
+			// 확장 헤더는 size 4 + type 4 + largesize 8 로 그 자체가 16바이트다. largesize 16 이면 브랜드가
+			// 들어갈 자리가 0 인데, 최소치를 기본 헤더 기준 16 하나로 두면 이 위장 파일이 그대로 빠져나간다.
+			byte[] 브랜드_자리가_없다 = Arrays.copyOf(largeHeader("ftyp", 16), 16);
+			byte[] 브랜드_자리가_있다 = Arrays.copyOf(largeHeader("ftyp", 24), 24);
+
+			assertThat(VideoSignature.looksLikeVideoContainer(브랜드_자리가_없다, true)).isFalse();
+			assertThat(VideoSignature.looksLikeVideoContainer(브랜드_자리가_없다, false)).isFalse();
+			assertThat(VideoSignature.looksLikeVideoContainer(브랜드_자리가_있다, true)).isTrue();
+		}
 	}
 
 	@Nested
@@ -171,6 +207,33 @@ class VideoSignatureTest {
 
 			assertThat(VideoSignature.looksLikeVideoContainer(head, false)).isTrue();
 			assertThat(VideoSignature.looksLikeVideoContainer(head, true)).isFalse();
+		}
+
+		// 검증: FR-VIDEO-03
+		@Test
+		void 창이_열여섯_바이트보다_짧아도_정상_ftyp는_오거부되지_않는다() {
+			// ftyp 최소 크기는 선언 크기로 재야 한다 — 포화된 오프셋(min(선언 크기, 창 길이 + 1))으로 재면
+			// 창 길이가 판정에 섞여 들어, 뒤가 더 있는 정상 ftyp 가 창이 짧다는 이유로 거부된다.
+			byte[] head = Arrays.copyOf(header(1024, "ftyp"), 12);
+
+			assertThat(VideoSignature.looksLikeVideoContainer(head, false)).isTrue();
+		}
+
+		// 검증: FR-VIDEO-03
+		@Test
+		void ftyp도_moov도_없이_mdat_하나로_끝나는_파일은_거부된다() {
+			// 크기를 적는 방식마다 크기 타당성 검사의 분기가 달라 세 형태를 다 본다 (MSG-471 D2).
+			byte[] 크기를_명시한_mdat = box(64, "mdat");
+			byte[] 크기가_0인_mdat = Arrays.copyOf(header(0, "mdat"), 64);
+			byte[] largesize로_적은_mdat = Arrays.copyOf(largeHeader("mdat", 64), 64);
+
+			// 파일 전체를 봤는데 재생에 필요한 메타데이터를 한 번도 못 봤다.
+			assertThat(VideoSignature.looksLikeVideoContainer(크기를_명시한_mdat, true)).isFalse();
+			assertThat(VideoSignature.looksLikeVideoContainer(크기가_0인_mdat, true)).isFalse();
+			assertThat(VideoSignature.looksLikeVideoContainer(largesize로_적은_mdat, true)).isFalse();
+
+			// 같은 바이트라도 창 소진이면 뒤에 moov 가 더 있을 수 있어 판정 불가로 통과한다.
+			assertThat(VideoSignature.looksLikeVideoContainer(크기를_명시한_mdat, false)).isTrue();
 		}
 	}
 
