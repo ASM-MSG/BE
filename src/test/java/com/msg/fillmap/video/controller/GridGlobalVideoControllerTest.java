@@ -113,11 +113,4 @@ class GridGlobalVideoControllerTest {
 			.andExpect(jsonPath("$.data.hasNext").value(false))
 			.andExpect(jsonPath("$.data.nextCursor").value(org.hamcrest.Matchers.nullValue()));
 	}
-
-	@Test
-	@DisplayName("인증없이 호출하면 401 이다")
-	void 인증없이_호출하면_401이다() throws Exception {
-		mockMvc.perform(get(URL, GRID_ID))
-			.andExpect(status().isUnauthorized());
-	}
 }

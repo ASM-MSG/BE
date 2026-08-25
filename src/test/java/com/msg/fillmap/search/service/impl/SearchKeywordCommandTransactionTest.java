@@ -36,6 +36,7 @@ class SearchKeywordCommandTransactionTest {
 	private static final LocalDate KST_DATE = LocalDate.of(2000, 1, 1);
 	private static final String DEDUPE_KEY = "searchdedupe:20000101";
 	private static final long USER_ID = 42L;
+	private static final String SEARCHER_KEY = String.valueOf(USER_ID);
 
 	private final String keyword = "테스트-" + UUID.randomUUID();
 
@@ -66,7 +67,7 @@ class SearchKeywordCommandTransactionTest {
 		SearchKeywordCommandServiceImpl service = new SearchKeywordCommandServiceImpl(redisTemplate,
 			searchKeywordDailyCountRepository, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC), Runnable::run);
 
-		service.recordSearch(USER_ID, keyword);
+		service.recordSearch(SEARCHER_KEY, keyword);
 
 		// 조회는 별개 커넥션·트랜잭션 밖 — 보인다면 UPSERT 가 스스로 트랜잭션을 열고 커밋했다는 뜻
 		assertThat(searchKeywordDailyCountRepository.findTopKeywords(KST_DATE, KST_DATE.minusDays(1)))

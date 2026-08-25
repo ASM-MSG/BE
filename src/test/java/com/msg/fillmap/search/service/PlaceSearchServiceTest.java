@@ -35,7 +35,7 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 @DisplayName("PlaceSearchService — trim 가드·gridId 합성·주소 규칙·집계 훅")
 class PlaceSearchServiceTest {
 
-	private static final long USER_ID = 42L;
+	private static final String SEARCHER_KEY = "42";
 
 	/** 표시명 계산용 합성 구역 (MSG-341) — 서면역 격자(16858_11420) 한 칸만 덮는다. */
 	private static final String ZONE_NAME = "m341서면";
@@ -74,7 +74,7 @@ class PlaceSearchServiceTest {
 	@Test
 	void 트림_후_빈_검색어는_집계도_카카오_호출도_되지_않는다() {
 		// 빈 쿼리를 카카오에 흘리면 카카오가 400 을 내고 쿼터만 소모한다 — 호출 0 이 계약이다(§D3, 234 trim 가드 계승)
-		assertThat(placeSearchService.searchPlaces(USER_ID, "   ")).isEmpty();
+		assertThat(placeSearchService.searchPlaces(SEARCHER_KEY, "   ")).isEmpty();
 
 		verifyNoInteractions(kakaoLocalClient);
 		verifyNoInteractions(searchKeywordCommandService);   // MSG-258 FR-9
@@ -87,10 +87,10 @@ class PlaceSearchServiceTest {
 		given(kakaoLocalClient.search("부산대"))
 			.willThrow(new ApiException(SearchErrorCode.SEARCH_UPSTREAM_ERROR));
 
-		assertThatThrownBy(() -> placeSearchService.searchPlaces(USER_ID, "부산대"))
+		assertThatThrownBy(() -> placeSearchService.searchPlaces(SEARCHER_KEY, "부산대"))
 			.isInstanceOf(ApiException.class);
 
-		verify(searchKeywordCommandService).recordSearch(USER_ID, "부산대");
+		verify(searchKeywordCommandService).recordSearch(SEARCHER_KEY, "부산대");
 	}
 
 	// 검증: FR-SEARCH-06
@@ -98,9 +98,9 @@ class PlaceSearchServiceTest {
 	void 집계에는_trim된_검색어가_전달된다() {
 		given(kakaoLocalClient.search("부산대")).willReturn(List.of(place("부산대학교", 35.23272, 129.08246)));
 
-		placeSearchService.searchPlaces(USER_ID, "  부산대  ");
+		placeSearchService.searchPlaces(SEARCHER_KEY, "  부산대  ");
 
-		verify(searchKeywordCommandService).recordSearch(USER_ID, "부산대");
+		verify(searchKeywordCommandService).recordSearch(SEARCHER_KEY, "부산대");
 	}
 
 	// 검증: FR-SEARCH-01
@@ -109,7 +109,7 @@ class PlaceSearchServiceTest {
 		given(kakaoLocalClient.search("강남역"))
 			.willReturn(List.of(place("강남역", 37.4979, 127.0276)));
 
-		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(USER_ID, "  강남역  ");
+		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(SEARCHER_KEY, "  강남역  ");
 
 		// GridEncoder.encode(37.4979, 127.0276) = 5179 변환 후 floor(y/100)_floor(x/100)
 		assertThat(results).hasSize(1);
@@ -129,7 +129,7 @@ class PlaceSearchServiceTest {
 			place("홍대입구역", 37.55650, 126.92390),
 			place("광안리해수욕장", 35.15350, 129.11910)));
 
-		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(USER_ID, "스모크");
+		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(SEARCHER_KEY, "스모크");
 
 		assertThat(results).extracting(PlaceSearchResponseDto::gridId)
 			.containsExactly("16941_11439", "16858_11420", "19509_9491", "16854_11474");
@@ -142,7 +142,7 @@ class PlaceSearchServiceTest {
 			place("서면역", 35.15790, 129.05930),
 			place("부산대학교", 35.23272, 129.08246)));
 
-		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(USER_ID, "서면");
+		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(SEARCHER_KEY, "서면");
 
 		// 합성 구역이 덮는 칸은 서면역 하나뿐 — 구역 밖인 부산대는 두 필드가 null 이고 표시 라벨은 address 가 맡는다
 		assertThat(results).extracting(PlaceSearchResponseDto::zoneName).containsExactly(ZONE_NAME, null);
@@ -180,7 +180,7 @@ class PlaceSearchServiceTest {
 			new KakaoPlace("도로명있음", "부산 금정구 장전동 40", "부산 금정구 부산대학로 63번길 2", 35.2, 129.0),
 			new KakaoPlace("도로명없음", "부산 수영구 광안동 192-20", "", 35.1, 129.1)));
 
-		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(USER_ID, "주소");
+		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(SEARCHER_KEY, "주소");
 
 		assertThat(results).extracting(PlaceSearchResponseDto::address)
 			.containsExactly("부산 금정구 부산대학로 63번길 2", "부산 수영구 광안동 192-20");

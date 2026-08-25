@@ -93,11 +93,4 @@ class TrendingKeywordControllerTest {
 			.andExpect(jsonPath("$.developCode").value(200))
 			.andExpect(jsonPath("$.data", hasSize(0)));
 	}
-
-	@Test
-	@DisplayName("미인증 요청은 401 이다 (SecurityConfig anyRequest — 무변경)")
-	void 미인증_요청은_401이다() throws Exception {
-		mockMvc.perform(get("/api/search/trending"))
-			.andExpect(status().isUnauthorized());
-	}
 }
