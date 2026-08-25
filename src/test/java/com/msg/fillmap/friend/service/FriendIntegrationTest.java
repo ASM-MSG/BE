@@ -25,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.services.s3.S3Client;
 
 import com.msg.fillmap.friend.dto.FriendListItemResponseDto;
+import com.msg.fillmap.friend.dto.FriendPreviewResponseDto;
+import com.msg.fillmap.friend.dto.FriendRelation;
 import com.msg.fillmap.friend.dto.ReceivedFriendRequestResponseDto;
 import com.msg.fillmap.friend.entity.Friendship;
 import com.msg.fillmap.friend.entity.FriendshipId;
@@ -105,20 +107,86 @@ class FriendIntegrationTest {
 			.isEqualTo(me.getFriendCode());
 	}
 
-	// 검증: FR-FRIEND-02
+	// 검증: FR-FRIEND-02, FR-FRIEND-14
 	@Test
 	@DisplayName("코드로 상대 닉네임을 미리본다 (FR-3)")
 	void 코드로_상대_닉네임을_미리본다() {
-		assertThat(friendService.preview(other.getFriendCode()).nickname()).isEqualTo("상대방");
+		assertThat(friendService.preview(me.getId(), other.getFriendCode()).nickname()).isEqualTo("상대방");
 	}
 
-	// 검증: FR-FRIEND-02
+	// 검증: FR-FRIEND-02, FR-FRIEND-14
 	@Test
 	@DisplayName("없는 코드 미리보기는 9404 다")
 	void 없는_코드_미리보기는_9404를_반환한다() {
-		assertThatThrownBy(() -> friendService.preview("XXXXXXXX"))
+		assertThatThrownBy(() -> friendService.preview(me.getId(), "XXXXXXXX"))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.FRIEND_CODE_NOT_FOUND);
+	}
+
+	// 검증: FR-FRIEND-14
+	@Test
+	@DisplayName("내 코드 미리보기는 SELF 를 준다 — 닉네임은 내 것 (MSG-391 FR-2)")
+	void 내_코드_미리보기는_SELF를_준다() {
+		FriendPreviewResponseDto previewed = friendService.preview(me.getId(), me.getFriendCode());
+
+		assertThat(previewed.relation()).isEqualTo(FriendRelation.SELF);
+		assertThat(previewed.nickname()).isEqualTo("나채움");
+	}
+
+	// 검증: FR-FRIEND-14
+	@Test
+	@DisplayName("관계 없는 상대의 미리보기는 NONE 을 준다 (MSG-391 FR-3)")
+	void 관계_없는_상대의_미리보기는_NONE을_준다() {
+		assertThat(friendService.preview(me.getId(), other.getFriendCode()).relation())
+			.isEqualTo(FriendRelation.NONE);
+	}
+
+	// 검증: FR-FRIEND-14
+	@Test
+	@DisplayName("내가 요청을 보낸 상대의 미리보기는 OUTGOING_PENDING 을 준다 (MSG-391 FR-4)")
+	void 내가_요청을_보낸_상대의_미리보기는_OUTGOING_PENDING을_준다() {
+		friendService.request(me.getId(), other.getFriendCode());
+
+		assertThat(friendService.preview(me.getId(), other.getFriendCode()).relation())
+			.isEqualTo(FriendRelation.OUTGOING_PENDING);
+	}
+
+	// 검증: FR-FRIEND-14
+	@Test
+	@DisplayName("상대가 요청을 보낸 코드의 미리보기는 INCOMING_PENDING 을 준다 (MSG-391 FR-5)")
+	void 상대가_요청을_보낸_코드의_미리보기는_INCOMING_PENDING을_준다() {
+		friendService.request(other.getId(), me.getFriendCode());
+
+		assertThat(friendService.preview(me.getId(), other.getFriendCode()).relation())
+			.isEqualTo(FriendRelation.INCOMING_PENDING);
+	}
+
+	// 검증: FR-FRIEND-14
+	@Test
+	@DisplayName("이미 친구인 상대의 미리보기는 방향 무관 FRIENDS 를 준다 (MSG-391 FR-6)")
+	void 이미_친구인_상대의_미리보기는_FRIENDS를_준다() {
+		// 내가 requester 였던 방향과 addressee 였던 방향 모두 같은 판정이어야 한다 — 행은 각 한 방향뿐.
+		User third = seedUser("세번째");
+		becomeFriends(me, other);
+		becomeFriends(third, me);
+
+		assertThat(friendService.preview(me.getId(), other.getFriendCode()).relation())
+			.isEqualTo(FriendRelation.FRIENDS);
+		assertThat(friendService.preview(me.getId(), third.getFriendCode()).relation())
+			.isEqualTo(FriendRelation.FRIENDS);
+	}
+
+	// 검증: FR-FRIEND-14
+	@Test
+	@DisplayName("FRIENDS 미리보기 직후 관계 변동 없이 요청하면 9409 다 (MSG-391 FR-10 정합)")
+	void FRIENDS_미리보기_직후_관계_변동_없이_요청하면_9409다() {
+		becomeFriends(me, other);
+
+		assertThat(friendService.preview(me.getId(), other.getFriendCode()).relation())
+			.isEqualTo(FriendRelation.FRIENDS);
+		assertThatThrownBy(() -> friendService.request(me.getId(), other.getFriendCode()))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", FriendErrorCode.ALREADY_FRIENDS);
 	}
 
 	// 검증: FR-FRIEND-02

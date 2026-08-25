@@ -30,6 +30,17 @@ public interface FriendshipRepository extends JpaRepository<Friendship, Friendsh
 		""")
 	Optional<Friendship> findPair(@Param("a") Long a, @Param("b") Long b);
 
+	/**
+	 * 방향 무관 쌍 조회, 무잠금 (MSG-391). findPair 와 JPQL 동일, @Lock 만 없다.
+	 * readOnly 트랜잭션(preview)용. findPair 는 PESSIMISTIC_WRITE 라 여기서 못 쓴다 (MSG-186 실측).
+	 */
+	@Query("""
+		SELECT f FROM Friendship f
+		WHERE (f.id.requesterId = :a AND f.id.addresseeId = :b)
+			OR (f.id.requesterId = :b AND f.id.addresseeId = :a)
+		""")
+	Optional<Friendship> findPairWithoutLock(@Param("a") Long a, @Param("b") Long b);
+
 	/** 수락·거절용 복합 PK 행 잠금 조회 — 같은 요청의 동시 수락+거절이 둘 다 성공하는 경합 차단 (Codex 리뷰 반영). */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	Optional<Friendship> findWithLockById(FriendshipId id);
