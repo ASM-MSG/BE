@@ -161,7 +161,7 @@ class VideoS3CleanupTest {
 	@DisplayName("삭제하면 원본·인코딩본·썸네일을 실제로 지운다 — MSG-72 D2 정정")
 	void 삭제하면_S3_에서도_지운다() {
 		Video video = existingVideo();
-		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", video.getDurationSec());
 		// 삭제는 잠금 로드다 (MSG-243) — 스텁도 프로덕션 로드 메서드를 따라간다.
 		given(repository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
@@ -176,7 +176,7 @@ class VideoS3CleanupTest {
 	@DisplayName("삭제하면 블러본도 지운다 (MSG-145)")
 	void 삭제하면_블러본도_지운다() {
 		Video video = existingVideo();
-		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", video.getDurationSec());
 		video.applyBlurResult("videos/blurred/1/7.mp4", List.of(List.of(0.0, 3.33)));
 		given(repository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
@@ -220,7 +220,7 @@ class VideoS3CleanupTest {
 	@DisplayName("교체하면 옛 원본만 지운다 — 인코딩본은 videoId 키라 덮어쓰기된다")
 	void 교체하면_옛_원본만_지운다() {
 		Video video = existingVideo();
-		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", video.getDurationSec());
 		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		service.replaceVideo(USER_ID, VIDEO_ID, new VideoReplaceRequestDto(
@@ -235,7 +235,7 @@ class VideoS3CleanupTest {
 	@DisplayName("교체하면 옛 블러본도 지운다 (MSG-145)")
 	void 교체하면_옛_블러본도_지운다() {
 		Video video = existingVideo();
-		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", video.getDurationSec());
 		video.applyBlurResult("videos/blurred/1/7.mp4", List.of(List.of(0.0, 3.33)));
 		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(video));
 

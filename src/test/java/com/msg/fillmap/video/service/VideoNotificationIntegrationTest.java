@@ -92,7 +92,7 @@ class VideoNotificationIntegrationTest {
 	@Test
 	@DisplayName("인코딩만 경로 완료 전이는 VIDEO 완료 알림을 기록한다 — event_key·문구 (FR-1)")
 	void 인코딩만_경로_완료_전이는_VIDEO_완료_알림을_기록한다() {
-		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY);
+		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 
 		assertThat(notificationCount()).isEqualTo(1);
 		Object[] row = notificationRow("VIDEO:" + videoId + ":" + fileName);
@@ -146,7 +146,8 @@ class VideoNotificationIntegrationTest {
 	@Test
 	@DisplayName("스테일 전이는 상태도 알림도 남기지 않는다 — 원본 키 불일치 가드 skip")
 	void 스테일_전이는_상태도_알림도_남기지_않는다() {
-		statusWriter.markReady(videoId, "videos/original/" + userId + "/stale.mp4", ENCODED_KEY, THUMBNAIL_KEY);
+		statusWriter.markReady(videoId, "videos/original/" + userId + "/stale.mp4", ENCODED_KEY, THUMBNAIL_KEY,
+			(short) 10);
 
 		assertThat(processingStatus()).isEqualTo("UPLOADED");
 		assertThat(notificationCount()).isZero();
@@ -155,8 +156,8 @@ class VideoNotificationIntegrationTest {
 	@Test
 	@DisplayName("같은 시도의 중복 전이는 알림을 한 번만 기록한다 — 같은 event_key, ON CONFLICT 흡수 (FR-6)")
 	void 같은_시도의_중복_전이는_알림을_한_번만_기록한다() {
-		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY);
-		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY);
+		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
+		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 
 		assertThat(notificationCount()).isEqualTo(1);
 	}
@@ -165,14 +166,14 @@ class VideoNotificationIntegrationTest {
 	@Test
 	@DisplayName("교체 후 재처리 완료는 새 알림으로 기록된다 — 다른 originalS3Key = 다른 event_key (FR-2)")
 	void 교체_후_재처리_완료는_새_알림으로_기록된다() {
-		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY);
+		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 		String replacedFileName = System.nanoTime() + ".mp4";
 		String replacedKey = "videos/original/" + userId + "/" + replacedFileName;
 		tx.executeWithoutResult(status ->
 			videoRepository.findById(videoId).orElseThrow()
 				.replaceFile(replacedKey, (short) 8, LocalDateTime.now()));
 
-		statusWriter.markReady(videoId, replacedKey, ENCODED_KEY, THUMBNAIL_KEY);
+		statusWriter.markReady(videoId, replacedKey, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 
 		assertThat(notificationCount()).isEqualTo(2);
 		Object[] replaced = notificationRow("VIDEO:" + videoId + ":" + replacedFileName);
@@ -189,7 +190,7 @@ class VideoNotificationIntegrationTest {
 			videoRepository.findById(videoId).orElseThrow()
 				.replaceFile(longKey, (short) 8, LocalDateTime.now()));
 
-		statusWriter.markReady(videoId, longKey, ENCODED_KEY, THUMBNAIL_KEY);
+		statusWriter.markReady(videoId, longKey, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 
 		// 꼬리 45자 = pendingUuid 끝 4자 + "-" + attemptUuid(36) + ".mp4" — attemptUuid 는 온전히 남는다
 		String expectedKey = "VIDEO:" + videoId + ":" + longFileName.substring(longFileName.length() - 45);
@@ -205,7 +206,7 @@ class VideoNotificationIntegrationTest {
 				.setParameter("videoId", videoId)
 				.executeUpdate());
 
-		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY);
+		statusWriter.markReady(videoId, originalKey, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 
 		assertThat(notificationCount()).isZero();
 	}
@@ -226,7 +227,7 @@ class VideoNotificationIntegrationTest {
 	 */
 	private LocalDateTime enterBlurring(String jobId) {
 		statusWriter.markEncoding(videoId, originalKey);
-		statusWriter.markEncoded(videoId, originalKey, ENCODED_KEY);
+		statusWriter.markEncoded(videoId, originalKey, ENCODED_KEY, (short) 10);
 		LocalDateTime startedAt = tx.execute(status ->
 			videoRepository.findById(videoId).orElseThrow().getBlurringStartedAt());
 		statusWriter.recordAiJob(videoId, jobId, startedAt);

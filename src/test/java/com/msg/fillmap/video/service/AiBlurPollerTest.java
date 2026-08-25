@@ -118,7 +118,7 @@ class AiBlurPollerTest {
 		Video video = Video.create(1L, "19495_9607", "videos/original/1/x.mp4",
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, 기준시각, Visibility.PRIVATE);
 		video.markEncoding();
-		video.markEncoded("videos/encoded/1/" + id + ".mp4");
+		video.markEncoded("videos/encoded/1/" + id + ".mp4", video.getDurationSec());
 		if (jobId != null) {
 			video.recordAiJob(jobId);
 		}

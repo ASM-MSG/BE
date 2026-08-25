@@ -40,11 +40,47 @@ class VideoStatusTransitionTest {
 		Video video = newVideo();
 		video.markEncoding();
 
-		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", video.getDurationSec());
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
 		assertThat(video.getEncodedUrl()).isEqualTo("videos/encoded/1/7.mp4");
 		assertThat(video.getThumbnailUrl()).isEqualTo("videos/thumb/1/7.jpg");
+	}
+
+	// 검증: FR-MEDIA-19
+	@Test
+	void markReady는_실측_길이를_durationSec에_덮어쓴다() {
+		Video video = newVideo();   // 클라 신고값 10 초로 확정된 영상
+		video.markEncoding();
+
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 13);
+
+		assertThat(video.getDurationSec()).isEqualTo((short) 13);
+	}
+
+	// 검증: FR-MEDIA-19
+	@Test
+	void markEncoded는_실측_길이를_durationSec에_덮어쓴다() {
+		Video video = newVideo();
+		video.markEncoding();
+
+		video.markEncoded("videos/encoded/1/7.mp4", (short) 13);
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.BLURRING);
+		assertThat(video.getDurationSec()).isEqualTo((short) 13);
+	}
+
+	// 검증: FR-MEDIA-19
+	@Test
+	void markReadyFromBlurring은_durationSec을_건드리지_않는다() {
+		// 블러본은 원본과 길이가 같다 — 실측값은 BLURRING 전이 때 이미 확정됐다.
+		Video video = newVideo();
+		video.markEncoding();
+		video.markEncoded("videos/encoded/1/7.mp4", (short) 13);
+
+		video.markReadyFromBlurring("videos/thumb/1/7.jpg");
+
+		assertThat(video.getDurationSec()).isEqualTo((short) 13);
 	}
 
 	@Test

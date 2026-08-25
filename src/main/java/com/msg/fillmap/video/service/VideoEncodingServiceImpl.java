@@ -90,6 +90,11 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 				return;
 			}
 
+			// 저장되는 길이의 정본 (MSG-470) — 클라 신고값은 확정 시점 잠정값이고, 여기서 실측 반올림으로 덮는다.
+			// 1~30 클램프는 스키마 CHECK(duration_sec > 0 AND <= 30) 준수용이다: 30~31초 여유 구간(위 MAX_DURATION_SEC
+			// 주석)은 반올림하면 31이 되고, 0.5초 미만 영상은 0이 된다. 초과 실패 판정은 위에서 클램프 전 원값으로 끝냈다.
+			short measuredDurationSec = (short) Math.max(1, Math.min(30, Math.round(duration)));
+
 			Path encoded = workDir.resolve("encoded.mp4");
 			Path thumbnail = workDir.resolve("thumb.jpg");
 			ffmpegRunner.encode720p(original, encoded);
@@ -117,14 +122,14 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			if (blurActive) {
 				// 미블러 썸네일을 S3 에 올리지 않고 thumbnailUrl 도 기록하지 않는다(P1/R5 불변식) — 폴러가 완료 시
 				// 블러본에서 뽑아 결정적 키에 올린 뒤 그때 thumbnailUrl 을 기록한다. 교체돼도 미블러본이 공개 키에 안 닿는다.
-				statusWriter.markEncoded(videoId, originalKey, encodedKey);
+				statusWriter.markEncoded(videoId, originalKey, encodedKey, measuredDurationSec);
 				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_COMPLETED);
 				resultCounted = true;
 			} else {
 				// 블러 꺼짐 경로. READY 전이와 완료 계측을 먼저 끝내고, 하이라이트는 전용 워커에 넘긴다 (MSG-456 D-1)
 				// — 계상 먼저(over_duration 경로와 같은 결). 워커 본문의 실패는 인코딩 태스크 계측과 무관하다.
 				upload(thumbnailKey, "image/jpeg", thumbnail);
-				statusWriter.markReady(videoId, originalKey, encodedKey, thumbnailKey);
+				statusWriter.markReady(videoId, originalKey, encodedKey, thumbnailKey, measuredDurationSec);
 				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_COMPLETED);
 				resultCounted = true;
 				submitHighlightJob(videoId, originalKey, encodedKey);

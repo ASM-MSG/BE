@@ -139,7 +139,8 @@ class EventVideoCommentServiceTest {
 
 	private Video 노출영상(EventLocation location) {
 		Video video = 영상(location, Visibility.PUBLIC, true);
-		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg");
+		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg",
+			video.getDurationSec());
 		em.flush();
 		return video;
 	}
@@ -235,11 +236,11 @@ class EventVideoCommentServiceTest {
 			EventLocation location = 위치(4);
 			Video 인코딩중 = 영상(location, Visibility.PUBLIC, true);
 			Video 비공개 = 영상(location, Visibility.PRIVATE, true);
-			비공개.markReady("videos/encoded/priv.mp4", "thumb/priv.jpg");
+			비공개.markReady("videos/encoded/priv.mp4", "thumb/priv.jpg", 비공개.getDurationSec());
 			Video 삭제 = 노출영상(location);
 			삭제.markDeleted();
 			Video 행사아님 = 영상(location, Visibility.PUBLIC, false);
-			행사아님.markReady("videos/encoded/plain.mp4", "thumb/plain.jpg");
+			행사아님.markReady("videos/encoded/plain.mp4", "thumb/plain.jpg", 행사아님.getDurationSec());
 			em.flush();
 
 			// 넷 모두 소유자가 요청자 본인이다 — 상세와 글자 그대로 같은 계약이라 본인도 예외가 아니다.
