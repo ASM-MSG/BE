@@ -128,7 +128,8 @@ class EventInteractionLockTest {
 		Video video = videoRepository.save(Video.create(userId, gridId,
 			"videos/original/" + UUID.randomUUID() + ".mp4", GeoSupport.toPoint(center.lat(), center.lon()),
 			(short) 10, startsAt, Visibility.PUBLIC));
-		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg");
+		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg",
+			video.getDurationSec());
 		eventVideoRepository.save(new EventVideo(video, location, occurrence.getId()));
 		em.flush();
 		return video;

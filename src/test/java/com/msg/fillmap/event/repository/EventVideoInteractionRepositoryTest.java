@@ -118,7 +118,8 @@ class EventVideoInteractionRepositoryTest {
 	/** 전역 노출 게이트(ACTIVE·PUBLIC·READY)를 통과하는 행사 영상 하나. */
 	private Video 노출영상(EventLocation location) {
 		Video video = 영상(location, Visibility.PUBLIC);
-		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg");
+		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg",
+			video.getDurationSec());
 		return video;
 	}
 
@@ -147,7 +148,7 @@ class EventVideoInteractionRepositoryTest {
 			EventLocation location = 위치(1);
 			Video 인코딩중 = 영상(location, Visibility.PUBLIC);
 			Video 비공개 = 영상(location, Visibility.PRIVATE);
-			비공개.markReady("videos/encoded/priv.mp4", "thumb/priv.jpg");
+			비공개.markReady("videos/encoded/priv.mp4", "thumb/priv.jpg", 비공개.getDurationSec());
 			Video 삭제 = 노출영상(location);
 			삭제.markDeleted();
 			Video 블라인드 = 노출영상(location);
@@ -158,7 +159,7 @@ class EventVideoInteractionRepositoryTest {
 			Video 일반 = videoRepository.save(Video.create(userId, gridId,
 				"videos/original/" + UUID.randomUUID() + ".mp4",
 				GeoSupport.toPoint(center.lat(), center.lon()), (short) 10, NOW, Visibility.PUBLIC));
-			일반.markReady("videos/encoded/plain.mp4", "thumb/plain.jpg");
+			일반.markReady("videos/encoded/plain.mp4", "thumb/plain.jpg", 일반.getDurationSec());
 			em.flush();
 			em.clear();
 

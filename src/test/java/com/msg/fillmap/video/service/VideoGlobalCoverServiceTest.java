@@ -82,7 +82,7 @@ class VideoGlobalCoverServiceTest {
 	private Video readyVideo(long id, String thumbKey, LocalDateTime recordedAt, long viewCount) {
 		Video video = Video.create(AUTHOR_ID, GRID_ID, "videos/original/x.mp4", null, (short) 12, recordedAt,
 			Visibility.PRIVATE);
-		video.markReady("videos/encoded/" + id + ".mp4", thumbKey);
+		video.markReady("videos/encoded/" + id + ".mp4", thumbKey, video.getDurationSec());
 		ReflectionTestUtils.setField(video, "id", id);
 		ReflectionTestUtils.setField(video, "viewCount", viewCount);
 		return video;

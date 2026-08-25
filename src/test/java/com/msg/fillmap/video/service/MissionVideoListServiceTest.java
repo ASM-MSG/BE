@@ -104,7 +104,7 @@ class MissionVideoListServiceTest {
 	private Video readyVideo(long id, long authorId, LocalDateTime recordedAt) {
 		Video video = Video.create(authorId, GRID_ID, "videos/original/" + id + ".mp4", null, (short) 12,
 			recordedAt, Visibility.PRIVATE);
-		video.markReady("videos/encoded/" + id + ".mp4", "videos/thumb/" + id + ".jpg");
+		video.markReady("videos/encoded/" + id + ".mp4", "videos/thumb/" + id + ".jpg", video.getDurationSec());
 		ReflectionTestUtils.setField(video, "id", id);
 		return video;
 	}

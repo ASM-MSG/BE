@@ -60,7 +60,8 @@ class VideoStatusWriterTest {
 		Video video = Video.create(1L, "19495_9607", "videos/original/1/x.mp4",
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
 		video.markEncoding();
-		video.markEncoded("videos/encoded/1/7.mp4");   // BLURRING + blurringStartedAt=now (thumbnailUrl 은 null)
+		// BLURRING + blurringStartedAt=now (thumbnailUrl 은 null). 길이는 신고값 그대로 둬 이 픽스처의 다른 검증에 영향 없다.
+		video.markEncoded("videos/encoded/1/7.mp4", video.getDurationSec());
 		ReflectionTestUtils.setField(video, "id", VIDEO_ID);
 		return video;
 	}
@@ -250,7 +251,7 @@ class VideoStatusWriterTest {
 		Video video = replacedWhileEncoding();
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
-		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.UPLOADED);   // 새 파일 흐름 유지
 		assertThat(video.getEncodedUrl()).isNull();
@@ -262,7 +263,7 @@ class VideoStatusWriterTest {
 		Video video = replacedWhileEncoding();
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
-		statusWriter.markEncoded(VIDEO_ID, K1, "videos/encoded/1/7.mp4");
+		statusWriter.markEncoded(VIDEO_ID, K1, "videos/encoded/1/7.mp4", (short) 10);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.UPLOADED);
 		// blurringStartedAt 이 안 찍히면 폴러 제출 대상이 아니다 — 옛 파일의 ai_job_id 잔존 경로 차단
@@ -284,7 +285,7 @@ class VideoStatusWriterTest {
 		// 새 시도(K2)가 이미 READY 까지 갔는데, 큐에 밀려 있던 옛 태스크(K1)가 뒤늦게 시작을 알린다
 		Video video = replacedWhileEncoding();
 		video.markEncoding();
-		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", video.getDurationSec());
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		boolean applied = statusWriter.markEncoding(VIDEO_ID, K1);
@@ -299,7 +300,7 @@ class VideoStatusWriterTest {
 		video.markDeleted();   // status=DELETED, 키는 K1 그대로 — ACTIVE 가드가 걸러야 한다
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
-		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.ENCODING);   // 불변
 		assertThat(video.getEncodedUrl()).isNull();
@@ -310,12 +311,49 @@ class VideoStatusWriterTest {
 		Video video = encoding();
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
-		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
 		assertThat(video.getEncodedUrl()).isEqualTo("videos/encoded/1/7.mp4");
 		assertThat(video.getThumbnailUrl()).isEqualTo("videos/thumb/1/7.jpg");
 		verify(videoProcessingMetrics).recordOutcome(VIDEO_ID, true, VideoProcessingMetrics.PATH_ENCODING);
+	}
+
+	// ── 실측 길이 반영 (MSG-470) ──
+	// 스테일 가드에 걸리면 상태와 함께 길이도 skip 된다 — 옛 파일의 실측값이 새 파일에 붙으면 안 된다.
+
+	// 검증: FR-MEDIA-19
+	@Test
+	void 현재_시도면_markReady가_실측_길이를_반영한다() {
+		Video video = encoding();   // 신고값 10 초로 확정된 영상
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 13);
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
+		assertThat(video.getDurationSec()).isEqualTo((short) 13);
+	}
+
+	// 검증: FR-MEDIA-19
+	@Test
+	void 스테일_markReady는_길이도_덮어쓰지_않는다() {
+		Video video = replacedWhileEncoding();   // 교체로 신고값 8 초인 새 파일
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 13);
+
+		assertThat(video.getDurationSec()).isEqualTo((short) 8);   // 옛 파일 실측값이 새 파일에 붙지 않는다
+	}
+
+	// 검증: FR-MEDIA-19
+	@Test
+	void 스테일_markEncoded는_길이도_덮어쓰지_않는다() {
+		Video video = replacedWhileEncoding();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markEncoded(VIDEO_ID, K1, "videos/encoded/1/7.mp4", (short) 13);
+
+		assertThat(video.getDurationSec()).isEqualTo((short) 8);
 	}
 
 	// ── 종결 후 중복 종결 가드 (MSG-382, NFR-OPS-08) ──
@@ -325,7 +363,7 @@ class VideoStatusWriterTest {
 	/** K1 시도가 이미 READY 로 끝난 영상. */
 	private Video ready() {
 		Video video = encoding();
-		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", video.getDurationSec());
 		return video;
 	}
 
@@ -334,7 +372,7 @@ class VideoStatusWriterTest {
 		Video video = ready();
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
-		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
 		verify(videoProcessingMetrics, never()).recordOutcome(anyLong(), anyBoolean(), anyString());
@@ -396,7 +434,7 @@ class VideoStatusWriterTest {
 		Video video = ready();
 		video.replaceFile(K2, (short) 8, LocalDateTime.now());
 		video.markEncoding();
-		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", video.getDurationSec());
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
 		statusWriter.recordHighlights(VIDEO_ID, K1, List.of(List.of(0.0, 3.33)));
@@ -423,7 +461,7 @@ class VideoStatusWriterTest {
 		LocalDateTime nonce = video.getBlurringStartedAt();
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
-		statusWriter.markEncoded(VIDEO_ID, K1, "videos/encoded/1/7.mp4");
+		statusWriter.markEncoded(VIDEO_ID, K1, "videos/encoded/1/7.mp4", (short) 10);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.BLURRING);
 		assertThat(video.getBlurringStartedAt()).isEqualTo(nonce);   // 넌스 재발급 없음 — 폴러 가드가 안 흔들린다

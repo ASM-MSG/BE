@@ -88,7 +88,7 @@ class VideoProcessingMetricsTest {
 	/** AI 시도까지 가서 job_id 가 붙은 BLURRING 영상. */
 	private Video blurring(String jobId) {
 		Video video = encoding();
-		video.markEncoded("videos/encoded/1/7.mp4");
+		video.markEncoded("videos/encoded/1/7.mp4", video.getDurationSec());
 		video.recordAiJob(jobId);
 		return video;
 	}
@@ -109,7 +109,7 @@ class VideoProcessingMetricsTest {
 		metrics.markStart(VIDEO_ID);
 		nano.set(TimeUnit.SECONDS.toNanos(5));
 
-		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10);
 
 		assertThat(outcomeCount("ready", "encoding")).isEqualTo(1.0);
 		assertThat(durationTimer("ready", "encoding").count()).isEqualTo(1L);
@@ -140,7 +140,7 @@ class VideoProcessingMetricsTest {
 		Video video = encoding();
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 
-		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10);
 
 		assertThat(outcomeCount("ready", "encoding")).isEqualTo(1.0);
 		assertThat(durationTimer("ready", "encoding").count()).isZero();
@@ -154,7 +154,7 @@ class VideoProcessingMetricsTest {
 		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
 		metrics.markStart(VIDEO_ID);
 
-		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10);
 		statusWriter.markFailed(VIDEO_ID, K1);
 
 		assertThat(outcomeCount("ready", "encoding")).isZero();
@@ -173,7 +173,7 @@ class VideoProcessingMetricsTest {
 		metrics.markStart(VIDEO_ID);                       // 교체 재등록 — 같은 키 덮어쓰기 (D2)
 		nano.set(TimeUnit.SECONDS.toNanos(63));
 
-		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
+		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10);
 
 		assertThat(durationTimer("ready", "encoding").totalTime(TimeUnit.SECONDS)).isEqualTo(3.0);
 	}

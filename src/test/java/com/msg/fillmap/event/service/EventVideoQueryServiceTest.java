@@ -172,7 +172,8 @@ class EventVideoQueryServiceTest {
 	/** 전역 노출 게이트(ACTIVE·PUBLIC·READY)를 통과하는 행사 영상 하나. */
 	private Video 노출영상(EventLocation location) {
 		Video video = 영상(location, Visibility.PUBLIC, userId);
-		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg");
+		video.markReady("videos/encoded/" + UUID.randomUUID() + ".mp4", "thumb/" + UUID.randomUUID() + ".jpg",
+			video.getDurationSec());
 		return video;
 	}
 
@@ -254,7 +255,7 @@ class EventVideoQueryServiceTest {
 			Video 정상 = 노출영상(location);
 			영상(location, Visibility.PUBLIC, userId);   // 인코딩 미완(READY 아님)
 			Video 비공개 = 영상(location, Visibility.PRIVATE, userId);
-			비공개.markReady("videos/encoded/priv.mp4", "thumb/priv.jpg");
+			비공개.markReady("videos/encoded/priv.mp4", "thumb/priv.jpg", 비공개.getDurationSec());
 			Video 삭제 = 노출영상(location);
 			삭제.markDeleted();
 			Video 블라인드 = 노출영상(location);
@@ -500,7 +501,7 @@ class EventVideoQueryServiceTest {
 			Video 일반영상 = videoRepository.save(Video.create(userId, gridId,
 				"videos/original/" + UUID.randomUUID() + ".mp4", GeoSupport.toPoint(center.lat(), center.lon()),
 				(short) 10, NOW, Visibility.PUBLIC));
-			일반영상.markReady("videos/encoded/plain.mp4", "thumb/plain.jpg");
+			일반영상.markReady("videos/encoded/plain.mp4", "thumb/plain.jpg", 일반영상.getDurationSec());
 			em.flush();
 
 			assertThatThrownBy(() -> service().getVideoDetail(일반영상.getId(), userId))
