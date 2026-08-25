@@ -68,12 +68,17 @@ public class FriendController {
 
 	@Operation(
 		summary = "친구 코드 미리보기",
-		description = "요청을 보내기 전 확인 화면용 — 코드 소유자의 닉네임만 반환한다. "
-			+ "요청 가능 여부 검증(자기 자신·중복 등)은 요청 API 가 수행한다."
+		description = "요청을 보내기 전 확인 화면용 — 코드 소유자의 닉네임과 나와의 관계 상태(relation)를 "
+			+ "반환한다. relation 은 SELF(내 코드)·NONE(관계 없음)·OUTGOING_PENDING(내가 보낸 요청 대기)·"
+			+ "INCOMING_PENDING(상대가 보낸 요청 대기)·FRIENDS(이미 친구) 다섯 값이고 조회 시점 실시간 "
+			+ "판정이다. 미리보기는 힌트일 뿐이며 최종 검증(자기 자신·중복 등)은 요청 API 가 다시 수행한다."
 	)
 	@GetMapping("/preview")
-	public SuccessResponse<FriendPreviewResponseDto> preview(@RequestParam("code") String code) {
-		return SuccessResponse.of(friendService.preview(code));
+	public SuccessResponse<FriendPreviewResponseDto> preview(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@RequestParam("code") String code
+	) {
+		return SuccessResponse.of(friendService.preview(principal.userId(), code));
 	}
 
 	@Operation(

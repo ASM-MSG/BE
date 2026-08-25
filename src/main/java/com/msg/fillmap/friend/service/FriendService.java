@@ -20,10 +20,11 @@ public interface FriendService {
 	FriendCodeResponseDto getMyFriendCode(Long userId);
 
 	/**
-	 * 코드 미리보기 (FR-3) — 요청 확정 전 확인 화면용 advisory 조회. 자기 코드·이미 친구인 상대도
-	 * 성공한다(단순 조회). 요청 검증은 {@link #request}가 전부 재수행한다.
+	 * 코드 미리보기 (FR-3, MSG-391) — 요청 확정 전 확인 화면용 advisory 조회. 자기 코드·이미 친구인
+	 * 상대도 성공하되 조회자와의 관계 상태(relation)를 함께 준다 — 화면이 요청 버튼 상태를 미리 정하는
+	 * 힌트다. 판정은 조회 시점 실시간이고 최종 검증은 {@link #request}가 그 시점 기준으로 전부 재수행한다.
 	 */
-	FriendPreviewResponseDto preview(String friendCode);
+	FriendPreviewResponseDto preview(Long userId, String friendCode);
 
 	/**
 	 * 친구 요청 (FR-4~8). 행 없음 → PENDING 생성, 역방향 대기 → 기존 행 ACCEPTED 승격(자동 수락).
