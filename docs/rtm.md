@@ -208,7 +208,7 @@
 | FR-ROUTE-09 | 구현됨 | RouteRecommendServiceTest |
 | FR-ROUTE-10 | 구현됨 | RouteOrderPlannerTest, RouteRecommendServiceTest |
 | FR-ROUTE-11 | 진행 중 | RouteOrderPlannerTest |
-| FR-ROUTE-12 | 진행 중 | RouteRecommendServiceTest |
+| FR-ROUTE-12 | 구현됨 | RouteRecommendServiceTest |
 | FR-ROUTE-13 | 구현됨 | RouteCandidateCollectorTest |
 | FR-ROUTE-14 | 진행 중 | RegionMentionMatchTest, RouteMentionedAreaResolverTest, RouteRecommendServiceTest |
 | FR-ROUTE-15 | 계획 | (없음) |
