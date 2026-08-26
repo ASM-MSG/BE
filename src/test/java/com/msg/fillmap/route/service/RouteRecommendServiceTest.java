@@ -26,6 +26,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -541,6 +542,196 @@ class RouteRecommendServiceTest {
 			// 판정은 캐시 히트에도 재실행된다 — 저장된 신호 재사용이 아니라 같은 region 문자열의 재현이다.
 			then(regionQueryService).should(times(2)).matchMentionedRegions(any(), any());
 			server.verify();
+		}
+	}
+
+	@Nested
+	@DisplayName("요청 제한 예외 (MSG-487 FR-9) — 자동 이동 직후 재요청 1회")
+	class RateLimitExemption {
+
+		private static final ViewportDto 서울_뷰포트 = new ViewportDto(37.45, 126.85, 37.65, 127.10);
+
+		/** overlapsViewport=false → MOVE, true → 서울 뷰포트와 실겹침 0 이라 ZOOM_OUT (MentionedArea 와 동일 픽스처). */
+		private MentionedRegionMatch 부산_매칭(boolean overlapsViewport) {
+			return new MentionedRegionMatch("부산광역시", 35.1985, 129.0538,
+				35.0512, 128.7602, 35.3891, 129.2723, overlapsViewport);
+		}
+
+		private void parse는_지역을_준다(String region) {
+			server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
+				"{\"region\": \"" + region + "\", \"period\": null, \"interests\": [], \"preferred_order\": []}",
+				MediaType.APPLICATION_JSON));
+		}
+
+		private RouteRecommendRequestDto 서울에서_요청(String text) {
+			return new RouteRecommendRequestDto(text, 서울_뷰포트, null);
+		}
+
+		// 검증: FR-ROUTE-12
+		@Test
+		void 이동_신호_응답_직후의_재요청_한_번은_제한을_통과한다() {
+			given(collector.collect(any(), any())).willReturn(List.of(장소후보("카페", 37.55, 126.99)));
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_지역을_준다("부산");
+			explain은_이유를_준다("r1");
+			parse는_빈해석을_준다();	// 재요청 — 지도가 옮겨져 뷰포트가 달라지므로 캐시 미스
+			explain은_이유를_준다("r1");
+
+			RouteRecommendResponseDto first = service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+			assertThat(first.mentionedArea().kind()).isEqualTo("MOVE");
+
+			clock.advance(Duration.ofSeconds(5));	// 10초 창 안 — 예외 없이는 14429 인 시점
+			assertThatCode(() -> service.recommend(USER_ID, 요청())).doesNotThrowAnyException();
+		}
+
+		// 검증: FR-ROUTE-12
+		@Test
+		@DisplayName("예외로 통과한 재요청 다음 요청은 다시 제한된다 — 예외 통과도 새 10초 창을 연다")
+		void 예외로_통과한_재요청_다음_요청은_다시_제한된다() {
+			given(collector.collect(any(), any())).willReturn(List.of());
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_지역을_준다("부산");
+			parse는_빈해석을_준다();
+
+			service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));	// MOVE — 예외 부여
+			clock.advance(Duration.ofSeconds(5));
+			service.recommend(USER_ID, 요청());	// 예외 소비 통과 (t=5)
+
+			clock.advance(Duration.ofSeconds(5));	// t=10 — 예외 통과 시각으로부터 5초
+			assertThatThrownBy(() -> service.recommend(USER_ID, 요청()))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", RouteErrorCode.ROUTE_RATE_LIMITED);
+		}
+
+		// 검증: FR-ROUTE-12
+		@Test
+		void 이동_신호_없는_응답_뒤_재요청은_그대로_제한된다() {
+			given(collector.collect(any(), any())).willReturn(List.of());
+			parse는_빈해석을_준다();
+
+			service.recommend(USER_ID, 서울에서_요청("축제 보고 싶어"));	// 무신호
+			clock.advance(Duration.ofSeconds(5));
+
+			assertThatThrownBy(() -> service.recommend(USER_ID, 서울에서_요청("축제 보고 싶어")))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", RouteErrorCode.ROUTE_RATE_LIMITED);
+		}
+
+		// 검증: FR-ROUTE-12
+		@Test
+		void 축소_신호는_재요청_예외를_만들지_않는다() {
+			given(collector.collect(any(), any())).willReturn(List.of());
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(true)));
+			parse는_지역을_준다("부산");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+			assertThat(response.mentionedArea().kind()).isEqualTo("ZOOM_OUT");
+			clock.advance(Duration.ofSeconds(5));
+
+			assertThatThrownBy(() -> service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어")))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", RouteErrorCode.ROUTE_RATE_LIMITED);
+		}
+
+		// 검증: FR-ROUTE-12
+		@Test
+		@DisplayName("예외 통과 요청의 응답에 또 이동 신호가 실려도 연속 통과되지 않는다 — 연쇄 차단 가드")
+		void 예외_통과_요청의_응답에_또_이동_신호가_실려도_연속_통과되지_않는다() {
+			given(collector.collect(any(), any())).willReturn(List.of());
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_지역을_준다("부산");	// 요청 1 — MOVE
+			parse는_지역을_준다("부산");	// 요청 2 — 캐시 미스, 응답에 또 MOVE
+
+			service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+			clock.advance(Duration.ofSeconds(5));
+			RouteRecommendResponseDto second = service.recommend(USER_ID, 요청());	// 예외 소비 통과
+			assertThat(second.mentionedArea().kind()).isEqualTo("MOVE");	// MOVE 가 또 실렸지만 재부여는 없다
+
+			clock.advance(Duration.ofSeconds(1));
+			assertThatThrownBy(() -> service.recommend(USER_ID, 요청()))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", RouteErrorCode.ROUTE_RATE_LIMITED);
+		}
+
+		// 검증: FR-ROUTE-12
+		@Test
+		@DisplayName("이동 신호 뒤 창 밖 정상 요청이 지나가면 예외는 소거된다 — 통과 전이가 남은 예외를 지운다")
+		void 이동_신호_뒤_창_밖_정상_요청이_지나가면_예외는_소거된다() {
+			given(collector.collect(any(), any())).willReturn(List.of());
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_지역을_준다("부산");
+			parse는_빈해석을_준다();
+
+			service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));	// MOVE — 예외 부여
+			clock.advance(Duration.ofSeconds(10));
+			service.recommend(USER_ID, 서울에서_요청("축제 보고 싶어"));	// 창 밖 정상 통과 — 예외 소거
+
+			clock.advance(Duration.ofSeconds(1));
+			assertThatThrownBy(() -> service.recommend(USER_ID, 서울에서_요청("축제 보고 싶어")))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", RouteErrorCode.ROUTE_RATE_LIMITED);
+		}
+
+		// 검증: FR-ROUTE-12
+		@Test
+		@DisplayName("처리가 늦어진 이동 신호 응답은 다른 창에 예외를 달지 않는다 — 조건부 부여 (시도 시각 바인딩)")
+		void 처리가_늦어진_이동_신호_응답은_다른_창에_예외를_달지_않는다() {
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_지역을_준다("부산");	// 요청 1
+			parse는_빈해석을_준다();	// 요청 2 (요청 1 처리 중 삽입)
+			// 요청 1의 후보 수집 시점에 10초를 흘리고 요청 2를 끼워 넣는다 — 외부 호출 지연으로 처리가 창을
+			// 넘긴 사이 다른 요청이 새 창을 정상 선점하는 시나리오의 동기적 재현이다.
+			AtomicBoolean 삽입됨 = new AtomicBoolean(false);
+			given(collector.collect(any(), any())).willAnswer(invocation -> {
+				if (삽입됨.compareAndSet(false, true)) {
+					clock.advance(Duration.ofSeconds(10));
+					service.recommend(USER_ID, 서울에서_요청("축제 보고 싶어"));	// 요청 2 — 새 창 정상 선점
+				}
+				return List.of();
+			});
+
+			RouteRecommendResponseDto delayed = service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+			assertThat(delayed.mentionedArea().kind()).isEqualTo("MOVE");	// 뒤늦게 완성된 MOVE 응답
+
+			clock.advance(Duration.ofSeconds(1));	// 요청 2가 선점한 창 안 — 예외가 달렸다면 통과해 버린다
+			assertThatThrownBy(() -> service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어")))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", RouteErrorCode.ROUTE_RATE_LIMITED);
+		}
+
+		// 검증: FR-ROUTE-12
+		@Test
+		@DisplayName("후보가 없는 이동 신호 응답도 예외를 부여한다 — 빈 후보 조기 반환 경로 합류 뒤 부여")
+		void 후보가_없는_이동_신호_응답도_예외를_부여한다() {
+			given(collector.collect(any(), any())).willReturn(List.of());
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_지역을_준다("부산");
+			parse는_빈해석을_준다();
+
+			RouteRecommendResponseDto first = service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));
+			assertThat(first.points()).isEmpty();
+			assertThat(first.mentionedArea()).isNotNull();
+
+			clock.advance(Duration.ofSeconds(5));
+			assertThatCode(() -> service.recommend(USER_ID, 요청())).doesNotThrowAnyException();
+		}
+
+		// 검증: FR-ROUTE-12
+		@Test
+		@DisplayName("뷰포트 검증 거부는 예외를 소모하지 않는다 — 창을 안 쓰는 거부는 예외도 안 쓴다")
+		void 뷰포트_검증_거부는_예외를_소모하지_않는다() {
+			given(collector.collect(any(), any())).willReturn(List.of());
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(부산_매칭(false)));
+			parse는_지역을_준다("부산");
+			parse는_빈해석을_준다();
+
+			service.recommend(USER_ID, 서울에서_요청("부산 축제 보고 싶어"));	// MOVE — 예외 부여
+			clock.advance(Duration.ofSeconds(5));
+			assertThatThrownBy(() -> service.recommend(USER_ID,
+				new RouteRecommendRequestDto("해운대 가자", new ViewportDto(35.1, 128.95, 35.1, 129.20), null)))
+				.hasFieldOrPropertyWithValue("errorCode", RouteErrorCode.INVALID_VIEWPORT);	// 넓이 0 — 청구 전 거부
+
+			assertThatCode(() -> service.recommend(USER_ID, 요청())).doesNotThrowAnyException();	// 예외 잔존
 		}
 	}
 

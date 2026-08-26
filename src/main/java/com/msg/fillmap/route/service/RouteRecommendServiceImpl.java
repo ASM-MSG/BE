@@ -61,6 +61,9 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	/** 사용자당 최소 요청 간격 (FR-ROUTE-12) — 호출마다 외부(AI·카카오) 비용이 나간다. */
 	private static final Duration RATE_LIMIT_INTERVAL = Duration.ofSeconds(10);
 
+	/** 재요청 예외를 만드는 신호 종류 (MSG-487 FR-9) — MentionedAreaDto.kind 의 MOVE 값. */
+	private static final String MOVE_KIND = "MOVE";
+
 	/** parse 해석 캐시 (§순서 배열) — 창 안 재요청의 결과 안정화가 목적이고 유료 재호출 절감은 부수 효과다. */
 	private static final Duration PARSE_CACHE_TTL = Duration.ofMinutes(10);
 	private static final int PARSE_CACHE_MAX_ENTRIES = 1000;
@@ -91,7 +94,7 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	// ponytail: 요청 제한·parse 캐시 모두 단일 인스턴스 전제의 메모리 구조다(스펙 명시 단순화) —
 	// 다중 인스턴스가 되면 Redis 로 옮긴다. 캐시는 LRU(LinkedHashMap accessOrder) + TTL 검사로 1,000건을 지킨다.
 	// 요청 제한 맵은 시도한 사용자 수만큼 영구 누적된다(10만 사용자 ≈ 5MB 수준) — Redis 전환 때 TTL 과 함께 해소.
-	private final ConcurrentHashMap<Long, Long> lastAttemptMillis = new ConcurrentHashMap<>();
+	private final ConcurrentHashMap<Long, RateLimitState> rateLimitStates = new ConcurrentHashMap<>();
 	private final Map<ParseCacheKey, CachedParse> parseCache =
 		Collections.synchronizedMap(new LinkedHashMap<>(16, 0.75f, true) {
 			@Override
@@ -130,18 +133,21 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		}
 		long startMillis = clock.millis();
 		long[] spans = {-1L, -1L};	// [parse_ms, explain_ms] — 도달 전 실패는 -1 로 남는다
+		RateLimitClaim claim = null;	// 청구 자체가 거부(14429)되면 null 그대로다 — 지표 exempt=false
 		try {
-			claimRateLimitWindow(userId, startMillis);
+			claim = claimRateLimitWindow(userId, startMillis);
 			RouteRecommendResponseDto response = doRecommend(intentClient, request, spans);
+			// 부여는 두 반환 경로(빈 후보 조기 반환·정상 assemble)가 합류한 응답 확보 시점 한 곳에서 (MSG-487).
+			grantMoveExemption(userId, claim, response);
 			logMetrics(response.points().size() >= NOTICE_THRESHOLD ? "ok" : "insufficient",
-				startMillis, spans, response.points().size(), signalOf(response));
+				startMillis, spans, response.points().size(), signalOf(response), claim.exemptConsumed());
 			return response;
 		} catch (ApiException e) {
-			logMetrics(outcomeOf(e), startMillis, spans, 0, "none");
+			logMetrics(outcomeOf(e), startMillis, spans, 0, "none", claim != null && claim.exemptConsumed());
 			throw e;
 		} catch (RuntimeException e) {
 			// ApiException 밖 실패(NPE류)도 지표 없이 새면 실패율이 과소 계상된다 — 지표만 남기고 그대로 올린다.
-			logMetrics("error", startMillis, spans, 0, "none");
+			logMetrics("error", startMillis, spans, 0, "none", claim != null && claim.exemptConsumed());
 			throw e;
 		}
 	}
@@ -178,18 +184,42 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	}
 
 	/**
-	 * 요청 제한 원자 선점 (FR-ROUTE-12) — compute 하나로 직전 시도 판정과 이번 시도 기록을 처리해 동시
-	 * 요청 두 개가 둘 다 통과하는 경합을 막는다. 기록은 성공 시각이 아니라 시도 시각이고 실패해도 되돌리지
-	 * 않는다 — parse 까지 갔다 실패한 요청도 외부 비용은 이미 나갔다(스펙 §도메인 로직 4).
+	 * 요청 제한 원자 선점 (FR-ROUTE-12) — compute 하나가 세 전이를 원자 판정한다 (MSG-487 §도메인 로직 2).
+	 * 창 통과는 남은 예외를 소거하며 기록, 창 위반 + 예외 보유는 예외를 소비하며 기록(자동 이동 직후 재요청
+	 * 1회), 창 위반 + 예외 없음은 14429 로 상태 불변이다. 기록은 성공 시각이 아니라 시도 시각이고 실패해도
+	 * 되돌리지 않는다 — parse 까지 갔다 실패한 요청도 외부 비용은 이미 나갔다(스펙 §도메인 로직 4).
+	 * 소비 여부와 기록 시각을 함께 돌려준다 — {@link #grantMoveExemption} 조건부 부여의 입력이다.
 	 */
-	private void claimRateLimitWindow(long userId, long nowMillis) {
-		lastAttemptMillis.compute(userId, (id, last) -> {
-			if (last != null && nowMillis - last < RATE_LIMIT_INTERVAL.toMillis()) {
-				// compute 안에서 던지면 매핑이 직전 시도 시각 그대로 남는다 — 거부된 시도는 창을 늘리지 않는다.
-				throw new ApiException(RouteErrorCode.ROUTE_RATE_LIMITED);
+	private RateLimitClaim claimRateLimitWindow(long userId, long nowMillis) {
+		boolean[] exemptConsumed = {false};	// CHM.compute 는 bin 잠금 아래 딱 한 번 호출된다 — spans 배열과 같은 관례
+		rateLimitStates.compute(userId, (id, state) -> {
+			if (state != null && nowMillis - state.lastAttemptMillis() < RATE_LIMIT_INTERVAL.toMillis()) {
+				if (!state.moveExempt()) {
+					// compute 안에서 던지면 매핑이 직전 상태 그대로 남는다 — 거부된 시도는 창을 늘리지 않는다.
+					throw new ApiException(RouteErrorCode.ROUTE_RATE_LIMITED);
+				}
+				exemptConsumed[0] = true;
 			}
-			return nowMillis;
+			return new RateLimitState(nowMillis, false);	// 어느 통과 전이든 남은 예외를 함께 지운다
 		});
+		return new RateLimitClaim(nowMillis, exemptConsumed[0]);
+	}
+
+	/**
+	 * 자동 이동 재요청 예외 부여 (MSG-487 §도메인 로직 2) — MOVE 응답이고 이번 요청이 예외 소비 통과가
+	 * 아닐 때만 켠다(연쇄 차단 — 예외로 통과한 응답의 MOVE 재부여를 막아 한 창에 통과 최대 두 번).
+	 * 상태의 시도 시각이 이 요청의 청구가 기록한 값 그대로일 때만 켠다 — 값이 다르면 처리(외부 호출 지연)
+	 * 중에 다른 요청이 창을 새로 선점한 것이라 부여를 버린다. 통과 청구끼리 기록 시각이 유일하므로 시각이
+	 * 곧 시도 식별자다. ZOOM_OUT·무신호는 부여하지 않는다 — 자동 이동이 없으니 자동 재요청도 없다.
+	 */
+	private void grantMoveExemption(long userId, RateLimitClaim claim, RouteRecommendResponseDto response) {
+		MentionedAreaDto area = response.mentionedArea();
+		if (claim.exemptConsumed() || area == null || !MOVE_KIND.equals(area.kind())) {
+			return;
+		}
+		rateLimitStates.computeIfPresent(userId, (id, state) ->
+			state.lastAttemptMillis() == claim.recordedMillis()
+				? new RateLimitState(state.lastAttemptMillis(), true) : state);
 	}
 
 	/**
@@ -289,10 +319,12 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	/**
 	 * 지표 로그 (비기능 운영) — 사용자 문장 원문과 AI 응답 원문은 남기지 않는다. 집계는 이 라인으로 한다.
 	 * signal 은 언급 지역 신호 발화 빈도의 실측 재료다 (MSG-468 §지표 로그) — 지역 이름 자체는 남기지 않는다.
+	 * exempt 는 자동 이동 재요청 예외 발동 빈도 — 비용 조항(한 실행에 요청 최대 두 번)의 실측 재료다 (MSG-487).
 	 */
-	private void logMetrics(String outcome, long startMillis, long[] spans, int points, String signal) {
-		log.info("[route] outcome={} total_ms={} parse_ms={} explain_ms={} points={} signal={}",
-			outcome, clock.millis() - startMillis, spans[0], spans[1], points, signal);
+	private void logMetrics(String outcome, long startMillis, long[] spans, int points, String signal,
+		boolean exempt) {
+		log.info("[route] outcome={} total_ms={} parse_ms={} explain_ms={} points={} signal={} exempt={}",
+			outcome, clock.millis() - startMillis, spans[0], spans[1], points, signal, exempt);
 	}
 
 	/** 신호 지표 값 — none·move·zoom_out (MSG-468 §지표 로그). */
@@ -346,5 +378,13 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 
 	/** 캐시 항목 — TTL 판정용 만료 시각을 함께 든다. 만료 항목은 다음 조회가 덮어쓴다. */
 	private record CachedParse(ParsedIntent intent, long expiresAtMillis) {
+	}
+
+	/** 요청 제한 상태 — 사용자당 하나. moveExempt 는 자동 이동(MOVE) 직후 재요청 1회 예외다 (MSG-487 FR-9). */
+	private record RateLimitState(long lastAttemptMillis, boolean moveExempt) {
+	}
+
+	/** 청구 결과 — 기록 시각(부여의 바인딩 조건)과 예외 소비 여부(연쇄 차단·지표 exempt)를 든다. */
+	private record RateLimitClaim(long recordedMillis, boolean exemptConsumed) {
 	}
 }
