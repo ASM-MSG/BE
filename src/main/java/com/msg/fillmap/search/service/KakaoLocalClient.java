@@ -28,18 +28,43 @@ public class KakaoLocalClient {
 
 	// 카카오 최대 페이지 크기 고정 — size/page 는 API 로 노출하지 않는다(§D4). FE 는 상위 몇 건만 잘라 쓴다.
 	private static final int PAGE_SIZE = 15;
+	// 카카오가 허용하는 최대 반경(m) — 지도 중심에서 이만큼 안을 먼저 본다 (MSG-481 §D6)
+	private static final int NEARBY_RADIUS_METERS = 20000;
 
 	private final RestClient kakaoLocalRestClient;
 
 	/** 키워드 검색 1페이지(카카오 정확도순 ≤15건). 무매치는 빈 리스트 — 예외가 아니다(§D3). */
 	public List<KakaoPlace> search(String query) {
+		return request(query, null, null);
+	}
+
+	/**
+	 * 지도 중심 반경 20km 우선 키워드 검색 (MSG-481 §D4). 정상 응답이 0건일 때만 위치 없이 한 번 재호출해
+	 * 전국 결과를 돌려준다 — 재호출은 한 번뿐이고, 실패(예외)는 재호출 없이 5502 로 수렴한다(§D5).
+	 * 좌표는 컨트롤러에서 검증된 값이며 로그·예외 메시지에 남기지 않는다(§D9).
+	 */
+	public List<KakaoPlace> search(String query, double lat, double lng) {
+		List<KakaoPlace> nearby = request(query, lat, lng);
+		return nearby.isEmpty() ? request(query, null, null) : nearby;
+	}
+
+	/** 좌표가 null 이면 위치 없는 전국 검색, 아니면 x·y·radius 를 실은 반경 검색이다. */
+	private List<KakaoPlace> request(String query, Double lat, Double lng) {
 		JsonNode response;
 		try {
 			response = kakaoLocalRestClient.get()
-				.uri(uriBuilder -> uriBuilder.path("/v2/local/search/keyword.json")
-					.queryParam("query", query)
-					.queryParam("size", PAGE_SIZE)
-					.build())
+				.uri(uriBuilder -> {
+					uriBuilder.path("/v2/local/search/keyword.json")
+						.queryParam("query", query)
+						.queryParam("size", PAGE_SIZE);
+					if (lat != null) {
+						// 카카오는 x 가 경도, y 가 위도다. sort 는 보내지 않아 기본 정확도순을 유지한다(§D6)
+						uriBuilder.queryParam("x", lng)
+							.queryParam("y", lat)
+							.queryParam("radius", NEARBY_RADIUS_METERS);
+					}
+					return uriBuilder.build();
+				})
 				.retrieve()
 				.body(JsonNode.class);
 		} catch (RestClientException e) {
