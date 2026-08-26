@@ -18,6 +18,9 @@ import com.msg.fillmap.response.ErrorCodeIfs;
 @AllArgsConstructor
 public enum SearchErrorCode implements ErrorCodeIfs {
 
+	// 좌표는 한 쌍으로만 유효하고 대한민국 범위 안이어야 한다 — 조용히 무시하면 FE 가 "왜 위치 랭킹이 안 먹지"를
+	// 추적할 단서가 없다 (MSG-481 §D2)
+	INVALID_COORDINATE(5400, HttpStatus.BAD_REQUEST, "지도 중심 좌표가 올바르지 않습니다"),
 	// ponytail: 쿼터 초과(429)가 실측되면 5429 분리(FE 백오프 신호) — 상수 1개 추가로 끝 (§D3)
 	SEARCH_UPSTREAM_ERROR(5502, HttpStatus.BAD_GATEWAY, "장소 검색이 일시적으로 어렵습니다. 잠시 후 다시 시도해주세요"),
 	;

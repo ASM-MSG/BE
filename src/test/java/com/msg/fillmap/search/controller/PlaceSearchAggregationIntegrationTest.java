@@ -176,4 +176,40 @@ class PlaceSearchAggregationIntegrationTest {
 		verify(searchKeywordCommandService).recordSearch(USER_SEARCHER_KEY, "부산대");
 		verifyNoMoreInteractions(searchKeywordCommandService);
 	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	@DisplayName("비로그인 좌표 검색도 200 이고 결과가 같다")
+	void 비로그인_좌표_검색도_200이고_결과가_같다() throws Exception {
+		// 파라미터가 늘어도 인증 요구가 새로 생기지 않는다 (MSG-469 불변)
+		given(kakaoLocalClient.search("부산대", 35.1578, 129.0594)).willReturn(List.of(
+			new KakaoPlace("부산대학교", "부산 금정구 장전동 40", "부산 금정구 부산대학로63번길 2", 35.23272, 129.08246)));
+
+		mockMvc.perform(get("/api/search/places")
+				.param("q", "부산대")
+				.param("lat", "35.1578")
+				.param("lng", "129.0594"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data[0].name").value("부산대학교"));
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	@DisplayName("좌표는 집계 레코드에 남지 않는다")
+	void 좌표는_집계_레코드에_남지_않는다() throws Exception {
+		given(kakaoLocalClient.search("부산대", 35.1578, 129.0594)).willReturn(List.of(
+			new KakaoPlace("부산대학교", "부산 금정구 장전동 40", "부산 금정구 부산대학로63번길 2", 35.23272, 129.08246)));
+
+		mockMvc.perform(get("/api/search/places")
+				.param("q", "  부산대  ")
+				.param("lat", "35.1578")
+				.param("lng", "129.0594")
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk());
+
+		// 접수 인자는 검색자 키와 trim 된 검색어 둘뿐이다 — 좌표가 섞이면 시그니처부터 달라진다 (§D7·§D9)
+		verify(searchKeywordCommandService).recordSearch(USER_SEARCHER_KEY, "부산대");
+		verifyNoMoreInteractions(searchKeywordCommandService);
+	}
 }

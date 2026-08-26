@@ -23,6 +23,16 @@ public interface PlaceSearchService {
 	List<PlaceSearchResponseDto> searchPlaces(String searcherKey, String q);
 
 	/**
+	 * 지도 중심 좌표를 실은 장소명 검색 (MSG-481). 좌표가 있으면 그 중심 반경 20km 안을 먼저 찾고, 근처
+	 * 결과가 0건이면 위치 없는 검색과 같은 전국 결과를 준다. 좌표는 집계에 넘기지 않으며 어디에도 저장하지
+	 * 않는다(§D7·§D9). 그 밖의 결과 규칙은 {@link #searchPlaces(String, String)} 와 동일하다.
+	 *
+	 * @param lat 지도 중심 위도. 호출자가 검증한 값만 받는다 — 좌표 유효성 검사는 컨트롤러 소관이다(§D1)
+	 * @param lng 지도 중심 경도. lat 과 함께 null 이거나 함께 검증을 통과한 값이어야 한다
+	 */
+	List<PlaceSearchResponseDto> searchPlaces(String searcherKey, String q, Double lat, Double lng);
+
+	/**
 	 * 집계 없는 장소명 검색 (MSG-457 계약 변경). 경로 추천이 기계 조립한 검색어 전용 — 사용자가 입력창에 친
 	 * 검색어가 아니므로 검색어 집계(인기 검색어 재료, MSG-258)에 접수하지 않는다. trim 가드·카카오 호출·검증·
 	 * 매핑 등 결과 규칙은 {@link #searchPlaces(String, String)} 와 동일하다.

@@ -4,6 +4,7 @@ import java.util.List;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -16,8 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.jwt.AuthPrincipal;
+import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.global.geo.KoreaCoordinates;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.search.dto.PlaceSearchResponseDto;
+import com.msg.fillmap.search.exception.SearchErrorCode;
 import com.msg.fillmap.search.service.PlaceSearchService;
 
 /**
@@ -47,16 +51,54 @@ public class PlaceSearchController {
 			+ "선택 즉시 lat/lng 지도 이동 + gridId 격자 하이라이트. q 누락 400 / trim 후 빈 q·무매치 200 [] / "
 			+ "카카오 장애·타임아웃 502(developCode 5502). 비로그인도 호출할 수 있고 결과는 로그인 때와 같다 — "
 			+ "비로그인 호출은 X-Viewer-Session 헤더(공백 아님·최대 64자·콜론 불가)를 실으면 인기 검색어 집계에 "
-			+ "잡히고, 안 실어도 검색은 정상 200 이다."
+			+ "잡히고, 안 실어도 검색은 정상 200 이다.\n\n"
+			+ "lat·lng 에 지금 보고 있는 지도의 중심 좌표를 실으면 그 중심 반경 20km 안의 장소를 먼저 찾는다. "
+			+ "근처에 결과가 하나도 없으면 위치 없이 다시 찾아 전국 결과를 주므로 좌표를 붙였다는 이유로 결과가 "
+			+ "사라지지는 않는다. 두 값은 반드시 한 쌍으로 보내야 하고, 한쪽만 오거나 숫자가 아니거나 대한민국 "
+			+ "범위(위도 33~39·경도 124~132) 밖이면 400 + developCode 5400 이다. 좌표를 아예 안 보내면 종전과 "
+			+ "똑같이 동작한다."
 	)
 	@GetMapping("/places")
 	public SuccessResponse<List<PlaceSearchResponseDto>> searchPlaces(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "검색어 (자유 텍스트 장소명)", example = "부산대")
 		@RequestParam String q,
+		@Parameter(description = "지도 중심 위도 (33.0~39.0). lng 과 한 쌍으로만 유효하다", example = "35.1578",
+			schema = @Schema(type = "number", format = "double"))
+		@RequestParam(required = false) String lat,
+		@Parameter(description = "지도 중심 경도 (124.0~132.0). lat 과 한 쌍으로만 유효하다", example = "129.0594",
+			schema = @Schema(type = "number", format = "double"))
+		@RequestParam(required = false) String lng,
 		@RequestHeader(value = VIEWER_SESSION_HEADER, required = false) String viewerSession
 	) {
-		return SuccessResponse.of(placeSearchService.searchPlaces(resolveSearcherKey(principal, viewerSession), q));
+		// 한쪽만 온 좌표는 클라이언트 실수다 — 조용히 무시하면 "왜 위치 랭킹이 안 먹지"를 추적할 단서가 없다 (§D2)
+		if ((lat == null) != (lng == null)) {
+			throw new ApiException(SearchErrorCode.INVALID_COORDINATE);
+		}
+		Double centerLat = null;
+		Double centerLng = null;
+		if (lat != null) {
+			centerLat = parseCoordinate(lat);
+			centerLng = parseCoordinate(lng);
+			// 국내 장소 검색의 중심점이라 국외·NaN·무한대는 정상 입력이 아니다 — 업로드·역지오코딩과 같은 경계(§D3)
+			if (KoreaCoordinates.isOutOfService(centerLat, centerLng)) {
+				throw new ApiException(SearchErrorCode.INVALID_COORDINATE);
+			}
+		}
+		return SuccessResponse.of(placeSearchService.searchPlaces(
+			resolveSearcherKey(principal, viewerSession), q, centerLat, centerLng));
+	}
+
+	/**
+	 * 좌표 문자열 → double (§D2). Double 로 직접 바인딩하면 숫자가 아닌 값이 스프링 바인딩 단계에서
+	 * MethodArgumentTypeMismatchException 이 되고 전역 핸들러가 developCode 400 으로 바꿔, 5400 이 나오지 않는다.
+	 */
+	private static double parseCoordinate(String value) {
+		try {
+			return Double.parseDouble(value);
+		} catch (NumberFormatException e) {
+			throw new ApiException(SearchErrorCode.INVALID_COORDINATE);
+		}
 	}
 
 	/**

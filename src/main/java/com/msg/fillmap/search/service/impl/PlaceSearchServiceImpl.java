@@ -10,6 +10,7 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.search.dto.PlaceSearchResponseDto;
 import com.msg.fillmap.search.service.KakaoLocalClient;
+import com.msg.fillmap.search.service.KakaoLocalClient.KakaoPlace;
 import com.msg.fillmap.search.service.PlaceSearchService;
 import com.msg.fillmap.search.service.SearchKeywordCommandService;
 import com.msg.fillmap.zone.service.ZoneCellName;
@@ -32,16 +33,22 @@ public class PlaceSearchServiceImpl implements PlaceSearchService {
 
 	@Override
 	public List<PlaceSearchResponseDto> searchPlaces(String searcherKey, String q) {
+		return searchPlaces(searcherKey, q, null, null);
+	}
+
+	@Override
+	public List<PlaceSearchResponseDto> searchPlaces(String searcherKey, String q, Double lat, Double lng) {
 		String query = q.trim();
 		if (query.isEmpty()) {
-			// 빈 검색어는 집계 접수 전에 자른다 — 카카오 호출 0 은 위임받는 오버로드의 가드가 재보장한다
+			// 빈 검색어는 집계 접수 전에 자른다 — 좌표가 함께 와도 카카오 호출은 0 이다 (MSG-481 FR-8)
 			return List.of();
 		}
 		// 카카오 호출 전 접수 — 호출 성공 여부와 무관하게 검색 의도를 집계한다 (MSG-258 §D1, FR-1)
 		if (searcherKey != null) {   // 식별값 없는 익명. 검색은 하고 집계만 건너뛴다 (MSG-469 D6)
+			// 좌표는 집계에 넘기지 않는다 — 검색어만이 인기 검색어의 재료다 (MSG-481 §D7)
 			searchKeywordCommandService.recordSearch(searcherKey, query);
 		}
-		return searchPlaces(query);
+		return searchAndMap(query, lat, lng);
 	}
 
 	@Override
@@ -52,9 +59,20 @@ public class PlaceSearchServiceImpl implements PlaceSearchService {
 			// 빈 쿼리를 카카오에 흘리면 카카오가 400 을 내고 쿼터만 소모한다 — 호출 0 (§D3, 234 trim 가드 계승)
 			return List.of();
 		}
+		return searchAndMap(query, null, null);
+	}
+
+	/**
+	 * 카카오 호출 + DTO 매핑. 좌표가 null 이면 위치 없는 검색이고, 아니면 반경 우선 검색이다 — 근처 0건일 때의
+	 * 전국 재호출은 어댑터 안에서 끝나므로 여기서는 재호출 여부를 알지 못한다 (MSG-481 §D4·§D7).
+	 */
+	private List<PlaceSearchResponseDto> searchAndMap(String query, Double lat, Double lng) {
 		// 리졸버는 매핑 진입 전 1회 — 결과마다 zones 를 다시 읽지 않는다 (MSG-341 FR-8)
 		ZoneNameResolver resolver = zoneNameQueryService.resolver();
-		return kakaoLocalClient.search(query).stream()
+		List<KakaoPlace> places = lat == null
+			? kakaoLocalClient.search(query)
+			: kakaoLocalClient.search(query, lat, lng);
+		return places.stream()
 			.map(place -> {
 				String gridId = GridEncoder.encode(place.lat(), place.lng());	// 즉석 계산 — 저장 아님
 				GridIndex index = GridEncoder.decode(gridId);	// gridId 합성에 쓴 인덱스를 이름 산술에 재사용
