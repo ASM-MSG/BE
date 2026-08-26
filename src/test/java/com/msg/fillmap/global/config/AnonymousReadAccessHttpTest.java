@@ -112,6 +112,13 @@ class AnonymousReadAccessHttpTest {
 		mockMvc.perform(post("/api/routes/recommend")).andExpect(status().isUnauthorized());
 	}
 
+	// 검증: NFR-SEC-10
+	@Test
+	@DisplayName("무인증 보행 경로 조회는 401로 거절된다 (외부 TMap 한도 소모 경로 — 비로그인 개방 6종에 없음)")
+	void 비로그인_보행_경로_조회는_401이다() throws Exception {
+		mockMvc.perform(post("/api/routes/walk-paths")).andExpect(status().isUnauthorized());
+	}
+
 	// 검증: FR-ZONE-11, FR-SEARCH-01
 	@Test
 	@DisplayName("무인증 비GET 개방 경로는 401로 거절된다 (GET 한정 계약)")
