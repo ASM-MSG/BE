@@ -204,12 +204,17 @@ class RegionExploreControllerTest {
 	}
 
 	@Test
-	@DisplayName("미인증_요청은_401이다")
-	void 미인증_요청은_401이다() throws Exception {
-		// 2 엔드포인트 전부 로그인 필수(SecurityConfig anyRequest().authenticated() — §D5).
+	@DisplayName("미인증_요청도_200이고_전체_지역은_개인화_없이_응답한다")
+	void 미인증_요청도_200이고_전체_지역은_개인화_없이_응답한다() throws Exception {
+		// 2 엔드포인트 전부 비로그인 개방 (MSG-491 — 기존 401 계약 대체). 카드 목록은 principal 을 안 받고,
+		// 전체 지역은 userId 자리에 null 이 들어가 개인화 절이 통째로 빠진다.
+		given(regionExploreService.getExploreRegions(null, null))
+			.willReturn(new RegionExplorePage(List.of(), false, null));
+
 		mockMvc.perform(get(GRIDS_URL, REGION_CODE))
-			.andExpect(status().isUnauthorized());
+			.andExpect(status().isOk());
 		mockMvc.perform(get(EXPLORE_URL))
-			.andExpect(status().isUnauthorized());
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.hasNext").value(false));
 	}
 }

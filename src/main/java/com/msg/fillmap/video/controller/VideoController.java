@@ -91,14 +91,15 @@ public class VideoController {
 	@Operation(
 		summary = "단건 영상 재생 조회",
 		description = "영상 하나의 표시용 메타와 재생본 presigned GET URL을 발급한다. 소유자·타인 모두 조회할 수 있으나 "
-			+ "삭제·블라인드(타인)는 404, 비공개(타인)·친구만 공개(비친구)는 403이다. READY가 아니면 playbackUrl은 null이다."
+			+ "삭제·블라인드(타인)는 404, 비공개(타인)·친구만 공개(비친구)는 403이다. READY가 아니면 playbackUrl은 null이다. "
+			+ "비로그인도 조회할 수 있으며 전체 공개 영상만 통과한다 — 나머지는 타인이 요청할 때와 같은 응답으로 거절된다."
 	)
 	@GetMapping("/{videoId}")
 	public SuccessResponse<VideoPlaybackResponseDto> getPlayback(
 		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "재생할 영상 ID", example = "1042") @PathVariable Long videoId
 	) {
-		return SuccessResponse.of(videoService.getVideoPlayback(principal.userId(), videoId));
+		return SuccessResponse.of(videoService.getVideoPlayback(userIdOrNull(principal), videoId));
 	}
 
 	// 명시 HEAD 매핑 — 없으면 Spring이 GET 핸들러로 폴백해 view_count가 오른다(Codex R2).
@@ -150,5 +151,10 @@ public class VideoController {
 	) {
 		videoService.deleteVideo(principal.userId(), videoId);
 		return new SuccessResponse<>(null);   // data 없는 성공 — AuthController.logout 과 같은 방식
+	}
+
+	/** 비로그인 요청의 principal 은 null 이다 (MSG-491, MissionController·EventVideoController 와 같은 형태). */
+	private Long userIdOrNull(AuthPrincipal principal) {
+		return principal == null ? null : principal.userId();
 	}
 }
