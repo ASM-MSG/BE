@@ -69,11 +69,16 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	private static final int MAX_AI_TEXT_LENGTH = 100;
 	private static final int MAX_FACTS_PER_POINT = 5;
 
-	/** notice 임계 (FR-ROUTE-07) — 지점 3개 이상이면 null, 0~2개면 안내가 실린다. */
+	/**
+	 * notice 임계 (FR-ROUTE-07) — 지점 3개 이상이면 null, 0~2개면 안내가 실린다. 문구는 MSG-487 결정 2 —
+	 * 자동 이동(FR-4~5) 도입으로 "지도 범위를 옮기라"는 제안이 자기모순이라 뺐다. 0곳 문구는 디자인 확정
+	 * 대기의 제안값이고, 1~2곳은 개수 포맷(피그마 시안 배너 실측과 2곳 케이스 글자 단위 일치)이다.
+	 */
 	private static final int NOTICE_THRESHOLD = 3;
 	private static final String EMPTY_NOTICE =
-		"조건에 맞는 추천 지점을 찾지 못했어요. 지도 범위를 옮기거나 문장을 바꿔보세요.";
-	private static final String INSUFFICIENT_NOTICE = "조건에 맞는 지점이 충분하지 않아 찾은 만큼만 보여드려요.";
+		"조건에 맞는 곳을 찾지 못했어요. 문장을 바꾸거나 다른 지역에서 다시 짜 보세요.";
+	private static final String INSUFFICIENT_NOTICE =
+		"조건에 맞는 곳을 %d곳만 찾았어요. 문장을 바꾸거나 다른 지역에서 다시 짜 보세요.";
 
 	// ObjectProvider: RouteIntentClient 는 route.ai.enabled 일 때만 뜨는 빈이라 직접 주입하면 기동이 깨진다.
 	private final ObjectProvider<RouteIntentClient> intentClientProvider;
@@ -273,8 +278,8 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 				regionNames.get(candidate.gridId()), reasons.get(i),
 				candidate.missionId(), candidate.occurrenceId()));
 		}
-		return new RouteRecommendResponseDto(points,
-			points.size() >= NOTICE_THRESHOLD ? null : INSUFFICIENT_NOTICE, mentionedArea);
+		return new RouteRecommendResponseDto(points, points.size() >= NOTICE_THRESHOLD ? null
+			: String.format(Locale.ROOT, INSUFFICIENT_NOTICE, points.size()), mentionedArea);
 	}
 
 	private static String truncate(String value) {

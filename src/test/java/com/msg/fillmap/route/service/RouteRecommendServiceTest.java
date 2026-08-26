@@ -287,6 +287,64 @@ class RouteRecommendServiceTest {
 	}
 
 	@Nested
+	@DisplayName("notice 문구 회귀 (MSG-487 결정 2)")
+	class NoticeWording {
+
+		// 검증: FR-ROUTE-07
+		@Test
+		void 후보가_없으면_지역_이동을_제안하지_않는_새_문구가_실린다() {
+			given(collector.collect(any(), any())).willReturn(List.of());
+			parse는_빈해석을_준다();
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
+
+			assertThat(response.notice())
+				.isEqualTo("조건에 맞는 곳을 찾지 못했어요. 문장을 바꾸거나 다른 지역에서 다시 짜 보세요.");
+		}
+
+		// 검증: FR-ROUTE-07
+		@Test
+		@DisplayName("후보가 두 곳이면 개수를 담은 문구가 실린다 — 피그마 시안 배너 실측과 글자 단위 일치")
+		void 후보가_두_곳이면_개수를_담은_문구가_실린다() {
+			given(collector.collect(any(), any()))
+				.willReturn(List.of(장소후보("카페", 35.15, 129.08), 장소후보("서점", 35.16, 129.09)));
+			parse는_빈해석을_준다();
+			explain은_이유를_준다("r1", "r2");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
+
+			assertThat(response.notice())
+				.isEqualTo("조건에 맞는 곳을 2곳만 찾았어요. 문장을 바꾸거나 다른 지역에서 다시 짜 보세요.");
+		}
+
+		// 검증: FR-ROUTE-07
+		@Test
+		void 후보가_한_곳이면_한_곳으로_읽히는_문구가_실린다() {
+			given(collector.collect(any(), any())).willReturn(List.of(장소후보("카페", 35.15, 129.08)));
+			parse는_빈해석을_준다();
+			explain은_이유를_준다("r1");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
+
+			assertThat(response.notice())
+				.isEqualTo("조건에 맞는 곳을 1곳만 찾았어요. 문장을 바꾸거나 다른 지역에서 다시 짜 보세요.");
+		}
+
+		// 검증: FR-ROUTE-07
+		@Test
+		void 후보가_세_곳_이상이면_안내가_없다() {
+			given(collector.collect(any(), any())).willReturn(List.of(
+				장소후보("카페", 35.15, 129.08), 장소후보("서점", 35.16, 129.09), 장소후보("맛집", 35.17, 129.10)));
+			parse는_빈해석을_준다();
+			explain은_이유를_준다("r1", "r2", "r3");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
+
+			assertThat(response.notice()).isNull();
+		}
+	}
+
+	@Nested
 	@DisplayName("AI 실패와 요청 제한")
 	class Failure {
 
