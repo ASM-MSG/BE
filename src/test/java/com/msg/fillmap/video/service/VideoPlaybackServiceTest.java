@@ -313,6 +313,51 @@ class VideoPlaybackServiceTest {
 		assertThat(notIssued.expiresInSec()).isNull();
 	}
 
+	// --- 비로그인 재생 (MSG-491) — userId 가 null 로 들어온다. 익명은 소유자일 수 없고 친구일 수도 없다.
+
+	// 검증: FR-VIDEO-13, FR-VIDEO-14
+	@Test
+	@DisplayName("비로그인은 공개 READY 영상을 재생할 수 있고 view_count 도 오른다")
+	void 비로그인은_공개_READY_영상을_재생할_수_있고_view_count도_오른다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 37L));
+
+		VideoPlaybackResponseDto result = videoService.getVideoPlayback(null, VIDEO_ID);
+
+		assertThat(result.playbackUrl()).startsWith("https://").contains(ENCODED_KEY);
+		// 익명은 언제나 소유자가 아니므로 기존 "타인이면 센다" 규칙이 그대로 적용된다 (2026-08-26 확정).
+		verify(videoRepository).incrementViewCount(VIDEO_ID);
+		verifyNoInteractions(friendshipQueryService);
+	}
+
+	// 검증: FR-VIDEO-16
+	@Test
+	@DisplayName("비로그인의 FRIENDS 재생은 비친구와 동일한 403 이고 친구 조회조차 하지 않는다")
+	void 비로그인의_FRIENDS_재생은_비친구와_동일한_403이다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.FRIENDS, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+
+		assertThatThrownBy(() -> videoService.getVideoPlayback(null, VIDEO_ID))
+			.isInstanceOf(ApiException.class)
+			.hasMessage("비공개 영상입니다");
+		// 익명에게 친구가 있을 수 없으므로 판정 쿼리를 아예 돌리지 않는다.
+		verifyNoInteractions(friendshipQueryService);
+		verify(videoRepository, never()).incrementViewCount(VIDEO_ID);
+	}
+
+	// 검증: FR-VIDEO-13
+	@Test
+	@DisplayName("비로그인의 PRIVATE 재생은 타인 조회와 동일한 403 이다")
+	void 비로그인의_PRIVATE_재생은_타인_조회와_동일한_403이다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PRIVATE, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+
+		assertThatThrownBy(() -> videoService.getVideoPlayback(null, VIDEO_ID))
+			.isInstanceOf(ApiException.class)
+			.hasMessage("비공개 영상입니다");
+		verify(videoRepository, never()).incrementViewCount(VIDEO_ID);
+	}
+
 	// --- 친구만 공개(FRIENDS) 판정 (MSG-285) — 친구 여부는 mock, 대칭·PENDING·삭제 반영은 FriendIntegrationTest 몫.
 
 	// 검증: FR-VIDEO-16

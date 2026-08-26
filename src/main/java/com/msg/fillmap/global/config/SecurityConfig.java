@@ -147,6 +147,23 @@ public class SecurityConfig {
 					"/api/grids/*/cover",
 					"/api/grids/*/videos",
 					"/api/grids/*/hourly-uploads").permitAll()
+				// 비로그인 조회 개방의 마지막 잔여분(MSG-491): 위 MSG-469 와 같은 원칙이고, 이번으로 비로그인
+				// 지도의 조회 개방이 닫힌다(정본 docs/prd/mission-map-explore.md 8절 2026-08-26). 동 격자 카드
+				// 목록은 지도 홈 좌측 패널의 재료이고(FR-VIDEO-17), 재생은 그 카드를 눌렀을 때 이어지는 동작이며
+				// (FR-VIDEO-12·13·16), 전체 지역 목록은 지역 탐색 화면 전체가 걸린 조회다(FR-SEARCH-15).
+				// 셋 중 재생과 전체 지역 목록은 principal 을 쓰던 자리라 익명이면 null 을 받아 각각
+				// "PUBLIC 만 통과"와 "개인화 절 없음"으로 떨어진다 — 열기 전에 컨트롤러의 null 전달이
+				// 먼저 있어야 한다(없으면 401 이 아니라 NPE 500).
+				// 경로 열거가 계약의 일부인 것도 위와 같다. /api/regions/** 로 넓히면 내 수집률 stats 계열이,
+				// /api/videos/** 로 넓히면 업로드 확정·교체·삭제와 신고가 함께 풀린다. 재생 경로를 GET 한정으로
+				// 여는 것이 같은 URL 의 PUT·PATCH·DELETE 를 막는 유일한 수단이다.
+				.requestMatchers(HttpMethod.GET,
+					"/api/regions/*/grids",
+					"/api/regions/explore",
+					"/api/videos/*").permitAll()
+				// 재생의 명시 HEAD 매핑은 GET 한정 matcher 에 안 잡혀 익명 HEAD 가 401 이 된다 — 행사 영상
+				// 상세와 같은 이유로 같은 경로를 HEAD 로도 연다(접근 제어 없이 200, 전 id 동일이라 존재 오라클 아님).
+				.requestMatchers(HttpMethod.HEAD, "/api/videos/*").permitAll()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.

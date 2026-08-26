@@ -1,7 +1,11 @@
 package com.msg.fillmap.global.config;
 
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -22,12 +26,14 @@ import com.msg.fillmap.search.service.PlaceSearchService;
 import com.msg.fillmap.search.service.TrendingKeywordQueryService;
 import com.msg.fillmap.video.dto.GridHourlyUploadResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
+import com.msg.fillmap.video.service.RegionExplorePage;
+import com.msg.fillmap.video.service.RegionExploreService;
 import com.msg.fillmap.video.service.VideoService;
 import com.msg.fillmap.zone.dto.ZoneResponseDto;
 import com.msg.fillmap.zone.service.ZoneQueryService;
 
 /**
- * 비로그인 지도의 나머지 조회 6종의 인증 계약 (MSG-469). "상단 칩은 비로그인, 업로드는 로그인"
+ * 비로그인 지도 조회의 인증 계약 (MSG-469, MSG-491로 3종 추가). "상단 칩은 비로그인, 업로드는 로그인"
  * 원칙(MSG-439·454·467)의 마지막 잔여분이라 검증 대상이 SecurityConfig 한 곳인데, 경로가 zone·search·
  * video 셋에 걸쳐 어느 도메인 패키지에도 온전히 속하지 않아 설정이 있는 global.config 아래에 둔다.
  * 서비스는 전부 목이라 이 테스트의 변수는 매처 등록뿐이다. 열려야 할 여섯이 열렸는지와, 사용자별 값인
@@ -39,6 +45,8 @@ import com.msg.fillmap.zone.service.ZoneQueryService;
 class AnonymousReadAccessHttpTest {
 
 	private static final String GRID_ID = "19422_9582";
+	private static final String REGION_CODE = "2644056000";
+	private static final long VIDEO_ID = 1042L;
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -54,6 +62,9 @@ class AnonymousReadAccessHttpTest {
 
 	@MockitoBean
 	private VideoService videoService;
+
+	@MockitoBean
+	private RegionExploreService regionExploreService;
 
 	// 검증: FR-ZONE-11, FR-SEARCH-01, FR-SEARCH-07, FR-VIDEO-17, FR-VIDEO-18, FR-MAP-09
 	@Test
@@ -89,6 +100,47 @@ class AnonymousReadAccessHttpTest {
 		mockMvc.perform(get("/api/grids/" + GRID_ID + "/hourly-uploads"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.data.gridId").value(GRID_ID));
+	}
+
+	// 검증: FR-VIDEO-17, FR-VIDEO-12, FR-VIDEO-16, FR-SEARCH-15
+	@Test
+	@DisplayName("무인증으로 비로그인 개방 3종이 200으로 성공한다 (MSG-491)")
+	void 무인증으로_비로그인_개방_3종이_200으로_성공한다() throws Exception {
+		given(regionExploreService.getExploreRegions(isNull(), isNull()))
+			.willReturn(new RegionExplorePage(List.of(), false, null));
+
+		// 동 격자 카드 목록은 principal 을 아예 안 받는다 — 여기서 보는 것은 매처 등록뿐이다.
+		mockMvc.perform(get("/api/regions/" + REGION_CODE + "/grids"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200));
+		mockMvc.perform(get("/api/regions/explore"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.hasNext").value(false));
+		mockMvc.perform(get("/api/videos/" + VIDEO_ID))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200));
+		// 열림만으로는 부족하다. 익명이 userId 자리에 null 로 들어가야 PUBLIC 만 통과하는 판정이 서고,
+		// principal.userId() 를 그대로 부르면 401 이 아니라 NPE 500 이 된다.
+		then(videoService).should().getVideoPlayback(isNull(), eq(VIDEO_ID));
+	}
+
+	// 검증: FR-VIDEO-12
+	@Test
+	@DisplayName("무인증 재생 경로의 쓰기 메서드는 401로 거절된다 (같은 URL, GET 한정 계약)")
+	void 무인증_재생_경로의_쓰기_메서드는_401로_거절된다() throws Exception {
+		// /api/videos/* 를 메서드 무제한으로 열면 교체·공개범위 변경·삭제가 함께 풀린다.
+		mockMvc.perform(delete("/api/videos/" + VIDEO_ID)).andExpect(status().isUnauthorized());
+		mockMvc.perform(post("/api/videos/" + VIDEO_ID + "/reports")).andExpect(status().isUnauthorized());
+	}
+
+	// 검증: FR-REGION-06, FR-REGION-07
+	@Test
+	@DisplayName("무인증 내 수집률 조회는 401로 거절된다 (사용자별 값은 열지 않는다)")
+	void 무인증_내_수집률_조회는_401로_거절된다() throws Exception {
+		// 매처를 /api/regions/** 로 넓히면 여기서 깨진다 — stats 계열은 principal.userId() 를 바로 부른다.
+		mockMvc.perform(get("/api/regions/stats")).andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/regions/stats/by-grid").param("gridId", GRID_ID))
+			.andExpect(status().isUnauthorized());
 	}
 
 	// 검증: FR-GRID-06

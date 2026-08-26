@@ -2,6 +2,7 @@ package com.msg.fillmap.video.controller;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -119,11 +120,17 @@ class VideoPlaybackControllerTest {
 			.andExpect(status().isNotFound());
 	}
 
+	// 검증: FR-VIDEO-12
 	@Test
-	@DisplayName("인증없이 호출하면 401이다")
-	void 인증없이_호출하면_401이다() throws Exception {
+	@DisplayName("인증없이 호출해도 200이고 서비스에 userId가 null로 전달된다")
+	void 인증없이_호출해도_200이고_서비스에_userId가_null로_전달된다() throws Exception {
+		// MSG-491 로 비로그인 재생이 열렸다(기존 401 계약 대체). 공개범위 판정은 서비스가 하고,
+		// 컨트롤러가 지켜야 할 것은 익명을 null 로 넘기는 것 하나다 — principal.userId() 를 그대로
+		// 부르면 401 이 아니라 NPE 500 이 된다.
 		mockMvc.perform(get(URL, VIDEO_ID))
-			.andExpect(status().isUnauthorized());
+			.andExpect(status().isOk());
+
+		then(videoService).should().getVideoPlayback(null, VIDEO_ID);
 	}
 
 	// 검증: FR-VIDEO-14

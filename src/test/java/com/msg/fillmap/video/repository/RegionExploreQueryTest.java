@@ -406,7 +406,7 @@ class RegionExploreQueryTest {
 	/* ---------- 모듈 3: 전체 지역 ---------- */
 
 	/** 공유 DB 의 타 데이터가 섞일 수 있어 합성(99954) region 행만 걸러 단언한다. */
-	private List<RegionExplorePageProjection> syntheticRows(long userId) {
+	private List<RegionExplorePageProjection> syntheticRows(Long userId) {
 		return videoRepository.getRegionExplorePage(userId, false, false, null, null, null, 21).stream()
 			.filter(row -> row.getRegionCode().startsWith("99954"))
 			.toList();
@@ -474,6 +474,32 @@ class RegionExploreQueryTest {
 			.containsExactly(REGION_B, REGION_A);
 		assertThat(rows.get(0).getPersonalLastUploadedAt()).isEqualTo(BASE.plusDays(1));
 		assertThat(rows.get(1).getPersonalLastUploadedAt()).isNull();
+	}
+
+	@Test
+	// 검증: FR-SEARCH-15
+	@DisplayName("비로그인은_개인화_없이_격자수_내림차순만_남는다")
+	void 비로그인은_개인화_없이_격자수_내림차순만_남는다() {
+		// 위 개인화 정렬과 같은 시드에 userId 만 null 이다 (MSG-491). 익명은 점령 격자를 찾을 수 없어
+		// personal_regions CTE 가 0 행이 되고, 정렬이 grid_count DESC · region_code ASC 로 떨어진다.
+		long me = newUser();
+		long other = newUser();
+		seedRegionA();
+		seedRegionB();
+		String a1 = seedLabeledGrid(GY0, GX0, REGION_A);
+		String a2 = seedLabeledGrid(GY0, GX0 + 1, REGION_A);
+		String b1 = seedLabeledGrid(GY0 + 10, GX0, REGION_B);
+		gated(other, a1, "thumbs/m491-a1.jpg", 1L, BASE);
+		gated(other, a2, "thumbs/m491-a2.jpg", 1L, BASE);
+		gated(other, b1, "thumbs/m491-b1.jpg", 1L, BASE);
+		occupy(me, b1, BASE.plusDays(1));
+
+		List<RegionExplorePageProjection> rows = syntheticRows(null);
+
+		// 로그인 me 였다면 B 가 먼저다. 익명에게는 그 근거가 없어 격자 수가 많은 A 가 먼저다.
+		assertThat(rows).extracting(RegionExplorePageProjection::getRegionCode)
+			.containsExactly(REGION_A, REGION_B);
+		assertThat(rows).allMatch(row -> row.getPersonalLastUploadedAt() == null);
 	}
 
 	@Test
@@ -611,7 +637,7 @@ class RegionExploreQueryTest {
 	@Test
 	@DisplayName("전체_지역_쿼리에_ST__geospatial_연산이_없다")
 	void 전체_지역_쿼리에_ST__geospatial_연산이_없다() throws Exception {
-		String listSql = VideoRepository.class.getMethod("getRegionExplorePage", long.class, boolean.class,
+		String listSql = VideoRepository.class.getMethod("getRegionExplorePage", Long.class, boolean.class,
 			boolean.class, LocalDateTime.class, Integer.class, String.class, int.class)
 			.getAnnotation(Query.class).value();
 		String summarySql = VideoRepository.class.getMethod("getRegionExploreSummary", String.class)

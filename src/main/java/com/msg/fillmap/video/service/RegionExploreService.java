@@ -20,5 +20,5 @@ public interface RegionExploreService {
 	RegionExploreResponseDto getRegionGrids(String regionCode, ExploreSort sort, Integer limit);
 
 	/** 전체 지역 개인화 커서 페이지. 첫 페이지는 cursor null이다. */
-	RegionExplorePage getExploreRegions(long userId, String cursor);
+	RegionExplorePage getExploreRegions(Long userId, String cursor);
 }

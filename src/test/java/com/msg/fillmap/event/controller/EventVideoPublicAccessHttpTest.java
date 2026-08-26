@@ -185,7 +185,9 @@ class EventVideoPublicAccessHttpTest {
 	@Test
 	@DisplayName("무인증 상세 요청에 다른 영상 경로가 함께 열리지 않는다 (기존 보호 유지)")
 	void 무인증_상세_요청에_다른_영상_경로가_함께_열리지_않는다() throws Exception {
-		mockMvc.perform(get("/api/videos/{videoId}", VIDEO_ID)).andExpect(status().isUnauthorized());
+		// 일반 영상 재생(GET /api/videos/{id})은 MSG-491 로 따로 열렸다. 여기서 보는 것은 행사 영상
+		// 매처가 제 경로 밖으로 새지 않는다는 것이라, 아직 로그인 필수인 쓰기 경로로 확인한다.
+		mockMvc.perform(delete("/api/videos/{videoId}", VIDEO_ID)).andExpect(status().isUnauthorized());
 		mockMvc.perform(get("/api/event-occurrences/{id}/locations/{lid}/videos/{vid}",
 			OCCURRENCE_ID, LOCATION_ID, VIDEO_ID)).andExpect(status().isUnauthorized());
 	}

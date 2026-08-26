@@ -1,6 +1,7 @@
 package com.msg.fillmap.video.service;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -70,7 +71,7 @@ public class RegionExploreServiceImpl implements RegionExploreService {
 	}
 
 	@Override
-	public RegionExplorePage getExploreRegions(long userId, String cursor) {
+	public RegionExplorePage getExploreRegions(Long userId, String cursor) {
 		RegionExploreCursor decoded = decodeCursor(userId, cursor);
 		List<RegionExplorePageProjection> rows = videoRepository.getRegionExplorePage(
 			userId,
@@ -94,13 +95,13 @@ public class RegionExploreServiceImpl implements RegionExploreService {
 		return new RegionExplorePage(items, hasNext, nextCursor);
 	}
 
-	private RegionExploreCursor decodeCursor(long userId, String cursor) {
+	private RegionExploreCursor decodeCursor(Long userId, String cursor) {
 		if (cursor == null) {
 			return null;
 		}
 		try {
 			RegionExploreCursor decoded = RegionExploreCursor.decode(cursor);
-			if (decoded.userId() != userId) {
+			if (!Objects.equals(decoded.userId(), userId)) {
 				throw new IllegalArgumentException("다른 사용자의 커서입니다");
 			}
 			return decoded;

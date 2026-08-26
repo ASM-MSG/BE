@@ -613,7 +613,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		LIMIT CAST(:limit AS bigint)
 		""", nativeQuery = true)
 	List<RegionExplorePageProjection> getRegionExplorePage(
-		@Param("userId") long userId,
+		@Param("userId") Long userId,
 		@Param("hasCursor") boolean hasCursor,
 		@Param("cursorPersonal") boolean cursorPersonal,
 		@Param("cursorLastUploadedAt") LocalDateTime cursorLastUploadedAt,

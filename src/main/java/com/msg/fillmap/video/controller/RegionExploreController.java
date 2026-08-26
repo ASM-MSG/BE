@@ -73,6 +73,11 @@ public class RegionExploreController {
 		@RequestParam(required = false) String cursor
 	) {
 		return SuccessResponse.of(RegionExplorePageResponseDto.from(
-			regionExploreService.getExploreRegions(principal.userId(), cursor)));
+			regionExploreService.getExploreRegions(userIdOrNull(principal), cursor)));
+	}
+
+	/** 비로그인 요청의 principal 은 null 이다 (MSG-491, MissionController·EventVideoController 와 같은 형태). */
+	private Long userIdOrNull(AuthPrincipal principal) {
+		return principal == null ? null : principal.userId();
 	}
 }

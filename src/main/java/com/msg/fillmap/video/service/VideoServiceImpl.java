@@ -724,10 +724,14 @@ public class VideoServiceImpl implements VideoService {
 	 */
 	@Override
 	@Transactional
-	public VideoPlaybackResponseDto getVideoPlayback(long userId, long videoId) {
+	public VideoPlaybackResponseDto getVideoPlayback(Long userId, long videoId) {
 		Video video = videoRepository.findById(videoId)
 			.orElseThrow(() -> new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
-		boolean owner = video.getUserId() == userId;
+		// userId 는 비로그인이면 null 이다(MSG-491). 익명은 소유자일 수 없고 친구일 수도 없으므로 아래 두
+		// 판정에서 각각 false 로 떨어져 PUBLIC 만 통과한다.
+		// equals 로 비교하는 이유: 양쪽 다 Long 이라 == 는 값이 아니라 참조를 본다(Long 캐시 밖 id, 즉
+		// 127 초과에서 소유자 판정이 조용히 무너진다 — VideoBlindIntegrationTest 가 잡은 실제 회귀).
+		boolean owner = userId != null && userId.equals(video.getUserId());
 
 		// 1. 존재/DELETED — 지운 영상은 소유자 포함 전원에게 존재 자체를 숨긴다.
 		if (video.isDeleted()) {
@@ -747,7 +751,7 @@ public class VideoServiceImpl implements VideoService {
 				case PUBLIC -> true;
 				// 친구 조회는 이 분기에서만 1회 — PUBLIC·PRIVATE·소유자 경로는 쿼리 0회다.
 				// 캐시 없는 요청 시점 판정이라 친구 삭제가 다음 요청부터 즉시 반영된다 (FR-6).
-				case FRIENDS -> friendshipQueryService.isFriend(video.getUserId(), userId);
+				case FRIENDS -> userId != null && friendshipQueryService.isFriend(video.getUserId(), userId);
 				case PRIVATE -> false;
 			};
 			if (!visible) {

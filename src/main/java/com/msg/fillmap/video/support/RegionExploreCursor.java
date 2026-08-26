@@ -6,9 +6,13 @@ import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.regex.Pattern;
 
-/** 전체 지역 페이지의 사용자 바인딩 키셋 커서. */
+/**
+ * 전체 지역 페이지의 사용자 바인딩 키셋 커서.
+ * userId 는 비로그인 요청에서 null 이고 토큰에서는 빈 자리로 직렬화된다 (MSG-491).
+ * 익명 커서와 로그인 커서가 서로 안 섞이는 성질은 그대로다 — 발급 주체가 다르면 대조에서 걸린다.
+ */
 public record RegionExploreCursor(
-	long userId,
+	Long userId,
 	LocalDateTime personalLastUploadedAt,
 	int gridCount,
 	String regionCode
@@ -19,16 +23,17 @@ public record RegionExploreCursor(
 	private static final Pattern REGION_CODE = Pattern.compile("\\d{10}");
 
 	public RegionExploreCursor {
-		if (userId <= 0 || gridCount <= 0 || !REGION_CODE.matcher(regionCode).matches()) {
+		if ((userId != null && userId <= 0) || gridCount <= 0 || !REGION_CODE.matcher(regionCode).matches()) {
 			throw new IllegalArgumentException("커서 값이 올바르지 않습니다");
 		}
 	}
 
 	public static String encode(
-		long userId, LocalDateTime personalLastUploadedAt, int gridCount, String regionCode) {
+		Long userId, LocalDateTime personalLastUploadedAt, int gridCount, String regionCode) {
 		new RegionExploreCursor(userId, personalLastUploadedAt, gridCount, regionCode);
 		String timestamp = personalLastUploadedAt == null ? "" : Long.toString(toEpochMicros(personalLastUploadedAt));
-		String raw = userId + ":" + timestamp + ":" + gridCount + ":" + regionCode;
+		String owner = userId == null ? "" : Long.toString(userId);
+		String raw = owner + ":" + timestamp + ":" + gridCount + ":" + regionCode;
 		return Base64.getUrlEncoder().withoutPadding().encodeToString(raw.getBytes(StandardCharsets.UTF_8));
 	}
 
@@ -39,7 +44,7 @@ public record RegionExploreCursor(
 			if (parts.length != 4) {
 				throw new IllegalArgumentException("커서 필드 수가 올바르지 않습니다");
 			}
-			long userId = Long.parseLong(parts[0]);
+			Long userId = parts[0].isEmpty() ? null : Long.parseLong(parts[0]);
 			LocalDateTime uploadedAt = parts[1].isEmpty() ? null : fromEpochMicros(Long.parseLong(parts[1]));
 			int gridCount = Integer.parseInt(parts[2]);
 			return new RegionExploreCursor(userId, uploadedAt, gridCount, parts[3]);
