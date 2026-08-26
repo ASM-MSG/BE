@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import java.util.List;
 
@@ -36,6 +37,9 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 class PlaceSearchServiceTest {
 
 	private static final String SEARCHER_KEY = "42";
+	/** 부산 서면 지도 중심 — 컨트롤러 검증을 통과한 좌표만 서비스에 들어온다 (MSG-481 §D1). */
+	private static final double CENTER_LAT = 35.1578;
+	private static final double CENTER_LNG = 129.0594;
 
 	/** 표시명 계산용 합성 구역 (MSG-341) — 서면역 격자(16858_11420) 한 칸만 덮는다. */
 	private static final String ZONE_NAME = "m341서면";
@@ -149,6 +153,67 @@ class PlaceSearchServiceTest {
 		assertThat(results).extracting(PlaceSearchResponseDto::zoneCell).containsExactly("A-1", null);
 	}
 
+	// 검증: FR-SEARCH-16
+	@Test
+	void 좌표를_받으면_클라이언트에_그대로_전달한다() {
+		given(kakaoLocalClient.search("서면", CENTER_LAT, CENTER_LNG))
+			.willReturn(List.of(place("서면역", 35.15790, 129.05930)));
+
+		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(SEARCHER_KEY, "서면",
+			CENTER_LAT, CENTER_LNG);
+
+		assertThat(results).extracting(PlaceSearchResponseDto::name).containsExactly("서면역");
+		verify(kakaoLocalClient).search("서면", CENTER_LAT, CENTER_LNG);
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	void 좌표가_없으면_좌표_없는_클라이언트_호출을_쓴다() {
+		given(kakaoLocalClient.search("서면")).willReturn(List.of(place("서면역", 35.15790, 129.05930)));
+
+		placeSearchService.searchPlaces(SEARCHER_KEY, "서면", null, null);
+
+		verify(kakaoLocalClient).search("서면");
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	void 좌표가_있어도_집계는_검색어만_접수한다() {
+		// 좌표는 사용자의 현재 위치에 준하는 값이라 집계에도 남기지 않는다 (§D7·§D9)
+		given(kakaoLocalClient.search("서면", CENTER_LAT, CENTER_LNG))
+			.willReturn(List.of(place("서면역", 35.15790, 129.05930)));
+
+		placeSearchService.searchPlaces(SEARCHER_KEY, "  서면  ", CENTER_LAT, CENTER_LNG);
+
+		verify(searchKeywordCommandService).recordSearch(SEARCHER_KEY, "서면");
+		verifyNoMoreInteractions(searchKeywordCommandService);
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	void trim_후_빈_검색어는_좌표가_있어도_카카오를_부르지_않는다() {
+		assertThat(placeSearchService.searchPlaces(SEARCHER_KEY, "   ", CENTER_LAT, CENTER_LNG)).isEmpty();
+
+		verifyNoInteractions(kakaoLocalClient);
+		verifyNoInteractions(searchKeywordCommandService);
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	void 좌표가_있어도_결과_필드_구성은_같다() {
+		// gridId 합성과 표시명 부여는 좌표 유무와 무관하다 — 반경은 카카오 요청에만 영향을 준다 (FR-5)
+		given(kakaoLocalClient.search("서면", CENTER_LAT, CENTER_LNG)).willReturn(List.of(
+			new KakaoPlace("서면역", "부산 부산진구 부전동", "부산 부산진구 중앙대로", 35.15790, 129.05930)));
+
+		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces(SEARCHER_KEY, "서면",
+			CENTER_LAT, CENTER_LNG);
+
+		assertThat(results).extracting(PlaceSearchResponseDto::gridId).containsExactly(서면역_GRID_ID);
+		assertThat(results).extracting(PlaceSearchResponseDto::zoneName).containsExactly(ZONE_NAME);
+		assertThat(results).extracting(PlaceSearchResponseDto::zoneCell).containsExactly("A-1");
+		assertThat(results).extracting(PlaceSearchResponseDto::address).containsExactly("부산 부산진구 중앙대로");
+	}
+
 	// 검증: FR-ROUTE-03 (계약 변경, Owner A)
 	@Test
 	void 집계없는_검색도_트림_후_빈_검색어면_카카오_호출이_되지_않는다() {
@@ -169,6 +234,20 @@ class PlaceSearchServiceTest {
 		// 결과 규칙(카카오 호출·gridId 합성·표시명)은 기존 경로와 동일하다
 		assertThat(results).extracting(PlaceSearchResponseDto::gridId).containsExactly("16858_11420");
 		assertThat(results).extracting(PlaceSearchResponseDto::zoneName).containsExactly(ZONE_NAME);
+		verifyNoInteractions(searchKeywordCommandService);
+	}
+
+	// 검증: FR-SEARCH-02 (MSG-457 크로스오너 경계면 회귀 방지)
+	@Test
+	void 집계_없는_1인자_오버로드는_동작이_불변이다() {
+		// 좌표 오버로드가 생겨도 경로 추천이 소비하는 입구는 좌표 없는 카카오 호출 그대로다
+		given(kakaoLocalClient.search("서면 축제")).willReturn(List.of(place("서면역", 35.15790, 129.05930)));
+
+		List<PlaceSearchResponseDto> results = placeSearchService.searchPlaces("  서면 축제  ");
+
+		assertThat(results).extracting(PlaceSearchResponseDto::gridId).containsExactly(서면역_GRID_ID);
+		verify(kakaoLocalClient).search("서면 축제");
+		verifyNoMoreInteractions(kakaoLocalClient);
 		verifyNoInteractions(searchKeywordCommandService);
 	}
 

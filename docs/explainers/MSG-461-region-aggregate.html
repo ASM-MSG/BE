@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>전체 지역 목록이 3.7초 걸리던 이유 — MSG-461</title>
+<style>
+	:root {
+		--bg: #ffffff;
+		--bg-soft: #f6f7f9;
+		--bg-code: #f2f4f7;
+		--fg: #1b1f24;
+		--fg-soft: #5b6673;
+		--line: #dfe3e8;
+		--accent: #2d6cdf;
+		--accent-soft: #eaf1fd;
+		--warn: #b4690e;
+		--warn-soft: #fdf3e3;
+		--danger: #c0392b;
+		--danger-soft: #fdeeec;
+		--ok: #1e7e4e;
+		--ok-soft: #e8f6ee;
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; padding: 32px 16px 80px;
+		font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+		background: var(--bg); color: var(--fg); line-height: 1.65;
+	}
+	main { max-width: 860px; margin: 0 auto; }
+	h1 { font-size: 1.6rem; margin: 0 0 4px; }
+	h2 { font-size: 1.2rem; margin: 44px 0 12px; padding-top: 20px; border-top: 1px solid var(--line); }
+	h3 { font-size: 1.02rem; margin: 24px 0 8px; }
+	p { margin: 10px 0; }
+	.sub { color: var(--fg-soft); font-size: .92rem; margin-bottom: 24px; }
+	.tldr {
+		background: var(--accent-soft); border-left: 4px solid var(--accent);
+		padding: 14px 18px; border-radius: 6px; margin: 20px 0;
+	}
+	.warnbox {
+		background: var(--warn-soft); border-left: 4px solid var(--warn);
+		padding: 12px 16px; border-radius: 6px; margin: 16px 0;
+	}
+	.dangerbox {
+		background: var(--danger-soft); border-left: 4px solid var(--danger);
+		padding: 12px 16px; border-radius: 6px; margin: 16px 0;
+	}
+	.okbox {
+		background: var(--ok-soft); border-left: 4px solid var(--ok);
+		padding: 12px 16px; border-radius: 6px; margin: 16px 0;
+	}
+	pre {
+		background: var(--bg-code); border: 1px solid var(--line); border-radius: 8px;
+		padding: 14px 16px; overflow-x: auto; font-size: .86rem; line-height: 1.55;
+	}
+	code { background: var(--bg-code); padding: 1px 5px; border-radius: 4px; font-size: .88em; }
+	pre code { background: none; padding: 0; }
+	table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: .92rem; }
+	th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+	th { background: var(--bg-soft); }
+	.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+	.win { color: var(--ok); font-weight: 600; }
+	.lose { color: var(--danger); font-weight: 600; }
+	.del { color: var(--danger); }
+	.add { color: var(--ok); }
+	.timeline { list-style: none; padding-left: 0; }
+	.timeline li { padding: 6px 0 6px 26px; position: relative; }
+	.timeline li::before {
+		content: ""; position: absolute; left: 8px; top: 14px;
+		width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+	}
+	.foot { color: var(--fg-soft); font-size: .88rem; }
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #16191d; --bg-soft: #1e2227; --bg-code: #1c2025; --fg: #e6e9ed;
+			--fg-soft: #9aa4b0; --line: #2c3238; --accent: #6ea0ff; --accent-soft: #1c2740;
+			--warn: #e0a458; --warn-soft: #33290f; --danger: #ff8f80; --danger-soft: #3a1f1c;
+			--ok: #63d296; --ok-soft: #16301f;
+		}
+	}
+</style>
+</head>
+<body>
+<main>
+
+<h1>전체 지역 목록이 3.7초 걸리던 이유</h1>
+<p class="sub">MSG-461 · 대상 <code>VideoRepository.getRegionExplorePage</code> · 스펙 <code>docs/spec/MSG-461.md</code> · 실측 2026-08-25 dev</p>
+
+<div class="tldr">
+<strong>TL;DR</strong><br>
+검색창을 눌렀을 때 뜨는 전체 지역 목록이 20개씩만 받는데도 3.7초 걸렸다.
+티켓의 첫 진단은 "요청마다 전국 격자 14만 개를 다시 센다"였고 풀이로 미리 계산(머티리얼라이즈드 뷰)을 제안했다.
+<strong>실측해 보니 세는 일 자체는 257 ms였다.</strong> 6.8초 중 나머지는 <code>regions</code> 조인을
+집계보다 앞에 둔 탓에 행정동 조회가 144,536번 돈 것과, 그룹 키가 넓어 정렬이 디스크로 샌 것이었다.
+조인을 집계 뒤로 옮기는 것만으로 <strong>6,810 ms에서 272 ms</strong>가 됐다.
+마이그레이션도 인덱스도 스케줄러도 없고, 정렬 규칙과 응답 계약은 한 글자도 안 바뀐다.
+</div>
+
+<h2>1. 증상</h2>
+
+<p>검색 화면의 무입력 상태에 "전체 지역" 목록이 뜬다. MSG-460에서 한 번에 다 내려주던 것을
+20개씩 커서로 나눠 받도록 바꿨는데, 화면이 뜨는 시간은 그대로 3.7초였다.</p>
+
+<table>
+<tr><th>항목</th><th class="num">값</th></tr>
+<tr><td>첫 페이지 응답</td><td class="num">3,833 ms</td></tr>
+<tr><td>깊은 페이지 응답</td><td class="num">3,675 ms</td></tr>
+<tr><td>만들었다가 버린 행 (깊은 페이지)</td><td class="num">1,313 / 1,339</td></tr>
+<tr><td>요청당 메모리 읽기량</td><td class="num">약 5.7 GB</td></tr>
+</table>
+
+<p>첫 페이지와 깊은 페이지가 사실상 같다는 게 핵심 단서였다. 페이지를 넘겨도 일이 줄지 않는다.
+그리고 이건 디스크를 기다린 시간이 아니다. 읽은 블록 732,048개 중 디스크에서 가져온 건 206개뿐이라
+필요한 데이터는 이미 거의 전부 메모리에 있었다. 3.7초는 <strong>계산에 쓴 시간</strong>이다.</p>
+
+<h2>2. 먼저, 집계가 무슨 일인가</h2>
+
+<p>집계는 흩어진 행 여러 개를 기준에 따라 묶어서 값 하나로 접는 계산이다.
+SQL에서는 <code>GROUP BY</code>로 묶고 <code>COUNT</code>·<code>SUM</code>·<code>MAX</code> 같은 걸로 접는다.</p>
+
+<p><code>grids</code> 테이블은 격자 하나가 한 행이고, 각 행에 그 격자가 속한 행정동 코드가 붙어 있다.</p>
+
+<pre><code>접기 전 (144,542행)                     접은 뒤 (1,339행)
+
+grid_id      region_code                region_code   grid_count
+19443_9582   1168010100  ┐              1168010100    412
+19443_9583   1168010100  ├── COUNT ──►  1111051500     87
+19444_9582   1168010100  ┘              ...
+21105_9012   1111051500  ┐
+21105_9013   1111051500  ┘</code></pre>
+
+<p>이 접는 일이 집계다. 144,542행이 1,339행이 된다.</p>
+
+<p>헷갈리기 쉬운 이웃 개념 둘과 구분해 두면 뒤가 편하다.</p>
+
+<table>
+<tr><th>연산</th><th>하는 일</th><th>행 수</th></tr>
+<tr><td><code>WHERE</code> 필터</td><td>조건에 안 맞는 행을 걸러낸다</td><td>줄지만 남은 건 각각 한 행</td></tr>
+<tr><td><code>JOIN</code> 조인</td><td>다른 테이블의 값을 옆으로 붙인다</td><td>그대로, 컬럼이 는다</td></tr>
+<tr><td><code>GROUP BY</code> 집계</td><td>여러 행을 하나로 접는다</td><td><strong>줄어든다</strong></td></tr>
+</table>
+
+<p>이 쿼리에는 집계가 둘 있다. 위의 <code>content_regions</code>(격자를 행정동별로 세기, 144,542 → 1,339)와
+<code>personal_regions</code>(내가 올린 격자를 행정동별로 모아 가장 최근 시각만 남기기, 512 → 337)다.</p>
+
+<h2>3. "20개만 달라"가 왜 안 통했나</h2>
+
+<p><code>LIMIT 21</code>이 실행 계획의 <strong>맨 마지막 노드</strong>였다.</p>
+
+<pre><code>Limit (actual time=3833.576..3837.081 rows=21)     ← 첫 행이 3.8초 뒤에 나온다
+  Sort  Sort Method: top-N heapsort
+    Hash Left Join (rows=1339)
+      GroupAggregate (rows=1339)
+        Parallel Seq Scan on grids (rows=48181 loops=3)   ← 144,542개 전부</code></pre>
+
+<p>이유는 <strong>정렬 키에 집계값이 끼어 있어서</strong>다. 정렬 규칙이
+<em>내가 올린 지역 우선 → 최근 업로드순 → 공개 격자 수 많은 순 → 지역 코드순</em>인데,
+<code>grid_count</code>는 테이블에 있는 값이 아니라 그 자리에서 세는 값이다.
+상위 21개를 고르려면 1,339개 행정동의 격자 수를 전부 알아야 하고, 알려면 다 세어야 한다.
+세기 전에는 누가 상위인지 알 수가 없으니 <code>LIMIT</code>이 도와줄 게 없다.</p>
+
+<p>커서도 마찬가지다. 커서 조건이 집계가 끝난 CTE 결과에 붙어서, 깊은 페이지에서
+<code>Rows Removed by Filter: 1313</code>이 나온다. 1,339개를 다 만든 다음 1,313개를 버린다.</p>
+
+<div class="okbox">
+<strong>비교</strong> · 옆에 있는 격자 카드 쿼리(<code>findExploreGridsPopular</code>)는
+<code>WHERE g.region_code = :regionCode</code>로 먼저 수백 개로 좁히고 나서 세기 때문에 빠르다.
+이 쿼리는 좁힐 조건이 없는 전국 집계라 그게 안 된다.
+</div>
+
+<h2>4. 첫 진단이 어긋난 지점</h2>
+
+<p>티켓은 원인을 "전국 격자 14만 개를 매번 훑는 것"으로 보고 풀이로 미리 계산을 제안했다.
+그 진단이 맞는지 확인하려고 쿼리를 조각내 재 봤다.</p>
+
+<table>
+<tr><th>측정</th><th class="num">Execution Time</th></tr>
+<tr><td><code>regions</code> 조인 없이 <code>GROUP BY region_code</code>만 (EXISTS 없음)</td><td class="num win">25 ms</td></tr>
+<tr><td><code>regions</code> 조인 없이 <code>GROUP BY region_code</code> + EXISTS 게이트</td><td class="num win">257 ms</td></tr>
+<tr><td>현행 쿼리 (조인 먼저 + 넓은 그룹 키)</td><td class="num lose">6,810 ms</td></tr>
+</table>
+
+<p>세 줄 다 격자 144,542개를 훑는다. 그런데 위 둘은 빠르다.
+<strong>6.8초 중 세는 데 쓴 시간은 257 ms고 나머지 6.5초는 다른 데서 나왔다.</strong></p>
+
+<div class="warnbox">
+데이터가 티켓 가정과 다른 점도 이때 드러났다. 격자 144,542개 중
+<strong>144,536개</strong>가 이미 공개 영상을 갖고 있다(차이 6개). 즉 이 집계는 사실상
+"전체 격자를 행정동별로 세기"다. EXISTS 게이트가 거의 아무것도 안 거른다는 뜻이라,
+"영상 쪽에서 접근 방향을 뒤집는" 종류의 최적화는 애초에 먹힐 여지가 없었다.
+</div>
+
+<h2>5. 진짜 원인 둘</h2>
+
+<h3>(1) <code>regions</code> 조인이 집계보다 앞에 있었다</h3>
+
+<p>현행 CTE가 <code>FROM grids g JOIN regions r ... GROUP BY g.region_code, r.region_name</code>이라,
+행정동 이름을 얻는 조회가 <strong>격자 수만큼</strong> 돌았다.</p>
+
+<pre><code>-&gt;  Memoize (actual time=0.001..0.001 rows=1 loops=144536)
+      Cache Key: g.region_code
+      Hits: 47970  Misses: 1335
+      -&gt;  Index Scan using regions_pkey on regions r (loops=3963)</code></pre>
+
+<p>PostgreSQL이 <code>Memoize</code>로 캐시까지 붙여 줬는데도 <code>loops=144536</code>이다.
+캐시 적중률이 97%라 한 번의 비용은 1 마이크로초 수준이지만, 14만 번이면 그것도 쌓인다.
+캐시가 붙었다는 건 애초에 반복 자체를 없애라는 신호로 읽는 게 맞다.</p>
+
+<h3>(2) 그룹 키가 넓어 정렬이 디스크로 샜다</h3>
+
+<pre><code>GROUP BY g.region_code, r.region_name
+  Sort Method: external merge  Disk: 2312kB</code></pre>
+
+<p>144,542행을 varchar 두 개로 정렬하느라 작업 메모리(<code>work_mem</code>)를 넘겼다.
+넘치면 임시 파일로 흘러 디스크에서 병합 정렬한다.</p>
+
+<h2>6. 고침</h2>
+
+<p><code>JOIN regions</code> 한 줄을 CTE 안에서 밖으로 꺼낸다. 딸려서 <code>region_name</code>이
+CTE의 SELECT와 GROUP BY에서 빠지고 바깥에서 읽힌다. 실질 변경 <strong>네 줄</strong>이다.</p>
+
+<pre><code> WITH content_regions AS (
+<span class="del">-    SELECT g.region_code, r.region_name, COUNT(*)::int AS grid_count</span>
+<span class="add">+    SELECT g.region_code, COUNT(*)::int AS grid_count</span>
+     FROM grids g
+<span class="del">-    JOIN regions r ON r.region_code = g.region_code</span>
+     WHERE EXISTS (
+         SELECT 1 FROM videos v
+         WHERE v.grid_id = g.grid_id
+           AND v.status = 'ACTIVE'
+           AND v.visibility = 'PUBLIC'
+           AND v.processing_status = 'READY')
+<span class="del">-    GROUP BY g.region_code, r.region_name</span>
+<span class="add">+    GROUP BY g.region_code</span>
+ ), personal_regions AS (
+     ... 그대로 ...
+ )
+ SELECT
+     c.region_code AS "regionCode",
+<span class="del">-    c.region_name AS "regionName",</span>
+<span class="add">+    r.region_name AS "regionName",</span>
+     c.grid_count  AS "gridCount",
+     p.last_uploaded_at AS "personalLastUploadedAt"
+ FROM content_regions c
+<span class="add">+JOIN regions r ON r.region_code = c.region_code</span>
+ LEFT JOIN personal_regions p ON p.region_code = c.region_code
+ WHERE  ... 커서 술어 그대로 ...
+ ORDER BY ... 정렬 그대로 ...
+ LIMIT CAST(:limit AS bigint)</code></pre>
+
+<h3>실행 시점에 무엇이 달라지나</h3>
+
+<pre><code>전 (6,810 ms)                          후 (272 ms)
+
+Parallel Seq Scan on grids             Parallel Seq Scan on grids
+  144,542행                              144,542행
+  ↓                                      ↓
+Memoize (loops=144536)                 Partial HashAggregate
+  → Index Scan regions_pkey              1,339행으로 접음
+  ↓                                      Sort Method: quicksort  Memory: 110kB
+GROUP BY (region_code, region_name)      ↓
+  Sort Method: external merge          Hash Join regions
+              Disk: 2312kB               1,339번
+</code></pre>
+
+<p><code>Memoize</code> 노드가 통째로 사라지고, 정렬이 디스크에서 메모리로 올라온다.
+같은 조인인데 붙이는 위치만으로 <strong>144,536번이 1,339번</strong>, 108배 차이다.</p>
+
+<div class="okbox">
+<strong>결과가 같은 이유</strong> · <code>region_code</code>가 <code>regions</code>의 기본키라
+코드 하나에 이름이 정확히 하나다. 코드로만 묶든 코드와 이름으로 묶든 무더기가 똑같이 나뉜다.
+이름은 나중에 붙여도 된다. 조인 종류도 INNER 그대로라 <code>regions</code>에 없거나
+<code>region_code</code>가 NULL인 격자가 빠지는 동작도 변하지 않는다.
+</div>
+
+<h2>7. 실측 결과</h2>
+
+<p>dev 실데이터, 2회 반복.</p>
+
+<table>
+<tr><th>구간</th><th class="num">현행</th><th class="num">수정 후</th></tr>
+<tr><td>첫 페이지 (<code>hasCursor=false</code>)</td><td class="num lose">6,810 ms</td><td class="num win">272 / 315 ms</td></tr>
+<tr><td>깊은 페이지 (비개인 커서)</td><td class="num lose">3,675 ms</td><td class="num win">277 / 345 ms</td></tr>
+</table>
+
+<p>첫 페이지와 깊은 페이지가 비슷한 것이 요구 충족이다. PRD가 요구한 건
+"페이지 깊이에 따라 비용이 늘지 않는다"이고, 깊이 무관 272~345 ms로 평탄하다.</p>
+
+<p class="foot">현행 6,810 ms는 2026-08-25 재측정값이고 티켓의 3,833 ms는 2026-08-22 측정값이다.
+같은 쿼리인데 차이가 나는 건 측정 시점 dev 부하 차이다. 수정 후 값과는 같은 세션에서 잰 6,810 ms로 비교했다.</p>
+
+<h2>8. 기각한 대안</h2>
+
+<p>티켓이 제안했던 방향을 포함해 다섯 가지를 재 보고 접었다. 나중에 같은 제안이 다시 나올 때
+재측정을 아끼려고 근거를 남긴다.</p>
+
+<table>
+<tr><th>대안</th><th class="num">실측</th><th>기각 이유</th></tr>
+<tr>
+	<td><strong>1. 머티리얼라이즈드 뷰 + 주기 갱신</strong><br><span class="foot">티켓이 제안한 방향</span></td>
+	<td class="num">첫 237 ms<br>깊은 6 ms<br>갱신 3.76 s</td>
+	<td>깊은 페이지는 훨씬 빠르지만 첫 페이지는 272 ms와 사실상 동률이다.
+	첫 페이지의 남은 비용은 집계가 아니라 개인 구간 <code>user_grids</code> 조회라서다.
+	마이그레이션·스케줄러·다중 인스턴스 갱신 경합이 새로 붙고 값이 갱신 주기만큼 낡는데,
+	얻는 게 첫 페이지 35 ms라 지금은 수지가 안 맞는다.</td>
+</tr>
+<tr>
+	<td><strong>2. <code>regions</code>에 카운트 칼럼을 두고 업로드·삭제 때 증감</strong></td>
+	<td class="num">미측정</td>
+	<td>낡음은 없지만 격자가 공개 영상 0→1, 1→0으로 넘어가는 순간만 증감해야 해서
+	업로드·삭제·블라인드·공개범위 변경·인코딩 상태 전이 다섯 경로에 유지 로직이 붙는다.
+	얻는 성능이 1번보다 크지 않은데 쓰기 경로 결함 위험이 가장 크다.</td>
+</tr>
+<tr>
+	<td><strong>3. 정렬 규칙을 저장된 컬럼으로 변경</strong><br><span class="foot">꼬리 구간을 <code>region_code ASC</code>로</span></td>
+	<td class="num">첫 14 ms<br>중간 63 ms<br>끝자락 98 ms</td>
+	<td>첫 페이지는 가장 빠르다(<code>Index Scan using regions_pkey ... rows=26</code> — 21행을 얻는 데
+	행정동 26개만 훑고 멈춘다). 그러나 <strong>단독으로는 기각</strong>했다. 응답에 남는
+	<code>gridCount</code>를 21개 행마다 세야 해서 큰 읍·면이 모인 페이지에서 약 390 ms로 튀고,
+	콘텐츠 없는 행정동을 건너뛰느라 비용이 페이지 깊이에 비례해 늘어 PRD의 "깊이 무관" 요구를
+	461과 달리 만족하지 못한다. 화면 순서가 바뀌는 제품 결정이기도 하다.
+	<strong>별도 티켓 MSG-479로 분리</strong>했다(10·11절에 실측과 판단 근거).</td>
+</tr>
+<tr>
+	<td><strong>4. 영상 쪽 부분 인덱스로 집계 방향 뒤집기</strong><br><span class="foot"><code>SELECT DISTINCT grid_id FROM videos</code>를 먼저</span></td>
+	<td class="num lose">6,123 ms</td>
+	<td>효과 없음. 원인이 집계 방향이 아니라 조인 위치였기 때문이다.
+	게다가 공개 영상 있는 격자가 전체의 99.996%라 방향을 뒤집어도 거를 게 없다.</td>
+</tr>
+<tr>
+	<td><strong>5. 최근 업로드로 후보를 좁히거나 전역 최신순으로 정렬</strong></td>
+	<td class="num">전역 최신순 313 ms<br>30일 창 864 ms</td>
+	<td>확정안 272 ms보다 빠르지 않다. 이유가 둘이다.
+	<strong>후보가 안 줄어든다</strong>(최근 30일 안에 업로드가 있는 행정동이 1,318개로 전체 1,339개의 98%).
+	<strong>최신순도 계산값 정렬이다</strong>(<code>MAX(created_at)</code>은 <code>grid_count</code>와 성질이 같아
+	상위 21개를 고르려면 1,339개를 전부 구해야 한다).</td>
+</tr>
+</table>
+
+<div class="tldr">
+<strong>이 다섯에서 나온 원칙 하나</strong> · 세어서 만드는 값(격자 수든 최근 시각이든)으로
+정렬하는 한, 조합을 어떻게 바꿔도 전국을 다 계산해야 한다.
+<code>LIMIT</code>이 일찍 멈추려면 정렬 키가 <strong>테이블에 이미 저장된 컬럼</strong>이어야 한다.
+그게 3번이 첫 페이지 14 ms인 이유이자 1·5번이 안 되는 이유다.
+다만 3번도 응답에 남는 <code>gridCount</code>까지는 못 없애서 단독으로는 완결되지 않는다(10절).
+</div>
+
+<div class="warnbox">
+<strong>커서 관점으로 옮겨 적으면</strong> · 키셋 커서가 이득을 주려면 정렬 키가
+<em>저장돼 있고</em>, <em>안 변하고</em>, <em>유일해야</em> 한다. 게시물 목록의
+<code>(created_at, id)</code>가 교과서 예시인 건 셋을 다 만족해서다. 이 화면의 정렬 키 넷 중
+셋이 계산값이고 그중 둘은 사용자별이라, <strong>커서를 쓰고는 있지만 이득은 하나도 못 받는
+상태</strong>였다. MSG-460이 커서를 넣고도 3.7초가 그대로였던 이유가 이것이다 — 응답 크기만 줄고
+계산량은 그대로였다. MSG-461도 이 구조는 바꾸지 않는다. 계산을 싸게 만들 뿐이다.
+</div>
+
+<div class="okbox">
+<strong>한 발 물러선 관찰</strong> · 이 목록은 <strong>상한이 있다</strong>. 행정동은 전국에
+3,558개고 행정구역 개편으로만 바뀐다. 사용자가 늘어도 영상이 100배가 되어도 이 목록은 안 자란다.
+지금 콘텐츠가 있는 것이 1,340개, 전부 내려도 JSON 약 84 kB다. 페이징은 보통 끝없이 자라는 목록을
+위한 도구인데, 여기서는 집계 비용·커서 안정성·정렬 키 제약 셋을 전부 그 커서 때문에 떠안고 있다.
+전량을 캐시해 한 번에 내리면 셋이 동시에 사라진다. 다만 MSG-460의 "페이징한다" 결정을 뒤집는
+것이라 별도 판단으로 열어 뒀다.
+</div>
+
+<h2>9. 남는 한계와 승격 조건</h2>
+
+<div class="warnbox">
+수정 후에도 집계는 <strong>요청마다</strong> 돌고 격자 전체를 훑는다(그 부분 257 ms).
+페이지 깊이에는 비례하지 않지만 <strong>격자 수에는 비례한다.</strong>
+지금 격자 144,542개에서 257 ms이므로 대략 격자 10배(약 145만)에서 2.5초대로 돌아온다.
+</div>
+
+<p><strong>승격 조건</strong> · 격자 수가 50만을 넘거나 이 엔드포인트 p95가 1초를 넘으면
+기각 대안 1번(머티리얼라이즈드 뷰)으로 올린다. 그때는 깊은 페이지 6 ms라는 이득이
+갱신 주기·낡음 비용을 이긴다.</p>
+
+<h2>10. 의사결정 과정 · 왜 461만 하기로 했나</h2>
+
+<p>2026-08-25 세션에서 후보 넷을 놓고 재 봤다. 결론만 보면 "조인 위치를 옮긴다"라는 작은 변경인데,
+거기 닿기까지 진단이 두 번 뒤집혔고 제안 하나는 실측 후 철회했다. 그 과정을 남긴다.</p>
+
+<h3>진단이 뒤집힌 지점 둘</h3>
+
+<ul class="timeline">
+<li><strong>1차 진단 (티켓, 08-22)</strong> · "요청마다 전국 집계를 반복하는 것이 원인" →
+풀이로 미리 계산 제안. <strong>분해 실측으로 반증됨</strong> (집계 자체는 257 ms).</li>
+<li><strong>2차 진단 (세션 초반)</strong> · 집계가 안 줄어드니 "미리 계산하는 수밖에 없다"고 판단하고
+머티리얼라이즈드 뷰를 재 봤다. <strong>이것도 틀렸다</strong> — 시험한 재작성이 <code>regions</code>
+조인을 CTE 안에 그대로 둬서 같은 문제를 재현했을 뿐이었다.</li>
+<li><strong>3차 (확정)</strong> · 조인을 빼고 재 보니 257 ms. 6.5초의 출처가 조인 위치와
+디스크 정렬임이 드러났다.</li>
+</ul>
+
+<div class="warnbox">
+교훈 하나 · <strong>"전국을 훑으니 느리다"는 그럴듯한 설명이었지만 측정된 적이 없었다.</strong>
+쿼리를 조각내 각 부분을 따로 재는 데 5분이 걸렸고, 그게 마이그레이션·스케줄러 한 벌을
+안 만들게 해 줬다. 원인을 추정으로 확정하면 처방이 통째로 어긋난다.
+</div>
+
+<h3>후보 넷과 채택·기각</h3>
+
+<table>
+<tr><th>후보</th><th class="num">첫 페이지</th><th class="num">깊은 페이지</th><th>판정</th></tr>
+<tr>
+	<td><strong>461 집계 후 조인</strong></td>
+	<td class="num win">272 ms</td><td class="num win">277 ms</td>
+	<td class="win">채택. 4줄, 정렬·계약 불변, 깊이 무관</td>
+</tr>
+<tr>
+	<td>미리 계산 (matview)</td>
+	<td class="num">237 ms</td><td class="num">6 ms</td>
+	<td>보류. 첫 페이지가 동률인데 마이그레이션·스케줄러·낡음이 붙는다. 승격 조건으로 남김(9절)</td>
+</tr>
+<tr>
+	<td>479 정렬 키를 저장 컬럼으로</td>
+	<td class="num">14 ms</td><td class="num">63~98 ms</td>
+	<td class="lose">단독 기각. 아래 참조</td>
+</tr>
+<tr>
+	<td>페이징 제거 (전량 84 kB + 캐시)</td>
+	<td class="num">캐시 히트</td><td class="num">해당 없음</td>
+	<td>열어 둠. MSG-460 결정 번복이라 별도 판단</td>
+</tr>
+</table>
+
+<h3>479를 단독으로 안 하기로 한 이유</h3>
+
+<p>세션 중반까지 479(정렬 키를 <code>region_code</code>로 교체)를 권했다가, 스트레스 측정 후 철회했다.
+평균은 훨씬 빠른데 두 가지가 걸렸다.</p>
+
+<ul class="timeline">
+<li><strong><code>gridCount</code>가 정렬에서 빠져도 응답에는 남는다.</strong> 21개 행마다 그 행정동의
+격자를 세야 하는데 행정동 크기가 제각각이다. 작은 동 21개면 14 ms, 격자 834개짜리 큰 읍·면 21개면
+약 390 ms다(<code>Nested Loop Semi Join rows=834 loops=21</code>). 코드순이면 같은 군의 큰 읍·면이
+붙어 나오므로 이런 페이지가 실제로 생긴다. 461은 어떤 페이지든 272 ms로 평탄하다.</li>
+<li><strong>깊이에 비례해 비용이 는다.</strong> 콘텐츠 없는 행정동을 건너뛰며 걸어야 하는데 분포가
+매우 불균등하다(충남 208개 중 0개, 경남 305개 중 2개, 세종 24개 중 0개에 콘텐츠가 있다).
+첫 페이지 14 ms, 중간 63 ms, 끝자락 98 ms로 늘어난다. <strong>MSG-460 PRD가 요구한 "페이지 깊이에
+따라 비용이 늘지 않는다"를 461은 만족하고 479는 만족하지 못한다</strong> — 절대값은 작지만 성질이 반대다.</li>
+</ul>
+
+<p>첫 번째를 없애려면 <code>gridCount</code>를 저장해야 하고, 그러면 결국 matview가 들어온다.
+즉 479는 단독으로 완결되지 않고 미리 계산과 묶이거나 페이징 제거에 흡수되어야 한다.</p>
+
+<h3>덤으로 드러난 것 · 지금 정렬은 목적과 안 맞는다</h3>
+
+<p>정렬 키를 고르다가 발견한 별개 사실이다. 이 화면의 목적은 코드에
+"검색 무입력 드롭다운의 <em>어디에 콘텐츠가 많은가</em> 발견용"이라 적혀 있는데
+(<code>RegionGridCountResponseDto</code>), <strong>공개 격자 수는 콘텐츠 양이 아니라 대체로 면적이다.</strong></p>
+
+<table>
+<tr><th>격자 수 순 (지금 목록)</th><th class="num">격자</th><th class="num">영상</th><th class="num">격자당</th></tr>
+<tr><td>제주 제주시 아라동</td><td class="num">1,302</td><td class="num">1,515</td><td class="num">1.16</td></tr>
+<tr><td>대전 유성구 신성동</td><td class="num">1,225</td><td class="num">1,960</td><td class="num">1.60</td></tr>
+<tr><td>포항 남구 연일읍</td><td class="num">1,057</td><td class="num">1,396</td><td class="num">1.32</td></tr>
+</table>
+
+<table>
+<tr><th>영상 수 순 (활동량대로면)</th><th class="num">격자</th><th class="num">영상</th><th class="num">격자당</th></tr>
+<tr><td>서울 중구 소공동</td><td class="num">75</td><td class="num">3,401</td><td class="num">45.3</td></tr>
+<tr><td>수원 팔달구 인계동</td><td class="num">195</td><td class="num">2,276</td><td class="num">11.7</td></tr>
+<tr><td>서울 중구 명동</td><td class="num">55</td><td class="num">1,689</td><td class="num">30.7</td></tr>
+</table>
+
+<p>지금 정렬에서 강남 역삼1동은 <strong>399등</strong>, 홍대 서교동은 <strong>522등</strong>,
+성수1가1동은 <strong>465등</strong>이다. 격자는 100m 고정이라 넓은 행정동일수록 많이 잡히고,
+상위권의 격자당 영상이 1.16~1.79라는 건 "넓은 데를 한 번씩 훑었다"는 뜻이다.
+소공동은 격자당 45개로 "좁은 데를 여러 번 찍었다"는 뜻이고, 사람이 모이는 곳은 후자다.</p>
+
+<p class="foot">단서 · dev는 시드 데이터라 격자가 전국에 고르게 뿌려져 있어(144,542개 중 144,536개가
+공개 영상 보유) 이 숫자 그대로가 실서비스 분포는 아니다. 다만 "격자 수 상한이 면적으로 정해진다"와
+"격자 수가 콘텐츠 양의 대리값으로 나쁘다"는 결론은 데이터 분포와 무관하게 성립한다.</p>
+
+<div class="tldr">
+이 발견으로 MSG-479의 성격이 바뀌었다. <strong>"커서를 안정시키는 티켓"이 아니라 "이 화면이
+발견용인지 찾기용인지 정하는 티켓"</strong>이다. 발견용을 유지하면 정답은 영상 수 순 + 미리 계산이고,
+찾기용으로 재정의하면 코드·가나다순이다. 지금 것은 발견용이라 적혀 있는데 발견을 못 하고 있다.
+"지금 활발한 곳" 발견은 이미 지도 홈의 핫구역 칩이 담당한다는 점도 판단 재료다.
+</div>
+
+<h3>PRD 게이트를 다시 통과시킨 일</h3>
+
+<p>스펙 초안이 성공 기준에 "500 ms 미만"을 새로 세웠는데, CLAUDE.md가
+"성능 목표 자체를 새로 세우면 요구사항 신설"로 규정하고 있어 PRD 게이트 대상이었다.
+처음에 이 작업을 "버그 수정이라 PRD 면제"로 판단한 것과 앞뒤가 안 맞았다.
+Codex 교차 리뷰 3라운드가 이를 잡아냈고, <code>docs/prd/MSG-460-prd.md</code> §4에
+정정과 승인 목표를 명시하는 것으로 해소했다(2026-08-25 정민 승인).</p>
+
+<p class="foot">근본은 PRD가 잘못된 진단 위에 쓰였다는 데 있었다. "요청마다 다시 만드는 게 원인"이라는
+문장은 분해 측정 없이 적힌 것이고, 진단이 바뀌었으니 그 위의 처방도 같이 고쳐야 했다.
+그걸 스펙에서 조용히 다르게 쓴 것이 게이트 위반이었다.</p>
+
+<h2>11. 파생 티켓 MSG-479 · 커서가 흔들린다</h2>
+
+<p>정렬 키 후보를 재는 과정에서 성능과 별개인 정확성 문제가 드러났다.</p>
+
+<p>커서가 <code>(공개 격자 수, 지역 코드)</code>로 만들어져 있는데 <strong>공개 격자 수는 변하는 값</strong>이다.
+누군가 영상을 올리거나 지우면 그 지역의 격자 수가 바뀌고, 바뀌면 목록에서의 자리도 움직인다.</p>
+
+<ul class="timeline">
+<li>내가 3페이지를 보는 사이 어떤 지역의 격자 수가 299에서 300으로 오르면,
+그 지역은 내가 이미 지나온 자리로 옮겨간다 → <strong>영영 안 보인다</strong></li>
+<li>반대로 격자 수가 줄어 내 앞쪽으로 내려오면 → <strong>같은 지역을 두 번 본다</strong></li>
+</ul>
+
+<div class="warnbox">
+<strong>다만 이것은 명세 위반이 아니다.</strong> MSG-460 PRD의 FR-7은
+"<strong>데이터가 바뀌지 않는 동안</strong> 커서를 이어서 조회하면 행정동이 중복되거나 누락되지 않는다"로
+단서를 명시해 뒀다. 즉 이 경우는 이미 알고 범위 밖으로 뺀 것이고, 현행 구현은 FR-7을 충족한다.
+(MSG-461 지라 티켓 설명 쪽에는 이 단서가 빠진 문장이 실려 있는데, 정본은 PRD다. 문서 간 불일치라
+별도로 정리할 값이다.)
+</div>
+
+<p>고쳐도 완전한 보장은 아니다. 지역 코드순으로 바꾸면 <strong>자리 이동</strong>은 사라지지만
+<strong>삽입</strong>은 남는다. 어떤 지역에 첫 공개 영상이 올라와 목록에 새로 들어왔는데 그 코드가
+이미 지나온 위치라면 여전히 안 보인다. 이건 살아 있는 데이터를 커서로 넘기는 한 없앨 수 없다.
+달라지는 것은 <strong>범위</strong>다. 지금은 1,339개 지역 전부가 움직일 후보이고,
+코드순이면 새로 들어오는 지역만 후보다.</p>
+
+<p>빈도도 생각보다 낮다. <code>grid_count</code>는 격자가 공개 영상 0→1 또는 1→0으로 넘어갈 때만
+변한다. 이미 세어진 격자에 영상을 하나 더 올려도 안 변한다.</p>
+
+<p><strong>그래서 MSG-479의 명분은 "정확성 버그 수정"이 아니다.</strong> 정직하게 쓰면
+"흔들림 범위를 좁히고 겸사 빨라진다"이고, 10절에서 드러난 "지금 정렬이 화면 목적과 안 맞는다"가
+오히려 더 큰 명분이다. 어느 쪽이든 화면에 보이는 순서를 바꾸는 제품 결정이라
+<strong>MSG-479</strong>로 분리했고, 실측상 단독으로는 권장하지 않는다(10절 참조).</p>
+
+<h2>부록 · 재현 방법</h2>
+
+<pre><code>ssh fillmap
+docker exec -i fillmap-postgres-dev psql -U dev -d fillmap
+
+EXPLAIN (ANALYZE, BUFFERS) &lt;쿼리&gt;;</code></pre>
+
+<table>
+<tr><th>항목</th><th>값</th></tr>
+<tr><td>측정 사용자</td><td><code>user_id = 499</code> (개인 지역 337개, <code>user_grids</code> 512행)</td></tr>
+<tr><td>격자</td><td>144,542개 (공개 영상 있는 것 144,536개)</td></tr>
+<tr><td>영상</td><td>240,198개 (ACTIVE·PUBLIC·READY 240,184개)</td></tr>
+<tr><td><code>regions</code></td><td>3,558행 (콘텐츠 있는 행정동 1,339개)</td></tr>
+<tr><td>비교 축</td><td><code>hasCursor=false</code>(1페이지) vs 비개인 구간 커서(깊은 페이지)의 <code>Execution Time</code></td></tr>
+</table>
+
+<div class="dangerbox">
+prod 컨테이너(<code>fillmap-postgres-prod</code>)는 건드리지 않았다.
+측정 중 dev에 만든 머티리얼라이즈드 뷰와 프로브 인덱스 3개는 모두 같은 스크립트에서 <code>DROP</code>했다.
+</div>
+
+<h2>관련 문서</h2>
+
+<ul>
+<li><code>docs/spec/MSG-461.md</code> — 설계 정본, 기각 대안과 승격 조건</li>
+<li><code>docs/prd/MSG-460-prd.md</code> — 요구사항 정본. §4 비기능 "성능" 행이 이 티켓을 지목한다</li>
+<li><code>docs/spec/MSG-460.md</code> — 커서 구조와 정렬 규칙의 원 결정</li>
+<li>Jira <strong>MSG-461</strong>(이 작업) · <strong>MSG-479</strong>(커서 안정성, 파생)</li>
+</ul>
+
+</main>
+</body>
+</html>

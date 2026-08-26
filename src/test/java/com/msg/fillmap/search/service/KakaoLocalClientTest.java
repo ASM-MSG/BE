@@ -3,6 +3,8 @@ package com.msg.fillmap.search.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -22,6 +24,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.client.ExpectedCount;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -46,6 +49,14 @@ class KakaoLocalClientTest {
 	// "부산대" UTF-8 percent 인코딩 — RestClient 가 queryParam 값을 인코딩해 내보내는 것까지 계약으로 고정한다
 	private static final String KEYWORD_URL =
 		BASE_URL + "/v2/local/search/keyword.json?query=%EB%B6%80%EC%82%B0%EB%8C%80&size=15";
+	// 부산 서면 지도 중심 — 카카오는 x 가 경도, y 가 위도다 (MSG-481 §D6)
+	private static final double CENTER_LAT = 35.1578;
+	private static final double CENTER_LNG = 129.0594;
+	private static final String NEARBY_URL = KEYWORD_URL + "&x=129.0594&y=35.1578&radius=20000";
+	private static final String ONE_PLACE_BODY = """
+		{ "documents": [ { "place_name": "서면역", "address_name": "부산 부산진구 부전동",
+			"road_address_name": "부산 부산진구 중앙대로", "x": "129.05930", "y": "35.15790" } ] }
+		""";
 
 	private MockRestServiceServer server;
 	private KakaoLocalClient client;
@@ -70,6 +81,83 @@ class KakaoLocalClientTest {
 			.andRespond(withSuccess("{\"documents\":[]}", MediaType.APPLICATION_JSON));
 
 		client.search("부산대");
+
+		server.verify();
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	void 좌표가_있으면_x_y_radius20000을_실어_요청한다() {
+		server.expect(requestTo(NEARBY_URL))
+			.andExpect(method(HttpMethod.GET))
+			.andRespond(withSuccess(ONE_PLACE_BODY, MediaType.APPLICATION_JSON));
+
+		client.search("부산대", CENTER_LAT, CENTER_LNG);
+
+		server.verify();
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	void 좌표가_있어도_sort는_보내지_않는다() {
+		// 반경은 후보 집합을 좁히는 데만 쓰고 그 안의 순서는 카카오 기본 정확도순을 그대로 따른다 (§D6)
+		server.expect(requestTo(not(containsString("sort"))))
+			.andRespond(withSuccess(ONE_PLACE_BODY, MediaType.APPLICATION_JSON));
+
+		client.search("부산대", CENTER_LAT, CENTER_LNG);
+
+		server.verify();
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	void 근처_결과가_0건이면_위치_없이_한_번_재호출한다() {
+		server.expect(requestTo(NEARBY_URL))
+			.andRespond(withSuccess("{\"documents\":[]}", MediaType.APPLICATION_JSON));
+		server.expect(requestTo(KEYWORD_URL))
+			.andRespond(withSuccess(ONE_PLACE_BODY, MediaType.APPLICATION_JSON));
+
+		List<KakaoPlace> places = client.search("부산대", CENTER_LAT, CENTER_LNG);
+
+		// 반환값은 폴백(전국) 응답이다 — 근처 0건이라고 빈 리스트가 나가면 검색이 지금보다 나빠진다 (FR-2)
+		assertThat(places).extracting(KakaoPlace::placeName).containsExactly("서면역");
+		server.verify();
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	void 근처_결과가_있으면_재호출하지_않는다() {
+		server.expect(ExpectedCount.once(), requestTo(NEARBY_URL))
+			.andRespond(withSuccess(ONE_PLACE_BODY, MediaType.APPLICATION_JSON));
+
+		assertThat(client.search("부산대", CENTER_LAT, CENTER_LNG)).hasSize(1);
+
+		server.verify();   // 기대 1건뿐이라 두 번째 호출이 있었다면 여기서 걸린다
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	void 폴백_결과도_0건이면_빈_리스트이고_세_번째_호출은_없다() {
+		server.expect(requestTo(NEARBY_URL))
+			.andRespond(withSuccess("{\"documents\":[]}", MediaType.APPLICATION_JSON));
+		server.expect(requestTo(KEYWORD_URL))
+			.andRespond(withSuccess("{\"documents\":[]}", MediaType.APPLICATION_JSON));
+
+		assertThat(client.search("부산대", CENTER_LAT, CENTER_LNG)).isEmpty();
+
+		server.verify();
+	}
+
+	// 검증: FR-SEARCH-16
+	@Test
+	void 근처_호출이_실패하면_폴백_없이_5502로_수렴한다() {
+		// 실패는 두 번째 호출에서도 대개 재현되고, 재호출하면 대기만 두 배가 된다 (§D5)
+		server.expect(ExpectedCount.once(), requestTo(NEARBY_URL))
+			.andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+		assertThatThrownBy(() -> client.search("부산대", CENTER_LAT, CENTER_LNG))
+			.isInstanceOfSatisfying(ApiException.class,
+				e -> assertThat(e.getErrorCode()).isEqualTo(SearchErrorCode.SEARCH_UPSTREAM_ERROR));
 
 		server.verify();
 	}
