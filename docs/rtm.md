@@ -51,8 +51,8 @@
 | FR-REGION-03 | 구현됨 | GridRegionCodeBackfillTest, RegionStatsPointGridQueryServiceTest, RegionStatsRecomputeTest |
 | FR-REGION-04 | 구현됨 | RegionStatsPointGridQueryServiceTest, RegionStatsQueryTest, RegionStatsRecomputeTest |
 | FR-REGION-05 | 구현됨 | RegionStatsCommandServiceTest, RegionStatsConcurrencyTest, RegionStatsRecomputeTest |
-| FR-REGION-06 | 구현됨 | RegionControllerTest, RegionPublicAccessHttpTest, RegionStatsQueryServiceTest, RegionStatsQueryTest |
-| FR-REGION-07 | 구현됨 | RegionControllerTest, RegionPublicAccessHttpTest, RegionStatsPointGridQueryServiceTest |
+| FR-REGION-06 | 구현됨 | AnonymousReadAccessHttpTest, RegionControllerTest, RegionPublicAccessHttpTest, RegionStatsQueryServiceTest, RegionStatsQueryTest |
+| FR-REGION-07 | 구현됨 | AnonymousReadAccessHttpTest, RegionControllerTest, RegionPublicAccessHttpTest, RegionStatsPointGridQueryServiceTest |
 | FR-REGION-08 | 구현됨 | GridControllerTest, GridQueryServiceIntegrationTest, GridRepositoryTest, HotZoneControllerTest, HotZoneServiceImplTest |
 | FR-REGION-09 | 구현됨 | GridQueryServiceIntegrationTest |
 | FR-REGION-10 | 구현됨 | GridQueryServiceIntegrationTest, GridRegionCodeBackfillTest, GridRepositoryTest, HotZoneServiceImplTest |
@@ -75,7 +75,7 @@
 | FR-SEARCH-12 | 구현됨 | SearchKeywordDailyCountRepositoryTest |
 | FR-SEARCH-13 | 계획 | (없음) |
 | FR-SEARCH-14 | 계획 | (없음) |
-| FR-SEARCH-15 | 구현됨 | RegionExploreControllerTest, RegionExploreCursorTest, RegionExploreQueryTest, RegionExploreServiceTest |
+| FR-SEARCH-15 | 구현됨 | AnonymousReadAccessHttpTest, RegionExploreControllerTest, RegionExploreCursorTest, RegionExploreQueryTest, RegionExploreServiceTest |
 | FR-SEARCH-16 | 구현됨 | KakaoLocalClientTest, PlaceSearchAggregationIntegrationTest, PlaceSearchControllerTest, PlaceSearchServiceTest |
 | FR-SEARCH-17 | 구현됨 | PlaceSearchControllerTest |
 | FR-HOTZONE-01 | 구현됨 | (없음) |
@@ -102,11 +102,11 @@
 | FR-VIDEO-09 | 구현됨 | VideoReplaceConcurrencyTest, VideoUploadRollbackCompensationTest |
 | FR-VIDEO-10 | 구현됨 | VideoReplaceIntegrationTest |
 | FR-VIDEO-11 | 구현됨 | VideoDeleteIntegrationTest, VideoS3CleanupTest |
-| FR-VIDEO-12 | 구현됨 | VideoPlaybackControllerTest, VideoPlaybackServiceTest |
+| FR-VIDEO-12 | 구현됨 | AnonymousReadAccessHttpTest, VideoPlaybackControllerTest, VideoPlaybackServiceTest |
 | FR-VIDEO-13 | 구현됨 | VideoBlindIntegrationTest, VideoPlaybackServiceTest |
 | FR-VIDEO-14 | 구현됨 | VideoGlobalListViewCountIntegrationTest, VideoPlaybackControllerTest, VideoPlaybackServiceTest, VideoPlaybackViewCountIntegrationTest, VideoViewCountQueryTest |
 | FR-VIDEO-15 | 구현됨 | VideoServiceIntegrationTest, VideoVisibilityControllerTest, VideoVisibilityIntegrationTest |
-| FR-VIDEO-16 | 구현됨 | VideoPlaybackServiceTest |
+| FR-VIDEO-16 | 구현됨 | AnonymousReadAccessHttpTest, VideoPlaybackServiceTest |
 | FR-VIDEO-17 | 구현됨 | AnonymousReadAccessHttpTest, RegionExploreQueryTest, VideoGlobalCoverQueryTest, VideoGlobalListQueryTest, VideoServiceIntegrationTest, VideoVisibilityIntegrationTest |
 | FR-VIDEO-18 | 구현됨 | AnonymousReadAccessHttpTest, VideoAuthorNicknameIntegrationTest, VideoGlobalCoverServiceTest, VideoPlaybackServiceTest |
 | FR-MEDIA-01 | 구현됨 | FfmpegRunnerTest, VideoEncodingServiceTest |
