@@ -247,18 +247,21 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	 */
 	private List<ExplainPoint> explainPoints(List<RouteCandidate> ordered) {
 		List<ExplainPoint> points = new ArrayList<>();
-		for (int i = 0; i < ordered.size(); i++) {
-			RouteCandidate candidate = ordered.get(i);
+		for (RouteCandidate candidate : ordered) {
 			points.add(new ExplainPoint(
 				truncate(candidate.name()),
 				candidate.kind().name().toLowerCase(Locale.ROOT),
-				facts(candidate, i > 0 ? ordered.get(i - 1) : null)));
+				facts(candidate)));
 		}
 		return points;
 	}
 
-	/** facts 조립 순서(§도메인 로직 3): 출처(상시 1건 — 하한 1 보장) → 기간 → 관심사 일치 → 직전 거리. */
-	private List<String> facts(RouteCandidate candidate, RouteCandidate previous) {
+	/**
+	 * facts 조립 순서(§도메인 로직 3): 출처(상시 1건 — 하한 1 보장) → 기간 → 관심사 일치. 직전 거리 항목은
+	 * MSG-483(FR-ROUTE-05 개정)이 뺐다 — 카드의 보행 실거리와 이유 문장 속 하버사인 직선거리가 나란히
+	 * 어긋나 보이는 상황을 없앤다. 순서 결정의 하버사인(RouteOrderPlanner.distanceMeters)은 불변이다.
+	 */
+	private List<String> facts(RouteCandidate candidate) {
 		List<String> facts = new ArrayList<>();
 		facts.add(sourceFact(candidate.kind()));
 		if (candidate.periodStart() != null && candidate.periodEnd() != null) {
@@ -269,12 +272,7 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		if (candidate.matchedInterest() != null) {
 			facts.add(truncate("관심사 '" + candidate.matchedInterest() + "' 일치"));
 		}
-		if (previous != null) {
-			double km = RouteOrderPlanner.distanceMeters(
-				previous.lat(), previous.lng(), candidate.lat(), candidate.lng()) / 1000.0;
-			facts.add(String.format(Locale.ROOT, "이전 지점에서 %.1fkm", km));
-		}
-		// 조립 규칙상 최대 4건이라 자연 충족 — 상한 5는 규칙이 늘어나도 계약 위반(422)이 안 나게 하는 방어다.
+		// 조립 규칙상 최대 3건이라 자연 충족 — 상한 5는 규칙이 늘어나도 계약 위반(422)이 안 나게 하는 방어다.
 		return facts.stream().limit(MAX_FACTS_PER_POINT).toList();
 	}
 

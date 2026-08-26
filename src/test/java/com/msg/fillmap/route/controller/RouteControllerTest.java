@@ -29,6 +29,7 @@ class RouteControllerTest {
 
 	private static final long USER_ID = 42L;
 	private static final String URL = "/api/routes/recommend";
+	private static final String WALK_PATHS_URL = "/api/routes/walk-paths";
 	private static final String 유효한_뷰포트 =
 		"{\"minLat\": 35.05, \"minLng\": 128.95, \"maxLat\": 35.25, \"maxLng\": 129.20}";
 
@@ -92,5 +93,40 @@ class RouteControllerTest {
 					+ "{\"minLat\": 35.25, \"minLng\": 128.95, \"maxLat\": 35.05, \"maxLng\": 129.20}}"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.developCode").value(14400));
+	}
+
+	// 검증: NFR-OPS-06, FR-ROUTE-16
+	@Test
+	@DisplayName("보행 경로 플래그가 꺼지면 기동이 성공하고 호출은 503 + 14504 명시적 비활성 응답이다 (MSG-483)")
+	void 플래그가_꺼진_환경에서는_14504_비활성_응답이_나간다() throws Exception {
+		// 기본 설정(route.walk.enabled=false) 기동 성공 = TmapWalkClient 빈 없이 상시 빈이 서는 구성의 증명.
+		mockMvc.perform(post(WALK_PATHS_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"segments\": [{\"startLat\": 35.1587, \"startLng\": 129.1604,"
+					+ " \"endLat\": 35.1631, \"endLng\": 129.1635}]}"))
+			.andExpect(status().isServiceUnavailable())
+			.andExpect(jsonPath("$.developCode").value(14504));
+	}
+
+	// 검증: FR-ROUTE-16
+	@Test
+	@DisplayName("세그먼트 검증은 비활성 게이트보다 앞선다 — JSON [null] 원소·좌표 누락 전부 400 + 14402")
+	void 세그먼트_원소가_null이면_14402로_거부한다() throws Exception {
+		// [null] 이 목록 크기 검증만 통과해 null 역참조 500 으로 새는 것을 실제 역직렬화 경로로 막는다.
+		mockMvc.perform(post(WALK_PATHS_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"segments\": [null]}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(14402));
+		// 누락 좌표는 박싱 Double null 로 역직렬화돼 서비스 검증이 14402 로 거른다 — 원시 double 이면
+		// Jackson 3 이 역직렬화 실패를 던져 공통 400 으로 새는 것을 이 케이스가 고정한다 (2026-08-26 실측).
+		mockMvc.perform(post(WALK_PATHS_URL)
+				.header(HttpHeaders.AUTHORIZATION, bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"segments\": [{\"startLat\": 35.1587}]}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.developCode").value(14402));
 	}
 }

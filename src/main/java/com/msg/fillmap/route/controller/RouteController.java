@@ -18,12 +18,15 @@ import com.msg.fillmap.auth.jwt.AuthPrincipal;
 import com.msg.fillmap.response.SuccessResponse;
 import com.msg.fillmap.route.dto.RouteRecommendRequestDto;
 import com.msg.fillmap.route.dto.RouteRecommendResponseDto;
+import com.msg.fillmap.route.dto.RouteWalkPathRequestDto;
+import com.msg.fillmap.route.dto.RouteWalkPathResponseDto;
 import com.msg.fillmap.route.service.RouteRecommendService;
+import com.msg.fillmap.route.service.RouteWalkPathService;
 
 /**
- * AI 경로 추천 API (MSG-457). 3-layer 얇게 — 파싱 + 서비스 호출 + SuccessResponse 변환만. 인증은
- * SecurityConfig anyRequest 로 강제된다(미인증 401) — 요청 제한(FR-ROUTE-12)에 로그인 사용자 id 를
- * 쓰므로 비로그인 조회가 없다. 상시 빈이다 — 플래그 꺼짐은 404 가 아니라 14503 이어야 한다 (§설정).
+ * AI 경로 추천 API (MSG-457) + 세그먼트 보행 경로 조회 (MSG-483). 3-layer 얇게 — 파싱 + 서비스 호출 +
+ * SuccessResponse 변환만. 인증은 SecurityConfig anyRequest 로 강제된다(미인증 401, 비로그인 개방 6종에
+ * 미포함 — NFR-SEC-10). 상시 빈이다 — 플래그 꺼짐은 404 가 아니라 14503·14504 이어야 한다 (§설정).
  */
 @Tag(name = "AI 경로 추천 (Routes)",
 	description = "자연어 한 문장과 뷰포트로 활성 미션·행사·장소 검색 실조회 후보에 방문 순서와 이유를 붙여 돌려준다.")
@@ -33,6 +36,7 @@ import com.msg.fillmap.route.service.RouteRecommendService;
 public class RouteController {
 
 	private final RouteRecommendService routeRecommendService;
+	private final RouteWalkPathService routeWalkPathService;
 
 	@Operation(
 		summary = "AI 경로 추천",
@@ -49,5 +53,19 @@ public class RouteController {
 		@Valid @RequestBody RouteRecommendRequestDto request
 	) {
 		return SuccessResponse.of(routeRecommendService.recommend(principal.userId(), request));
+	}
+
+	@Operation(
+		summary = "세그먼트 보행 경로 조회",
+		description = "추천 응답의 이웃 좌표쌍(출발지 구간 포함 1~8개)을 보내면 서버가 TMap 보행자 경로안내를 대신 "
+			+ "호출해 세그먼트별 보행 좌표열과 실거리(미터)를 요청과 같은 개수, 같은 순서로 돌려준다.\n\n"
+			+ "TMap 호출 실패·형태 위반·일 한도 소진은 에러가 아니라 200 에 해당 세그먼트 resolved: false 다 — "
+			+ "그 세그먼트는 직선과 직선거리 안내를 유지하면 된다 (부분 실패 허용).\n\n"
+			+ "목록이 없거나 비었거나 9개 이상, 원소가 null, 좌표가 한국 서비스 범위(위도 33~39·경도 124~132) "
+			+ "밖이면 400 + developCode 14402 이고, 기능이 꺼진 환경(route.walk.enabled=false)에서는 503 + 14504 다."
+	)
+	@PostMapping("/walk-paths")
+	public SuccessResponse<RouteWalkPathResponseDto> walkPaths(@RequestBody RouteWalkPathRequestDto request) {
+		return SuccessResponse.of(routeWalkPathService.walkPaths(request));
 	}
 }
