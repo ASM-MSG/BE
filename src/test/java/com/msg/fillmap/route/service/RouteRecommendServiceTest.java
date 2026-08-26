@@ -24,7 +24,6 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -181,20 +180,20 @@ class RouteRecommendServiceTest {
 
 		// 검증: FR-ROUTE-05, NFR-SEC-09
 		@Test
-		@DisplayName("facts 는 지점마다 1건 이상이다 — 출처 문장 상시 1건 + 직전 거리, 사용자 식별 정보 없음")
-		void facts는_지점마다_1건_이상이다() {
+		@DisplayName("facts 는 출처 상시 1건이 하한 1을 보장하고, 직전 거리 항목이 없다 (FR-ROUTE-05 개정, MSG-483)")
+		void 추천_이유_사실_문장에_직전_거리_항목이_실리지_않는다() {
 			RouteCandidate 카페 = 장소후보("카페", 35.15, 129.08);
 			RouteCandidate 서점 = 장소후보("서점", 35.16, 129.09);
 			given(collector.collect(any(), any())).willReturn(List.of(카페, 서점));
-			double km = RouteOrderPlanner.distanceMeters(카페.lat(), 카페.lng(), 서점.lat(), 서점.lng()) / 1000.0;
 			parse는_빈해석을_준다();
 			// strict 비교 — 기간·관심사가 없는 후보도 출처 문장 1건이 보장되고(하한 1), 여분 필드가 없다.
+			// 둘째 지점에 "이전 지점에서 X.Xkm" 가 실리면 여기서 깨진다 — 직전 거리 제거의 관측 지점.
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(content().json("""
 					{"points": [
 						{"name": "카페", "kind": "place", "facts": ["장소 검색 결과"]},
-						{"name": "서점", "kind": "place", "facts": ["장소 검색 결과", "%s"]}]}
-					""".formatted(String.format(Locale.ROOT, "이전 지점에서 %.1fkm", km)), JsonCompareMode.STRICT))
+						{"name": "서점", "kind": "place", "facts": ["장소 검색 결과"]}]}
+					""", JsonCompareMode.STRICT))
 				.andRespond(withSuccess("{\"reasons\": [\"r1\", \"r2\"]}", MediaType.APPLICATION_JSON));
 
 			service.recommend(USER_ID, 요청());
