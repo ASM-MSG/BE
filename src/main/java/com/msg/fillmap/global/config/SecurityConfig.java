@@ -157,13 +157,16 @@ public class SecurityConfig {
 				// 경로 열거가 계약의 일부인 것도 위와 같다. /api/regions/** 로 넓히면 내 수집률 stats 계열이,
 				// /api/videos/** 로 넓히면 업로드 확정·교체·삭제와 신고가 함께 풀린다. 재생 경로를 GET 한정으로
 				// 여는 것이 같은 URL 의 PUT·PATCH·DELETE 를 막는 유일한 수단이다.
+				// videoId 자리를 숫자로 못박는 것도 같은 fail-open 방어다 — /api/videos/* 로 두면 나중에 붙는
+				// GET /api/videos/{새경로}(drafts·my 류)가 열거를 거치지 않고 기본 공개가 된다. 지금 이 하위의
+				// 단일 세그먼트 GET 은 재생 하나뿐이라 동작은 그대로이고, 늘어날 때 401 로 닫히는 쪽이 기본이 된다.
 				.requestMatchers(HttpMethod.GET,
 					"/api/regions/*/grids",
 					"/api/regions/explore",
-					"/api/videos/*").permitAll()
+					"/api/videos/{videoId:[0-9]+}").permitAll()
 				// 재생의 명시 HEAD 매핑은 GET 한정 matcher 에 안 잡혀 익명 HEAD 가 401 이 된다 — 행사 영상
 				// 상세와 같은 이유로 같은 경로를 HEAD 로도 연다(접근 제어 없이 200, 전 id 동일이라 존재 오라클 아님).
-				.requestMatchers(HttpMethod.HEAD, "/api/videos/*").permitAll()
+				.requestMatchers(HttpMethod.HEAD, "/api/videos/{videoId:[0-9]+}").permitAll()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.

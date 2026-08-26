@@ -4,8 +4,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -131,6 +132,15 @@ class AnonymousReadAccessHttpTest {
 		// /api/videos/* 를 메서드 무제한으로 열면 교체·공개범위 변경·삭제가 함께 풀린다.
 		mockMvc.perform(delete("/api/videos/" + VIDEO_ID)).andExpect(status().isUnauthorized());
 		mockMvc.perform(post("/api/videos/" + VIDEO_ID + "/reports")).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	@DisplayName("무인증 재생 경로의 비숫자 세그먼트는 401로 거절된다 (열거되지 않은 GET 은 닫힌다)")
+	void 무인증_재생_경로의_비숫자_세그먼트는_401로_거절된다() throws Exception {
+		// videoId 자리를 숫자로 못박지 않으면 나중에 붙는 GET /api/videos/{새경로} 가 열거를 거치지 않고
+		// 기본 공개가 된다. 지금은 핸들러가 없어도 매처가 먼저 걸러 401 이어야 한다.
+		mockMvc.perform(get("/api/videos/drafts")).andExpect(status().isUnauthorized());
+		mockMvc.perform(head("/api/videos/drafts")).andExpect(status().isUnauthorized());
 	}
 
 	// 검증: FR-REGION-06, FR-REGION-07
