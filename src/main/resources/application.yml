@@ -142,6 +142,13 @@ route:
     enabled: ${ROUTE_AI_ENABLED:false}      # 기본 꺼짐(NFR-OPS-06 관례). 꺼지면 호출은 14503
     base-url: ${ROUTE_AI_BASE_URL:http://localhost:8000}
     timeout: ${ROUTE_AI_TIMEOUT:PT10S}      # AI 호출당 교환 전체 시한 — 실측 근거는 MSG-457 상한 확정 절
+  # AI 경로 추천 보행 경로 (MSG-483). route.ai 와 독립 게이트다. 추천만 켜고 보행 경로는 끌 수 있다.
+  walk:
+    enabled: ${ROUTE_WALK_ENABLED:false}    # 기본 꺼짐 (NFR-OPS-06 관례). 꺼지면 호출은 14504
+    base-url: ${ROUTE_WALK_BASE_URL:https://apis.openapi.sk.com}
+    app-key: ${TMAP_APP_KEY:}               # NFR-SEC-10, 서버에만 둔다. dev/prod env 주입
+    daily-limit: ${ROUTE_WALK_DAILY_LIMIT:900}
+    timeout: ${ROUTE_WALK_TIMEOUT:PT3S}     # 교환 전체 시한 (카카오 선례와 같은 급)
 
 server:
   port: 8080
