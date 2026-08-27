@@ -110,7 +110,7 @@
 | FR-VIDEO-17 | 구현됨 | AnonymousReadAccessHttpTest, RegionExploreQueryTest, VideoGlobalCoverQueryTest, VideoGlobalListQueryTest, VideoServiceIntegrationTest, VideoVisibilityIntegrationTest |
 | FR-VIDEO-18 | 구현됨 | AnonymousReadAccessHttpTest, VideoAuthorNicknameIntegrationTest, VideoGlobalCoverServiceTest, VideoPlaybackServiceTest |
 | FR-MEDIA-01 | 구현됨 | FfmpegRunnerTest, VideoEncodingServiceTest |
-| FR-MEDIA-02 | 구현됨 | AiBlurPollerTest, VideoBlurTransitionTest, VideoEncodingAiTriggerTest, VideoEncodingServiceTest, VideoEncodingTriggerTest, VideoGridQueryServiceTest, VideoPlaybackServiceTest, VideoStatusTransitionTest, VideoStatusWriterTest |
+| FR-MEDIA-02 | 구현됨 | AiBlurPollerTest, VideoBlurTransitionTest, VideoEncodingAiTriggerTest, VideoEncodingServiceTest, VideoGridQueryServiceTest, VideoPlaybackServiceTest, VideoStatusTransitionTest, VideoStatusWriterTest |
 | FR-MEDIA-03 | 구현됨 | VideoEncodingDurationRealFfmpegTest, VideoEncodingServiceTest |
 | FR-MEDIA-04 | 구현됨 | AiBlurPollerTest, VideoBlurTransitionTest, VideoEncodingServiceTest, VideoPlaybackServiceTest |
 | FR-MEDIA-05 | 구현됨 | AiEnabledContextTest, VideoEncodingAiTriggerTest |
