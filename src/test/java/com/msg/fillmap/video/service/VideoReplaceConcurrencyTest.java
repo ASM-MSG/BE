@@ -101,10 +101,6 @@ class VideoReplaceConcurrencyTest {
 	@MockitoBean
 	private S3Client s3Client;
 
-	// 승자 커밋의 afterCommit 인코딩 무력화 — 실 인코딩이 돌면 없는 파일로 FAILED 마킹이 낀다.
-	@MockitoBean
-	private VideoEncodingService videoEncodingService;
-
 	private TransactionTemplate tx;
 	private long userId;
 	private String gridId;

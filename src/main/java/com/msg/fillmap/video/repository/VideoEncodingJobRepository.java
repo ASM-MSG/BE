@@ -3,6 +3,7 @@ package com.msg.fillmap.video.repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -110,6 +111,33 @@ public class VideoEncodingJobRepository {
 			.param("jobId", claim.jobId())
 			.param("claimToken", claim.claimToken())
 			.update();
+	}
+
+	@Transactional
+	public int verifyActive(EncodingJobClaim claim) {
+		return jdbcClient.sql("""
+			UPDATE video_encoding_jobs
+			SET lease_until = lease_until
+			WHERE id = :jobId
+				AND status = 'PROCESSING'
+				AND claim_token = :claimToken
+				AND lease_until > (statement_timestamp() AT TIME ZONE 'utc')
+			""")
+			.param("jobId", claim.jobId())
+			.param("claimToken", claim.claimToken())
+			.update();
+	}
+
+	public Optional<LocalDateTime> findEnqueuedAt(Long videoId, String originalS3Key) {
+		return jdbcClient.sql("""
+			SELECT enqueued_at
+			FROM video_encoding_jobs
+			WHERE video_id = :videoId AND original_s3_key = :originalS3Key
+			""")
+			.param("videoId", videoId)
+			.param("originalS3Key", originalS3Key)
+			.query(LocalDateTime.class)
+			.optional();
 	}
 
 	@Transactional

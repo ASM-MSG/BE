@@ -48,7 +48,7 @@ class EncodingJobPollerTest {
 		poller = new EncodingJobPoller(
 			repository, encodingService, statusWriter, encodingExecutor, properties, "be");
 		claim = new EncodingJobClaim(1L, 7L, "videos/original/1/x.mp4", UUID.randomUUID(),
-			(short)1, LocalDateTime.of(2026, 8, 27, 0, 0));
+			(short) 1, LocalDateTime.of(2026, 8, 27, 0, 0));
 	}
 
 	@Test
@@ -71,7 +71,7 @@ class EncodingJobPollerTest {
 		runSubmittedTask();
 
 		verify(encodingService).encode(claim);
-		verify(repository).complete(claim);
+		verify(repository, never()).complete(claim);
 	}
 
 	@Test
@@ -103,7 +103,7 @@ class EncodingJobPollerTest {
 	@DisplayName("세 번째 처리 오류는 영상과 작업을 FAILED로 종결한다")
 	void 세번째_처리오류는_영상과_작업을_FAILED로_종결한다() {
 		claim = new EncodingJobClaim(1L, 7L, "videos/original/1/x.mp4", UUID.randomUUID(),
-			(short)3, LocalDateTime.of(2026, 8, 27, 0, 0));
+			(short) 3, LocalDateTime.of(2026, 8, 27, 0, 0));
 		given(repository.claimDead(eq("be"), any(UUID.class), eq(LEASE))).willReturn(Optional.empty());
 		given(repository.claimNext(eq("be"), any(UUID.class), eq(LEASE))).willReturn(Optional.of(claim));
 		willThrow(new IllegalStateException("ffmpeg unavailable")).given(encodingService).encode(claim);
@@ -116,11 +116,24 @@ class EncodingJobPollerTest {
 	}
 
 	@Test
+	@DisplayName("claim을 잃은 결과는 재시도나 실패 종결을 하지 않는다")
+	void claim을_잃은_결과는_무시한다() {
+		given(repository.claimNext(eq("be"), any(UUID.class), eq(LEASE))).willReturn(Optional.of(claim));
+		willThrow(new ClaimLostException(claim.jobId())).given(encodingService).encode(claim);
+
+		poller.poll();
+		runSubmittedTask();
+
+		verify(repository, never()).retry(any(), any(), any());
+		verify(statusWriter, never()).markFailed(any(EncodingJobClaim.class));
+	}
+
+	@Test
 	@DisplayName("세 번째 시도 중 중단된 DEAD 작업도 FAILED로 종결한다")
 	void 세번째_시도중_중단된_DEAD_작업도_FAILED로_종결한다() {
 		EncodingJobClaim deadClaim = new EncodingJobClaim(
 			2L, 8L, "videos/original/1/dead.mp4", UUID.randomUUID(),
-			(short)3, LocalDateTime.of(2026, 8, 27, 0, 0));
+			(short) 3, LocalDateTime.of(2026, 8, 27, 0, 0));
 		given(repository.claimDead(eq("be"), any(UUID.class), eq(LEASE)))
 			.willReturn(Optional.of(deadClaim));
 

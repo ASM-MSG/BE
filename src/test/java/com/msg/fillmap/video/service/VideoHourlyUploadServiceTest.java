@@ -50,12 +50,12 @@ class VideoHourlyUploadServiceTest {
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 
 		videoService = new VideoServiceImpl(
-			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
+			videoRepository, mock(com.msg.fillmap.video.repository.VideoEncodingJobRepository.class),
 			mock(S3Presigner.class), mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
-			mock(ZoneNameQueryService.class), mock(VideoProcessingMetrics.class), mock(EventVideoRepository.class));
+			mock(ZoneNameQueryService.class), mock(EventVideoRepository.class));
 	}
 
 	/** 저장 존 인자가 어긋나면 이 스텁이 매치되지 않아 테스트가 깨진다 — UTC 배선 검증을 겸한다. */

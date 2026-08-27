@@ -60,12 +60,12 @@ class VideoPresignTest {
 
 		// presign 경로는 DB 도 인코딩도 S3 조회도 타지 않는다.
 		videoService = new VideoServiceImpl(
-			mock(VideoRepository.class), mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
+			mock(VideoRepository.class), mock(com.msg.fillmap.video.repository.VideoEncodingJobRepository.class),
 			presigner, mock(software.amazon.awssdk.services.s3.S3Client.class), properties,
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
-			mock(VideoProcessingMetrics.class), mock(EventVideoRepository.class));
+			mock(EventVideoRepository.class));
 	}
 
 	// 검증: FR-VIDEO-02

@@ -74,13 +74,14 @@ class VideoRecordedAtValidationTest {
 		given(missionAwardService.awardOnUpload(anyLong(), anyString())).willReturn(MissionAwardResult.EMPTY);
 
 		// 13번째 인자가 고정 클럭 — 프로덕션은 12-인자 @Autowired 생성자가 Clock.systemUTC() 로 위임한다.
-		service = new VideoServiceImpl(repository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
+		service = new VideoServiceImpl(repository,
+			mock(com.msg.fillmap.video.repository.VideoEncodingJobRepository.class),
 			mock(S3Presigner.class), s3Client,
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
-			mock(VideoProcessingMetrics.class), mock(EventVideoRepository.class),
+			mock(EventVideoRepository.class),
 			Clock.fixed(FIXED_NOW, ZoneOffset.UTC));
 	}
 

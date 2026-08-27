@@ -99,7 +99,8 @@ public class EncodingJobPoller {
 	private void process(EncodingJobClaim claim) {
 		try {
 			encodingService.encode(claim);
-			repository.complete(claim);
+		} catch (ClaimLostException e) {
+			log.info("인코딩 claim 상실로 결과 무시: jobId={} node={}", claim.jobId(), nodeId);
 		} catch (RuntimeException e) {
 			if (claim.attemptCount() < 3) {
 				repository.retry(claim, properties.retryDelay(), errorMessage(e));

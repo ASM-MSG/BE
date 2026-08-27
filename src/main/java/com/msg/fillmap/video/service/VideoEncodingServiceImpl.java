@@ -9,7 +9,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
@@ -23,7 +22,6 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.video.config.AiProperties;
-import com.msg.fillmap.video.config.AsyncConfig;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
@@ -46,8 +44,7 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 	private final FfmpegRunner ffmpegRunner;
 	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
-	// 인코딩 태스크 결과 계측 (MSG-343) — completed·failed_over_duration·failed_error. rejected 는
-	// 태스크 본문이 돌지 않는 submit 스레드의 일이라 VideoServiceImpl.submitEncoding 이 센다.
+	// 인코딩 태스크 결과 계측 (MSG-343) — completed·failed_over_duration·failed_error.
 	private final VideoProcessingMetrics videoProcessingMetrics;
 	// 실효 블러 활성(enabled && blurEnabled) 판정 재료 (MSG-456) — 플래그가 2개라 @Value 산발 대신 한 타입으로 읽는다.
 	private final AiProperties aiProperties;
@@ -57,20 +54,16 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 	private final ThreadPoolTaskExecutor highlightExecutor;
 
 	@Override
-	@Async(AsyncConfig.ENCODING_EXECUTOR)
-	public void encode(Long videoId, String originalKey) {
-		encodeNow(videoId, originalKey);
-	}
-
-	@Override
 	public void encode(EncodingJobClaim claim) {
-		encodeNow(claim.videoId(), claim.originalS3Key());
-	}
-
-	private void encodeNow(Long videoId, String originalKey) {
+		Long videoId = claim.videoId();
+		String originalKey = claim.originalS3Key();
+		if (!statusWriter.markEncoding(claim)) {
+			return;
+		}
 		Video video = videoRepository.findById(videoId).orElse(null);
 		if (video == null) {
 			log.error("인코딩 대상 영상 없음: videoId={}", videoId);
+			statusWriter.complete(claim);
 			return;
 		}
 
@@ -80,9 +73,6 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 		boolean resultCounted = false;
 		try {
 			// 큐 대기 중 교체/삭제됐으면 이 태스크의 원본은 더는 현재 시도가 아니다 — ffmpeg 을 돌리지 않는다 (MSG-241).
-			if (!statusWriter.markEncoding(videoId, originalKey)) {
-				return;
-			}
 			workDir = Files.createTempDirectory("encode-" + videoId + "-");
 
 			Path original = workDir.resolve("original");
@@ -96,7 +86,7 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 				// 분류 보존 — markFailed(REQUIRES_NEW)가 던져도 over_duration 계상은 이미 끝나 있어야 한다.
 				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_OVER_DURATION);
 				resultCounted = true;
-				statusWriter.markFailed(videoId, originalKey);
+				statusWriter.markFailed(claim);
 				return;
 			}
 
@@ -121,6 +111,7 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			// — DB 가드가 상태 전이를 막고, 교체 시도는 별도 키를 써 현재 산출물을 보존한다.
 			if (!isCurrentEncodingAttempt(videoId, originalKey)) {
 				log.info("인코딩 중 삭제·교체됨 — 결과 업로드 생략: videoId={}", videoId);
+				statusWriter.complete(claim);
 				return;
 			}
 
@@ -132,28 +123,34 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			if (blurActive) {
 				// 미블러 썸네일을 S3 에 올리지 않고 thumbnailUrl 도 기록하지 않는다(P1/R5 불변식) — 폴러가 완료 시
 				// 블러본에서 뽑아 결정적 키에 올린 뒤 그때 thumbnailUrl 을 기록한다. 교체돼도 미블러본이 공개 키에 안 닿는다.
-				statusWriter.markEncoded(videoId, originalKey, encodedKey, measuredDurationSec);
+				statusWriter.markEncoded(claim, encodedKey, measuredDurationSec);
 				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_COMPLETED);
 				resultCounted = true;
 			} else {
 				// 블러 꺼짐 경로. READY 전이와 완료 계측을 먼저 끝내고, 하이라이트는 전용 워커에 넘긴다 (MSG-456 D-1)
 				// — 계상 먼저(over_duration 경로와 같은 결). 워커 본문의 실패는 인코딩 태스크 계측과 무관하다.
 				upload(thumbnailKey, "image/jpeg", thumbnail);
-				statusWriter.markReady(videoId, originalKey, encodedKey, thumbnailKey, measuredDurationSec);
+				statusWriter.markReady(claim, encodedKey, thumbnailKey, measuredDurationSec);
 				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_COMPLETED);
 				resultCounted = true;
 				submitHighlightJob(videoId, originalKey, encodedKey);
 			}
 			log.info("인코딩 완료: videoId={} duration={}s blurActive={}", videoId, duration, blurActive);
-		} catch (Exception e) {
-			// 비동기라 던져봐야 받을 곳이 없다. 기록만 남기고 재시도하지 않는다 (MSG-65 D8).
-			log.error("인코딩 실패: videoId={}", videoId, e);
-			// over_duration 경로와 대칭 — 계상 먼저, 전이 나중 (Codex 3R). markFailed(REQUIRES_NEW)가 DB
-			// 장애로 던지면 인코더는 재시도하지 않으므로, 뒤에 두면 failed_error 가 영구 누락된다.
+		} catch (FfmpegRunner.InvalidMediaException e) {
+			log.warn("손상 영상으로 인코딩 중단: videoId={}", videoId, e);
 			if (!resultCounted) {
 				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_ERROR);
 			}
-			statusWriter.markFailed(videoId, originalKey);
+			statusWriter.markFailed(claim);
+		} catch (Exception e) {
+			log.error("인코딩 실패: videoId={}", videoId, e);
+			if (!resultCounted) {
+				videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_FAILED_ERROR);
+			}
+			if (e instanceof RuntimeException runtimeException) {
+				throw runtimeException;
+			}
+			throw new IllegalStateException("인코딩 실행 실패", e);
 		} finally {
 			deleteQuietly(workDir);
 		}

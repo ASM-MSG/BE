@@ -66,6 +66,21 @@ public class VideoStatusWriter {
 		return true;
 	}
 
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public boolean markEncoding(EncodingJobClaim claim) {
+		Video video = videoRepository.findWithLockById(claim.videoId()).orElse(null);
+		if (!isCurrentEncodingAttempt(video, claim.originalS3Key())) {
+			logStaleSkip("인코딩 시작", claim.videoId(), claim.originalS3Key(), video);
+			complete(claim);
+			return false;
+		}
+		video.markEncoding();
+		if (encodingJobRepository.verifyActive(claim) != 1) {
+			throw new ClaimLostException(claim.jobId());
+		}
+		return true;
+	}
+
 	/**
 	 * measuredDurationSec 은 인코더가 ffprobe 로 잰 길이(1~30 보정 완료, MSG-470)다. 스테일 가드에 걸려
 	 * 전이가 skip 되면 길이 덮어쓰기도 함께 skip 된다 — 옛 파일의 실측값이 새 파일에 붙지 않는다.
@@ -83,8 +98,24 @@ public class VideoStatusWriter {
 			}
 			video.markReady(encodedKey, thumbnailKey, measuredDurationSec);
 			recordOutcomeNotification(video, true);
-			videoProcessingMetrics.recordOutcome(videoId, true, VideoProcessingMetrics.PATH_ENCODING);
+			recordOutcome(video, true, VideoProcessingMetrics.PATH_ENCODING);
 		});
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void markReady(EncodingJobClaim claim, String encodedKey, String thumbnailKey,
+		short measuredDurationSec) {
+		boolean uploaderLocked = lockUploaderFirst(claim.videoId());
+		Video video = uploaderLocked ? videoRepository.findWithLockById(claim.videoId()).orElse(null) : null;
+		boolean applied = isCurrentEncodingAttempt(video, claim.originalS3Key());
+		if (applied) {
+			video.markReady(encodedKey, thumbnailKey, measuredDurationSec);
+			recordOutcomeNotification(video, true);
+		}
+		complete(claim);
+		if (applied) {
+			videoProcessingMetrics.recordOutcome(claim.enqueuedAt(), true, VideoProcessingMetrics.PATH_ENCODING);
+		}
 	}
 
 	/**
@@ -126,6 +157,22 @@ public class VideoStatusWriter {
 		});
 	}
 
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void markEncoded(EncodingJobClaim claim, String encodedKey, short measuredDurationSec) {
+		Video video = videoRepository.findWithLockById(claim.videoId()).orElse(null);
+		if (isCurrentEncodingAttempt(video, claim.originalS3Key())) {
+			video.markEncoded(encodedKey, measuredDurationSec);
+		}
+		complete(claim);
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void complete(EncodingJobClaim claim) {
+		if (encodingJobRepository.complete(claim) != 1) {
+			throw new ClaimLostException(claim.jobId());
+		}
+	}
+
 	/**
 	 * 제출 직후 job_id 기록 (MSG-149, P1-b). 폴러가 목록 로드 시점의 blurringStartedAt(시도 넌스)을 넘긴다.
 	 * fresh 조회가 여전히 그 시도(ACTIVE·BLURRING·아직 미제출·같은 blurringStartedAt)일 때만 기록한다 —
@@ -163,7 +210,7 @@ public class VideoStatusWriter {
 		video.applyBlurResult(blurredS3Key, highlights);
 		video.markReadyFromBlurring(thumbnailKey);
 		recordOutcomeNotification(video, true);
-		videoProcessingMetrics.recordOutcome(videoId, true, VideoProcessingMetrics.PATH_AI);
+		recordOutcome(video, true, VideoProcessingMetrics.PATH_AI);
 		return true;
 	}
 
@@ -188,7 +235,7 @@ public class VideoStatusWriter {
 			}
 			video.markFailed(failReason);
 			recordOutcomeNotification(video, false);
-			videoProcessingMetrics.recordOutcome(videoId, false, VideoProcessingMetrics.PATH_AI);
+			recordOutcome(video, false, VideoProcessingMetrics.PATH_AI);
 		});
 	}
 
@@ -224,7 +271,7 @@ public class VideoStatusWriter {
 			}
 			video.markFailed();
 			recordOutcomeNotification(video, false);
-			videoProcessingMetrics.recordOutcome(videoId, false, VideoProcessingMetrics.PATH_ENCODING);
+			recordOutcome(video, false, VideoProcessingMetrics.PATH_ENCODING);
 		});
 	}
 
@@ -239,10 +286,8 @@ public class VideoStatusWriter {
 	}
 
 	private void markClaimFailed(EncodingJobClaim claim, boolean dead) {
-		if (!lockUploaderFirst(claim.videoId())) {
-			return;
-		}
-		Video video = videoRepository.findWithLockById(claim.videoId()).orElse(null);
+		boolean uploaderLocked = lockUploaderFirst(claim.videoId());
+		Video video = uploaderLocked ? videoRepository.findWithLockById(claim.videoId()).orElse(null) : null;
 		boolean applied = isCurrentEncodingAttempt(video, claim.originalS3Key());
 		if (applied) {
 			video.markFailed();
@@ -253,9 +298,15 @@ public class VideoStatusWriter {
 			throw new ClaimLostException(claim.jobId());
 		}
 		if (applied) {
-			videoProcessingMetrics.recordOutcome(
-				claim.videoId(), false, VideoProcessingMetrics.PATH_ENCODING);
+			videoProcessingMetrics.recordOutcome(claim.enqueuedAt(), false, VideoProcessingMetrics.PATH_ENCODING);
 		}
+	}
+
+	private void recordOutcome(Video video, boolean ready, String path) {
+		LocalDateTime enqueuedAt = encodingJobRepository
+			.findEnqueuedAt(video.getId(), video.getOriginalS3Key())
+			.orElse(null);
+		videoProcessingMetrics.recordOutcome(enqueuedAt, ready, path);
 	}
 
 	/**

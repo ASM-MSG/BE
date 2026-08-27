@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -77,6 +78,7 @@ class VideoEncodingDurationRealFfmpegTest {
 	private S3Client s3Client;
 	private VideoEncodingService encodingService;
 	private Video video;
+	private EncodingJobClaim claim;
 
 	@BeforeAll
 	static void checkFfmpeg() {
@@ -112,8 +114,10 @@ class VideoEncodingDurationRealFfmpegTest {
 		video = Video.create(1L, "19495_9607", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), 신고값, LocalDateTime.now(java.time.ZoneOffset.UTC),
 			Visibility.PRIVATE);
+		claim = new EncodingJobClaim(1L, VIDEO_ID, ORIGINAL_KEY, UUID.randomUUID(),
+			(short) 1, LocalDateTime.of(2026, 8, 27, 0, 0));
 		given(videoRepository.findById(VIDEO_ID)).willReturn(Optional.of(video));
-		given(statusWriter.markEncoding(VIDEO_ID, ORIGINAL_KEY)).willAnswer(invocation -> {
+		given(statusWriter.markEncoding(claim)).willAnswer(invocation -> {
 			video.markEncoding();
 			return true;
 		});
@@ -126,7 +130,7 @@ class VideoEncodingDurationRealFfmpegTest {
 
 		encodeReal(dir, "12.7");
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 13);
+		verify(statusWriter).markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 13);
 	}
 
 	// 검증: FR-MEDIA-19
@@ -137,7 +141,7 @@ class VideoEncodingDurationRealFfmpegTest {
 		encodeReal(dir, "0.3");
 
 		// 반올림하면 0 이라 CHECK(duration_sec > 0) 위반이다. 클램프가 없으면 전이가 깨진다.
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 1);
+		verify(statusWriter).markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 1);
 	}
 
 	// 검증: FR-MEDIA-19
@@ -148,8 +152,8 @@ class VideoEncodingDurationRealFfmpegTest {
 		encodeReal(dir, "30.6");
 
 		// MSG-370 이 허용한 여유 구간이라 실패가 아니다. 반올림하면 31 이지만 CHECK 상한이 30 이다.
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 30);
-		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		verify(statusWriter).markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 30);
+		verify(statusWriter, never()).markFailed(claim);
 	}
 
 	// 검증: FR-MEDIA-03
@@ -160,8 +164,8 @@ class VideoEncodingDurationRealFfmpegTest {
 		encodeReal(dir, "31.4");
 
 		// 초과 판정이 클램프보다 앞이라는 순서가 계약이다. 뒤집히면 30 으로 뭉개져 통과한다.
-		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
+		verify(statusWriter).markFailed(claim);
+		verify(statusWriter, never()).markReady(eq(claim), any(), any(), anyShort());
 	}
 
 	/** 신고값과 무관하게 실측이 이긴다는 것이 이 티켓의 요지다. */
@@ -173,7 +177,7 @@ class VideoEncodingDurationRealFfmpegTest {
 
 		encodeReal(dir, "5.0");
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 5);
+		verify(statusWriter).markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 5);
 	}
 
 	/**
@@ -190,7 +194,7 @@ class VideoEncodingDurationRealFfmpegTest {
 			});
 		given(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).willReturn(null);
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 	}
 
 	/** lavfi 합성 영상. 바이너리 픽스처를 리포에 넣지 않으려고 그때그때 만든다 (FfmpegRunnerTest 와 같은 방식). */

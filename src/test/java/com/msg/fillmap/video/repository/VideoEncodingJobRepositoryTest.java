@@ -140,7 +140,7 @@ class VideoEncodingJobRepositoryTest {
 
 		assertThat(reclaimed.jobId()).isEqualTo(oldClaim.jobId());
 		assertThat(reclaimed.claimToken()).isEqualTo(newToken);
-		assertThat(reclaimed.attemptCount()).isEqualTo((short)2);
+		assertThat(reclaimed.attemptCount()).isEqualTo((short) 2);
 	}
 
 	@Test
@@ -170,6 +170,7 @@ class VideoEncodingJobRepositoryTest {
 		LocalDateTime enqueuedAt = jdbcTemplate.queryForObject(
 			"SELECT enqueued_at FROM video_encoding_jobs WHERE video_id = ?", LocalDateTime.class, videoId);
 		assertThat(enqueuedAt).isBetween(before, after);
+		assertThat(repository.findEnqueuedAt(videoId, originalKey)).contains(enqueuedAt);
 	}
 
 	@Test
@@ -190,8 +191,20 @@ class VideoEncodingJobRepositoryTest {
 		repository.claimNext("ai", UUID.randomUUID(), LEASE).orElseThrow();
 
 		assertThat(repository.complete(oldClaim)).isZero();
+		assertThat(repository.verifyActive(oldClaim)).isZero();
 		assertThat(repository.retry(oldClaim, Duration.ofSeconds(5), "old failure")).isZero();
 		assertThat(statusOf(oldClaim.jobId())).isEqualTo(VideoEncodingJobStatus.PROCESSING.name());
+	}
+
+	@Test
+	@DisplayName("살아있는 토큰만 인코딩 시작 권한을 검증한다")
+	void 살아있는_token만_인코딩_시작권한을_검증한다() {
+		repository.enqueue(videoId, originalKey);
+		EncodingJobClaim claim = repository.claimNext("be", UUID.randomUUID(), LEASE).orElseThrow();
+
+		assertThat(repository.verifyActive(claim)).isEqualTo(1);
+		expireLease(claim.jobId());
+		assertThat(repository.verifyActive(claim)).isZero();
 	}
 
 	@Test
@@ -232,7 +245,7 @@ class VideoEncodingJobRepositoryTest {
 		assertThat(repository.release(claim)).isEqualTo(1);
 		EncodingJobClaim reclaimed = repository.claimNext("ai", UUID.randomUUID(), LEASE).orElseThrow();
 
-		assertThat(reclaimed.attemptCount()).isEqualTo((short)1);
+		assertThat(reclaimed.attemptCount()).isEqualTo((short) 1);
 	}
 
 	@Test
@@ -247,7 +260,7 @@ class VideoEncodingJobRepositoryTest {
 		assertThat(repository.release(claim)).isEqualTo(1);
 		EncodingJobClaim reclaimed = repository.claimDead("ai", UUID.randomUUID(), LEASE).orElseThrow();
 
-		assertThat(reclaimed.attemptCount()).isEqualTo((short)3);
+		assertThat(reclaimed.attemptCount()).isEqualTo((short) 3);
 	}
 
 	@Test
@@ -265,7 +278,7 @@ class VideoEncodingJobRepositoryTest {
 		String key = "videos/original/%d/m494-%s-%s.mp4".formatted(userId, suffix, UUID.randomUUID());
 		return videoRepository.save(Video.create(
 			userId, gridId, key, GeoSupport.toPoint(center.lat(), center.lon()),
-			(short)10, LocalDateTime.now(ZoneOffset.UTC), Visibility.PRIVATE)).getId();
+			(short) 10, LocalDateTime.now(ZoneOffset.UTC), Visibility.PRIVATE)).getId();
 	}
 
 	private String originalKey(long id) {

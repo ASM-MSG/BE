@@ -42,6 +42,7 @@ class VideoStatusWriterTest {
 	private static final long VIDEO_ID = 7L;
 	private static final String K1 = "videos/original/1/x.mp4";
 	private static final String K2 = "videos/original/1/y.mp4";
+	private static final LocalDateTime ENQUEUED_AT = LocalDateTime.of(2026, 8, 27, 0, 0);
 
 	private VideoRepository videoRepository;
 	private VideoProcessingMetrics videoProcessingMetrics;
@@ -59,13 +60,14 @@ class VideoStatusWriterTest {
 		given(userRepository.findIdForKeyShare(1L)).willReturn(Optional.of(1L));
 		given(encodingJobRepository.complete(any())).willReturn(1);
 		given(encodingJobRepository.completeDead(any())).willReturn(1);
+		given(encodingJobRepository.verifyActive(any())).willReturn(1);
+		given(encodingJobRepository.findEnqueuedAt(anyLong(), anyString())).willReturn(Optional.of(ENQUEUED_AT));
 		statusWriter = new VideoStatusWriter(videoRepository, userRepository,
 			mock(NotificationCommandService.class), videoProcessingMetrics, encodingJobRepository);
 	}
 
 	private EncodingJobClaim claim() {
-		return new EncodingJobClaim(1L, VIDEO_ID, K1, UUID.randomUUID(),
-			(short)3, LocalDateTime.of(2026, 8, 27, 0, 0));
+		return new EncodingJobClaim(1L, VIDEO_ID, K1, UUID.randomUUID(), (short) 3, ENQUEUED_AT);
 	}
 
 	/** BLURRING·ACTIVE 인, 아직 미제출(aiJobId=null) 시도의 영상. */
@@ -306,6 +308,72 @@ class VideoStatusWriterTest {
 	}
 
 	@Test
+	void 활성_claim만_ENCODING으로_전이한다() {
+		Video video = Video.create(1L, "19495_9607", K1,
+			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
+		ReflectionTestUtils.setField(video, "id", VIDEO_ID);
+		EncodingJobClaim claim = claim();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		assertThat(statusWriter.markEncoding(claim)).isTrue();
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.ENCODING);
+		verify(encodingJobRepository).verifyActive(claim);
+	}
+
+	@Test
+	void 스테일_claim의_시작은_영상은_건드리지_않고_작업만_종결한다() {
+		Video video = replacedWhileEncoding();
+		EncodingJobClaim claim = claim();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		assertThat(statusWriter.markEncoding(claim)).isFalse();
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.UPLOADED);
+		verify(encodingJobRepository).complete(claim);
+		verify(encodingJobRepository, never()).verifyActive(claim);
+	}
+
+	@Test
+	void claim의_READY와_작업_COMPLETED를_함께_종결한다() {
+		Video video = encoding();
+		EncodingJobClaim claim = claim();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markReady(claim, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10);
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
+		verify(encodingJobRepository).complete(claim);
+		verify(videoProcessingMetrics).recordOutcome(
+			ENQUEUED_AT, true, VideoProcessingMetrics.PATH_ENCODING);
+	}
+
+	@Test
+	void claim의_BLURRING과_작업_COMPLETED를_함께_종결한다() {
+		Video video = encoding();
+		EncodingJobClaim claim = claim();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markEncoded(claim, "videos/encoded/1/7.mp4", (short) 10);
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.BLURRING);
+		verify(encodingJobRepository).complete(claim);
+	}
+
+	@Test
+	void claim의_READY_종결_UPDATE가_0행이면_상실_예외를_던진다() {
+		Video video = encoding();
+		EncodingJobClaim claim = claim();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+		given(encodingJobRepository.complete(claim)).willReturn(0);
+
+		assertThatThrownBy(() -> statusWriter.markReady(
+			claim, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10))
+			.isInstanceOf(ClaimLostException.class);
+		verify(videoProcessingMetrics, never()).recordOutcome(any(), anyBoolean(), anyString());
+	}
+
+	@Test
 	void 스테일_claim은_영상은_건드리지_않고_작업만_종결한다() {
 		Video video = replacedWhileEncoding();
 		EncodingJobClaim claim = claim();
@@ -338,7 +406,18 @@ class VideoStatusWriterTest {
 
 		assertThatThrownBy(() -> statusWriter.markFailed(claim))
 			.isInstanceOf(ClaimLostException.class);
-		verify(videoProcessingMetrics, never()).recordOutcome(anyLong(), anyBoolean(), anyString());
+		verify(videoProcessingMetrics, never()).recordOutcome(any(), anyBoolean(), anyString());
+	}
+
+	@Test
+	void 업로더가_삭제돼도_claim은_종결한다() {
+		EncodingJobClaim claim = claim();
+		given(videoRepository.findUserIdById(VIDEO_ID)).willReturn(Optional.empty());
+
+		statusWriter.markFailed(claim);
+
+		verify(encodingJobRepository).complete(claim);
+		verify(videoProcessingMetrics, never()).recordOutcome(any(), anyBoolean(), anyString());
 	}
 
 	@Test
@@ -377,7 +456,8 @@ class VideoStatusWriterTest {
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
 		assertThat(video.getEncodedUrl()).isEqualTo("videos/encoded/1/7.mp4");
 		assertThat(video.getThumbnailUrl()).isEqualTo("videos/thumb/1/7.jpg");
-		verify(videoProcessingMetrics).recordOutcome(VIDEO_ID, true, VideoProcessingMetrics.PATH_ENCODING);
+		verify(videoProcessingMetrics).recordOutcome(
+			ENQUEUED_AT, true, VideoProcessingMetrics.PATH_ENCODING);
 	}
 
 	// ── 실측 길이 반영 (MSG-470) ──
@@ -436,7 +516,7 @@ class VideoStatusWriterTest {
 		statusWriter.markReady(VIDEO_ID, K1, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", (short) 10);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
-		verify(videoProcessingMetrics, never()).recordOutcome(anyLong(), anyBoolean(), anyString());
+		verify(videoProcessingMetrics, never()).recordOutcome(any(), anyBoolean(), anyString());
 	}
 
 	@Test
@@ -447,7 +527,7 @@ class VideoStatusWriterTest {
 		statusWriter.markFailed(VIDEO_ID, K1);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.READY);
-		verify(videoProcessingMetrics, never()).recordOutcome(anyLong(), anyBoolean(), anyString());
+		verify(videoProcessingMetrics, never()).recordOutcome(any(), anyBoolean(), anyString());
 	}
 
 	@Test
@@ -459,7 +539,7 @@ class VideoStatusWriterTest {
 		statusWriter.markFailed(VIDEO_ID, K1);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.FAILED);
-		verify(videoProcessingMetrics, never()).recordOutcome(anyLong(), anyBoolean(), anyString());
+		verify(videoProcessingMetrics, never()).recordOutcome(any(), anyBoolean(), anyString());
 	}
 
 	@Test
