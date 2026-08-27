@@ -6,6 +6,7 @@ import java.time.ZoneOffset;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -25,16 +26,18 @@ import com.msg.fillmap.notification.service.NotificationCommandService;
  * 행사 생명주기 경계의 부수효과 (MSG-442, FR-EVENT-06). 한 틱에 두 단계를 순서대로 한다:
  * 시작 알림 발송과 종료 구독 자동 해제.
  * <p>
- * **빈은 조건 없이 항상 뜬다.** {@code fillmap.notification.enabled} 로 클래스를 게이트하면 안 된다 —
- * 그 속성의 기본값이 false 라(local·CI 가 이 상태) 스케줄러가 통째로 죽으면 구독 API 는 열려 있는데 종료
- * 구독 해제가 영원히 돌지 않아 행이 무한 축적된다. 정리는 발송 게이트 밖이어야 하므로, 게이트는 발송
- * 단계 안에서만 검사한다. 스케줄링 인프라 자체는 {@code EventSchedulingConfig} 가 무조건 제공한다.
+ * API 프로세스에서는 알림 설정과 무관하게 항상 뜬다. {@code fillmap.notification.enabled} 로 클래스를
+ * 게이트하면 안 된다 — 그 속성의 기본값이 false 라(local·CI 가 이 상태) 스케줄러가 통째로 죽으면 구독
+ * API 는 열려 있는데 종료 구독 해제가 영원히 돌지 않아 행이 무한 축적된다. 단, API 역할이 없는
+ * encoding-worker 프로필에서는 중복 실행을 막기 위해 빈을 제외한다. 스케줄링 인프라 자체는
+ * {@code EventSchedulingConfig} 가 무조건 제공한다.
  * <p>
  * 두 단계 모두 멱등이다. 발송은 outbox 의 {@code uq_notifications_user_event}(user_id + event_key)가
  * 재기록을 흡수하고(WeeklySummaryScheduler 선례), 해제는 DELETE 라 본성상 재실행 안전하다(PRD §10).
  */
 @Slf4j
 @Component
+@Profile("!encoding-worker")
 public class EventNotificationScheduler {
 
 	/**

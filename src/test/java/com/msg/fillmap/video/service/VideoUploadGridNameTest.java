@@ -83,13 +83,14 @@ class VideoUploadGridNameTest {
 		S3Client s3Client = mock(S3Client.class);
 		// 확정의 실측 크기 검증(MSG-351 P1-1)이 headObject 응답을 읽는다 — 스텁이 없으면 null 로 NPE.
 		givenUploadedVideoObject(s3Client);
-		return new VideoServiceImpl(repository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
+		return new VideoServiceImpl(repository,
+			mock(com.msg.fillmap.video.repository.VideoEncodingJobRepository.class),
 			mock(S3Presigner.class), s3Client,
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of(zones)),
-			mock(VideoProcessingMetrics.class), mock(EventVideoRepository.class));
+			mock(EventVideoRepository.class));
 	}
 
 	private VideoUploadRequestDto uploadRequest() {

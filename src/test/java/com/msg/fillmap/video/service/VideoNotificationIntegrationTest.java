@@ -1,6 +1,7 @@
 package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +23,7 @@ import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
+import com.msg.fillmap.video.repository.VideoEncodingJobRepository;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 
@@ -45,6 +47,9 @@ class VideoNotificationIntegrationTest {
 
 	@Autowired
 	private VideoRepository videoRepository;
+
+	@Autowired
+	private VideoEncodingJobRepository encodingJobRepository;
 
 	@Autowired
 	private UserRepository userRepository;
@@ -99,6 +104,50 @@ class VideoNotificationIntegrationTest {
 		assertThat(row[0]).isEqualTo("VIDEO");
 		assertThat(row[1]).isEqualTo("영상이 준비됐어요");
 		assertThat(row[2]).isEqualTo("올린 영상 처리가 끝났어요. 지금 확인해 보세요");
+	}
+
+	@Test
+	@DisplayName("claim 완료는 READY, 알림, 작업 COMPLETED를 함께 커밋한다")
+	void claim_완료는_READY_알림_작업을_함께_커밋한다() {
+		EncodingJobClaim claim = claimEncodingJob();
+
+		statusWriter.markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
+
+		assertThat(processingStatus()).isEqualTo("READY");
+		assertThat(notificationCount()).isEqualTo(1);
+		assertThat(jobStatus(claim.jobId())).isEqualTo("COMPLETED");
+	}
+
+	@Test
+	@DisplayName("작업 완료 UPDATE가 0행이면 READY와 알림도 롤백한다")
+	void 작업_완료_UPDATE가_0행이면_READY와_알림도_롤백한다() {
+		EncodingJobClaim claim = claimEncodingJob();
+		tx.executeWithoutResult(status -> em.createNativeQuery("""
+			UPDATE video_encoding_jobs
+			SET lease_until = (statement_timestamp() AT TIME ZONE 'utc') - interval '1 second'
+			WHERE id = :jobId
+			""").setParameter("jobId", claim.jobId()).executeUpdate());
+
+		assertThatThrownBy(() -> statusWriter.markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 10))
+			.isInstanceOf(ClaimLostException.class);
+
+		assertThat(processingStatus()).isEqualTo("UPLOADED");
+		assertThat(notificationCount()).isZero();
+		assertThat(jobStatus(claim.jobId())).isEqualTo("PROCESSING");
+	}
+
+	@Test
+	@DisplayName("같은 claim을 다시 완료해도 영상과 알림은 한 번만 종결한다")
+	void 같은_claim의_중복완료는_한번만_반영한다() {
+		EncodingJobClaim claim = claimEncodingJob();
+		statusWriter.markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
+
+		assertThatThrownBy(() -> statusWriter.markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 10))
+			.isInstanceOf(ClaimLostException.class);
+
+		assertThat(processingStatus()).isEqualTo("READY");
+		assertThat(notificationCount()).isEqualTo(1);
+		assertThat(jobStatus(claim.jobId())).isEqualTo("COMPLETED");
 	}
 
 	// 검증: FR-MEDIA-08, FR-NOTI-10
@@ -238,6 +287,18 @@ class VideoNotificationIntegrationTest {
 		return ((Number) em.createNativeQuery("SELECT count(*) FROM notifications WHERE user_id = :userId")
 			.setParameter("userId", userId)
 			.getSingleResult()).longValue();
+	}
+
+	private EncodingJobClaim claimEncodingJob() {
+		encodingJobRepository.enqueue(videoId, originalKey);
+		return encodingJobRepository.claimNext(
+			"test", UUID.randomUUID(), java.time.Duration.ofMinutes(35)).orElseThrow();
+	}
+
+	private String jobStatus(long jobId) {
+		return (String) em.createNativeQuery("SELECT status FROM video_encoding_jobs WHERE id = :jobId")
+			.setParameter("jobId", jobId)
+			.getSingleResult();
 	}
 
 	/** category·title·body 스냅샷 — 단언은 호출부에서 (BadgeNotificationIntegrationTest 선례). */

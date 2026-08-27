@@ -92,13 +92,14 @@ class VideoS3CleanupTest {
 		MissionAwardService missionAwardService = mock(MissionAwardService.class);
 		given(missionAwardService.awardOnUpload(org.mockito.ArgumentMatchers.anyLong(),
 			org.mockito.ArgumentMatchers.anyString())).willReturn(MissionAwardResult.EMPTY);
-		service = new VideoServiceImpl(repository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
+		service = new VideoServiceImpl(repository,
+			mock(com.msg.fillmap.video.repository.VideoEncodingJobRepository.class),
 			mock(S3Presigner.class), s3Client,
 			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, mock(HotScoreCommandService.class),
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
-			mock(VideoProcessingMetrics.class), mock(EventVideoRepository.class));
+			mock(EventVideoRepository.class));
 	}
 
 	@AfterEach

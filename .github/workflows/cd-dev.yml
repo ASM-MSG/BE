@@ -4,8 +4,10 @@ name: CD (dev)
 # EC2(MSG-51) 준비 전까지는 repo variable DEPLOY_ENABLED 로 비활성(skip) 상태.
 # 준비되면 Settings > Variables 에 DEPLOY_ENABLED=true, 아래 secrets 등록:
 #   DEV_EC2_HOST / DEV_EC2_USER / DEV_EC2_SSH_KEY
+#   AI_EC2_HOST / AI_EC2_USER / AI_EC2_SSH_KEY
 # dev 앱은 EC2에서 systemd 서비스 fillmap-dev (profile=dev, DB 5432 컨테이너)로 상시 구동.
-# DB 접속·시크릿은 EC2의 서비스 .env 에 있고, CD는 jar 교체 + 재시작만 한다.
+# 인코딩 워커는 AI EC2에서 fillmap-encoding-worker (profile=dev,encoding-worker)로 구동.
+# DB 접속·시크릿은 각 EC2의 서비스 .env 에 있고, CD는 jar 교체 + 재시작만 한다.
 on:
   push:
     branches: [ develop ]
@@ -56,7 +58,7 @@ jobs:
 
       # systemctl restart 는 기동을 '지시'하고 즉시 0 을 반환한다 — 앱이 직후 죽어도 위 step 은 성공이다.
       # 실제로 2026-07-14~15 dev 가 32시간 크래시 루프였는데 CD 는 계속 초록불이었다 (MSG-129).
-      - name: Health check
+      - name: Health check dev service
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEV_EC2_HOST }}
@@ -93,4 +95,55 @@ jobs:
             done
             echo "::error::150초 내 기동 실패 — 아래 로그에서 원인 확인"
             journalctl -u fillmap-dev -n 50 --no-pager
+            exit 1
+
+      - name: Upload jar to encoding worker EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.AI_EC2_HOST }}
+          username: ${{ secrets.AI_EC2_USER }}
+          key: ${{ secrets.AI_EC2_SSH_KEY }}
+          source: build/libs/fillmap-0.0.1-SNAPSHOT.jar
+          target: /home/${{ secrets.AI_EC2_USER }}/encoding-worker
+          strip_components: 2
+
+      - name: Restart encoding worker service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AI_EC2_HOST }}
+          username: ${{ secrets.AI_EC2_USER }}
+          key: ${{ secrets.AI_EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd /home/${{ secrets.AI_EC2_USER }}/encoding-worker
+            command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+            mv -f fillmap-0.0.1-SNAPSHOT.jar app.jar
+            sudo systemctl restart fillmap-encoding-worker
+
+      - name: Health check encoding worker service
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AI_EC2_HOST }}
+          username: ${{ secrets.AI_EC2_USER }}
+          key: ${{ secrets.AI_EC2_SSH_KEY }}
+          script: |
+            deadline_start=$(date +%s)
+            while [ $(( $(date +%s) - deadline_start )) -lt 150 ]; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:8081/actuator/health || true)
+              if [ "$code" = "200" ]; then
+                main_pid=$(systemctl show -p MainPID --value fillmap-encoding-worker)
+                listen_pids=$(sudo ss -ltnpH 'sport = :8081' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
+                if [ -n "$main_pid" ] && [ "$main_pid" != "0" ] && [ "$listen_pids" = "$main_pid" ]; then
+                  echo "기동 확인 — health HTTP 200, 8081 리스너(pid=$listen_pids) = fillmap-encoding-worker MainPID ($(( $(date +%s) - deadline_start ))초)"
+                  exit 0
+                fi
+                echo "::error::200 응답을 재시작한 워커가 아닌 프로세스가 줬다 — MainPID=$main_pid, 8081 리스너 pid=[$listen_pids]"
+                sudo ss -ltnp 'sport = :8081' || true
+                journalctl -u fillmap-encoding-worker -n 50 --no-pager
+                exit 1
+              fi
+              sleep 5
+            done
+            echo "::error::150초 내 워커 health 200 실패 (마지막 코드: $code) — 아래 로그에서 원인 확인"
+            journalctl -u fillmap-encoding-worker -n 50 --no-pager
             exit 1

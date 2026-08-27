@@ -1,0 +1,26 @@
+server:
+  address: 0.0.0.0
+  port: ${SERVER_PORT:8081}
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 2
+      minimum-idle: 1
+  flyway:
+    enabled: false
+
+management:
+  health:
+    redis:
+      enabled: false
+
+fillmap:
+  notification:
+    enabled: false
+  zone:
+    seed:
+      enabled: false
+  event:
+    seed:
+      enabled: false

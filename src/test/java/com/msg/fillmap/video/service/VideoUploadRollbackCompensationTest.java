@@ -89,10 +89,6 @@ class VideoUploadRollbackCompensationTest {
 	@MockitoBean
 	private S3Client s3Client;
 
-	// 커밋 성공 케이스의 afterCommit 인코딩 무력화 — 실 인코딩이 돌면 없는 파일로 FAILED 마킹이 낀다.
-	@MockitoBean
-	private VideoEncodingService videoEncodingService;
-
 	// 커밋 성공 케이스의 afterCommit 핫스코어 무력화 (MSG-183) — 실 빈이 돌면 공유 로컬 Redis 현재
 	// 버킷에 테스트 격자 점수가 54시간 남는다. 이 테스트는 핫스코어와 무관하다 (S3 mock 과 같은 취지).
 	@MockitoBean
@@ -171,6 +167,12 @@ class VideoUploadRollbackCompensationTest {
 			.setParameter("u", userId).getSingleResult();
 	}
 
+	private long encodingJobCount(String originalKey) {
+		return ((Number) em.createNativeQuery(
+			"SELECT count(*) FROM video_encoding_jobs WHERE original_s3_key = :k")
+			.setParameter("k", originalKey).getSingleResult()).longValue();
+	}
+
 	@Test
 	@DisplayName("확정 트랜잭션이 롤백되면 original 복사본을 지운다")
 	void 확정_트랜잭션이_롤백되면_original_복사본을_지운다() {
@@ -189,6 +191,7 @@ class VideoUploadRollbackCompensationTest {
 		tx.executeWithoutResult(status -> {
 			assertThat(rowCount("videos")).as("DB 는 롤백돼 row 가 없다").isZero();
 			assertThat(rowCount("user_grids")).isZero();
+			assertThat(encodingJobCount(copied.get(0))).as("인코딩 작업도 영상과 함께 롤백된다").isZero();
 		});
 	}
 
@@ -199,6 +202,7 @@ class VideoUploadRollbackCompensationTest {
 
 		// 방금 확정한 원본이 지워지면 재생 불가 — 보상은 STATUS_ROLLED_BACK 에서만 돌아야 한다.
 		then(s3Client).should(never()).deleteObjects(any(DeleteObjectsRequest.class));
+		assertThat(encodingJobCount(committedOriginalKey())).as("커밋된 영상에는 인코딩 작업이 있다").isEqualTo(1);
 	}
 
 	@Test

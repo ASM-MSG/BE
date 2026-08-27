@@ -39,6 +39,16 @@ scrape_configs:
           service: fillmap
           env: dev
 
+  # 같은 호스트에서 실행되는 분산 인코딩 워커 (MSG-494). 포트는 외부에 열지 않고
+  # docker-compose의 host-gateway를 통해 Prometheus 컨테이너에서만 접근한다.
+  - job_name: fillmap-encoding-worker
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
+        labels:
+          service: fillmap
+          env: dev
+
   # 수집 서버 자기 자신 — 스택 자체의 이상을 남기기 위해.
   - job_name: prometheus
     static_configs:

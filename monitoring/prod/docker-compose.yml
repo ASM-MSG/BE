@@ -20,6 +20,8 @@ services:
       - prometheus-data:/prometheus    # 보관 30일이 재기동에도 유지되게 데이터는 볼륨에
     ports:
       - "127.0.0.1:9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     # fillmap-ai 가용 메모리 실측 1070MiB — 셋 합계를 그 아래로 캡해 동거 프로세스를 지킨다
     mem_limit: 512m

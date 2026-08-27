@@ -74,13 +74,12 @@ class VideoGlobalListServiceTest {
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 
 		videoService = new VideoServiceImpl(
-			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
+			videoRepository, mock(com.msg.fillmap.video.repository.VideoEncodingJobRepository.class),
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
-			() -> new ZoneNameResolver(List.of()), mock(VideoProcessingMetrics.class),
-			mock(EventVideoRepository.class));
+			() -> new ZoneNameResolver(List.of()), mock(EventVideoRepository.class));
 
 		// 기본값 = 요청한 작성자가 전부 살아 있다(탈퇴 CASCADE 로 정상 경로엔 빈손이 없다). 닉네임이 없으면
 		// 항목이 응답에서 빠지므로(MSG-371), 닉네임을 안 보는 테스트도 이 기본 스텁이 있어야 항목을 받는다.

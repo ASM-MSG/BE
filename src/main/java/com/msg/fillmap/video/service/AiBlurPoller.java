@@ -14,6 +14,7 @@ import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
@@ -43,6 +44,7 @@ import com.msg.fillmap.video.support.VideoAssetKeys;
  * BLURRING 영상을 일괄 조정하는 단일 폴러 (MSG-149/150 D3). 실효 블러 활성(ai.enabled && ai.blur-enabled,
  * MSG-456)일 때만 빈으로 뜨고 @Scheduled(fixedDelay) 로 폴 중첩 없이 돈다 — 어느 한쪽이라도 꺼진
  * 환경(로컬/CI/블러 일시 비활성 dev)에서는 아예 뜨지 않아 블러 잡 제출·폴링·다운로드가 일절 없다(FR-3).
+ * encoding-worker 프로필에서도 제외해 API 노드와 워커 노드가 같은 BLURRING 행을 중복 처리하지 않는다.
  *
  * 잡별 reconcile:
  *  - 미제출(job_id null) → 타임아웃 넘었으면 markBlurFailed, 아니면 encoded 재다운로드 후 제출·job_id 기록 (D2)
@@ -62,6 +64,7 @@ import com.msg.fillmap.video.support.VideoAssetKeys;
 @Slf4j
 @Component
 @ConditionalOnProperty(prefix = "ai", name = {"enabled", "blur-enabled"})
+@Profile("!encoding-worker")
 @RequiredArgsConstructor
 public class AiBlurPoller {
 

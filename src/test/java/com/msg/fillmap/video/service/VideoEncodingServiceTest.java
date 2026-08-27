@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -65,6 +66,7 @@ class VideoEncodingServiceTest {
 	private ThreadPoolTaskExecutor highlightExecutor;
 	private VideoEncodingService encodingService;
 	private Video video;
+	private EncodingJobClaim claim;
 
 	@BeforeEach
 	@SuppressWarnings("unchecked")
@@ -82,10 +84,12 @@ class VideoEncodingServiceTest {
 
 		video = Video.create(1L, "19495_9607", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
+		claim = new EncodingJobClaim(1L, VIDEO_ID, ORIGINAL_KEY, UUID.randomUUID(),
+			(short) 1, LocalDateTime.of(2026, 8, 27, 0, 0));
 		given(videoRepository.findById(VIDEO_ID)).willReturn(Optional.of(video));
 		// 실제 라이터처럼 엔티티 상태도 전이시킨다 (MSG-382 Codex 리뷰) — 업로드 직전 fresh 재확인(쌍둥이 술어)이
 		// 정상 흐름에서 ENCODING 을 실제로 지나게 해서, 술어에서 ENCODING 허용이 빠지면 아래 정상 테스트가 깨진다.
-		given(statusWriter.markEncoding(VIDEO_ID, ORIGINAL_KEY)).willAnswer(invocation -> {
+		given(statusWriter.markEncoding(claim)).willAnswer(invocation -> {
 			video.markEncoding();
 			return true;
 		});
@@ -114,12 +118,12 @@ class VideoEncodingServiceTest {
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
-		verify(statusWriter).markEncoding(VIDEO_ID, ORIGINAL_KEY);
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
+		verify(statusWriter).markEncoding(claim);
+		verify(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
 			MEASURED);
-		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		verify(statusWriter, never()).markFailed(claim);
 	}
 
 	/** 목 호출 시 출력 경로(마지막에서 두 번째 인자가 아닌 Path 인자)에 빈 파일을 만들어 준다. */
@@ -137,11 +141,11 @@ class VideoEncodingServiceTest {
 	void 길이가_판정_여유_31초를_넘으면_인코딩하지_않고_FAILED_다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.5);
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
-		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		verify(statusWriter).markFailed(claim);
 		verify(ffmpegRunner, never()).encode720p(any(), any());
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
+		verify(statusWriter, never()).markReady(eq(claim), any(), any(), anyShort());
 	}
 
 	// 검증: FR-MEDIA-03
@@ -152,64 +156,69 @@ class VideoEncodingServiceTest {
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
+		verify(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
 			(short) 30);   // 반올림 31 이 스키마 상한 30 으로 눌린다 (MSG-470)
-		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		verify(statusWriter, never()).markFailed(claim);
 	}
 
 	// 검증: FR-MEDIA-02
 	@Test
 	void 손상_영상이라_ffprobe_가_실패하면_FAILED_다() {
-		willThrow(new IllegalStateException("ffprobe 실패")).given(ffmpegRunner).probeDurationSec(any());
+		willThrow(new FfmpegRunner.InvalidMediaException("ffprobe 실패"))
+			.given(ffmpegRunner).probeDurationSec(any());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
-		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
+		verify(statusWriter).markFailed(claim);
+		verify(statusWriter, never()).markReady(eq(claim), any(), any(), anyShort());
 	}
 
 	// 검증: FR-MEDIA-02
 	@Test
-	void 인코딩_도중_실패해도_예외를_밖으로_던지지_않고_FAILED_로_기록한다() {
+	void ffmpeg_환경_실패는_재시도를_위해_호출자에게_전파한다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		willThrow(new IllegalStateException("ffmpeg 실패"))
 			.given(ffmpegRunner).encode720p(any(Path.class), any(Path.class));
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // 예외가 새어나오면 테스트 실패
-
-		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		assertThatThrownBy(() -> encodingService.encode(claim)).hasMessage("ffmpeg 실패");
+		verify(statusWriter, never()).markFailed(claim);
 	}
 
 	@Test
-	void 대상_영상이_없으면_아무_전이도_하지_않는다() {
+	void 시작_직후_영상이_사라지면_작업만_종결한다() {
+		EncodingJobClaim missingClaim = new EncodingJobClaim(2L, 999L, ORIGINAL_KEY, UUID.randomUUID(),
+			(short) 1, LocalDateTime.of(2026, 8, 27, 0, 0));
+		given(statusWriter.markEncoding(missingClaim)).willReturn(true);
 		given(videoRepository.findById(999L)).willReturn(Optional.empty());
 
-		encodingService.encode(999L, ORIGINAL_KEY);
+		encodingService.encode(missingClaim);
 
-		verify(statusWriter, never()).markEncoding(999L, ORIGINAL_KEY);
-		verify(statusWriter, never()).markFailed(999L, ORIGINAL_KEY);
+		verify(statusWriter).complete(missingClaim);
+		verify(statusWriter, never()).markFailed(missingClaim);
 	}
 
 	@Test
 	void 썸네일_추출은_실제_길이를_받아_seek_지점을_고른다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(0.5);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
 		verify(ffmpegRunner).extractThumbnail(any(), any(), eq(0.5));
 	}
 
 	// 검증: FR-MEDIA-02
 	@Test
-	void S3_다운로드가_실패하면_FAILED_다() {
+	void S3_다운로드가_실패하면_재시도를_위해_호출자에게_전파한다() {
 		willThrow(new RuntimeException("S3 다운로드 실패"))
 			.given(s3Client).getObject(any(GetObjectRequest.class), any(Path.class));
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		assertThatThrownBy(() -> encodingService.encode(claim)).hasMessage("S3 다운로드 실패");
 
-		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		verify(statusWriter, never()).markFailed(claim);
 		verify(ffmpegRunner, never()).probeDurationSec(any());
 	}
 
@@ -220,7 +229,7 @@ class VideoEncodingServiceTest {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
 		// 인코딩본 하나만 올린다 — 미블러 썸네일은 추출도 업로드도 하지 않는다 (P1).
 		ArgumentCaptor<PutObjectRequest> captor = ArgumentCaptor.forClass(PutObjectRequest.class);
@@ -228,7 +237,7 @@ class VideoEncodingServiceTest {
 		assertThat(captor.getValue().key()).isEqualTo(ASSET_KEYS.encoded());
 		verify(ffmpegRunner, never()).extractThumbnail(any(), any(), anyDouble());
 		// thumbnail 키는 폴러가 완료 시 기록(R5)
-		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), MEASURED);
+		verify(statusWriter).markEncoded(claim, ASSET_KEYS.encoded(), MEASURED);
 	}
 
 	// ── 실측 길이 저장 (MSG-470) ──
@@ -241,9 +250,9 @@ class VideoEncodingServiceTest {
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
+		verify(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
 			(short) 13);
 	}
 
@@ -255,11 +264,11 @@ class VideoEncodingServiceTest {
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
+		verify(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
 			(short) 30);
-		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		verify(statusWriter, never()).markFailed(claim);
 	}
 
 	// 검증: FR-MEDIA-19
@@ -270,9 +279,9 @@ class VideoEncodingServiceTest {
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
+		verify(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
 			(short) 1);
 	}
 
@@ -283,9 +292,9 @@ class VideoEncodingServiceTest {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(12.7);
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
-		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), (short) 13);
+		verify(statusWriter).markEncoded(claim, ASSET_KEYS.encoded(), (short) 13);
 	}
 
 	// 검증: FR-MEDIA-03, FR-MEDIA-19
@@ -294,10 +303,10 @@ class VideoEncodingServiceTest {
 		// 클램프가 판정보다 앞서면 31.4 가 30 으로 뭉개져 초과 영상이 통과한다 — 판정은 double 원값으로 끝낸다.
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.4);
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
-		verify(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
+		verify(statusWriter).markFailed(claim);
+		verify(statusWriter, never()).markReady(eq(claim), any(), any(), anyShort());
 	}
 
 	// ── 인코딩 태스크 계측 (MSG-343 모듈 2) ──
@@ -312,11 +321,11 @@ class VideoEncodingServiceTest {
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // 블러 비활성 → markReady 경로
+		encodingService.encode(claim);   // 블러 비활성 → markReady 경로
 		assertThat(taskCount("completed")).isEqualTo(1.0);
 
 		encodingService = service(true, true);
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);   // 실효 블러 활성 → markEncoded 경로도 completed (스펙 표)
+		encodingService.encode(claim);   // 실효 블러 활성 → markEncoded 경로도 completed (스펙 표)
 		assertThat(taskCount("completed")).isEqualTo(2.0);
 		assertThat(taskCount("failed_over_duration")).isZero();
 		assertThat(taskCount("failed_error")).isZero();
@@ -326,7 +335,7 @@ class VideoEncodingServiceTest {
 	void 실측_길이_초과는_failed_over_duration으로_기록된다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.5);
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
 		assertThat(taskCount("failed_over_duration")).isEqualTo(1.0);
 		assertThat(taskCount("completed")).isZero();
@@ -337,10 +346,9 @@ class VideoEncodingServiceTest {
 	void 길이_초과에서_markFailed가_던져도_failed_over_duration_한_번만_계상된다() {
 		// 분류 보존 (Codex 2R) — 전이 기록 실패가 outer catch 로 떨어져도 result 카운트는 태스크당 정확히 1회.
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.5);
-		willThrow(new RuntimeException("전이 기록 실패")).willDoNothing()
-			.given(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		willThrow(new RuntimeException("전이 기록 실패")).given(statusWriter).markFailed(claim);
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		assertThatThrownBy(() -> encodingService.encode(claim)).hasMessage("전이 기록 실패");
 
 		assertThat(taskCount("failed_over_duration")).isEqualTo(1.0);
 		assertThat(taskCount("failed_error")).isZero();
@@ -348,20 +356,18 @@ class VideoEncodingServiceTest {
 	}
 
 	@Test
-	void ffmpeg_예외_후_markFailed가_던져도_failed_error가_계상된다() {
-		// 인코더는 재시도하지 않는다 — 전이 기록 실패에 계상까지 딸려 유실되면 그 태스크는 영원히 안 보인다.
+	void claim_상실은_failed_error로_계상하지_않고_호출자에게_전파한다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
-		willThrow(new IllegalStateException("ffmpeg 실패"))
-			.given(ffmpegRunner).encode720p(any(Path.class), any(Path.class));
-		willThrow(new RuntimeException("전이 기록 실패")).given(statusWriter).markFailed(VIDEO_ID, ORIGINAL_KEY);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+		willThrow(new ClaimLostException(claim.jobId()))
+			.given(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(), MEASURED);
 
-		// catch 안에서 던진 예외는 밖으로 나간다(기존 동작 — @Async 라 받을 곳이 없다). 검증 대상은 계상뿐.
-		assertThatThrownBy(() -> encodingService.encode(VIDEO_ID, ORIGINAL_KEY))
-			.hasMessage("전이 기록 실패");
+		assertThatThrownBy(() -> encodingService.encode(claim)).isInstanceOf(ClaimLostException.class);
 
-		assertThat(taskCount("failed_error")).isEqualTo(1.0);
-		assertThat(taskCount("failed_over_duration")).isZero();
+		assertThat(taskCount("failed_error")).isZero();
 		assertThat(taskCount("completed")).isZero();
+		assertThat(taskCount("failed_over_duration")).isZero();
 	}
 
 	@Test
@@ -370,7 +376,7 @@ class VideoEncodingServiceTest {
 		willThrow(new IllegalStateException("ffmpeg 실패"))
 			.given(ffmpegRunner).encode720p(any(Path.class), any(Path.class));
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		assertThatThrownBy(() -> encodingService.encode(claim)).hasMessage("ffmpeg 실패");
 
 		assertThat(taskCount("failed_error")).isEqualTo(1.0);
 		assertThat(taskCount("completed")).isZero();
@@ -385,9 +391,10 @@ class VideoEncodingServiceTest {
 		// ffmpeg 가 도는 사이 사용자가 교체 — 업로드 직전 fresh 로드가 다른 원본 키를 돌려준다 (MSG-241).
 		video.replaceFile("videos/original/1/y.mp4", (short) 8, LocalDateTime.now());
 
-		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
+		encodingService.encode(claim);
 
 		verify(s3Client, never()).putObject(any(PutObjectRequest.class), any(RequestBody.class));
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
+		verify(statusWriter).complete(claim);
+		verify(statusWriter, never()).markReady(eq(claim), any(), any(), anyShort());
 	}
 }

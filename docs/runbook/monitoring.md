@@ -1,14 +1,14 @@
-# 운영 관측 runbook (MSG-344)
+# 운영 관측 runbook (MSG-344/494)
 
-prod와 dev 앱을 대상 서버 밖에서 상시 관측하는 스택의 운영 절차. 스택 파일 정본은 레포의
-`monitoring/prod/` 이고, 실제 가동 위치는 fillmap-ai EC2(52.78.158.240, t3.small)다.
+prod와 dev 앱, 분산 인코딩 워커를 상시 관측하는 스택의 운영 절차. 스택 파일 정본은 레포의
+`monitoring/prod/`이고, 실제 가동 위치는 fillmap-ai EC2(52.78.158.240, t3.small)다.
 부하테스트용 임시 스택(`monitoring/`)과는 별개이며 서로 건드리지 않는다.
 
 ## 구성 요약
 
 | 컨테이너 | 포트 | 역할 |
 |---|---|---|
-| Prometheus v2.54.1 | 9090 | prod 앱 관리 포트(10.0.1.24:8081)와 dev 앱 포트(10.0.1.24:8080, MSG-377)의 `/actuator/prometheus`를 15초 간격 scrape, 알림 규칙 평가. 둘 다 fillmap-dev EC2의 사설 IP다 |
+| Prometheus v2.54.1 | 9090 | prod 앱(10.0.1.24:8081), dev 앱(10.0.1.24:8080), 같은 호스트의 인코딩 워커(`host.docker.internal:8081`)를 15초 간격으로 수집하고 알림 규칙을 평가 |
 | Alertmanager v0.27.0 | 9093 | 규칙 위반을 Slack incoming webhook으로 발송 |
 | Grafana 11.3.0 | 3000 | 상시 대시보드 1장(fillmap-prod-overview), 익명 접근 차단 |
 
@@ -39,11 +39,55 @@ SSH 터널이 유일한 접근 경로다. Grafana와 Prometheus가 평문 HTTP�
 1. 터널 연결: `ssh -L 3000:localhost:3000 -L 9090:localhost:9090 -L 9093:localhost:9093 <user>@52.78.158.240`
 2. Grafana: 브라우저에서 `http://localhost:3000`. 로그인 admin / `GRAFANA_ADMIN_PASSWORD` 값.
    익명 접근은 차단돼 있다
-3. 대시보드 "FillMap 상시 관측 (MSG-344/377)" 1장: 상단 "대상" 변수로 fillmap-prod와
-   fillmap-dev를 오간다. 패널은 기동 상태(up), 5xx 비율, p95와 p99, Hikari(active, pending,
-   max), JVM heap, 프로세스 CPU
+3. 대시보드 "FillMap 상시 관측 (MSG-344/377/494)" 1장: 상단 "대상" 변수로 fillmap-prod,
+   fillmap-dev, fillmap-encoding-worker를 오간다. 워커는 기동 상태, JVM heap, 프로세스 CPU,
+   Hikari 패널을 확인한다. 사용자 API 트래픽을 받지 않으므로 5xx 패널은 값이 없거나 0이고,
+   뷰포트 지연 패널은 비어 있는 게 정상이다
 4. Prometheus 원본 조회는 `http://localhost:9090` (targets 상태는 `/targets`, 규칙은 `/rules`),
    Alertmanager는 `http://localhost:9093`
+
+## 인코딩 워커 확인과 복구
+
+워커는 fillmap-ai EC2의 `fillmap-encoding-worker` systemd 서비스다. 앱과 같은 JAR를 쓰지만
+`dev,encoding-worker` 프로필로 실행하며 8081만 연다. 정상 여부는 아래 순서로 확인한다.
+
+1. 서비스와 health 확인:
+   `systemctl is-active fillmap-encoding-worker`와
+   `curl -sS http://127.0.0.1:8081/actuator/health`
+2. 최근 로그 확인:
+   `journalctl -u fillmap-encoding-worker -n 100 --no-pager`
+3. Prometheus 컨테이너에서도 같은 health가 보이는지 확인:
+   `cd ~/BE && sudo docker compose -f monitoring/prod/docker-compose.yml exec -T prometheus wget -qO- http://host.docker.internal:8081/actuator/health`
+
+3번이 실패하고 1번이 성공하면 워커가 아니라 host gateway[^1]나 Compose 설정 문제다.
+`monitoring/prod/docker-compose.yml`의 `extra_hosts`와
+`monitoring/prod/prometheus/prometheus.yml`의 `fillmap-encoding-worker` 타깃을 확인한다. AI EC2
+보안그룹에 8081 인바운드를 추가하지 않는다. 컨테이너는 호스트 내부 경로로 접근한다.
+
+큐 적체는 DB가 있는 fillmap-dev EC2에서 확인한다. 아래 쿼리는 아직 종결되지 않은 PENDING,
+PROCESSING, DEAD만 집계한다.
+
+```bash
+docker exec fillmap-postgres-dev psql -U dev -d fillmap -c "
+SELECT status, COALESCE(claimed_by, '-') AS claimed_by,
+       count(*) AS jobs, min(enqueued_at) AS oldest_enqueued_at
+FROM video_encoding_jobs
+WHERE completed_at IS NULL
+GROUP BY status, claimed_by
+ORDER BY status, claimed_by;"
+```
+
+지난 1시간의 노드별 선점 수는 Prometheus에서 아래 식으로 확인한다. `node`는 `be`와 `ai`다.
+
+```promql
+sum by (node) (increase(video_encoding_job_total{event=~"claimed|reclaimed"}[1h]))
+```
+
+PENDING이 계속 늘거나 PROCESSING의 `lease_until`이 지난 채 남으면 두 워커의 로그를 함께 본다.
+임대[^2]가 끝난 작업은 다른 노드가 다시 가져가므로 DB 행을 손으로 바꾸지 않는다. 재시작이 필요하면
+`sudo systemctl restart fillmap-encoding-worker`를 실행한 뒤 1번과 3번을 다시 확인한다. 정상 종료 때는
+현재 claim[^3]을 PENDING으로 즉시 반납하며, 강제 종료면 임대 만료 후 다른 노드가 회수한다.
+BE 쪽 워커 로그는 fillmap-dev EC2에서 `journalctl -u fillmap-dev -n 100 --no-pager`로 본다.
 
 ## 알림: 기준, 의미, 대응 (prod 8종 + dev 2종)
 
@@ -140,9 +184,12 @@ cd ~/BE && sudo docker compose -f monitoring/prod/docker-compose.yml up -d
 
 반영 확인:
 
-- Prometheus `/targets`에서 fillmap-dev 타깃 UP(fillmap-prod는 앱 가동 전까지 DOWN이 정상),
+- Prometheus `/targets`에서 fillmap-dev와 fillmap-encoding-worker 타깃 UP(fillmap-prod는 앱 가동
+  전까지 DOWN이 정상),
   `/rules`에서 규칙 10종(prod 8종 + dev 2종) 로드 (규칙은 Prometheus가
   로드하고 평가한다. Alertmanager가 아니다)
+- Prometheus 컨테이너에서 워커 health 확인:
+  `docker compose -f monitoring/prod/docker-compose.yml exec -T prometheus wget -qO- http://host.docker.internal:8081/actuator/health`
 - Alertmanager 라우팅은 별도로 확인한다: UI(`http://localhost:9093/#/status`)의 config에
   slack receiver가 보이는지, 또는
   `docker compose -f monitoring/prod/docker-compose.yml exec alertmanager amtool config show`
@@ -168,7 +215,7 @@ docker compose -f monitoring/prod/docker-compose.yml exec grafana grafana-cli ad
 ## prod 미가동 기간의 타깃 DOWN 조치
 
 2026-08-11 실측 기준 prod 앱은 아직 어디에도 상시 구동돼 있지 않다(api.fillmap.kr 트래픽은
-dev 앱이 받는다). 따라서 스택 가동 직후 fillmap-prod 타깃이 DOWN인 것이 정상이고, 방치하면
+dev 앱이 받는다). 스택 가동 직후 fillmap-prod 타깃이 DOWN인 것이 정상이고, 방치하면
 AppDown 알림이 계속 울린다. 조치는 silence다:
 
 1. Alertmanager UI(SSH 터널 후 `http://localhost:9093`, 위 "대시보드 접근법")에서 New Silence 생성
@@ -192,3 +239,7 @@ AppDown 알림이 계속 울린다. 조치는 silence다:
 |---|---|---|---|
 | 2026-08-11 | 배치 전 | 1070 | 스펙 실측값 |
 | 2026-08-11 | 배치 직후 | 751 | 스택 3컨테이너 실사용 약 320MiB. 캡 합계 896MiB보다 한참 아래라 여유 충분 |
+
+[^1]: host gateway: 컨테이너가 실행 중인 호스트로 나가는 Docker 내부 경로다. 여기서는 Prometheus 컨테이너가 같은 EC2의 워커 8081에 접근할 때 쓴다.
+[^2]: 임대(lease): 한 워커가 정해진 시간 동안 작업 처리권을 갖는 방식이다. 시간이 끝나면 다른 워커가 작업을 회수할 수 있다.
+[^3]: claim: 워커가 선점한 작업과 선점 토큰을 묶은 처리 권한이다. 토큰이 바뀌면 이전 워커의 늦은 완료 결과는 반영되지 않는다.

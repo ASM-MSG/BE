@@ -85,12 +85,12 @@ class VideoPlaybackServiceTest {
 
 		friendshipQueryService = mock(FriendshipQueryService.class);
 		videoService = new VideoServiceImpl(
-			videoRepository, mock(VideoEncodingService.class), mock(VideoStatusWriter.class),
+			videoRepository, mock(com.msg.fillmap.video.repository.VideoEncodingJobRepository.class),
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), thumbnailUrlPresigner, mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
 			friendshipQueryService, () -> new ZoneNameResolver(List.of(SEOMYEON)),
-			mock(VideoProcessingMetrics.class), mock(EventVideoRepository.class));
+			mock(EventVideoRepository.class));
 
 		// 기본값 = 작성자가 살아 있다. 닉네임이 빈손이면 404 로 수렴하므로(MSG-371), 닉네임을 안 보는
 		// 테스트도 이 기본 스텁이 있어야 응답까지 간다. 탈퇴 경합을 보는 테스트는 given 으로 덮어쓴다.

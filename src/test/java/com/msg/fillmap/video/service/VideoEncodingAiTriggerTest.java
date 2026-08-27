@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.RejectedExecutionException;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -67,6 +68,7 @@ class VideoEncodingAiTriggerTest {
 	private AiClient aiClient;
 	private ObjectProvider<AiClient> aiClientProvider;
 	private ThreadPoolTaskExecutor highlightExecutor;
+	private EncodingJobClaim claim;
 
 	@BeforeEach
 	@SuppressWarnings("unchecked")
@@ -87,8 +89,10 @@ class VideoEncodingAiTriggerTest {
 
 		Video video = Video.create(1L, "19495_9607", ORIGINAL_KEY,
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, LocalDateTime.now(), Visibility.PRIVATE);
+		claim = new EncodingJobClaim(1L, VIDEO_ID, ORIGINAL_KEY, UUID.randomUUID(),
+			(short) 1, LocalDateTime.of(2026, 8, 27, 0, 0));
 		given(videoRepository.findById(VIDEO_ID)).willReturn(Optional.of(video));
-		given(statusWriter.markEncoding(VIDEO_ID, ORIGINAL_KEY)).willReturn(true);
+		given(statusWriter.markEncoding(claim)).willReturn(true);
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
@@ -107,11 +111,11 @@ class VideoEncodingAiTriggerTest {
 	// 검증: FR-MEDIA-05, FR-MEDIA-02
 	@Test
 	void 블러가_켜져_있으면_인코딩_완료가_BLURRING으로_전이한다() {
-		service(true, true).encode(VIDEO_ID, ORIGINAL_KEY);
+		service(true, true).encode(claim);
 
 		// thumbnail 은 폴러가 완료 시 기록(R5)
-		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, (short) 10);
-		verify(statusWriter, never()).markReady(eq(VIDEO_ID), any(), any(), any(), anyShort());
+		verify(statusWriter).markEncoded(claim, ENCODED_KEY, (short) 10);
+		verify(statusWriter, never()).markReady(eq(claim), any(), any(), anyShort());
 		verify(highlightExecutor, never()).execute(any(Runnable.class));
 	}
 
@@ -122,18 +126,18 @@ class VideoEncodingAiTriggerTest {
 		given(aiClientProvider.getObject()).willReturn(aiClient);
 		given(aiClient.analyzeHighlights(any(Path.class))).willReturn(하이라이트_구간);
 
-		service(true, false).encode(VIDEO_ID, ORIGINAL_KEY);
+		service(true, false).encode(claim);
 
 		// D-1 핵심: READY 전이가 워커 제출보다 먼저다
 		InOrder readyFirst = inOrder(statusWriter, highlightExecutor);
-		readyFirst.verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
+		readyFirst.verify(statusWriter).markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 		readyFirst.verify(highlightExecutor).execute(any(Runnable.class));
 		// 워커 입력은 tmp 가 아니라 S3 인코딩본 — 원본(1번째)에 이어 2번째 다운로드가 encoded 키 대상이다
 		ArgumentCaptor<GetObjectRequest> downloads = ArgumentCaptor.forClass(GetObjectRequest.class);
 		verify(s3Client, times(2)).getObject(downloads.capture(), any(Path.class));
 		assertThat(downloads.getAllValues().get(1).key()).isEqualTo(ENCODED_KEY);
 		verify(statusWriter).recordHighlights(VIDEO_ID, ORIGINAL_KEY, 하이라이트_구간);
-		verify(statusWriter, never()).markEncoded(eq(VIDEO_ID), any(), any(), anyShort());
+		verify(statusWriter, never()).markEncoded(eq(claim), any(), anyShort());
 	}
 
 	// 검증: FR-MEDIA-18
@@ -144,11 +148,11 @@ class VideoEncodingAiTriggerTest {
 		given(aiClient.analyzeHighlights(any(Path.class)))
 			.willThrow(new AiClient.HighlightUpstreamException("AI 서버 다운"));
 
-		service(true, false).encode(VIDEO_ID, ORIGINAL_KEY);
+		service(true, false).encode(claim);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
+		verify(statusWriter).markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 		verify(statusWriter, never()).recordHighlights(anyLong(), any(), any());
-		verify(statusWriter, never()).markFailed(anyLong(), any());
+		verify(statusWriter, never()).markFailed(any(EncodingJobClaim.class));
 		// 계측 선행 확인 — 워커 본문의 실패는 인코딩 태스크 계측과 무관하다
 		verify(videoProcessingMetrics).countEncodingTask(VideoProcessingMetrics.TASK_COMPLETED);
 		verify(videoProcessingMetrics, never()).countEncodingTask(VideoProcessingMetrics.TASK_FAILED_ERROR);
@@ -161,21 +165,21 @@ class VideoEncodingAiTriggerTest {
 		willThrow(new RejectedExecutionException("큐 포화"))
 			.given(highlightExecutor).execute(any(Runnable.class));
 
-		service(true, false).encode(VIDEO_ID, ORIGINAL_KEY);
+		service(true, false).encode(claim);
 
 		// 거부가 인코딩 경로로 새지 않는다 — 그 영상만 하이라이트 null 로 남는다
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
+		verify(statusWriter).markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 		verify(statusWriter, never()).recordHighlights(anyLong(), any(), any());
-		verify(statusWriter, never()).markFailed(anyLong(), any());
+		verify(statusWriter, never()).markFailed(any(EncodingJobClaim.class));
 	}
 
 	// 검증: FR-MEDIA-05
 	@Test
 	void AI가_꺼져_있으면_하이라이트_계산_없이_READY로_끝난다() {
 		// ObjectProvider 는 빈 값 — getIfAvailable() 이 null (목 기본 동작). ai.enabled=false 는 지금과 동일 (FR-5)
-		service(false, false).encode(VIDEO_ID, ORIGINAL_KEY);
+		service(false, false).encode(claim);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
+		verify(statusWriter).markReady(claim, ENCODED_KEY, THUMBNAIL_KEY, (short) 10);
 		verify(highlightExecutor, never()).execute(any(Runnable.class));
 		verify(statusWriter, never()).recordHighlights(anyLong(), any(), any());
 	}

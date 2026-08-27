@@ -18,7 +18,6 @@ import java.util.stream.IntStream;
 
 import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -81,6 +80,7 @@ import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.AuthorNicknameProjection;
 import com.msg.fillmap.video.repository.HourlyUploadProjection;
+import com.msg.fillmap.video.repository.VideoEncodingJobRepository;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 import com.msg.fillmap.video.support.MissionVideoCursor;
@@ -130,8 +130,7 @@ public class VideoServiceImpl implements VideoService {
 	private static final int GLOBAL_PAGE_MAX_SIZE = 50;
 
 	private final VideoRepository videoRepository;
-	private final VideoEncodingService videoEncodingService;
-	private final VideoStatusWriter videoStatusWriter;
+	private final VideoEncodingJobRepository videoEncodingJobRepository;
 	private final S3Presigner s3Presigner;
 	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
@@ -146,8 +145,6 @@ public class VideoServiceImpl implements VideoService {
 	private final FriendshipQueryService friendshipQueryService;
 	// 업로드 확정·재생 응답의 격자 표시명 (MSG-341). 단건 경로라 리졸버를 응답 조립 직전에 1회 받는다.
 	private final ZoneNameQueryService zoneNameQueryService;
-	// 처리 시간 시작점 등록·제거 (MSG-343 D2) — submitEncoding 진입(확정 커밋 직후)이 시작점이다.
-	private final VideoProcessingMetrics videoProcessingMetrics;
 	// 행사 영상 판정 (MSG-440) — 공개범위 전환 차단 하나에만 쓴다. 같은 Owner B 내부 의존이고, 엔티티
 	// 방향(event 가 video 참조)과 빈 방향(video 서비스가 event 리포지토리 참조)이 달라 순환이 없다.
 	private final EventVideoRepository eventVideoRepository;
@@ -160,17 +157,17 @@ public class VideoServiceImpl implements VideoService {
 	 * 전체 생성자(@RequiredArgsConstructor 생성)는 테스트 고정 클럭 주입용이다.
 	 */
 	@Autowired
-	public VideoServiceImpl(VideoRepository videoRepository, VideoEncodingService videoEncodingService,
-		VideoStatusWriter videoStatusWriter, S3Presigner s3Presigner, S3Client s3Client, AwsProperties awsProperties,
+	public VideoServiceImpl(VideoRepository videoRepository, VideoEncodingJobRepository videoEncodingJobRepository,
+		S3Presigner s3Presigner, S3Client s3Client, AwsProperties awsProperties,
 		RegionStatsCommandService regionStatsCommandService, ThumbnailUrlPresigner thumbnailUrlPresigner,
 		BadgeAwardService badgeAwardService, StreakCommandService streakCommandService,
 		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService,
 		FriendshipQueryService friendshipQueryService, ZoneNameQueryService zoneNameQueryService,
-		VideoProcessingMetrics videoProcessingMetrics, EventVideoRepository eventVideoRepository) {
-		this(videoRepository, videoEncodingService, videoStatusWriter, s3Presigner, s3Client, awsProperties,
+		EventVideoRepository eventVideoRepository) {
+		this(videoRepository, videoEncodingJobRepository, s3Presigner, s3Client, awsProperties,
 			regionStatsCommandService, thumbnailUrlPresigner, badgeAwardService, streakCommandService,
 			missionAwardService, hotScoreCommandService, friendshipQueryService, zoneNameQueryService,
-			videoProcessingMetrics, eventVideoRepository, Clock.systemUTC());
+			eventVideoRepository, Clock.systemUTC());
 	}
 
 	@Override
@@ -234,7 +231,7 @@ public class VideoServiceImpl implements VideoService {
 	 * 업로드 확정 코어 (MSG-440 에서 추출) — 좌표 경로(saveVideo)와 격자 지정 경로(confirmAtGrid)가 공유한다.
 	 * 순서가 계약이다: recordedAt 검증 → confirmUpload(pending 키 소유·이중 확정 차단·실측 크기) →
 	 * grids lazy insert → 점령 여부 스냅숏 → videos INSERT → S3 복사 → 점령 UPSERT → 뱃지·스트릭 →
-	 * 커밋 후 핫스코어·인코딩 등록. 미션 판정은 코어 밖이다 — 행사 업로드가 그 훅 하나만 제외하기 때문이다.
+	 * 인코딩 작업 등록 → 커밋 후 핫스코어. 미션 판정은 코어 밖이다 — 행사 업로드가 그 훅 하나만 제외하기 때문이다.
 	 */
 	private ConfirmedVideo confirmAndStore(long userId, String gridId, Point geom, String s3Key, Short durationSec,
 		LocalDateTime recordedAt, Visibility visibility) {
@@ -269,7 +266,7 @@ public class VideoServiceImpl implements VideoService {
 		newBadges.addAll(streakCommandService.recordUpload(userId));
 		// 핫스코어 (MSG-233): 커밋 후 증분 — 롤백 시 유령 증분 방지. 실패는 구현이 삼킨다 (FR-6).
 		afterCommit(() -> hotScoreCommandService.recordUpload(gridId));
-		triggerEncodingAfterCommit(video.getId(), originalKey);
+		videoEncodingJobRepository.enqueue(video.getId(), originalKey);
 
 		return new ConfirmedVideo(video, !alreadyOccupied, List.copyOf(newBadges));
 	}
@@ -317,10 +314,7 @@ public class VideoServiceImpl implements VideoService {
 		videoRepository.flush();
 		copyToOriginal(request.s3Key(), originalKey);
 
-		// 인코딩 트리거를 먼저 등록한다 (MSG-343 Codex 리뷰) — afterCommit 콜백은 등록 순으로 돌아,
-		// 옛 키 S3 삭제 I/O 뒤에 markStart 가 찍히면 교체 처리 시간이 그만큼 과소 측정된다.
-		// 순서 의존 없음: 인코딩은 encodingExecutor 비동기 제출이고 새 originalKey ≠ replacedKey.
-		triggerEncodingAfterCommit(videoId, originalKey);
+		videoEncodingJobRepository.enqueue(videoId, originalKey);
 		// 파생 키가 인코딩 시도별로 갈리므로 이전 시도의 파일도 전부 참조를 잃는다 (MSG-67).
 		afterCommit(() -> deleteQuietly(
 			replacedKey, replacedEncodedKey, replacedBlurredKey, replacedThumbnailKey));
@@ -411,10 +405,6 @@ public class VideoServiceImpl implements VideoService {
 		// "정리는 별도 배치 백로그"라는 범위 유예였고, undelete 기능은 없다. 파일이 영원히 남는 쪽이
 		// 오히려 문제다. 시점에 지우면 배치·스케줄러가 통째로 필요 없다.
 		afterCommit(() -> {
-			// 종결이 오지 않을 처리 시간 시작점 제거 (MSG-343 D2) — 커밋 후에만. 트랜잭션 본문에서 지우면
-			// 이후 단계 롤백 시 영상은 살아있는데 시작점만 사라져 Timer 표본이 유실된다 (Codex 리뷰).
-			// 탈퇴 CASCADE 등 그 밖의 경로로 남는 엔트리는 극소량 허용.
-			videoProcessingMetrics.removeStart(videoId);
 			deleteQuietly(
 				video.getOriginalS3Key(), video.getEncodedUrl(), video.getThumbnailUrl(),
 				video.getBlurredS3Key());
@@ -463,14 +453,6 @@ public class VideoServiceImpl implements VideoService {
 		}
 	}
 
-	/**
-	 * 인코딩은 커밋 이후에 띄운다. @Async 는 별도 스레드라 여기서 바로 호출하면 아직 커밋되지 않은
-	 * videos row 를 조회해 "영상 없음"으로 실패할 수 있다 (MSG-65 트리거 타이밍).
-	 */
-	private void triggerEncodingAfterCommit(Long videoId, String originalKey) {
-		afterCommit(() -> submitEncoding(videoId, originalKey));
-	}
-
 	/** 트랜잭션이 없으면(테스트 등) 그냥 지금 실행한다. */
 	private void afterCommit(Runnable action) {
 		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -483,24 +465,6 @@ public class VideoServiceImpl implements VideoService {
 				action.run();
 			}
 		});
-	}
-
-	/**
-	 * 큐가 가득 차면 executor 가 TaskRejectedException 을 던지는데, 이는 @Async 메서드 본문이 아니라
-	 * submit 을 호출한 이 스레드에서 터진다. 그냥 두면 afterCommit 밖으로 전파돼 이미 커밋된 업로드가
-	 * 500 으로 응답되고(클라이언트는 재시도 → 중복 업로드), 인코딩 쪽 catch 는 실행조차 되지 않아
-	 * 영상이 UPLOADED 로 남는다. 그래서 여기서 삼키고 FAILED 로 기록한다.
-	 */
-	private void submitEncoding(Long videoId, String originalKey) {
-		// 처리 시간 시작점 (MSG-343 D2) — 확정 커밋 직후, 업로드·교체 공용. 교체는 같은 키를 덮어쓴다.
-		videoProcessingMetrics.markStart(videoId);
-		try {
-			videoEncodingService.encode(videoId, originalKey);
-		} catch (TaskRejectedException e) {
-			log.error("인코딩 큐 포화로 작업이 거부됨: videoId={}", videoId, e);
-			videoProcessingMetrics.countEncodingTask(VideoProcessingMetrics.TASK_REJECTED);
-			videoStatusWriter.markFailed(videoId, originalKey);
-		}
 	}
 
 	@Override

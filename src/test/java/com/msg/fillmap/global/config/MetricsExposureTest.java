@@ -43,6 +43,8 @@ class MetricsExposureTest {
 			.contains("video_processing_outcome_total")
 			.contains("video_processing_duration_seconds")
 			.contains("video_encoding_task_total")
+			.contains("video_encoding_job_total")
+			.contains("video_encoding_queue")
 			.contains("video_ai_job_total")
 			.contains("notification_outcome_total")
 			.contains("notification_backlog");

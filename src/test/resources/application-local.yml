@@ -34,3 +34,8 @@ jwt:
 oauth:
   kakao:
     client-id: test-client-id
+
+fillmap:
+  video:
+    encoding-job:
+      enabled: false

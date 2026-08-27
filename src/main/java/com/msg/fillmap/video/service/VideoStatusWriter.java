@@ -17,6 +17,7 @@ import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
+import com.msg.fillmap.video.repository.VideoEncodingJobRepository;
 import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
@@ -51,6 +52,7 @@ public class VideoStatusWriter {
 	// 종결(READY·FAILED) 계측 (MSG-343 D5) — 인코딩·AI 경로가 모두 이 라이터를 지나므로 여기 한 곳에서만
 	// 증가시켜 중복 계상을 막는다. 호출은 스테일 가드를 통과한 전이 적용 분기에만 둔다.
 	private final VideoProcessingMetrics videoProcessingMetrics;
+	private final VideoEncodingJobRepository encodingJobRepository;
 
 	/** 적용 여부를 반환한다 — false 면 태스크 시작 시점부터 스테일(큐 대기 중 교체·삭제됨)이라 ffmpeg 을 돌릴 이유가 없다. */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -61,6 +63,21 @@ public class VideoStatusWriter {
 			return false;
 		}
 		video.markEncoding();
+		return true;
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public boolean markEncoding(EncodingJobClaim claim) {
+		Video video = videoRepository.findWithLockById(claim.videoId()).orElse(null);
+		if (!isCurrentEncodingAttempt(video, claim.originalS3Key())) {
+			logStaleSkip("인코딩 시작", claim.videoId(), claim.originalS3Key(), video);
+			complete(claim);
+			return false;
+		}
+		video.markEncoding();
+		if (encodingJobRepository.verifyActive(claim) != 1) {
+			throw new ClaimLostException(claim.jobId());
+		}
 		return true;
 	}
 
@@ -81,8 +98,24 @@ public class VideoStatusWriter {
 			}
 			video.markReady(encodedKey, thumbnailKey, measuredDurationSec);
 			recordOutcomeNotification(video, true);
-			videoProcessingMetrics.recordOutcome(videoId, true, VideoProcessingMetrics.PATH_ENCODING);
+			recordOutcome(video, true, VideoProcessingMetrics.PATH_ENCODING);
 		});
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void markReady(EncodingJobClaim claim, String encodedKey, String thumbnailKey,
+		short measuredDurationSec) {
+		boolean uploaderLocked = lockUploaderFirst(claim.videoId());
+		Video video = uploaderLocked ? videoRepository.findWithLockById(claim.videoId()).orElse(null) : null;
+		boolean applied = isCurrentEncodingAttempt(video, claim.originalS3Key());
+		if (applied) {
+			video.markReady(encodedKey, thumbnailKey, measuredDurationSec);
+			recordOutcomeNotification(video, true);
+		}
+		complete(claim);
+		if (applied) {
+			videoProcessingMetrics.recordOutcome(claim.enqueuedAt(), true, VideoProcessingMetrics.PATH_ENCODING);
+		}
 	}
 
 	/**
@@ -124,6 +157,22 @@ public class VideoStatusWriter {
 		});
 	}
 
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void markEncoded(EncodingJobClaim claim, String encodedKey, short measuredDurationSec) {
+		Video video = videoRepository.findWithLockById(claim.videoId()).orElse(null);
+		if (isCurrentEncodingAttempt(video, claim.originalS3Key())) {
+			video.markEncoded(encodedKey, measuredDurationSec);
+		}
+		complete(claim);
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void complete(EncodingJobClaim claim) {
+		if (encodingJobRepository.complete(claim) != 1) {
+			throw new ClaimLostException(claim.jobId());
+		}
+	}
+
 	/**
 	 * 제출 직후 job_id 기록 (MSG-149, P1-b). 폴러가 목록 로드 시점의 blurringStartedAt(시도 넌스)을 넘긴다.
 	 * fresh 조회가 여전히 그 시도(ACTIVE·BLURRING·아직 미제출·같은 blurringStartedAt)일 때만 기록한다 —
@@ -161,7 +210,7 @@ public class VideoStatusWriter {
 		video.applyBlurResult(blurredS3Key, highlights);
 		video.markReadyFromBlurring(thumbnailKey);
 		recordOutcomeNotification(video, true);
-		videoProcessingMetrics.recordOutcome(videoId, true, VideoProcessingMetrics.PATH_AI);
+		recordOutcome(video, true, VideoProcessingMetrics.PATH_AI);
 		return true;
 	}
 
@@ -186,7 +235,7 @@ public class VideoStatusWriter {
 			}
 			video.markFailed(failReason);
 			recordOutcomeNotification(video, false);
-			videoProcessingMetrics.recordOutcome(videoId, false, VideoProcessingMetrics.PATH_AI);
+			recordOutcome(video, false, VideoProcessingMetrics.PATH_AI);
 		});
 	}
 
@@ -222,8 +271,42 @@ public class VideoStatusWriter {
 			}
 			video.markFailed();
 			recordOutcomeNotification(video, false);
-			videoProcessingMetrics.recordOutcome(videoId, false, VideoProcessingMetrics.PATH_ENCODING);
+			recordOutcome(video, false, VideoProcessingMetrics.PATH_ENCODING);
 		});
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void markFailed(EncodingJobClaim claim) {
+		markClaimFailed(claim, false);
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void markDeadFailed(EncodingJobClaim claim) {
+		markClaimFailed(claim, true);
+	}
+
+	private void markClaimFailed(EncodingJobClaim claim, boolean dead) {
+		boolean uploaderLocked = lockUploaderFirst(claim.videoId());
+		Video video = uploaderLocked ? videoRepository.findWithLockById(claim.videoId()).orElse(null) : null;
+		boolean applied = isCurrentEncodingAttempt(video, claim.originalS3Key());
+		if (applied) {
+			video.markFailed();
+			recordOutcomeNotification(video, false);
+		}
+		int updated = dead ? encodingJobRepository.completeDead(claim) : encodingJobRepository.complete(claim);
+		if (updated != 1) {
+			throw new ClaimLostException(claim.jobId());
+		}
+		if (applied) {
+			videoProcessingMetrics.recordOutcome(claim.enqueuedAt(), false, VideoProcessingMetrics.PATH_ENCODING);
+		}
+	}
+
+	private void recordOutcome(Video video, boolean ready, String path) {
+		LocalDateTime enqueuedAt = encodingJobRepository
+			.findEnqueuedAt(video.getId(), video.getOriginalS3Key())
+			.orElse(null);
+		videoProcessingMetrics.recordOutcome(enqueuedAt, ready, path);
 	}
 
 	/**
