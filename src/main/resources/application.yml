@@ -125,6 +125,13 @@ aws:
     # 하이라이트 선분석 원본(purpose=HIGHLIGHT_PREVIEW) 전용 상한 — 3분 4K 원본까지 (MSG-351 D-4)
     max-highlight-upload-bytes: ${S3_MAX_HIGHLIGHT_UPLOAD_BYTES:2147483648}   # 2GiB
 
+# 영상·썸네일 전송망 (MSG-67). 로컬·CI 는 S3 presigned URL, dev 는 CloudFront signed URL 을 쓴다.
+cloudfront:
+  enabled: ${CLOUDFRONT_ENABLED:false}
+  domain: ${CLOUDFRONT_DOMAIN:}
+  key-pair-id: ${CLOUDFRONT_KEY_PAIR_ID:}
+  private-key-path: ${CLOUDFRONT_PRIVATE_KEY_PATH:}
+
 # AI Highlight-Blur 서버 연동 (MSG-149). 기본 off — AI 서버가 붙는 환경에서만 AI_ENABLED=true 로 켠다.
 # 플래그 2개 체계 (MSG-456): enabled 는 AI 연동 전체(선분석·재생 하이라이트 계산), blur-enabled 는 블러
 # 파이프라인 전용. 둘 다 켜져야(실효 블러 활성) 인코딩 완료가 BLURRING 으로 가고 폴러가 base-url 서버에

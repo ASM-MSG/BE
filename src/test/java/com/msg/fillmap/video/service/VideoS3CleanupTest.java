@@ -217,8 +217,8 @@ class VideoS3CleanupTest {
 	}
 
 	@Test
-	@DisplayName("교체하면 옛 원본만 지운다 — 인코딩본은 videoId 키라 덮어쓰기된다")
-	void 교체하면_옛_원본만_지운다() {
+	@DisplayName("교체하면 이전 원본과 파생파일을 모두 지운다")
+	void 교체하면_이전_파생파일을_모두_지운다() {
 		Video video = existingVideo();
 		video.markReady("videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", video.getDurationSec());
 		given(repository.findById(VIDEO_ID)).willReturn(Optional.of(video));
@@ -226,9 +226,8 @@ class VideoS3CleanupTest {
 		service.replaceVideo(USER_ID, VIDEO_ID, new VideoReplaceRequestDto(
 			PENDING, null, null, (short) 7, LocalDateTime.now(ZoneOffset.UTC)));
 
-		// 새 original 을 지우면 방금 올린 파일이 사라지고, 인코딩본을 지우면 재인코딩이 어차피 덮어쓸
-		// 자리를 헛되이 건드린다.
-		assertThat(deletedKeys()).containsExactly(OLD_ORIGINAL);
+		assertThat(deletedKeys()).containsExactlyInAnyOrder(
+			OLD_ORIGINAL, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg");
 	}
 
 	@Test
@@ -243,6 +242,7 @@ class VideoS3CleanupTest {
 			PENDING, null, null, (short) 7, LocalDateTime.now(ZoneOffset.UTC)));
 
 		// replaceFile 이 블러본 키를 null 로 밀기 전에 잡아둔 값이어야 한다 — 캡처 순서 회귀 방지.
-		assertThat(deletedKeys()).containsExactlyInAnyOrder(OLD_ORIGINAL, "videos/blurred/1/7.mp4");
+		assertThat(deletedKeys()).containsExactlyInAnyOrder(
+			OLD_ORIGINAL, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg", "videos/blurred/1/7.mp4");
 	}
 }

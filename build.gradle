@@ -51,6 +51,7 @@ dependencies {
 	// --- AWS S3 (presigned URL 발급, MSG-64) ---
 	implementation platform('software.amazon.awssdk:bom:2.48.0')
 	implementation 'software.amazon.awssdk:s3'             // S3Presigner 포함
+	implementation 'software.amazon.awssdk:cloudfront'     // CloudFront signed URL 발급
 
 	// --- 알림 발송 파이프라인 (MSG-179) ---
 	implementation 'org.springframework.kafka:spring-kafka'

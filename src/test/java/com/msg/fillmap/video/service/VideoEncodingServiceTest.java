@@ -36,6 +36,7 @@ import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.FfmpegRunner;
 import com.msg.fillmap.video.support.GeoSupport;
+import com.msg.fillmap.video.support.VideoAssetKeys;
 
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -51,6 +52,7 @@ class VideoEncodingServiceTest {
 
 	private static final long VIDEO_ID = 7L;
 	private static final String ORIGINAL_KEY = "videos/original/1/x.mp4";
+	private static final VideoAssetKeys ASSET_KEYS = VideoAssetKeys.from(1L, VIDEO_ID, ORIGINAL_KEY);
 	/** 대부분의 케이스가 스텁하는 실측 10.0 초의 저장값 (MSG-470) — 신고값 10 과 우연히 같다. */
 	private static final short MEASURED = 10;
 
@@ -115,7 +117,7 @@ class VideoEncodingServiceTest {
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
 		verify(statusWriter).markEncoding(VIDEO_ID, ORIGINAL_KEY);
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg",
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
 			MEASURED);
 		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
 	}
@@ -152,7 +154,7 @@ class VideoEncodingServiceTest {
 
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg",
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
 			(short) 30);   // 반올림 31 이 스키마 상한 30 으로 눌린다 (MSG-470)
 		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
 	}
@@ -223,10 +225,10 @@ class VideoEncodingServiceTest {
 		// 인코딩본 하나만 올린다 — 미블러 썸네일은 추출도 업로드도 하지 않는다 (P1).
 		ArgumentCaptor<PutObjectRequest> captor = ArgumentCaptor.forClass(PutObjectRequest.class);
 		verify(s3Client, times(1)).putObject(captor.capture(), any(RequestBody.class));
-		assertThat(captor.getValue().key()).isEqualTo("videos/encoded/1/7.mp4");
+		assertThat(captor.getValue().key()).isEqualTo(ASSET_KEYS.encoded());
 		verify(ffmpegRunner, never()).extractThumbnail(any(), any(), anyDouble());
 		// thumbnail 키는 폴러가 완료 시 기록(R5)
-		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", MEASURED);
+		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), MEASURED);
 	}
 
 	// ── 실측 길이 저장 (MSG-470) ──
@@ -241,7 +243,7 @@ class VideoEncodingServiceTest {
 
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg",
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
 			(short) 13);
 	}
 
@@ -255,7 +257,7 @@ class VideoEncodingServiceTest {
 
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg",
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
 			(short) 30);
 		verify(statusWriter, never()).markFailed(VIDEO_ID, ORIGINAL_KEY);
 	}
@@ -270,7 +272,7 @@ class VideoEncodingServiceTest {
 
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", "videos/thumb/1/7.jpg",
+		verify(statusWriter).markReady(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(),
 			(short) 1);
 	}
 
@@ -283,7 +285,7 @@ class VideoEncodingServiceTest {
 
 		encodingService.encode(VIDEO_ID, ORIGINAL_KEY);
 
-		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, "videos/encoded/1/7.mp4", (short) 13);
+		verify(statusWriter).markEncoded(VIDEO_ID, ORIGINAL_KEY, ASSET_KEYS.encoded(), (short) 13);
 	}
 
 	// 검증: FR-MEDIA-03, FR-MEDIA-19

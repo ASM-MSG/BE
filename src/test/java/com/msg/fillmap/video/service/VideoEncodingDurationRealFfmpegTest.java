@@ -35,6 +35,7 @@ import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.FfmpegRunner;
 import com.msg.fillmap.video.support.GeoSupport;
+import com.msg.fillmap.video.support.VideoAssetKeys;
 
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -63,8 +64,9 @@ class VideoEncodingDurationRealFfmpegTest {
 
 	private static final long VIDEO_ID = 7L;
 	private static final String ORIGINAL_KEY = "videos/original/1/x.mp4";
-	private static final String ENCODED_KEY = "videos/encoded/1/7.mp4";
-	private static final String THUMBNAIL_KEY = "videos/thumb/1/7.jpg";
+	private static final VideoAssetKeys ASSET_KEYS = VideoAssetKeys.from(1L, VIDEO_ID, ORIGINAL_KEY);
+	private static final String ENCODED_KEY = ASSET_KEYS.encoded();
+	private static final String THUMBNAIL_KEY = ASSET_KEYS.thumbnail();
 	/** 신고값. 실측과 일부러 다르게 둬서 저장값이 어느 쪽에서 왔는지 구분된다. */
 	private static final short 신고값 = 30;
 

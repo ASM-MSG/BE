@@ -29,6 +29,7 @@ import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.FfmpegRunner;
+import com.msg.fillmap.video.support.VideoAssetKeys;
 
 @Slf4j
 @Service
@@ -105,18 +106,18 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 				ffmpegRunner.extractThumbnail(original, thumbnail, duration);
 			}
 
-			// ffmpeg 가 도는 동안 삭제됐으면 결과를 올려봐야 아무도 참조하지 않는 고아가 되고,
-			// 교체됐으면 옛 바이트가 결정적 encoded 키의 새 인코딩본을 덮는다 (MSG-241) — 정체성이
-			// 유지될 때(ACTIVE·같은 원본)만 올린다.
+			// ffmpeg 가 도는 동안 삭제·교체됐으면 결과를 올려봐야 아무도 참조하지 않는 고아가 된다.
+			// 정체성이 유지될 때(ACTIVE·같은 원본)만 올린다 (MSG-241).
 			// ponytail: 이 확인과 upload 사이 창(~100ms)은 남는다. 10초짜리 인코딩 창을 그만큼 줄이는 걸로 충분
-			// — 상태 전이는 어차피 statusWriter 의 DB 가드가 막고, 새 태스크의 재인코딩이 같은 키를 덮는다.
+			// — DB 가드가 상태 전이를 막고, 교체 시도는 별도 키를 써 현재 산출물을 보존한다.
 			if (!isCurrentEncodingAttempt(videoId, originalKey)) {
 				log.info("인코딩 중 삭제·교체됨 — 결과 업로드 생략: videoId={}", videoId);
 				return;
 			}
 
-			String encodedKey = "videos/encoded/%d/%d.mp4".formatted(video.getUserId(), videoId);
-			String thumbnailKey = "videos/thumb/%d/%d.jpg".formatted(video.getUserId(), videoId);
+			VideoAssetKeys assetKeys = VideoAssetKeys.from(video.getUserId(), videoId, originalKey);
+			String encodedKey = assetKeys.encoded();
+			String thumbnailKey = assetKeys.thumbnail();
 			upload(encodedKey, "video/mp4", encoded);
 
 			if (blurActive) {
