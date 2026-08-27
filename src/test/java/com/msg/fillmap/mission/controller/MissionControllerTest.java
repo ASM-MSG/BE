@@ -111,7 +111,7 @@ class MissionControllerTest {
 	void PATH의_line은_GeoJSON_객체로_직렬화된다() throws Exception {
 		String line = "{\"type\":\"LineString\",\"coordinates\":[[129.04,35.10],[129.05,35.11]]}";
 		MissionResponseDto dto = withoutMetadata(12L, "COURSE", "남파랑길 3코스", 3,
-			new PathShape(line, List.of(new Spot("16794_11404", 35.1005, 129.0415, 1))));
+			new PathShape(line, List.of(new Spot("16794_11404", 35.1005, 129.0415, 1, "광안리해수욕장"))));
 		given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.COURSE))).willReturn(List.of(dto));
 
 		mockMvc.perform(activeRequest("COURSE")
@@ -143,7 +143,7 @@ class MissionControllerTest {
 	void 활성_미션_응답에_메타데이터_필드가_실린다() throws Exception {
 		MissionResponseDto dto = new MissionResponseDto(
 			12L, "COURSE", "남파랑길 3코스", 3, null, null,
-			new PathShape(null, List.of(new Spot("16794_11404", 35.1005, 129.0415, 1))),
+			new PathShape(null, List.of(new Spot("16794_11404", 35.1005, 129.0415, 1, "광안리해수욕장"))),
 			"바다를 따라 걷는다\n전망대가 있다", "부산 영도구", "https://festival.example.kr",
 			"매일 11:00 ~ 20:00", "https://cdn.fillmap.kr/mission/12.webp", 14000, 330, 2);
 		given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.COURSE))).willReturn(List.of(dto));
@@ -288,7 +288,7 @@ class MissionControllerTest {
 	void 미션_상세는_공통_응답으로_감싸_반환한다() throws Exception {
 		MissionDetailResponseDto detail = new MissionDetailResponseDto(
 			withoutMetadata(412L, "COURSE", "남파랑길 3코스", 3,
-				new PathShape(null, List.of(new Spot("38677_114635", 35.1, 129.0, 1)))),
+				new PathShape(null, List.of(new Spot("38677_114635", 35.1, 129.0, 1, "광안리해수욕장")))),
 			new MissionProgressResponseDto(412L, 3, 2, false),
 			19L,
 			List.of(new SpotStats("38677_114635", true, 9)));

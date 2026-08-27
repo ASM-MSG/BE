@@ -1,6 +1,8 @@
 package com.msg.fillmap.mission.seed;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,6 +23,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -33,6 +37,7 @@ import com.msg.fillmap.mission.dto.MissionAwardResult;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
 import com.msg.fillmap.mission.dto.MissionShape.PathShape;
 import com.msg.fillmap.mission.dto.MissionShape.Spot;
+import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
 import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
@@ -65,6 +70,9 @@ class CourseSeedContractTest {
 	// 새 체계 한국 범위(y 15000~23000)와도 안 겹쳐 격리 근거가 유지된다 (MSG-347).
 	private static final long BASE_Y = -39200L;
 	private static final long BASE_X = 112198L;
+
+	@Autowired
+	private com.msg.fillmap.zone.service.ZoneNameQueryService zoneNameQueryService;
 
 	@Autowired
 	private MissionRepository missionRepository;
@@ -123,6 +131,78 @@ class CourseSeedContractTest {
 		assertThat(shape.spots()).extracting(Spot::seq).containsExactly(1, 2, 3, 4, 5);
 		assertThat(shape.spots()).extracting(Spot::gridId)
 			.containsExactly(gid(BASE_Y), gid(BASE_Y + 1), gid(BASE_Y + 2), gid(BASE_Y + 3), gid(BASE_Y + 4));
+		// MSG-492: 저장된 이름이 그대로 통과한다 — 조회는 계산하지 않는다.
+		assertThat(shape.spots()).extracting(Spot::name)
+			.containsExactly("스팟1", "스팟2", "스팟3", "스팟4", "스팟5");
+	}
+
+	// 검증: FR-MISSION-19
+	@Test
+	@DisplayName("코스 상세 조회가 RegionQueryService 를 부르지 않는다 — 이름은 컬럼 통과다 (MSG-492 성공 기준 5)")
+	void 코스_상세_조회가_행정동_계약을_부르지_않는다() throws IOException {
+		String title = unique("무의존 조회 코스");
+		Mission mission = seedCourse("T_RT_3", title, BASE_Y - 200);
+		em.flush();
+		em.clear();
+
+		// 전역 verifyNoInteractions 는 쓰지 않는다 — 목록 경로는 EVENT·POPUP 행정 귀속(MSG-437)으로 이 계약을
+		// 정상 호출하므로, 코스 상세 한 건으로 좁혀 호출 0 을 본다.
+		RegionQueryService spy = mock(RegionQueryService.class);
+		MissionQueryService queryService = new MissionQueryServiceImpl(missionRepository, missionGridRepository,
+			videoRepository, objectMapper, new MissionViewportProperties(Map.of()), spy, Clock.systemUTC(),
+			Duration.ofHours(1).toMillis());
+
+		MissionDetailResponseDto detail = queryService.getMissionDetail(mission.getId(), null);
+
+		assertThat(((PathShape) detail.mission().shape()).spots()).extracting(Spot::name)
+			.containsExactly("스팟1", "스팟2", "스팟3", "스팟4", "스팟5");
+		verifyNoInteractions(spy);
+	}
+
+	// 검증: FR-MISSION-19
+	@Test
+	@DisplayName("응답 어디에도 자리표시 \"경유점\" 이 나타나지 않는다 — 폴백 스팟이 섞인 코스 (MSG-492 성공 기준 3)")
+	void 응답에_자리표시_경유점이_나타나지_않는다() throws IOException {
+		String title = unique("폴백 섞인 코스");
+		Mission mission = seedCourseWithFallbackSpots("T_RT_4", title, BASE_Y - 300);
+		em.flush();
+		em.clear();
+
+		MissionDetailResponseDto detail = newQueryService().getMissionDetail(mission.getId(), null);
+
+		assertThat(objectMapper.writeValueAsString(detail)).doesNotContain("경유점");
+	}
+
+	// 검증: FR-MISSION-19
+	@Test
+	@DisplayName("상세 조회 SQL 문장 수가 스팟 수와 무관하다 — 이름이 스팟당 쿼리를 만들지 않는다 (MSG-492 성공 기준 5)")
+	void 상세_조회_문장수가_스팟_수와_무관하다() throws IOException {
+		Mission fewSpots = seedCourse("T_RT_5", unique("스팟 5 코스"), BASE_Y - 400, 5);
+		Mission manySpots = seedCourse("T_RT_6", unique("스팟 8 코스"), BASE_Y - 500, 8);
+		em.flush();
+		em.clear();
+		MissionQueryService queryService = newQueryService();
+
+		// "도입 전후 비교"는 한 빌드에서 옛 구현을 못 돌려 성립하지 않는다 — 항목 수만 다른 두 조회를 견준다.
+		long 적은쪽 = 문장수(() -> queryService.getMissionDetail(fewSpots.getId(), null));
+		long 많은쪽 = 문장수(() -> queryService.getMissionDetail(manySpots.getId(), null));
+
+		assertThat(많은쪽).isEqualTo(적은쪽);
+	}
+
+	/** 한 호출이 실제로 보낸 JDBC 문장 수 (선례: EventVideoQueryServiceTest). 통계는 이 단언에서만 켠다. */
+	private long 문장수(Runnable 호출) {
+		Statistics stats = em.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+		boolean 원래값 = stats.isStatisticsEnabled();
+		stats.setStatisticsEnabled(true);
+		try {
+			em.flush();
+			stats.clear();
+			호출.run();
+			return stats.getPrepareStatementCount();
+		} finally {
+			stats.setStatisticsEnabled(원래값);
+		}
 	}
 
 	// 검증: FR-MISSION-03, FR-MISSION-09
@@ -158,10 +238,44 @@ class CourseSeedContractTest {
 			Duration.ofHours(1).toMillis());
 	}
 
-	/** 산출물 파일을 만들어 시더로 적재하고 미션을 돌려준다 — 스팟 5곳 = (baseY..baseY+4, BASE_X), seq 1..5. */
-	private Mission seedCourse(String crsIdx, String title, long baseY) throws IOException {
+	/** 산출물의 절반이 geometric-fallback("경유점 N")인 코스 — 자리표시가 응답에 새지 않는지 본다 (MSG-492 D-1). */
+	private Mission seedCourseWithFallbackSpots(String crsIdx, String title, long baseY) throws IOException {
 		StringBuilder spots = new StringBuilder();
 		for (int seq = 1; seq <= 5; seq++) {
+			if (seq > 1) {
+				spots.append(",");
+			}
+			String method = seq % 2 == 0 ? "geometric-fallback" : "tourapi";
+			String name = seq % 2 == 0 ? "경유점 " + seq : "명소" + seq;
+			spots.append("""
+				{"seq": %d, "gridId": "%d_%d", "name": "%s", "method": "%s"}"""
+				.formatted(seq, baseY + seq - 1, BASE_X, name, method));
+		}
+		Path file = tempDir.resolve(crsIdx + ".json");
+		Files.writeString(file, """
+			[{"crsIdx": "%s", "name": "%s", "path": %s, "spots": [%s]}]"""
+			.formatted(crsIdx, title, PATH_JSON, spots));
+
+		CourseMissionSeeder seeder = new CourseMissionSeeder(missionRepository, missionGridRepository, reader,
+			awsProperties, zoneNameQueryService, regionQueryService);
+		ReflectionTestUtils.setField(seeder, "enabled", true);
+		ReflectionTestUtils.setField(seeder, "seedPath", file.toString());
+		seeder.seed(file);
+		return missionRepository.findBySource(CourseMissionSeeder.SOURCE_DURUNUBI).stream()
+			.filter(mission -> mission.getTitle().equals(title))
+			.findFirst()
+			.orElseThrow();
+	}
+
+	/** 산출물 파일을 만들어 시더로 적재하고 미션을 돌려준다 — 스팟 5곳 = (baseY..baseY+4, BASE_X), seq 1..5. */
+	private Mission seedCourse(String crsIdx, String title, long baseY) throws IOException {
+		return seedCourse(crsIdx, title, baseY, 5);
+	}
+
+	/** 스팟 수를 지정하는 같은 형식의 코스 — 항목 수만 다른 두 조회를 견주는 문장수 가드에 쓴다 (MSG-492). */
+	private Mission seedCourse(String crsIdx, String title, long baseY, int spotCount) throws IOException {
+		StringBuilder spots = new StringBuilder();
+		for (int seq = 1; seq <= spotCount; seq++) {
 			if (seq > 1) {
 				spots.append(",");
 			}
@@ -175,7 +289,7 @@ class CourseSeedContractTest {
 			.formatted(crsIdx, title, PATH_JSON, spots));
 
 		CourseMissionSeeder seeder = new CourseMissionSeeder(missionRepository, missionGridRepository, reader,
-			awsProperties);
+			awsProperties, zoneNameQueryService, regionQueryService);
 		ReflectionTestUtils.setField(seeder, "enabled", true);
 		ReflectionTestUtils.setField(seeder, "seedPath", file.toString());
 		seeder.seed(file);

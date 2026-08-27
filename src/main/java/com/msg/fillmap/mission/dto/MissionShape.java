@@ -20,11 +20,16 @@ public sealed interface MissionShape
 	record LatLng(double lat, double lng) {
 	}
 
-	/** 코스 포토스팟 마커 (격자 중심점 + gridId + seq). */
-	@Schema(description = "코스 포토스팟 마커", requiredProperties = {"gridId", "lat", "lng", "seq"})
+	/** 코스 포토스팟 마커 (격자 중심점 + gridId + seq + 표시 이름). */
+	@Schema(description = "코스 포토스팟 마커", requiredProperties = {"gridId", "lat", "lng", "seq", "name"})
 	record Spot(String gridId, double lat, double lng,
 		@Schema(description = "코스 내 순번 — mission_grids.seq 는 NULL 허용 컬럼이라 없을 수 있다", nullable = true)
-		Integer seq) {
+		Integer seq,
+		@Schema(description = "표시 이름 (MSG-492) — 명소 이름·구역 표시명(\"서면 A-14\")·행정동 이름 중 하나로 "
+			+ "이미 조립된 문자열이다. 시더가 적재 시점에 정해 저장한 값을 그대로 통과시킨다. "
+			+ "코스가 아닌 유형의 스팟과 시더 갱신 전 스팟만 null — 화면은 기존 안내 문구를 폴백으로 남긴다",
+			nullable = true)
+		String name) {
 	}
 
 	/** 격자 중심점 (gridId 포함). */

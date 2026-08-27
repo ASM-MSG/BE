@@ -667,7 +667,8 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 			.sorted(SPOT_ORDER)
 			.map(grid -> {
 				GridPoint center = GridEncoder.center(grid.getGridId());
-				return new Spot(grid.getGridId(), center.lat(), center.lon(), grid.getSeq());
+				// 이름은 저장 컬럼 통과다 — 여기서 계산하지 않는다(MSG-492 D-2). 조회 경로에 쿼리도 의존도 안 는다.
+				return new Spot(grid.getGridId(), center.lat(), center.lon(), grid.getSeq(), grid.getName());
 			})
 			.toList();
 		return new PathShape(mission.getPath(), spots);
