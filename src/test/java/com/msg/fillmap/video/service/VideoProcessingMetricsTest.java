@@ -36,6 +36,7 @@ import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
+import com.msg.fillmap.video.repository.VideoEncodingJobRepository;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
@@ -73,7 +74,7 @@ class VideoProcessingMetricsTest {
 		given(videoRepository.findUserIdById(VIDEO_ID)).willReturn(Optional.of(1L));
 		given(userRepository.findIdForKeyShare(1L)).willReturn(Optional.of(1L));
 		statusWriter = new VideoStatusWriter(videoRepository, userRepository,
-			mock(NotificationCommandService.class), metrics);
+			mock(NotificationCommandService.class), metrics, mock(VideoEncodingJobRepository.class));
 	}
 
 	/** K1 원본으로 ENCODING 중인 시도의 영상 (VideoStatusWriterTest 픽스처 관례). */

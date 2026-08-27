@@ -17,6 +17,7 @@ import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
+import com.msg.fillmap.video.repository.VideoEncodingJobRepository;
 import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
@@ -51,6 +52,7 @@ public class VideoStatusWriter {
 	// 종결(READY·FAILED) 계측 (MSG-343 D5) — 인코딩·AI 경로가 모두 이 라이터를 지나므로 여기 한 곳에서만
 	// 증가시켜 중복 계상을 막는다. 호출은 스테일 가드를 통과한 전이 적용 분기에만 둔다.
 	private final VideoProcessingMetrics videoProcessingMetrics;
+	private final VideoEncodingJobRepository encodingJobRepository;
 
 	/** 적용 여부를 반환한다 — false 면 태스크 시작 시점부터 스테일(큐 대기 중 교체·삭제됨)이라 ffmpeg 을 돌릴 이유가 없다. */
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -224,6 +226,36 @@ public class VideoStatusWriter {
 			recordOutcomeNotification(video, false);
 			videoProcessingMetrics.recordOutcome(videoId, false, VideoProcessingMetrics.PATH_ENCODING);
 		});
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void markFailed(EncodingJobClaim claim) {
+		markClaimFailed(claim, false);
+	}
+
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void markDeadFailed(EncodingJobClaim claim) {
+		markClaimFailed(claim, true);
+	}
+
+	private void markClaimFailed(EncodingJobClaim claim, boolean dead) {
+		if (!lockUploaderFirst(claim.videoId())) {
+			return;
+		}
+		Video video = videoRepository.findWithLockById(claim.videoId()).orElse(null);
+		boolean applied = isCurrentEncodingAttempt(video, claim.originalS3Key());
+		if (applied) {
+			video.markFailed();
+			recordOutcomeNotification(video, false);
+		}
+		int updated = dead ? encodingJobRepository.completeDead(claim) : encodingJobRepository.complete(claim);
+		if (updated != 1) {
+			throw new ClaimLostException(claim.jobId());
+		}
+		if (applied) {
+			videoProcessingMetrics.recordOutcome(
+				claim.videoId(), false, VideoProcessingMetrics.PATH_ENCODING);
+		}
 	}
 
 	/**

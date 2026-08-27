@@ -1,6 +1,8 @@
 package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -12,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +26,7 @@ import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
+import com.msg.fillmap.video.repository.VideoEncodingJobRepository;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 
@@ -41,18 +45,27 @@ class VideoStatusWriterTest {
 
 	private VideoRepository videoRepository;
 	private VideoProcessingMetrics videoProcessingMetrics;
+	private VideoEncodingJobRepository encodingJobRepository;
 	private VideoStatusWriter statusWriter;
 
 	@BeforeEach
 	void setUp() {
 		videoRepository = mock(VideoRepository.class);
 		videoProcessingMetrics = mock(VideoProcessingMetrics.class);
+		encodingJobRepository = mock(VideoEncodingJobRepository.class);
 		UserRepository userRepository = mock(UserRepository.class);
 		// 알림 배선 전이의 users 선취(잠금 순서 통일)가 통과하도록 스텁 — 순서 자체는 통합·리뷰 검증 몫.
 		given(videoRepository.findUserIdById(VIDEO_ID)).willReturn(Optional.of(1L));
 		given(userRepository.findIdForKeyShare(1L)).willReturn(Optional.of(1L));
+		given(encodingJobRepository.complete(any())).willReturn(1);
+		given(encodingJobRepository.completeDead(any())).willReturn(1);
 		statusWriter = new VideoStatusWriter(videoRepository, userRepository,
-			mock(NotificationCommandService.class), videoProcessingMetrics);
+			mock(NotificationCommandService.class), videoProcessingMetrics, encodingJobRepository);
+	}
+
+	private EncodingJobClaim claim() {
+		return new EncodingJobClaim(1L, VIDEO_ID, K1, UUID.randomUUID(),
+			(short)3, LocalDateTime.of(2026, 8, 27, 0, 0));
 	}
 
 	/** BLURRING·ACTIVE 인, 아직 미제출(aiJobId=null) 시도의 영상. */
@@ -278,6 +291,54 @@ class VideoStatusWriterTest {
 		statusWriter.markFailed(VIDEO_ID, K1);
 
 		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.UPLOADED);
+	}
+
+	@Test
+	void 현재_claim의_세번째_실패는_영상과_작업을_함께_종결한다() {
+		Video video = encoding();
+		EncodingJobClaim claim = claim();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markFailed(claim);
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.FAILED);
+		verify(encodingJobRepository).complete(claim);
+	}
+
+	@Test
+	void 스테일_claim은_영상은_건드리지_않고_작업만_종결한다() {
+		Video video = replacedWhileEncoding();
+		EncodingJobClaim claim = claim();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markFailed(claim);
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.UPLOADED);
+		verify(encodingJobRepository).complete(claim);
+	}
+
+	@Test
+	void DEAD_finalizer는_영상_FAILED와_completed_at을_함께_종결한다() {
+		Video video = encoding();
+		EncodingJobClaim claim = claim();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+
+		statusWriter.markDeadFailed(claim);
+
+		assertThat(video.getProcessingStatus()).isEqualTo(ProcessingStatus.FAILED);
+		verify(encodingJobRepository).completeDead(claim);
+	}
+
+	@Test
+	void 작업_종결_UPDATE가_0행이면_claim_상실_예외를_던진다() {
+		Video video = encoding();
+		EncodingJobClaim claim = claim();
+		given(videoRepository.findWithLockById(VIDEO_ID)).willReturn(Optional.of(video));
+		given(encodingJobRepository.complete(claim)).willReturn(0);
+
+		assertThatThrownBy(() -> statusWriter.markFailed(claim))
+			.isInstanceOf(ClaimLostException.class);
+		verify(videoProcessingMetrics, never()).recordOutcome(anyLong(), anyBoolean(), anyString());
 	}
 
 	@Test
