@@ -13,7 +13,7 @@ usage() {
   SSH_KEY_PATH=~/.ssh/fillmap-key-soma.pem \
   ./load-test/measure-msg494.sh signal-term video.mp4
 
-  # 두 노드 lease-duration=PT10S 적용·재시작 뒤 실행하고, 끝나면 PT35M로 복구한다.
+  # 두 노드 lease-duration=PT1M 적용·재시작 뒤 실행하고, 끝나면 PT35M로 복구한다.
   ALLOW_SERVICE_SIGNALS=true BASE_URL=https://api.fillmap.kr \
   SSH_KEY_PATH=~/.ssh/fillmap-key-soma.pem \
   ./load-test/measure-msg494.sh signal-kill video.mp4
@@ -27,7 +27,7 @@ usage() {
   AI_SSH       기본 ubuntu@52.78.158.240
   BENCH_OID    기본 msg494-bench
   LAT, LNG     기본 37.5665, 126.9780
-  TIMEOUT_SEC  종결 대기, 기본 180
+  TIMEOUT_SEC  종결 대기, 기본 180(블러 300)
   RESULT_DIR   기본 build/reports/msg494/<실행시각>
 
 자체 점검: ./load-test/measure-msg494.sh --self-test
@@ -101,6 +101,14 @@ is_terminal_state() {
 		&& ("$2" = "COMPLETED" || "$2" = "DEAD") ]]
 }
 
+default_timeout_sec() {
+	if [[ "$1" = "blur" ]]; then
+		echo 300
+	else
+		echo 180
+	fi
+}
+
 self_test() {
 	local value statuses
 	value=$(printf '%s' '{"data":{"videoId":42}}' | json_field data.videoId)
@@ -122,6 +130,8 @@ self_test() {
 	if is_terminal_state BLURRING COMPLETED; then
 		fail "BLURRING을 종결 상태로 허용했다"
 	fi
+	[[ "$(default_timeout_sec baseline)" = "180" ]] || fail "기본 대기 시간 자체 점검 실패"
+	[[ "$(default_timeout_sec blur)" = "300" ]] || fail "블러 대기 시간 자체 점검 실패"
 	echo "self-test 통과"
 }
 
@@ -164,7 +174,7 @@ AI_SSH="${AI_SSH:-ubuntu@52.78.158.240}"
 BENCH_OID="${BENCH_OID:-msg494-bench}"
 LAT="${LAT:-37.5665}"
 LNG="${LNG:-126.9780}"
-TIMEOUT_SEC="${TIMEOUT_SEC:-180}"
+TIMEOUT_SEC="${TIMEOUT_SEC:-$(default_timeout_sec "$MODE")}"
 RESULT_DIR="${RESULT_DIR:-build/reports/msg494/$(date -u +%Y%m%dT%H%M%SZ)}"
 RESULT_CSV="$RESULT_DIR/results.csv"
 
@@ -469,12 +479,12 @@ wait_for_blur_overlap() {
 	done
 }
 
-has_short_lease() {
+has_test_lease() {
 	local target="$1" service="$2"
 	"${SSH[@]}" "$target" "
 main_pid=\$(systemctl show -p MainPID --value '$service')
 [ \"\$main_pid\" != 0 ]
-sudo grep -zFxq 'FILLMAP_VIDEO_ENCODING_JOB_LEASE_DURATION=PT10S' \"/proc/\$main_pid/environ\"
+sudo grep -zFxq 'FILLMAP_VIDEO_ENCODING_JOB_LEASE_DURATION=PT1M' \"/proc/\$main_pid/environ\"
 "
 }
 
@@ -514,10 +524,10 @@ run_signal_test() {
 	remote_snapshot "$BE_SSH" fillmap-dev 8080 "$RESULT_DIR/be-before.txt"
 	remote_snapshot "$AI_SSH" fillmap-encoding-worker 8081 "$RESULT_DIR/ai-before.txt"
 	if [[ "$MODE" = "signal-kill" ]]; then
-		has_short_lease "$BE_SSH" fillmap-dev \
-			|| fail "fillmap-dev의 lease-duration이 PT10S가 아니다"
-		has_short_lease "$AI_SSH" fillmap-encoding-worker \
-			|| fail "fillmap-encoding-worker의 lease-duration이 PT10S가 아니다"
+		has_test_lease "$BE_SSH" fillmap-dev \
+			|| fail "fillmap-dev의 lease-duration이 PT1M이 아니다"
+		has_test_lease "$AI_SSH" fillmap-encoding-worker \
+			|| fail "fillmap-encoding-worker의 lease-duration이 PT1M이 아니다"
 	fi
 	queue_snapshot > "$RESULT_DIR/queue-before.txt"
 

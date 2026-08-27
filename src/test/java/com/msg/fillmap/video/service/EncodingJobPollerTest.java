@@ -1,8 +1,11 @@
 package com.msg.fillmap.video.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,12 +16,15 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import com.msg.fillmap.video.config.EncodingJobProperties;
@@ -147,17 +153,82 @@ class EncodingJobPollerTest {
 
 	@Test
 	@DisplayName("SIGTERM이면 현재 claim을 즉시 반납하고 새 작업을 받지 않는다")
-	void SIGTERM이면_현재_claim을_즉시_반납하고_새_작업을_받지_않는다() {
+	void SIGTERM이면_실행중인_claim을_즉시_반납하고_새_작업을_받지_않는다() throws Exception {
+		CountDownLatch encodingStarted = new CountDownLatch(1);
+		CountDownLatch finishEncoding = new CountDownLatch(1);
 		given(repository.claimNext(eq("be"), any(UUID.class), eq(LEASE))).willReturn(Optional.of(claim));
+		willAnswer(invocation -> {
+			encodingStarted.countDown();
+			finishEncoding.await(5, TimeUnit.SECONDS);
+			return null;
+		}).given(encodingService).encode(claim);
 		poller.poll();
+		ArgumentCaptor<Runnable> task = ArgumentCaptor.forClass(Runnable.class);
+		verify(encodingExecutor).execute(task.capture());
+		Thread runningTask = new Thread(task.getValue());
+		runningTask.start();
+		AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
+		context.registerBean(EncodingJobPoller.class, () -> poller);
+		context.refresh();
 
-		poller.shutdown();
-		poller.poll();
-		runSubmittedTask();
+		try {
+			assertThat(encodingStarted.await(5, TimeUnit.SECONDS)).isTrue();
+			context.close();
+			poller.poll();
+
+			verify(repository).release(claim);
+			verify(repository, times(1)).claimNext(eq("be"), any(UUID.class), eq(LEASE));
+		} finally {
+			finishEncoding.countDown();
+			context.close();
+			runningTask.join(5_000);
+		}
+
+		verify(encodingService).encode(claim);
+	}
+
+	@Test
+	@DisplayName("종료 중 늦게 선점된 claim은 실행하지 않고 반납한다")
+	void 종료중_늦게_선점된_claim은_실행하지_않고_반납한다() throws Exception {
+		CountDownLatch claiming = new CountDownLatch(1);
+		CountDownLatch finishClaim = new CountDownLatch(1);
+		given(repository.claimNext(eq("be"), any(UUID.class), eq(LEASE))).willAnswer(invocation -> {
+			claiming.countDown();
+			finishClaim.await(5, TimeUnit.SECONDS);
+			return Optional.of(claim);
+		});
+		Thread polling = new Thread(poller::poll);
+		polling.start();
+
+		try {
+			assertThat(claiming.await(5, TimeUnit.SECONDS)).isTrue();
+			poller.shutdown();
+			finishClaim.countDown();
+			polling.join(5_000);
+		} finally {
+			finishClaim.countDown();
+			polling.join(5_000);
+		}
 
 		verify(repository).release(claim);
-		verify(repository, times(1)).claimNext(eq("be"), any(UUID.class), eq(LEASE));
-		verify(encodingService, never()).encode(claim);
+		verify(encodingExecutor, never()).execute(any(Runnable.class));
+	}
+
+	@Test
+	@DisplayName("종료 반납 실패는 PreDestroy 호출에서 다시 시도한다")
+	void 종료_반납_실패는_PreDestroy_호출에서_다시_시도한다() {
+		given(repository.claimNext(eq("be"), any(UUID.class), eq(LEASE))).willReturn(Optional.of(claim));
+		willThrow(new IllegalStateException("DB unavailable"))
+			.willReturn(1)
+			.given(repository).release(claim);
+		poller.poll();
+
+		assertThatThrownBy(poller::shutdown)
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessage("DB unavailable");
+		poller.shutdown();
+
+		verify(repository, times(2)).release(claim);
 	}
 
 	private void runSubmittedTask() {

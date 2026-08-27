@@ -10,6 +10,8 @@ import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
@@ -76,11 +78,14 @@ public class EncodingJobPoller {
 
 	private void submit(EncodingJobClaim claim, Runnable task) {
 		activeClaim.set(claim);
+		if (!acceptingClaims.get()) {
+			release(claim);
+			return;
+		}
 		try {
 			encodingExecutor.execute(() -> runClaim(claim, task));
 		} catch (RejectedExecutionException e) {
-			repository.release(claim);
-			clear(claim);
+			release(claim);
 			log.warn("인코딩 실행기 포화로 작업 반납: jobId={} node={}", claim.jobId(), nodeId);
 		}
 	}
@@ -111,13 +116,22 @@ public class EncodingJobPoller {
 	}
 
 	@PreDestroy
+	@EventListener(ContextClosedEvent.class)
 	public void shutdown() {
 		acceptingClaims.set(false);
-		EncodingJobClaim claim = activeClaim.getAndSet(null);
-		if (claim != null) {
-			repository.release(claim);
-		}
 		busy.set(false);
+		EncodingJobClaim claim = activeClaim.get();
+		if (claim != null) {
+			release(claim);
+		}
+	}
+
+	private synchronized void release(EncodingJobClaim claim) {
+		if (activeClaim.get() != claim) {
+			return;
+		}
+		repository.release(claim);
+		clear(claim);
 	}
 
 	private void clear(EncodingJobClaim claim) {
