@@ -60,6 +60,36 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	Optional<RegionProjection> findContainingRegion(@Param("lat") double lat, @Param("lon") double lon);
 
 	/**
+	 * 최근접 행정동 (MSG-492): 좌표를 품는 행정동이 없을 때(바다·경계 밖) 경계까지 거리가 가장 짧은 1건.
+	 * 거리 상한을 두지 않는다 — 호출이 스팟당 생애 1회(시더)라 비용이 문제되지 않고, 상한을 두면 그만큼이
+	 * 이름 없이 남아 FR-1 을 스스로 깬다(§D-5).
+	 *
+	 * <p><b>2단 구조인 이유</b>: PostgreSQL 은 ORDER BY 가 KNN 연산자(&lt;-&gt;) <b>하나뿐일 때만</b> GIST
+	 * 인덱스의 순서 스캔을 쓴다. 동률 결정성을 위해 region_code 를 정렬 키로 덧붙이면 인덱스를 통째로 버리고
+	 * regions 전량을 읽어 정렬한다 — dev 실측(2026-08-27, 행정동 3,558건)에서 Seq Scan 1,666ms 대
+	 * Index Scan 13ms 로 128배 차이였다. 그래서 안쪽에서 거리만으로 최근접 후보를 인덱스로 뽑고,
+	 * 바깥에서 그 후보 안에서만 region_code 로 동률을 가른다(실측 20.7ms, Incremental Sort).
+	 *
+	 * <p>후보 수 8은 "경계선에서 거리가 정확히 같은 행정동"의 현실적 상한이다. 행정동 경계는 서로 변을
+	 * 공유하므로 한 점에서 동시에 최단거리인 행정동은 사실상 2~3개이고, 8을 넘는 동률이 나오면 그때는
+	 * 지오메트리 자체가 이상한 상황이다. 후보를 늘려도 인덱스 스캔은 실제로 필요한 만큼만 읽는다
+	 * (실측에서 LIMIT 8 을 걸어도 읽은 행은 2건이었다).
+	 */
+	@Query(value = """
+		SELECT "regionCode", "regionName", "parentCode"
+		FROM (
+			SELECT region_code AS "regionCode", region_name AS "regionName", parent_code AS "parentCode",
+				boundary_geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography AS distance
+			FROM regions
+			ORDER BY boundary_geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+			LIMIT 8
+		) nearest
+		ORDER BY distance, "regionCode"
+		LIMIT 1
+		""", nativeQuery = true)
+	Optional<RegionProjection> findNearestRegion(@Param("lat") double lat, @Param("lon") double lon);
+
+	/**
 	 * grids.region_code 멱등 보정 백필 (MSG-167 §D2 보정). V5 백필과 같은 판정·같은 IS NULL 가드다.
 	 * V5 는 Flyway 시점(RegionSeeder 이전)에 돌아, "격자는 있는데 regions 가 빈" 환경에선 no-op 으로 끝나고
 	 * upsertGrid 는 기존 격자를 건너뛰므로 라벨이 영구 NULL 로 남는다 — 시딩 직후 이 보정을 1회 돌려 닫는다.

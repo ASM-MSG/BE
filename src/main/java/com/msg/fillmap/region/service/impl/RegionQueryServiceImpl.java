@@ -36,6 +36,12 @@ public class RegionQueryServiceImpl implements RegionQueryService {
 	}
 
 	@Override
+	public Optional<RegionView> resolveNearestByPoint(double lat, double lon) {
+		validateCoordinate(lat, lon);
+		return regionRepository.findNearestRegion(lat, lon).map(RegionQueryServiceImpl::toView);
+	}
+
+	@Override
 	public List<MentionedRegionMatch> matchMentionedRegions(String name, ViewportBounds viewport) {
 		return regionRepository.matchMentionedRegions(
 				name, viewport.swLat(), viewport.swLng(), viewport.neLat(), viewport.neLng())
