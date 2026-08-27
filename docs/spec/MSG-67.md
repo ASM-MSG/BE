@@ -67,8 +67,9 @@ HLS는 재생 목록, 세그먼트 저장과 정리, 서명 쿠키 계약을 새
 ### D3. S3 원본은 OAC로 닫는다
 
 CloudFront는 Origin Access Control[^4]로 `fillmap-video-dev`의 영상 객체를 읽는다. 배포의 캐시 동작에는
-신뢰 키 그룹을 연결해 모든 조회에 서명을 요구한다. 버킷 정책은 해당 배포 ARN의 `s3:GetObject`만
-추가로 허용한다. 기존 `profiles/original/*`과 `missions/*` 공개 정책은 이 티켓에서 바꾸지 않는다.
+신뢰 키 그룹을 연결해 모든 조회에 서명을 요구한다. 버킷 정책은 해당 배포 ARN이 `videos/encoded/*`,
+`videos/blurred/*`, `videos/thumb/*`를 읽는 `s3:GetObject`만 추가로 허용한다. 원본과 pending 파일은 CDN이
+읽지 못한다. 기존 `profiles/original/*`과 `missions/*` 공개 정책은 이 티켓에서 바꾸지 않는다.
 
 ### D4. 파생 파일 키를 인코딩 시도마다 다르게 만든다
 
@@ -141,7 +142,7 @@ cloudfront:
 - RSA 2048 공개 키 1개와 신뢰 키 그룹 1개
 - 표준 CloudFront 배포 1개, HTTPS 강제, GET과 HEAD 허용, IPv6 사용
 - 사용자 지정 캐시 정책 1개, TTL 0/600/600초
-- 버킷 정책에 배포 ARN 조건이 붙은 `s3:GetObject` 허용문 1개
+- 버킷 정책에 배포 ARN과 재생용 세 prefix 조건이 붙은 `s3:GetObject` 허용문 1개
 
 CloudFront 배포와 버킷 정책을 먼저 반영한 뒤 애플리케이션 플래그를 켠다. 순서를 거꾸로 하면 아직
 읽을 수 없는 CDN URL이 API에서 발급된다.
@@ -187,6 +188,47 @@ Owner A와 맞닿는 서비스 인터페이스 변경은 없다. DTO 필드 이�
 4. 세 파일마다 전체 GET과 1MiB Range GET을 콜드 1회, 웜 10회 실행한다.
 5. S3 직접 요청과 CloudFront 요청의 TTFB 및 전체 시간 중앙값을 비교한다.
 6. 영상 교체 후 신규 API URL의 경로가 바뀌고 새 바이트를 반환하는지 확인한다.
+
+## 작업 로그
+
+### 2026-08-27 구현 및 dev 검증
+
+- 재생과 썸네일 URL 발급은 기존 `ThumbnailUrlPresigner` 한 곳에서 갈랐다. CloudFront가 켜지면
+  `CloudFrontUtilities`로 600초 서명 URL을 만들고, 꺼지면 기존 S3 사전서명 URL을 만든다.
+- 개인 키는 기동할 때 한 번 읽는다. CloudFront가 켜졌는데 도메인, 키 ID, 키 파일이 없거나 키를 읽지
+  못하면 `IllegalStateException`으로 기동을 중단한다. 별도 스케줄러나 실행기는 추가하지 않았다.
+- DB 스키마와 실행 SQL은 바뀌지 않았다. `videos.encoded_url`, `blurred_s3_key`, `thumbnail_url`에는 계속
+  S3 키만 저장한다. 신규 파생 파일은 `videos/{encoded|blurred|thumb}/{userId}/{videoId}/{attemptId}`에
+  저장하고 영상 교체 커밋 뒤 이전 시도의 원본과 파생 파일을 삭제한다.
+- dev 배포는 `E3CZ3XF3CKTFQM`이고 도메인은 `d3teyj4rrssh77.cloudfront.net`이다. OAC는
+  `E2MHO1EUTRUH56`, 캐시 정책은 `1993b24f-5cde-4352-a428-dd9b2892c41a`, 신뢰 키 그룹은
+  `66db24b4-2546-4c55-9422-d73bda9c71e6`이다. 개인 키는 EC2의
+  `/home/ubuntu/fillmap-cloudfront-private-key.pem`에 권한 600으로 저장했다.
+- OAC 버킷 정책은 `videos/encoded/*`, `videos/blurred/*`, `videos/thumb/*`만 읽게 제한했다. 원본과
+  pending 파일은 CloudFront 오리진 권한에서 제외했다.
+- branch JAR을 dev에 수동 배포했고 기존 JAR과 환경 파일은 각각 `app.jar.pre-msg67`,
+  `fillmap-dev.env.pre-msg67`로 보존했다. 재기동 후 `/actuator/health`는 `UP`이었다.
+
+서울에서 MP4 세 개를 측정했다. S3 직접 요청은 9회 중앙값, CloudFront 콜드는 파일별 첫 요청
+3회의 중앙값, 웜은 파일별 10회씩 총 30회의 중앙값이다.
+
+| 요청 | S3 직접 | CloudFront 콜드 | CloudFront 웜 | 웜 개선 폭 |
+|---|---:|---:|---:|---:|
+| 전체 GET TTFB | 105.9ms | 199.2ms | 51.8ms | 51.1% |
+| 전체 GET 완료 | 250.8ms | 284.4ms | 181.0ms | 27.8% |
+| 1MiB Range TTFB | 94.4ms | 191.6ms | 48.6ms | 48.5% |
+| 1MiB Range 완료 | 181.6ms | 285.0ms | 129.2ms | 28.9% |
+
+- 미서명 URL과 만료 URL은 403, 유효한 전체 GET은 200, Range는 올바른 `Content-Range`와 206을
+  반환했다. 웜 캐시 적중은 전체 GET 29/30, Range 30/30이었다.
+- 콜드 요청은 S3 직접 요청보다 느렸다. 이 구성의 이점은 첫 재생이 아니라 같은 영상의 반복 재생에서
+  확인됐다. 새로 발급한 서명 URL도 같은 객체 캐시를 적중했다.
+- 비공개 영상 240325를 실제 교체했다. 재생 경로는 `videos/encoded/524/240325.mp4`에서
+  `videos/encoded/524/240325/2483237a-d093-36cf-bfbe-5a2260efa674.mp4`로 바뀌었고, 이전 인코딩본과
+  썸네일은 S3에서 삭제됐다. 새 경로의 Range 요청도 206을 반환했다.
+- 교체 검증의 첫 폴링 스크립트는 zsh 예약 변수명 충돌로 중단됐다. 교체 요청은 이미 접수된 상태라
+  새 요청을 만들지 않고 현재 상태를 이어서 조회해 READY 수렴을 확인했다.
+- prod 배포, 사용자 지정 도메인, HLS는 아직 구성하지 않았다.
 
 ## 미해결 질문
 
