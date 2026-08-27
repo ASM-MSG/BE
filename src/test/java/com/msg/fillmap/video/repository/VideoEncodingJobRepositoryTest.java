@@ -224,6 +224,33 @@ class VideoEncodingJobRepositoryTest {
 	}
 
 	@Test
+	@DisplayName("PROCESSING claim 반납은 시도 횟수를 소비하지 않는다")
+	void PROCESSING_claim_반납은_시도횟수를_소비하지_않는다() {
+		repository.enqueue(videoId, originalKey);
+		EncodingJobClaim claim = repository.claimNext("be", UUID.randomUUID(), LEASE).orElseThrow();
+
+		assertThat(repository.release(claim)).isEqualTo(1);
+		EncodingJobClaim reclaimed = repository.claimNext("ai", UUID.randomUUID(), LEASE).orElseThrow();
+
+		assertThat(reclaimed.attemptCount()).isEqualTo((short)1);
+	}
+
+	@Test
+	@DisplayName("DEAD finalizer 반납은 세 번째 시도 횟수를 유지한다")
+	void DEAD_finalizer_반납은_세번째_시도횟수를_유지한다() {
+		repository.enqueue(videoId, originalKey);
+		long jobId = jobId();
+		jdbcTemplate.update(
+			"UPDATE video_encoding_jobs SET status = 'DEAD', attempt_count = 3 WHERE id = ?", jobId);
+		EncodingJobClaim claim = repository.claimDead("be", UUID.randomUUID(), LEASE).orElseThrow();
+
+		assertThat(repository.release(claim)).isEqualTo(1);
+		EncodingJobClaim reclaimed = repository.claimDead("ai", UUID.randomUUID(), LEASE).orElseThrow();
+
+		assertThat(reclaimed.attemptCount()).isEqualTo((short)3);
+	}
+
+	@Test
 	@DisplayName("회원 탈퇴로 video 행이 삭제되면 작업도 cascade 삭제된다")
 	void 회원탈퇴로_video행이_삭제되면_작업도_cascade_삭제된다() {
 		repository.enqueue(videoId, originalKey);

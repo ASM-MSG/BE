@@ -116,14 +116,14 @@ public class VideoEncodingJobRepository {
 	public int release(EncodingJobClaim claim) {
 		return jdbcClient.sql("""
 			UPDATE video_encoding_jobs
-			SET status = 'PENDING',
-				attempt_count = attempt_count - 1,
+			SET status = CASE WHEN status = 'PROCESSING' THEN 'PENDING' ELSE 'DEAD' END,
+				attempt_count = CASE WHEN status = 'PROCESSING' THEN attempt_count - 1 ELSE attempt_count END,
 				claim_token = NULL,
 				claimed_by = NULL,
 				lease_until = NULL,
 				available_at = statement_timestamp() AT TIME ZONE 'utc'
 			WHERE id = :jobId
-				AND status = 'PROCESSING'
+				AND status IN ('PROCESSING', 'DEAD')
 				AND claim_token = :claimToken
 				AND attempt_count > 0
 				AND lease_until > (statement_timestamp() AT TIME ZONE 'utc')
