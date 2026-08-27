@@ -1,10 +1,10 @@
 {
   "uid": "fillmap-prod-overview",
-  "title": "FillMap 상시 관측 (MSG-344/377)",
+  "title": "FillMap 상시 관측 (MSG-344/377/494)",
   "tags": ["fillmap"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
   "templating": {
@@ -13,11 +13,12 @@
         "name": "job",
         "label": "대상",
         "type": "custom",
-        "query": "fillmap-prod,fillmap-dev",
+        "query": "fillmap-prod,fillmap-dev,fillmap-encoding-worker",
         "current": { "text": "fillmap-prod", "value": "fillmap-prod" },
         "options": [
           { "text": "fillmap-prod", "value": "fillmap-prod", "selected": true },
-          { "text": "fillmap-dev", "value": "fillmap-dev", "selected": false }
+          { "text": "fillmap-dev", "value": "fillmap-dev", "selected": false },
+          { "text": "fillmap-encoding-worker", "value": "fillmap-encoding-worker", "selected": false }
         ]
       }
     ]
