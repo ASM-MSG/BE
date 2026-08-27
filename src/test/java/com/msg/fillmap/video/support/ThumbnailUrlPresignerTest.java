@@ -15,6 +15,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.global.config.AwsProperties;
@@ -24,6 +27,40 @@ class ThumbnailUrlPresignerTest {
 
 	@TempDir
 	Path tempDir;
+
+	@Test
+	@DisplayName("mediaKey가 null이면 null을 반환한다")
+	void nullKeyReturnsNull() {
+		ThumbnailUrlPresigner presigner = new ThumbnailUrlPresigner(
+			mock(S3Presigner.class), mock(AwsProperties.class)
+		);
+
+		assertThat(presigner.presign(null)).isNull();
+	}
+
+	@Test
+	@DisplayName("CloudFront가 꺼지면 S3 사전서명 URL을 반환한다")
+	void cloudFrontDisabledFallsBackToS3() {
+		AwsProperties awsProperties = new AwsProperties(
+			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)
+		);
+		CloudFrontProperties cloudFrontProperties = new CloudFrontProperties(false, null, null, null);
+		try (S3Presigner s3Presigner = S3Presigner.builder()
+			.region(Region.AP_NORTHEAST_2)
+			.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("ak", "sk")))
+			.build()) {
+			ThumbnailUrlPresigner presigner = new ThumbnailUrlPresigner(
+				s3Presigner, awsProperties, cloudFrontProperties
+			);
+
+			String url = presigner.presign("videos/encoded/1/2.mp4");
+
+			assertThat(url).startsWith(
+				"https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/videos/encoded/1/2.mp4?"
+			);
+			assertThat(url).contains("X-Amz-Expires=600");
+		}
+	}
 
 	@Test
 	@DisplayName("CloudFront가 켜지면 배포 도메인과 canned policy 서명으로 URL을 발급한다")
