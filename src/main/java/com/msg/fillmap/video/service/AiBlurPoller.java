@@ -37,6 +37,7 @@ import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.service.AiClient.AiJobResult;
 import com.msg.fillmap.video.service.AiClient.AiJobStatus;
 import com.msg.fillmap.video.support.FfmpegRunner;
+import com.msg.fillmap.video.support.VideoAssetKeys;
 
 /**
  * BLURRING 영상을 일괄 조정하는 단일 폴러 (MSG-149/150 D3). 실효 블러 활성(ai.enabled && ai.blur-enabled,
@@ -56,7 +57,7 @@ import com.msg.fillmap.video.support.FfmpegRunner;
  *
  * ponytail: 단일 인스턴스 전제 — 이 폴러는 앱 인스턴스가 1개일 때만 안전하다 (encodingExecutor 의 단일
  * 프로세스 OOM 직렬화와 같은 전제, ADR t3.small). 수평 확장 시 두 폴러가 같은 행을 집어 패자가 승자의 S3
- * 산출물을 지울 수 있다 — 그때는 조회에 FOR UPDATE SKIP LOCKED 클레임 또는 시도 스코프 키로 승격할 것.
+ * 산출물을 지울 수 있다 — 그때는 조회에 FOR UPDATE SKIP LOCKED 클레임을 추가할 것.
  */
 @Slf4j
 @Component
@@ -203,10 +204,11 @@ public class AiBlurPoller {
 		// 인코딩 워커가 만든 썸네일은 블러 전 원본 프레임이라 PUBLIC 전환 시 미블러 얼굴이 대표로 노출된다.
 		// 블러본에서 같은 FfmpegRunner 로 다시 뽑는다 (P1). 추출은 업로드 전이라 실패해도 정리할 객체가 없다.
 		byte[] thumbnail = extractThumbnail(video, blurred);
-		String blurredKey = "videos/blurred/%d/%d.mp4".formatted(video.getUserId(), video.getId());
+		VideoAssetKeys assetKeys = VideoAssetKeys.from(video.getUserId(), video.getId(), video.getOriginalS3Key());
+		String blurredKey = assetKeys.blurred();
 		// 썸네일 키는 인코더 규칙(VideoEncodingServiceImpl)과 동일 포맷으로 직접 계산한다 — BLURRING 동안
 		// thumbnailUrl 은 null 이라(R5 불변식) 여기서 산출해 올리고, 아래 markBlurReady 가 그 키를 기록한다.
-		String thumbnailKey = "videos/thumb/%d/%d.jpg".formatted(video.getUserId(), video.getId());
+		String thumbnailKey = assetKeys.thumbnail();
 
 		boolean applied;
 		try {
@@ -222,7 +224,7 @@ public class AiBlurPoller {
 		}
 		if (!applied) {
 			// 가드 거부(교체/삭제/스테일) → 방금 올린 블러본과 재추출 썸네일 둘 다 고아라 지운다 (P2-c/d).
-			// 교체 레이스여도 안전: 인코딩 단계에서 미블러 썸네일을 안 올렸고(P1), 새 시도가 완료 시 자기 걸 올린다.
+			// 교체 레이스여도 안전: 새 시도는 별도 키를 쓰고, 완료 시 자기 산출물을 올린다.
 			deleteQuietly(blurredKey, thumbnailKey);
 			return;
 		}

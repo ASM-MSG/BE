@@ -46,6 +46,7 @@ import com.msg.fillmap.video.service.AiClient.AiJobStatus;
 import com.msg.fillmap.video.service.AiClient.Precheck;
 import com.msg.fillmap.video.support.FfmpegRunner;
 import com.msg.fillmap.video.support.GeoSupport;
+import com.msg.fillmap.video.support.VideoAssetKeys;
 
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
@@ -79,6 +80,10 @@ class AiBlurPollerTest {
 	private ThreadPoolTaskExecutor encodingExecutor;
 	private SimpleMeterRegistry meterRegistry;
 	private AiBlurPoller poller;
+
+	private VideoAssetKeys assetKeys(long videoId) {
+		return VideoAssetKeys.from(1L, videoId, "videos/original/1/x.mp4");
+	}
 
 	@BeforeEach
 	void setUp() {
@@ -118,7 +123,7 @@ class AiBlurPollerTest {
 		Video video = Video.create(1L, "19495_9607", "videos/original/1/x.mp4",
 			GeoSupport.toPoint(37.5445, 127.0560), (short) 10, 기준시각, Visibility.PRIVATE);
 		video.markEncoding();
-		video.markEncoded("videos/encoded/1/" + id + ".mp4", video.getDurationSec());
+		video.markEncoded(assetKeys(id).encoded(), video.getDurationSec());
 		if (jobId != null) {
 			video.recordAiJob(jobId);
 		}
@@ -154,7 +159,7 @@ class AiBlurPollerTest {
 
 		ArgumentCaptor<GetObjectRequest> captor = ArgumentCaptor.forClass(GetObjectRequest.class);
 		verify(s3Client).getObjectAsBytes(captor.capture());
-		assertThat(captor.getValue().key()).isEqualTo("videos/encoded/1/7.mp4");
+		assertThat(captor.getValue().key()).isEqualTo(assetKeys(7L).encoded());
 		verify(aiClient).submit(any());
 		verify(statusWriter).recordAiJob(7L, "job-1", video.getBlurringStartedAt());
 	}
@@ -172,8 +177,8 @@ class AiBlurPollerTest {
 		ArgumentCaptor<PutObjectRequest> captor = ArgumentCaptor.forClass(PutObjectRequest.class);
 		verify(s3Client, times(2)).putObject(captor.capture(), any(RequestBody.class));   // 블러본 + 썸네일
 		assertThat(captor.getAllValues()).extracting(PutObjectRequest::key)
-			.containsExactlyInAnyOrder("videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg");
-		verify(statusWriter).markBlurReady(7L, "job-1", "videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg", highlights);
+			.containsExactlyInAnyOrder(assetKeys(7L).blurred(), assetKeys(7L).thumbnail());
+		verify(statusWriter).markBlurReady(7L, "job-1", assetKeys(7L).blurred(), assetKeys(7L).thumbnail(), highlights);
 		verify(s3Client, never()).deleteObject(any(DeleteObjectRequest.class));   // 적용됐으니 정리 안 함
 	}
 
@@ -191,7 +196,7 @@ class AiBlurPollerTest {
 		ArgumentCaptor<PutObjectRequest> captor = ArgumentCaptor.forClass(PutObjectRequest.class);
 		verify(s3Client, times(2)).putObject(captor.capture(), any(RequestBody.class));
 		PutObjectRequest thumbPut = captor.getAllValues().stream()
-			.filter(r -> r.key().equals("videos/thumb/1/7.jpg"))   // 인코딩 때와 같은 썸네일 키 덮어쓰기
+			.filter(r -> r.key().equals(assetKeys(7L).thumbnail()))
 			.findFirst().orElseThrow();
 		assertThat(thumbPut.contentType()).isEqualTo("image/jpeg");
 	}
@@ -207,7 +212,7 @@ class AiBlurPollerTest {
 		ArgumentCaptor<DeleteObjectRequest> captor = ArgumentCaptor.forClass(DeleteObjectRequest.class);
 		verify(s3Client, times(2)).deleteObject(captor.capture());   // 블러본 + 재추출 썸네일 둘 다 고아
 		assertThat(captor.getAllValues()).extracting(DeleteObjectRequest::key)
-			.containsExactlyInAnyOrder("videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg");
+			.containsExactlyInAnyOrder(assetKeys(7L).blurred(), assetKeys(7L).thumbnail());
 	}
 
 	// 검증: FR-MEDIA-06
@@ -294,7 +299,7 @@ class AiBlurPollerTest {
 		ArgumentCaptor<DeleteObjectRequest> captor = ArgumentCaptor.forClass(DeleteObjectRequest.class);
 		verify(s3Client, times(2)).deleteObject(captor.capture());   // 부분 업로드된 블러본·썸네일 정리 (P2-a)
 		assertThat(captor.getAllValues()).extracting(DeleteObjectRequest::key)
-			.containsExactlyInAnyOrder("videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg");
+			.containsExactlyInAnyOrder(assetKeys(7L).blurred(), assetKeys(7L).thumbnail());
 	}
 
 	// 검증: FR-MEDIA-06
@@ -513,7 +518,7 @@ class AiBlurPollerTest {
 
 		poller.reconcile();
 
-		verify(statusWriter).markBlurReady(7L, "job-1", "videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg", List.of());
+		verify(statusWriter).markBlurReady(7L, "job-1", assetKeys(7L).blurred(), assetKeys(7L).thumbnail(), List.of());
 		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 통과는 실패가 아니다 (FR-2)
 	}
 
@@ -559,7 +564,7 @@ class AiBlurPollerTest {
 		givenDone("job-new", List.of(List.of(0.0, 3.33)));
 		given(statusWriter.markBlurReady(anyLong(), anyString(), anyString(), anyString(), any())).willReturn(true);
 		poller.reconcile();
-		verify(statusWriter).markBlurReady(7L, "job-new", "videos/blurred/1/7.mp4", "videos/thumb/1/7.jpg",
+		verify(statusWriter).markBlurReady(7L, "job-new", assetKeys(7L).blurred(), assetKeys(7L).thumbnail(),
 			List.of(List.of(0.0, 3.33)));
 		verify(statusWriter, never()).markBlurFailed(anyLong(), any(), any(), any());   // 세 주기 어디서도 FAILED 없음
 	}
