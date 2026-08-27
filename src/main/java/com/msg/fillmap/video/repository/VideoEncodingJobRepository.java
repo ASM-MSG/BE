@@ -4,12 +4,25 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.msg.fillmap.video.entity.VideoEncodingJobStatus;
 import com.msg.fillmap.video.service.EncodingJobClaim;
@@ -18,16 +31,33 @@ import com.msg.fillmap.video.service.EncodingJobClaim;
 public class VideoEncodingJobRepository {
 
 	private static final int MAX_ERROR_LENGTH = 1000;
+	private static final List<String> JOB_EVENTS = List.of(
+		"enqueued", "claimed", "reclaimed", "retried", "completed", "dead");
+	private static final List<VideoEncodingJobStatus> QUEUE_STATUSES = List.of(
+		VideoEncodingJobStatus.PENDING, VideoEncodingJobStatus.PROCESSING, VideoEncodingJobStatus.DEAD);
 
 	private final JdbcClient jdbcClient;
+	private final Map<String, Counter> jobCounters = new HashMap<>();
+	private final Map<VideoEncodingJobStatus, AtomicLong> queueSizes = new HashMap<>();
 
-	public VideoEncodingJobRepository(JdbcClient jdbcClient) {
+	public VideoEncodingJobRepository(JdbcClient jdbcClient, MeterRegistry meterRegistry,
+		@Value("${FILLMAP_NODE_ID:be}") String nodeId) {
 		this.jdbcClient = jdbcClient;
+		for (String event : JOB_EVENTS) {
+			jobCounters.put(event, Counter.builder("video.encoding.job")
+				.tag("event", event).tag("node", nodeId).register(meterRegistry));
+		}
+		for (VideoEncodingJobStatus status : QUEUE_STATUSES) {
+			AtomicLong size = new AtomicLong();
+			queueSizes.put(status, size);
+			Gauge.builder("video.encoding.queue", size, AtomicLong::get)
+				.tag("status", status.name().toLowerCase(Locale.ROOT)).tag("node", nodeId).register(meterRegistry);
+		}
 	}
 
 	@Transactional
 	public void enqueue(Long videoId, String originalS3Key) {
-		jdbcClient.sql("""
+		int updated = jdbcClient.sql("""
 			INSERT INTO video_encoding_jobs (video_id, original_s3_key)
 			VALUES (:videoId, :originalS3Key)
 			ON CONFLICT (video_id, original_s3_key) DO NOTHING
@@ -35,11 +65,12 @@ public class VideoEncodingJobRepository {
 			.param("videoId", videoId)
 			.param("originalS3Key", originalS3Key)
 			.update();
+		recordAfterCommit("enqueued", updated);
 	}
 
 	@Transactional
 	public Optional<EncodingJobClaim> claimNext(String nodeId, UUID claimToken, Duration lease) {
-		return jdbcClient.sql("""
+		Optional<EncodingJobClaim> claim = jdbcClient.sql("""
 			WITH clock AS (
 				SELECT statement_timestamp() AT TIME ZONE 'utc' AS now_utc
 			), candidate AS (
@@ -68,11 +99,13 @@ public class VideoEncodingJobRepository {
 			.param("leaseSeconds", seconds(lease))
 			.query(VideoEncodingJobRepository::mapClaim)
 			.optional();
+		claim.ifPresent(value -> recordAfterCommit(value.attemptCount() == 1 ? "claimed" : "reclaimed", 1));
+		return claim;
 	}
 
 	@Transactional
 	public int retry(EncodingJobClaim claim, Duration delay, String error) {
-		return jdbcClient.sql("""
+		int updated = jdbcClient.sql("""
 			UPDATE video_encoding_jobs
 			SET status = 'PENDING',
 				claim_token = NULL,
@@ -92,11 +125,13 @@ public class VideoEncodingJobRepository {
 			.param("jobId", claim.jobId())
 			.param("claimToken", claim.claimToken())
 			.update();
+		recordAfterCommit("retried", updated);
+		return updated;
 	}
 
 	@Transactional
 	public int complete(EncodingJobClaim claim) {
-		return jdbcClient.sql("""
+		int updated = jdbcClient.sql("""
 			UPDATE video_encoding_jobs
 			SET status = 'COMPLETED',
 				claim_token = NULL,
@@ -111,6 +146,8 @@ public class VideoEncodingJobRepository {
 			.param("jobId", claim.jobId())
 			.param("claimToken", claim.claimToken())
 			.update();
+		recordAfterCommit("completed", updated);
+		return updated;
 	}
 
 	@Transactional
@@ -163,7 +200,7 @@ public class VideoEncodingJobRepository {
 
 	@Transactional
 	public int markExpiredThirdAttemptsDead() {
-		return jdbcClient.sql("""
+		int updated = jdbcClient.sql("""
 			UPDATE video_encoding_jobs
 			SET status = 'DEAD', claim_token = NULL, claimed_by = NULL, lease_until = NULL
 			WHERE status = 'PROCESSING'
@@ -171,6 +208,8 @@ public class VideoEncodingJobRepository {
 				AND lease_until <= (statement_timestamp() AT TIME ZONE 'utc')
 			""")
 			.update();
+		recordAfterCommit("dead", updated);
+		return updated;
 	}
 
 	@Transactional
@@ -207,7 +246,7 @@ public class VideoEncodingJobRepository {
 
 	@Transactional
 	public int completeDead(EncodingJobClaim claim) {
-		return jdbcClient.sql("""
+		int updated = jdbcClient.sql("""
 			UPDATE video_encoding_jobs
 			SET completed_at = statement_timestamp() AT TIME ZONE 'utc',
 				claim_token = NULL,
@@ -222,13 +261,40 @@ public class VideoEncodingJobRepository {
 			.param("jobId", claim.jobId())
 			.param("claimToken", claim.claimToken())
 			.update();
+		recordAfterCommit("completed", updated);
+		return updated;
 	}
 
-	public long count(VideoEncodingJobStatus status) {
-		return jdbcClient.sql("SELECT count(*) FROM video_encoding_jobs WHERE status = :status")
+	@Scheduled(fixedDelay = 15_000, initialDelay = 15_000)
+	public void refreshQueueMetrics() {
+		for (VideoEncodingJobStatus status : QUEUE_STATUSES) {
+			queueSizes.get(status).set(countQueue(status));
+		}
+	}
+
+	private long countQueue(VideoEncodingJobStatus status) {
+		String completedGuard = status == VideoEncodingJobStatus.DEAD ? " AND completed_at IS NULL" : "";
+		return jdbcClient.sql("SELECT count(*) FROM video_encoding_jobs WHERE status = :status" + completedGuard)
 			.param("status", status.name())
 			.query(Long.class)
 			.single();
+	}
+
+	private void recordAfterCommit(String event, long amount) {
+		if (amount <= 0) {
+			return;
+		}
+		Runnable increment = () -> jobCounters.get(event).increment(amount);
+		if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+			increment.run();
+			return;
+		}
+		TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+			@Override
+			public void afterCommit() {
+				increment.run();
+			}
+		});
 	}
 
 	private static EncodingJobClaim mapClaim(ResultSet resultSet, int rowNumber) throws SQLException {

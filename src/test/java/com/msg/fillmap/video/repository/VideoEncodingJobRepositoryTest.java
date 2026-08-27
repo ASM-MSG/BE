@@ -13,6 +13,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.persistence.EntityManager;
 
 import org.junit.jupiter.api.AfterEach;
@@ -36,7 +38,7 @@ import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.service.EncodingJobClaim;
 import com.msg.fillmap.video.support.GeoSupport;
 
-@SpringBootTest
+@SpringBootTest(properties = "FILLMAP_NODE_ID=test")
 @DisplayName("VideoEncodingJobRepository 작업 선점 (실 PostgreSQL)")
 class VideoEncodingJobRepositoryTest {
 
@@ -58,6 +60,9 @@ class VideoEncodingJobRepositoryTest {
 
 	@Autowired
 	private JdbcTemplate jdbcTemplate;
+
+	@Autowired
+	private MeterRegistry meterRegistry;
 
 	@Autowired
 	private PlatformTransactionManager txManager;
@@ -273,6 +278,71 @@ class VideoEncodingJobRepositoryTest {
 		assertThat(jobCount()).isZero();
 	}
 
+	@Test
+	@DisplayName("작업 생명주기 Counter는 성공한 전이만 고정 node 태그로 기록한다")
+	void 작업_생명주기_Counter는_성공한_전이만_기록한다() {
+		double enqueued = jobCount("enqueued");
+		double claimed = jobCount("claimed");
+		double retried = jobCount("retried");
+		double reclaimed = jobCount("reclaimed");
+		double completed = jobCount("completed");
+
+		repository.enqueue(videoId, originalKey);
+		EncodingJobClaim first = repository.claimNext("be", UUID.randomUUID(), LEASE).orElseThrow();
+		assertThat(repository.retry(first, Duration.ZERO, "retry")).isEqualTo(1);
+		EncodingJobClaim second = repository.claimNext("ai", UUID.randomUUID(), LEASE).orElseThrow();
+		assertThat(repository.complete(second)).isEqualTo(1);
+
+		assertThat(jobCount("enqueued") - enqueued).isEqualTo(1.0);
+		assertThat(jobCount("claimed") - claimed).isEqualTo(1.0);
+		assertThat(jobCount("retried") - retried).isEqualTo(1.0);
+		assertThat(jobCount("reclaimed") - reclaimed).isEqualTo(1.0);
+		assertThat(jobCount("completed") - completed).isEqualTo(1.0);
+	}
+
+	@Test
+	@DisplayName("롤백된 작업 등록은 enqueued Counter를 올리지 않는다")
+	void 롤백된_작업등록은_enqueued_Counter를_올리지_않는다() {
+		double enqueued = jobCount("enqueued");
+
+		tx.executeWithoutResult(status -> {
+			repository.enqueue(videoId, originalKey);
+			status.setRollbackOnly();
+		});
+
+		assertThat(jobCount("enqueued")).isEqualTo(enqueued);
+		assertThat(jobCount()).isZero();
+	}
+
+	@Test
+	@DisplayName("작업 Queue Gauge는 미종결 상태만 센다")
+	void 작업_Queue_Gauge는_미종결_상태만_센다() {
+		double deadCount = jobCount("dead");
+		repository.enqueue(videoId, originalKey);
+		repository.refreshQueueMetrics();
+		assertThat(queueSize("pending")).isEqualTo(1.0);
+
+		long jobId = jobId();
+		jdbcTemplate.update("""
+			UPDATE video_encoding_jobs
+			SET status = 'PROCESSING', attempt_count = 3, claim_token = ?,
+				claimed_by = 'be', lease_until = (statement_timestamp() AT TIME ZONE 'utc') - interval '1 second'
+			WHERE id = ?
+			""", UUID.randomUUID(), jobId);
+		assertThat(repository.markExpiredThirdAttemptsDead()).isEqualTo(1);
+		repository.refreshQueueMetrics();
+
+		assertThat(queueSize("pending")).isZero();
+		assertThat(queueSize("processing")).isZero();
+		assertThat(queueSize("dead")).isEqualTo(1.0);
+		assertThat(jobCount("dead") - deadCount).isEqualTo(1.0);
+
+		EncodingJobClaim dead = repository.claimDead("be", UUID.randomUUID(), LEASE).orElseThrow();
+		assertThat(repository.completeDead(dead)).isEqualTo(1);
+		repository.refreshQueueMetrics();
+		assertThat(queueSize("dead")).isZero();
+	}
+
 	private long saveVideo(String suffix) {
 		GridPoint center = GridFixtures.pointAt(GY + 0.5, GX + 0.5);
 		String key = "videos/original/%d/m494-%s-%s.mp4".formatted(userId, suffix, UUID.randomUUID());
@@ -294,6 +364,20 @@ class VideoEncodingJobRepositoryTest {
 	private int jobCount() {
 		return jdbcTemplate.queryForObject(
 			"SELECT count(*) FROM video_encoding_jobs WHERE video_id = ?", Integer.class, videoId);
+	}
+
+	private double jobCount(String event) {
+		return meterRegistry.get("video.encoding.job")
+			.tags("event", event, "node", "test")
+			.counter()
+			.count();
+	}
+
+	private double queueSize(String status) {
+		return meterRegistry.get("video.encoding.queue")
+			.tags("status", status, "node", "test")
+			.gauge()
+			.value();
 	}
 
 	private String statusOf(long id) {
