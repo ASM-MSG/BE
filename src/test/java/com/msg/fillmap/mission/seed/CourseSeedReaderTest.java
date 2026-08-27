@@ -420,4 +420,64 @@ class CourseSeedReaderTest {
 				.hasMessageContaining("확장자");
 		}
 	}
+
+	// 검증: FR-MISSION-19
+	// --- MSG-492: 스팟 표시 이름 재료 (테스트 1~5) ---
+
+	@Test
+	void method가_tourapi인_스팟은_name이_담긴다() {
+		List<CourseRecord> records = read("[" + valid("T_1", "코스") + "]");
+
+		assertThat(records.get(0).spots()).extracting(CourseRecord.Spot::name)
+			.containsExactly("스팟1", "스팟2", "스팟3", "스팟4", "스팟5");
+	}
+
+	@Test
+	void method가_geometric_fallback인_스팟은_name이_null이다() {
+		// "경유점 N" 은 지명이 아니라 자리표시라 버린다 — 폴백 이름은 시더가 채운다 (D-1).
+		String fallback = spots(5)
+			.replace("\"method\": \"tourapi\"", "\"method\": \"geometric-fallback\"")
+			.replace("\"name\": \"스팟", "\"name\": \"경유점 ");
+
+		List<CourseRecord> records = read("[" + course("T_1", "코스", PATH, fallback) + "]");
+
+		assertThat(records.get(0).spots()).extracting(CourseRecord.Spot::name).containsOnlyNulls();
+	}
+
+	@Test
+	void 스팟_name이_문자열이_아니면_전량_거부한다() {
+		String numericName = spots(5).replace("\"name\": \"스팟1\"", "\"name\": 123");
+
+		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, numericName) + "]"))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("name 가 문자열이 아닙니다");
+	}
+
+	@Test
+	void 명소_스팟의_name이_공백뿐이면_전량_거부한다() {
+		// requireText 는 isTextual 만 보므로 "" 가 통과한다 — 빈 이름이 저장되면 폴백이 안 돌아 빈 제목이 나간다.
+		String blankName = spots(5).replace("\"name\": \"스팟1\"", "\"name\": \"   \"");
+
+		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, blankName) + "]"))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("공백입니다");
+	}
+
+	@Test
+	void method가_두_값_밖이면_전량_거부한다() {
+		String unknownMethod = spots(5).replace("\"method\": \"tourapi\"", "\"method\": \"guessed\"");
+
+		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, unknownMethod) + "]"))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("method");
+	}
+
+	@Test
+	void method가_아예_없으면_전량_거부한다() {
+		String noMethod = spots(5).replace(", \"method\": \"tourapi\"", "");
+
+		assertThatThrownBy(() -> read("[" + course("T_1", "코스", PATH, noMethod) + "]"))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("method");
+	}
 }
