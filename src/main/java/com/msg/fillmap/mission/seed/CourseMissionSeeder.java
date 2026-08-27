@@ -26,6 +26,8 @@ import com.msg.fillmap.mission.entity.MissionMetadata;
 import com.msg.fillmap.mission.entity.MissionType;
 import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
+import com.msg.fillmap.region.service.RegionQueryService;
+import com.msg.fillmap.zone.service.ZoneNameQueryService;
 
 /**
  * 코스 미션 시더 (MSG-225 D7, FestivalMissionSeeder 미러). 기본 off —
@@ -54,6 +56,8 @@ public class CourseMissionSeeder implements ApplicationRunner {
 	private final MissionGridRepository missionGridRepository;
 	private final CourseSeedReader reader;
 	private final AwsProperties awsProperties;
+	private final ZoneNameQueryService zoneNameQueryService;
+	private final RegionQueryService regionQueryService;
 
 	@Value("${fillmap.mission.course.seed.enabled:false}")
 	private boolean enabled;
@@ -68,8 +72,9 @@ public class CourseMissionSeeder implements ApplicationRunner {
 			return;
 		}
 		SeedResult result = seed(Path.of(seedPath));
-		log.info("코스 미션 시드 완료 — 적재 {} 건, dedupe 건너뜀 {} 건(메타데이터 갱신 {} 건), 메타데이터 결측 {} 건",
-			result.loaded(), result.deduped(), result.updated(), result.missingMetadata());
+		log.info("코스 미션 시드 완료 — 적재 {} 건, dedupe 건너뜀 {} 건(메타데이터 갱신 {} 건, 스팟 이름 갱신 {} 건), "
+				+ "메타데이터 결측 {} 건",
+			result.loaded(), result.deduped(), result.updated(), result.spotNamesUpdated(), result.missingMetadata());
 	}
 
 	/**
@@ -99,8 +104,12 @@ public class CourseMissionSeeder implements ApplicationRunner {
 		// ORDER BY m.id 라 첫 원소가 최소 id 이고, 그 정렬이 이 결정성의 근거다.
 		Map<String, Mission> existing = missionRepository.findBySource(SOURCE_DURUNUBI).stream()
 			.collect(Collectors.toMap(Mission::getTitle, mission -> mission, (first, duplicate) -> first));
+		// 리졸버는 실행당 1회 — ZoneNameResolver 는 zones 전량을 담고 있어 코스마다 만들면 148회 전량 로드가 된다.
+		CourseSpotNameResolver nameResolver =
+			new CourseSpotNameResolver(zoneNameQueryService.resolver(), regionQueryService);
 		int loaded = 0;
 		int updated = 0;
+		int spotNamesUpdated = 0;
 		int missingMetadata = 0;
 		for (CourseRecord course : courses) {
 			MissionMetadata metadata = metadataOf(course);
@@ -114,16 +123,17 @@ public class CourseMissionSeeder implements ApplicationRunner {
 				if (existingMission.applyMetadata(metadata.withImageFallback(existingMission.getImageUrl()))) {
 					updated++;
 				}
+				spotNamesUpdated += updateSpotNames(existingMission.getId(), course, nameResolver);
 				continue;
 			}
-			insertCourse(course, metadata);
+			insertCourse(course, metadata, nameResolver);
 			loaded++;
 		}
-		return new SeedResult(loaded, courses.size() - loaded, updated, missingMetadata);
+		return new SeedResult(loaded, courses.size() - loaded, updated, spotNamesUpdated, missingMetadata);
 	}
 
 	/** 미션 1건(무기간·path 원문) + 스팟 mission_grids(seq 1..N) INSERT — 표시·판정 분리 저장 (FR-6). */
-	private void insertCourse(CourseRecord course, MissionMetadata metadata) {
+	private void insertCourse(CourseRecord course, MissionMetadata metadata, CourseSpotNameResolver nameResolver) {
 		Mission mission = missionRepository.save(Mission.builder()
 			.type(MissionType.COURSE)
 			.title(course.title())
@@ -133,8 +143,37 @@ public class CourseMissionSeeder implements ApplicationRunner {
 			.metadata(metadata)
 			.build());
 		missionGridRepository.saveAll(course.spots().stream()
-			.map(spot -> new MissionGrid(mission.getId(), spot.gridId(), spot.seq()))
+			.map(spot -> new MissionGrid(mission.getId(), spot.gridId(), spot.seq(),
+				nameResolver.resolve(spot.gridId(), spot.name())))
 			.toList());
+	}
+
+	/**
+	 * 이미 등재된 코스의 스팟 이름만 갱신한다 (MSG-492 §도메인 3, MSG-383 의 "재실행이 곧 백필" 형태).
+	 *
+	 * <p><b>격자 집합·seq·target_count·path 는 건드리지 않는다.</b> 스팟 격자가 바뀌면 이미 발급된 스탬프의
+	 * 근거가 흔들리고 진행도가 요동친다 — 이 갱신은 name 한 컬럼만 쓴다(더티 체킹).
+	 *
+	 * <p>산출물에 없는 (mission_id, grid_id) 는 건너뛴다. 반대로 명소였다가 폴백으로 바뀐 스팟은 null 로
+	 * 되돌리지 않고 폴백 계산 결과로 덮는다 — 저장값이 언제나 최종 표시 문자열이라 코스 스팟에 null 이 남는
+	 * 상태 자체가 없고, 막아야 하는 것은 명소가 억제 목록에 올라 빠졌는데 옛 이름이 남는 쪽이다.
+	 *
+	 * @return 값이 실제로 바뀐 스팟 수
+	 */
+	private int updateSpotNames(Long missionId, CourseRecord course, CourseSpotNameResolver nameResolver) {
+		Map<String, MissionGrid> storedByGridId = missionGridRepository.findByMissionIds(List.of(missionId)).stream()
+			.collect(Collectors.toMap(MissionGrid::getGridId, grid -> grid, (first, duplicate) -> first));
+		int changed = 0;
+		for (CourseRecord.Spot spot : course.spots()) {
+			MissionGrid stored = storedByGridId.get(spot.gridId());
+			if (stored == null) {
+				continue;
+			}
+			if (stored.applyName(nameResolver.resolve(spot.gridId(), spot.name()))) {
+				changed++;
+			}
+		}
+		return changed;
 	}
 
 	/**
@@ -151,10 +190,12 @@ public class CourseMissionSeeder implements ApplicationRunner {
 
 	/**
 	 * updated: 이미 있던 미션의 메타데이터를 채운 건수 (MSG-383 D6).
+	 * spotNamesUpdated: 이미 있던 코스에서 표시 이름이 실제로 바뀐 <b>스팟</b> 수 (MSG-492). updated 와 단위가
+	 * 달라(미션 vs 스팟) 같은 칸에 더하면 로그가 뜻을 잃으므로 따로 센다.
 	 * missingMetadata: 화면용 값(소개·시군·거리·소요시간·난이도·대표 이미지)이 <b>전부</b> 없는 코스 수 —
 	 * 산출물이 신규 키를 아직 안 싣고 있다는 신호다(D4). 이게 없으면 백필 재실행이 "적재 0 · 갱신 0"으로
 	 * 끝나 운영자가 "이미 다 돼 있다"로 읽는다.
 	 */
-	public record SeedResult(int loaded, int deduped, int updated, int missingMetadata) {
+	public record SeedResult(int loaded, int deduped, int updated, int spotNamesUpdated, int missingMetadata) {
 	}
 }

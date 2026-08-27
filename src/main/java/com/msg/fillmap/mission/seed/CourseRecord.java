@@ -5,7 +5,8 @@ import java.util.List;
 /**
  * courses-seed.json 코스 1건에서 추출한 적재 입력 (MSG-225 D6 · MSG-383 D4). pathJson 은 GeoJSON
  * LineString 원문(jsonb 그대로 저장·와이어 passthrough), spots 는 seq 오름차순 정렬 상태다. crsIdx 는
- * 미적재 — 산출물 추적·유니크 검증용. spots[].name/method 도 미적재(운영 검수용, MSG-222 계약에 없음).
+ * 미적재 — 산출물 추적·유니크 검증용. spots[].method 는 미적재 — 이름을 담을지 가르는 데만 쓰고 버린다
+ * (MSG-492 D-3). spots[].name 은 MSG-492 부터 적재한다.
  *
  * 뒤 6개는 화면용 값이다. 앞 5개는 MSG-383 이 더했고(산출물 키 contents·sigun·distanceKm·
  * durationMinutes·level), 거리는 미터로 환산해 담는다 — 원본이 킬로미터 문자열이라 정수 컬럼에 그대로
@@ -19,7 +20,14 @@ public record CourseRecord(String crsIdx, String title, String pathJson, List<Sp
 	String description, String placeName, Integer distanceMeters, Integer durationMinutes, Integer difficulty,
 	String imageKey) {
 
-	/** 판정용 포토스팟 하나 — seq 1..N 연속, gridId 는 논리 식별자("{grid_y}_{grid_x}"). */
-	public record Spot(int seq, String gridId) {
+	/**
+	 * 판정용 포토스팟 하나 — seq 1..N 연속, gridId 는 논리 식별자("{grid_y}_{grid_x}").
+	 *
+	 * name 은 <b>산출물이 실제 명소로 준 이름만</b> 담는다(method=tourapi). method=geometric-fallback 의
+	 * "경유점 3" 은 지명이 아니라 파이프라인이 이름 자리를 비워두지 않으려 넣은 자리표시라 여기서 버리고
+	 * null 로 둔다 — 담으면 시더의 이름 결정 사다리 ① 에서 걸려 폴백이 영영 안 돈다(MSG-492 D-1).
+	 * 그 null 을 최종 표시 문자열로 채우는 것은 시더 몫이다.
+	 */
+	public record Spot(int seq, String gridId, String name) {
 	}
 }

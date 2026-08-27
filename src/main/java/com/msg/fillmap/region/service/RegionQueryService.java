@@ -18,6 +18,17 @@ public interface RegionQueryService {
 	 */
 	Optional<RegionView> resolveByPoint(double lat, double lon);
 
+	/**
+	 * 좌표에서 경계까지 가장 가까운 행정동 1건 (MSG-492). regions 가 비지 않는 한 항상 값이 있다.
+	 * resolveByPoint 에 폴백을 얹지 않고 메서드를 나눈 이유는, 그쪽 계약의 Optional.empty 가 "품는 행정동 없음"
+	 * 신호라 기존 소비처(역지오코딩 API 의 200 + data null 등)가 그걸 쓰고 있기 때문이다 — 안으로 넣으면
+	 * "없음"이 영영 오지 않아 그 분기가 죽는다.
+	 * 호출처는 코스 시더 하나다. 격자 귀속 라벨(grids.region_code)에는 쓰지 않는다 — 그건 동별 집계의 분모라
+	 * 파급이 다르다(MSG-493).
+	 * lat/lon 이 서비스범위(한국) 밖이면 resolveByPoint 와 같이 INVALID_COORDINATE(6400).
+	 */
+	Optional<RegionView> resolveNearestByPoint(double lat, double lon);
+
 	/** 언급 지명 대조: 시도(접미 보정), 시군구, 동 세 단위 완전 일치 그룹. 매칭 없으면 빈 리스트. */
 	List<MentionedRegionMatch> matchMentionedRegions(String name, ViewportBounds viewport);
 

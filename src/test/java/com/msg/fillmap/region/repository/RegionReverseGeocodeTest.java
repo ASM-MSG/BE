@@ -70,4 +70,45 @@ class RegionReverseGeocodeTest {
 
 		assertThat(found).isPresent();
 	}
+
+	// --- MSG-492: 최근접 행정동 (테스트 23~25) ---
+
+	@Test
+	@DisplayName("폴리곤 밖 좌표는 경계까지 가장 가까운 행정동을 반환한다")
+	void 폴리곤_밖_좌표는_최근접_행정동을_반환한다() {
+		seed(CODE_A, POLYGON_A);
+
+		// A 북쪽 약 1km 바깥. 서해 공해상이라 실데이터 육상 행정동보다 A 가 압도적으로 가깝다.
+		Optional<RegionProjection> found = regionRepository.findNearestRegion(36.02, 125.0);
+
+		assertThat(found).isPresent();
+		assertThat(found.get().getRegionCode()).isEqualTo(CODE_A);
+	}
+
+	@Test
+	@DisplayName("폴리곤 안 좌표는 그 행정동을 반환한다 — ST_Covers 와 같은 답")
+	void 폴리곤_안_좌표는_ST_Covers와_같은_답을_준다() {
+		seed(CODE_A, POLYGON_A);
+
+		Optional<RegionProjection> nearest = regionRepository.findNearestRegion(36.0, 125.0);
+
+		assertThat(nearest).isPresent();
+		assertThat(nearest.get().getRegionCode())
+			.isEqualTo(regionRepository.findContainingRegion(36.0, 125.0).orElseThrow().getRegionCode());
+	}
+
+	@Test
+	@DisplayName("경계 동률에서는 region_code 가 작은 쪽으로 결정적으로 갈린다")
+	void 경계_동률은_region_code로_결정적으로_갈린다() {
+		seed(CODE_A, POLYGON_A);
+		seed(CODE_B, POLYGON_B);
+
+		// A|B 공유 변(lon 125.01) 위 — 두 폴리곤 모두 거리 0 이라 KNN 순서만으로는 비결정적이다.
+		Optional<RegionProjection> first = regionRepository.findNearestRegion(36.0, 125.01);
+		Optional<RegionProjection> second = regionRepository.findNearestRegion(36.0, 125.01);
+
+		assertThat(first).isPresent();
+		assertThat(first.get().getRegionCode()).isEqualTo(CODE_A);
+		assertThat(second.get().getRegionCode()).isEqualTo(first.get().getRegionCode());
+	}
 }

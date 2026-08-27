@@ -5,7 +5,7 @@
 **병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(`git checkout --ours docs/rtm.md` 등)
 스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다.
 
-요약: FR 279건 중 테스트 연결 247건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 25건, 성격상 테스트 비대상 7건 별도)
+요약: FR 279건 중 테스트 연결 248건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -180,7 +180,7 @@
 | FR-MISSION-16 | 진행 중 | CourseMissionSeederIntegrationTest, CourseSeedReaderTest, FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, MissionControllerTest, MissionDetailServiceTest, MissionPublicAccessHttpTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
 | FR-MISSION-17 | 진행 중 | MissionControllerTest, MissionDetailConsistencyTest, MissionDetailServiceTest, MissionPublicAccessHttpTest, MissionVideoControllerTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVideoListServiceTest, MissionVisitedGridQueryTest |
 | FR-MISSION-18 | 진행 중 | MissionControllerTest, MissionDetailConsistencyTest, MissionDetailServiceTest, MissionProgressQueryTest, MissionProgressServiceTest, MissionPublicAccessHttpTest, MissionVisitedGridQueryTest |
-| FR-MISSION-19 | 계획 | (없음) |
+| FR-MISSION-19 | 진행 중 | CourseMissionSeederIntegrationTest, CourseSeedContractTest, CourseSeedReaderTest, CourseSpotNameResolverTest |
 | FR-MISSION-21 | 구현됨 | FestivalMissionSeederIntegrationTest, PopupMissionSeederIntegrationTest |
 | FR-MISSION-22 | 진행 중 | MissionVideoControllerTest, MissionVideoUploadServiceTest |
 | FR-MISSION-23 | 구현됨 | MissionVideoUploadServiceTest |
@@ -310,7 +310,6 @@
 - FR-MISSION-07 (폐기됨)
 - FR-MISSION-12 (계획)
 - FR-MISSION-15 (계획)
-- FR-MISSION-19 (계획)
 - FR-EVENT-03 (폐기됨)
 - FR-EVENT-04 (폐기됨)
 - FR-EVENT-05 (폐기됨)

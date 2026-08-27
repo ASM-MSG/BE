@@ -29,6 +29,12 @@ import com.msg.fillmap.global.geo.KoreaCoordinates;
 @Component
 public class CourseSeedReader {
 
+	/** 산출물이 실제 명소(TourAPI)에서 이름을 얻은 스팟 — 이 값일 때만 name 을 적재한다 (MSG-492 D-1). */
+	private static final String METHOD_TOURAPI = "tourapi";
+
+	/** 명소가 없어 좌표만 기하로 잡은 스팟 — name 이 "경유점 N" 자리표시라 버린다 (MSG-492 D-1). */
+	private static final String METHOD_FALLBACK = "geometric-fallback";
+
 	private static final int SPOTS_MIN = 5;
 	private static final int SPOTS_MAX = 8;
 	/** missions.title VARCHAR(200) 방어 절단 (MSG-224 미러) — dedupe 키도 절단값으로 일관. */
@@ -243,7 +249,7 @@ public class CourseSeedReader {
 				// target_count 달성 불가 미션이 된다 — 파이프라인 격자 dedupe(D4-3) 위반 = 전량 거부(D7).
 				throw new IllegalStateException("코스 안에서 스팟 gridId 가 중복입니다 (D7): " + crsIdx + " = " + gridId);
 			}
-			spots.add(new CourseRecord.Spot(spot.path("seq").asInt(), gridId));
+			spots.add(new CourseRecord.Spot(spot.path("seq").asInt(), gridId, toSpotName(spot, crsIdx)));
 		}
 		spots.sort(Comparator.comparingInt(CourseRecord.Spot::seq));
 		for (int i = 0; i < spots.size(); i++) {
@@ -252,6 +258,33 @@ public class CourseSeedReader {
 			}
 		}
 		return List.copyOf(spots);
+	}
+
+	/**
+	 * 스팟의 표시 이름 재료 (MSG-492 §도메인 2). method=tourapi 일 때만 산출물 이름을 담고,
+	 * geometric-fallback 은 null 을 돌려 시더가 격자 표시명으로 채우게 한다(D-1).
+	 * method 가 두 값 밖이면 전량 거부 — 모르는 값을 폴백으로 흘려보내면 실제 명소 이름이 조용히 사라진다.
+	 */
+	private static String toSpotName(JsonNode spot, String crsIdx) {
+		String method = requireText(spot, "method");
+		if (!METHOD_TOURAPI.equals(method) && !METHOD_FALLBACK.equals(method)) {
+			throw new IllegalStateException(
+				"스팟 method 가 " + METHOD_TOURAPI + "·" + METHOD_FALLBACK + " 밖입니다 (MSG-492): "
+					+ crsIdx + " = " + method);
+		}
+		// method 와 무관하게 name 의 존재·타입은 먼저 검증한다 — 폴백 스팟에서 값을 버린다고 검증까지 건너뛰면
+		// 산출물이 name 을 통째로 빼먹거나 타입을 바꿔도 조용히 통과해, 다음에 그 스팟이 tourapi 로 돌아올 때
+		// 비로소 터진다. 전량 거부 계약은 method 별로 갈리지 않는다.
+		String name = requireText(spot, "name");
+		if (!METHOD_TOURAPI.equals(method)) {
+			return null;
+		}
+		if (name.isBlank()) {
+			// requireText 는 isTextual 만 보므로 "" 가 통과한다. 빈 이름이 저장되면 이름 결정 사다리 ① 에서
+			// 걸려 폴백이 안 돌고 그 스팟만 빈 제목으로 화면에 나간다(FR-1 위반) — 전량 거부가 낫다.
+			throw new IllegalStateException("명소 스팟(" + METHOD_TOURAPI + ")의 name 이 공백입니다 (MSG-492): " + crsIdx);
+		}
+		return name;
 	}
 
 	/** Long 왕복 재조립이 원본과 일치해야 정규형 — 정규식(자릿수 나열)만으로는 선행 0 을 못 거른다. */

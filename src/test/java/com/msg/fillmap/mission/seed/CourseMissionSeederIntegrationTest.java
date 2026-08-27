@@ -46,6 +46,12 @@ class CourseMissionSeederIntegrationTest {
 		{"type": "LineString", "coordinates": [[129.03597, 35.09656], [129.03642, 35.09721]]}""";
 
 	@Autowired
+	private com.msg.fillmap.zone.service.ZoneNameQueryService zoneNameQueryService;
+
+	@Autowired
+	private com.msg.fillmap.region.service.RegionQueryService regionQueryService;
+
+	@Autowired
 	private MissionRepository missionRepository;
 
 	@Autowired
@@ -68,7 +74,7 @@ class CourseMissionSeederIntegrationTest {
 
 	private CourseMissionSeeder newSeeder(boolean enabled, String path) {
 		CourseMissionSeeder seeder = new CourseMissionSeeder(missionRepository, missionGridRepository, reader,
-			awsProperties);
+			awsProperties, zoneNameQueryService, regionQueryService);
 		ReflectionTestUtils.setField(seeder, "enabled", enabled);
 		ReflectionTestUtils.setField(seeder, "seedPath", path);
 		return seeder;
@@ -410,6 +416,116 @@ class CourseMissionSeederIntegrationTest {
 		return missionRepository.findBySource(CourseMissionSeeder.SOURCE_DURUNUBI).stream()
 			.filter(mission -> mission.getTitle().equals(title))
 			.count();
+	}
+
+	// 검증: FR-MISSION-19
+	// --- MSG-492: 스팟 표시 이름 (테스트 7~11) ---
+
+	@Test
+	@DisplayName("새 코스 적재 시 명소 이름이 mission_grids.name 에 그대로 저장된다")
+	void 새_코스_적재시_명소_이름이_저장된다() throws IOException {
+		String title = unique("이름 적재 코스");
+		Path file = writeSeed("name-insert.json", course("T_NM_1", title, 5));
+
+		seeder().seed(file);
+		em.flush();
+		em.clear();
+
+		assertThat(spotNames(title)).containsExactly("스팟1", "스팟2", "스팟3", "스팟4", "스팟5");
+	}
+
+	@Test
+	@DisplayName("이미 등재된 코스를 재실행하면 이름만 갱신되고 격자 집합과 seq 는 그대로다")
+	void 재실행은_이름만_갱신하고_격자_집합은_그대로다() throws IOException {
+		String title = unique("이름 갱신 코스");
+		seeder().seed(writeSeed("before.json", course("T_NM_2", title, 5)));
+		em.flush();
+		em.clear();
+		List<String> gridsBefore = spotGridIds(title);
+
+		String renamed = course("T_NM_2", title, 5).replace("스팟", "새이름");
+		CourseMissionSeeder.SeedResult result = seeder().seed(writeSeed("after.json", renamed));
+		em.flush();
+		em.clear();
+
+		assertThat(result.loaded()).isZero();
+		assertThat(result.spotNamesUpdated()).isEqualTo(5);
+		assertThat(spotNames(title)).containsExactly("새이름1", "새이름2", "새이름3", "새이름4", "새이름5");
+		assertThat(spotGridIds(title)).isEqualTo(gridsBefore);
+		assertThat(spotSeqs(title)).containsExactly(1, 2, 3, 4, 5);
+	}
+
+	@Test
+	@DisplayName("명소였다가 폴백으로 바뀐 스팟은 폴백 계산 결과로 덮인다 — 옛 이름이 남지 않는다")
+	void 명소가_폴백으로_바뀌면_옛_이름이_남지_않는다() throws IOException {
+		String title = unique("억제 코스");
+		seeder().seed(writeSeed("named.json", course("T_NM_3", title, 5)));
+		em.flush();
+		em.clear();
+		assertThat(spotNames(title)).contains("스팟1");
+
+		String suppressed = course("T_NM_3", title, 5)
+			.replace("\"method\": \"tourapi\"", "\"method\": \"geometric-fallback\"");
+		seeder().seed(writeSeed("suppressed.json", suppressed));
+		em.flush();
+		em.clear();
+
+		// 합성 격자는 서비스 범위 밖이라 폴백 계산 결과가 null 이다. doesNotContain 은 "안 덮었다"와 "null 로
+		// 덮었다"를 구분 못 하므로 전부 null 임을 단언한다 — 옛 이름이 하나라도 남으면 여기서 깨진다.
+		// 폴백이 실제로 이름을 만들어내는 경로(구역·행정동·최근접)는 CourseSpotNameResolverTest 가 검증한다.
+		assertThat(spotNames(title)).containsOnlyNulls();
+	}
+
+	@Test
+	@DisplayName("같은 산출물로 두 번 돌리면 두 번째 이름 갱신은 0건이다 — 멱등 (FR-10)")
+	void 같은_산출물_재실행은_이름_갱신이_0건이다() throws IOException {
+		String title = unique("이름 멱등 코스");
+		Path file = writeSeed("idempotent-name.json", course("T_NM_4", title, 5));
+		seeder().seed(file);
+		em.flush();
+		em.clear();
+
+		CourseMissionSeeder.SeedResult second = seeder().seed(file);
+
+		assertThat(second.spotNamesUpdated()).isZero();
+	}
+
+	@Test
+	@DisplayName("이름 갱신이 target_count 와 path 를 건드리지 않는다 — 판정 불변 (성공 기준 7)")
+	void 이름_갱신이_판정_재료를_바꾸지_않는다() throws IOException {
+		String title = unique("판정 불변 코스");
+		seeder().seed(writeSeed("judge-before.json", course("T_NM_5", title, 5)));
+		em.flush();
+		em.clear();
+		Mission before = findByTitle(title);
+		Integer targetBefore = before.getTargetCount();
+		String pathBefore = before.getPath();
+
+		seeder().seed(writeSeed("judge-after.json", course("T_NM_5", title, 5).replace("스팟", "새이름")));
+		em.flush();
+		em.clear();
+
+		Mission after = findByTitle(title);
+		assertThat(after.getTargetCount()).isEqualTo(targetBefore);
+		assertThat(after.getPath()).isEqualTo(pathBefore);
+	}
+
+	private List<MissionGrid> spotsOf(String title) {
+		return missionGridRepository.findByMissionIds(List.of(findByTitle(title).getId())).stream()
+			.sorted(Comparator.comparing(MissionGrid::getSeq))
+			.toList();
+	}
+
+	private List<String> spotNames(String title) {
+		return spotsOf(title).stream().map(MissionGrid::getName).toList();
+	}
+
+	private List<String> spotGridIds(String title) {
+		return spotsOf(title).stream().map(MissionGrid::getGridId).toList();
+	}
+
+	private List<Integer> spotSeqs(String title) {
+		return spotsOf(title).stream().map(MissionGrid::getSeq).toList();
 	}
 
 	private Path writeSeed(String filename, String coursesJson) throws IOException {

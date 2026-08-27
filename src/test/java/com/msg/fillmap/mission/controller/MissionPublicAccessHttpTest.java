@@ -63,7 +63,7 @@ class MissionPublicAccessHttpTest {
 	/** 익명 상세 — progress 는 null, spotStats.visited 는 전부 false 인 서비스 응답 (MSG-454 §미션 상세의 익명 계약). */
 	private static MissionDetailResponseDto anonymousDetail() {
 		MissionResponseDto mission = new MissionResponseDto(MISSION_ID, "COURSE", "남파랑길 3코스", 3, null, null,
-			new PathShape(null, List.of(new Spot("38677_114635", 35.1, 129.0, 1))),
+			new PathShape(null, List.of(new Spot("38677_114635", 35.1, 129.0, 1, "광안리해수욕장"))),
 			null, null, null, null, null, null, null, null);
 		return new MissionDetailResponseDto(mission, null, 19L,
 			List.of(new SpotStats("38677_114635", false, 9)));
