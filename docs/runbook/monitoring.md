@@ -51,6 +51,32 @@ SSH 터널이 유일한 접근 경로다. Grafana와 Prometheus가 평문 HTTP�
 워커는 fillmap-ai EC2의 `fillmap-encoding-worker` systemd 서비스다. 앱과 같은 JAR를 쓰지만
 `dev,encoding-worker` 프로필로 실행하며 8081만 연다. 정상 여부는 아래 순서로 확인한다.
 
+CD는 JAR 교체와 재시작만 맡고 초기 프로비저닝은 하지 않는다. AI EC2를 새로 만들었다면 Java 21과
+`/home/ubuntu/encoding-worker` 디렉터리를 먼저 준비하고, MSG-494 스펙 9.2의 환경 파일을
+`/home/ubuntu/encoding-worker/worker.env`에 권한 600으로 둔다. systemd 단위는 아래와 같다.
+
+```ini
+[Unit]
+Description=FillMap distributed encoding worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/encoding-worker
+EnvironmentFile=/home/ubuntu/encoding-worker/worker.env
+ExecStart=/usr/bin/java -Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m -jar /home/ubuntu/encoding-worker/app.jar
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+단위 파일을 `/etc/systemd/system/fillmap-encoding-worker.service`에 둔 뒤 `systemctl daemon-reload`와
+`systemctl enable fillmap-encoding-worker`를 실행한다. GitHub dev 환경의 `AI_EC2_HOST`, `AI_EC2_USER`,
+`AI_EC2_SSH_KEY`도 없으면 CD가 JAR 업로드 단계에서 멈춘다.
+
 1. 서비스와 health 확인:
    `systemctl is-active fillmap-encoding-worker`와
    `curl -sS http://127.0.0.1:8081/actuator/health`
