@@ -298,6 +298,7 @@ class VideoEncodingJobRepositoryTest {
 		assertThat(jobCount("retried") - retried).isEqualTo(1.0);
 		assertThat(jobCount("reclaimed") - reclaimed).isEqualTo(1.0);
 		assertThat(jobCount("completed") - completed).isEqualTo(1.0);
+		assertThat(claimedBy(second.jobId())).isEqualTo("ai");
 	}
 
 	@Test
@@ -339,6 +340,7 @@ class VideoEncodingJobRepositoryTest {
 
 		EncodingJobClaim dead = repository.claimDead("be", UUID.randomUUID(), LEASE).orElseThrow();
 		assertThat(repository.completeDead(dead)).isEqualTo(1);
+		assertThat(claimedBy(dead.jobId())).isEqualTo("be");
 		repository.refreshQueueMetrics();
 		assertThat(queueSize("dead")).isZero();
 	}
@@ -383,6 +385,11 @@ class VideoEncodingJobRepositoryTest {
 	private String statusOf(long id) {
 		return jdbcTemplate.queryForObject(
 			"SELECT status FROM video_encoding_jobs WHERE id = ?", String.class, id);
+	}
+
+	private String claimedBy(long id) {
+		return jdbcTemplate.queryForObject(
+			"SELECT claimed_by FROM video_encoding_jobs WHERE id = ?", String.class, id);
 	}
 
 	private void expireLease(long id) {

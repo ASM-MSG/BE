@@ -135,7 +135,6 @@ public class VideoEncodingJobRepository {
 			UPDATE video_encoding_jobs
 			SET status = 'COMPLETED',
 				claim_token = NULL,
-				claimed_by = NULL,
 				lease_until = NULL,
 				completed_at = statement_timestamp() AT TIME ZONE 'utc'
 			WHERE id = :jobId
@@ -250,7 +249,6 @@ public class VideoEncodingJobRepository {
 			UPDATE video_encoding_jobs
 			SET completed_at = statement_timestamp() AT TIME ZONE 'utc',
 				claim_token = NULL,
-				claimed_by = NULL,
 				lease_until = NULL
 			WHERE id = :jobId
 				AND status = 'DEAD'
