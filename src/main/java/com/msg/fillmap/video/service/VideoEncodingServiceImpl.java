@@ -59,6 +59,15 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 	@Override
 	@Async(AsyncConfig.ENCODING_EXECUTOR)
 	public void encode(Long videoId, String originalKey) {
+		encodeNow(videoId, originalKey);
+	}
+
+	@Override
+	public void encode(EncodingJobClaim claim) {
+		encodeNow(claim.videoId(), claim.originalS3Key());
+	}
+
+	private void encodeNow(Long videoId, String originalKey) {
 		Video video = videoRepository.findById(videoId).orElse(null);
 		if (video == null) {
 			log.error("인코딩 대상 영상 없음: videoId={}", videoId);
