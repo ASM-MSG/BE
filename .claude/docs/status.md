@@ -143,6 +143,7 @@
 - MSG-64: presigned URL 발급(`POST /api/videos/presigned-url`)
 - MSG-65: 인코딩 워커(`VideoEncodingService`+`VideoStatusWriter`+`support/FfmpegRunner`+`config/AsyncConfig`, 커밋 후 `@Async` 트리거)
 - MSG-67: MP4 재생 CloudFront 연동(`CloudFrontUtilities` 600초 signed URL, 비활성 시 S3 presign 폴백, OAC+신뢰 키 그룹+10분 캐시 정책 dev 배포). 파생 S3 키를 original 시도별 UUID 경로로 분리하고 교체 커밋 뒤 이전 원본·인코딩본·블러본·썸네일을 삭제한다. dev 실측: 전체 GET 웜30 TTFB 51.8ms·완료 181.0ms, 1MiB Range 웜30 TTFB 48.6ms·완료 129.2ms, S3 직접 대비 각각 51.1%·27.8%와 48.5%·28.9% 개선. 콜드는 S3 직접보다 느림, 미서명·만료 403, Range 206, 캐시 적중 29/30·30/30, 실제 교체 후 경로 변경·옛 파생 파일 삭제 확인
+- MSG-495: 운영 영상 전송 자원 구성(`fillmap-video-prod`, 전용 OAC·공개 키·신뢰 키 그룹, CloudFront `E3RTGBXCIBKF2M`, `media.fillmap.kr` ACM·Route 53 A/AAAA). 운영 업로드 IAM 정책은 prod EC2가 없어 미연결 상태다. 실검증: 전체 GET 200·Range 206(`bytes 0-1023/10439`)·반복 요청 캐시 Hit, 미서명·만료·original·pending은 403, dev Range 206 유지. 검증 객체 삭제 완료. HLS·WAF·Origin Shield는 비범위
 - MSG-72: 삭제+점령 롤백(`DELETE /api/videos/{videoId}`, cover 재선정)
 - MSG-243: 삭제 동시성 정합(`deleteVideo` 도입부 `findWithLockById` 행 잠금 — 동시 삭제 이중 감소·점령 오롤백 차단, 패자 멱등 200 유지, `VideoDeleteConcurrencyTest` pg_blocking_pids 결정적 재현)
 - MSG-241: 인코딩 stale completion 차단(`encode(videoId, originalKey)` 시그니처 + 인코딩 라이터 4종 `findWithLockById`·`isCurrentEncodingAttempt`(ACTIVE·originalS3Key 일치) 가드 — 교체 후 옛 태스크의 READY/BLURRING/FAILED 오염·ai_job_id 잔존 차단. 폴러 라이터 3종 무변경, 마이그레이션 불요)

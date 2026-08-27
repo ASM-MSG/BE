@@ -41,6 +41,10 @@ docker compose up -d          # PostGIS 컨테이너(fillmap DB) 기동
 | `REDIS_HOST` / `REDIS_PORT` | EC2 redis-prod 접속 (포트 기본 `6380`) |
 | `REDIS_PASSWORD` | redis-prod requirepass — 기본값 없음, 미설정 시 기동 실패 (`ProdRequiredEnvValidator`, MSG-244 → MSG-260) |
 | `S3_BUCKET_VIDEO` | prod 영상 S3 버킷 — 기본값 없음, 미설정 시 `AwsProperties @Pattern` 이 기동 실패시킴 |
+| `CLOUDFRONT_ENABLED` | 영상 CDN 사용 여부. 운영에서는 `true` |
+| `CLOUDFRONT_DOMAIN` | 영상 전용 도메인 `media.fillmap.kr` |
+| `CLOUDFRONT_KEY_PAIR_ID` | 운영 CloudFront 공개 키 ID `K16XTNUYLRC55E` |
+| `CLOUDFRONT_PRIVATE_KEY_PATH` | 운영 서명 개인 키 경로 `/home/ubuntu/fillmap-prod-cloudfront-private-key.pem` |
 | `SERVER_PORT` | 서버 포트 (기본 `8080`) |
 
 - 카카오 엔드포인트 두 개(`oauth.kakao.token-uri` 인가 코드 교환, `oauth.kakao.authorize-uri` 로그인 진입점의
@@ -58,6 +62,26 @@ SPRING_PROFILES_ACTIVE=prod java -jar build/libs/msgbe-0.0.1-SNAPSHOT.jar
 
 - `jpa.show-sql=false`, 로깅 `root=INFO`, `hibernate.SQL=WARN`.
 - HikariCP 풀: max 20 / idle 5.
+
+### 운영 영상 CDN (MSG-495)
+
+운영 영상은 `fillmap-video-prod` 버킷에 저장하고 `media.fillmap.kr`에서 CloudFront 서명 URL[^cdn-1]로
+전송한다. CloudFront 배포 ID는 `E3RTGBXCIBKF2M`이며, S3 원본은 OAC[^cdn-2]를 통해
+`videos/encoded/*`, `videos/blurred/*`, `videos/thumb/*`만 읽을 수 있다. 서명하지 않았거나 만료된
+요청은 403이다.
+
+`FillMapVideoUploadProd` IAM 정책은 `videos/*`의 PutObject, GetObject, DeleteObject만 허용한다. 아직
+prod EC2 역할이 없으므로 정책은 어떤 역할에도 연결하지 않았다. 운영 인스턴스를 만들 때 해당 역할에만
+연결하고, dev 역할인 `FillMapEc2DevRole`에는 연결하지 않는다.
+
+운영 기동 시 위 CloudFront 변수와 `S3_BUCKET_VIDEO=fillmap-video-prod`를 함께 주입한다. 장애 시
+`CLOUDFRONT_ENABLED=false`로 바꾸면 기존 S3 사전서명 URL로 돌아간다. DNS만 되돌릴 때는 Route 53의
+`media.fillmap.kr` A와 AAAA 별칭 레코드[^cdn-3]를 제거한다. HLS, WAF, Origin Shield와 엣지 함수는
+MSG-495 범위에 포함하지 않았다.
+
+[^cdn-1]: CloudFront 서명 URL은 백엔드가 객체 경로와 만료 시각을 개인 키로 서명한 주소다. CloudFront는 운영 공개 키로 요청을 검증한다.
+[^cdn-2]: Origin Access Control은 CloudFront의 S3 원본 요청을 AWS 서명으로 인증해 버킷을 공개하지 않게 한다.
+[^cdn-3]: Route 53 별칭 레코드는 서비스 도메인을 CloudFront 배포에 연결하는 AWS 전용 DNS 레코드다.
 
 ## 관리자 계정 승격 (MSG-195)
 
