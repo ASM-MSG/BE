@@ -136,6 +136,8 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 				submitHighlightJob(videoId, originalKey, encodedKey);
 			}
 			log.info("인코딩 완료: videoId={} duration={}s blurActive={}", videoId, duration, blurActive);
+		} catch (ClaimLostException e) {
+			throw e;
 		} catch (FfmpegRunner.InvalidMediaException e) {
 			log.warn("손상 영상으로 인코딩 중단: videoId={}", videoId, e);
 			if (!resultCounted) {

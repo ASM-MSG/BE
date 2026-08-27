@@ -356,6 +356,21 @@ class VideoEncodingServiceTest {
 	}
 
 	@Test
+	void claim_상실은_failed_error로_계상하지_않고_호출자에게_전파한다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+		willThrow(new ClaimLostException(claim.jobId()))
+			.given(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(), MEASURED);
+
+		assertThatThrownBy(() -> encodingService.encode(claim)).isInstanceOf(ClaimLostException.class);
+
+		assertThat(taskCount("failed_error")).isZero();
+		assertThat(taskCount("completed")).isZero();
+		assertThat(taskCount("failed_over_duration")).isZero();
+	}
+
+	@Test
 	void ffmpeg_예외는_failed_error로_기록된다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		willThrow(new IllegalStateException("ffmpeg 실패"))
