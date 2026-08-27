@@ -161,8 +161,9 @@ public class CourseMissionSeeder implements ApplicationRunner {
 	 * @return 값이 실제로 바뀐 스팟 수
 	 */
 	private int updateSpotNames(Long missionId, CourseRecord course, CourseSpotNameResolver nameResolver) {
+		// PK(mission_id, grid_id)가 중복을 막으므로 병합 함수가 필요 없다 — 깨지면 toMap 이 던져 조기 발각된다.
 		Map<String, MissionGrid> storedByGridId = missionGridRepository.findByMissionIds(List.of(missionId)).stream()
-			.collect(Collectors.toMap(MissionGrid::getGridId, grid -> grid, (first, duplicate) -> first));
+			.collect(Collectors.toMap(MissionGrid::getGridId, grid -> grid));
 		int changed = 0;
 		for (CourseRecord.Spot spot : course.spots()) {
 			MissionGrid stored = storedByGridId.get(spot.gridId());

@@ -528,6 +528,45 @@ class CourseMissionSeederIntegrationTest {
 		return spotsOf(title).stream().map(MissionGrid::getSeq).toList();
 	}
 
+	// --- MSG-492 커버리지 보강: run 활성 경로 · 읽기 실패 · 유효 0건 ---
+
+	@Test
+	@DisplayName("플래그가 켜져 있으면 run 이 seed 를 실행하고 적재까지 끝낸다")
+	void 플래그가_켜져_있으면_run이_seed를_실행한다() throws IOException {
+		String title = unique("run 경로 코스");
+		Path file = writeSeed("run-enabled.json", course("T_RUN_1", title, 5));
+
+		newSeeder(true, file.toString()).run(emptyArgs());
+		em.flush();
+		em.clear();
+
+		assertThat(findByTitle(title).getType()).isEqualTo(MissionType.COURSE);
+	}
+
+	@Test
+	@DisplayName("경로가 디렉터리면 던진다 — 부분 적재 없음")
+	void 경로가_디렉터리면_던진다() {
+		long before = courseCount();
+
+		// isReadable 은 디렉터리에 true 다. 이 플랫폼은 디렉터리 스트림이 열리고 파서 단계에서 깨져
+		// reader 의 파싱 실패 메시지로 나온다 — 어느 단계든 명확한 예외로 멈추고 DB 는 무변경이어야 한다.
+		assertThatThrownBy(() -> seeder().seed(tempDir))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("파싱에 실패");
+		assertThat(courseCount()).isEqualTo(before);
+	}
+
+	@Test
+	@DisplayName("유효 코스가 0건이면 던진다 — 빈 산출물이 조용히 넘어가지 않는다")
+	void 유효_코스가_0건이면_던진다() throws IOException {
+		Path file = tempDir.resolve("empty.json");
+		Files.writeString(file, "[]");
+
+		assertThatThrownBy(() -> seeder().seed(file))
+			.isInstanceOf(IllegalStateException.class)
+			.hasMessageContaining("0건");
+	}
+
 	private Path writeSeed(String filename, String coursesJson) throws IOException {
 		Path file = tempDir.resolve(filename);
 		Files.writeString(file, "[" + coursesJson + "]");

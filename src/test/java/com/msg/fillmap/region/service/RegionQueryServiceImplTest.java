@@ -86,4 +86,28 @@ class RegionQueryServiceImplTest {
 		assertThat(view).isPresent();
 		assertThat(view.get().regionCode()).isEqualTo(CODE);
 	}
+
+	// --- MSG-492: 최근접 행정동 (서비스 계층 — 리포지토리 KNN 은 RegionReverseGeocodeTest 가 검증) ---
+
+	@Test
+	@DisplayName("품는 행정동이 없는 좌표는 최근접 행정동 뷰를 반환한다")
+	void 품는_행정동이_없는_좌표는_최근접_행정동뷰를_반환한다() {
+		seed();
+
+		// 폴리곤 북쪽 바깥 — resolveByPoint 는 empty 지만 최근접은 그 폴리곤이다.
+		Optional<RegionView> view = regionQueryService.resolveNearestByPoint(36.02, 125.0);
+
+		assertThat(view).isPresent();
+		assertThat(view.get().regionCode()).isEqualTo(CODE);
+		assertThat(view.get().regionName()).isEqualTo("합성동");
+	}
+
+	@Test
+	@DisplayName("최근접 조회도 서비스범위 밖 좌표는 INVALID_COORDINATE 를 던진다 (resolveByPoint 와 동일 가드)")
+	void 최근접_조회도_서비스범위_밖_좌표는_INVALID_COORDINATE를_던진다() {
+		assertThatThrownBy(() -> regionQueryService.resolveNearestByPoint(10.0, 100.0))
+			.isInstanceOf(ApiException.class)
+			.extracting(e -> ((ApiException) e).getErrorCode())
+			.isEqualTo(RegionErrorCode.INVALID_COORDINATE);
+	}
 }
