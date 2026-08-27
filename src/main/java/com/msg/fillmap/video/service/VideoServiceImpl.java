@@ -306,7 +306,9 @@ public class VideoServiceImpl implements VideoService {
 
 		// replaceFile 이 필드를 덮어쓰므로 그 전에 잡아둔다.
 		String replacedKey = video.getOriginalS3Key();
+		String replacedEncodedKey = video.getEncodedUrl();
 		String replacedBlurredKey = video.getBlurredS3Key();
+		String replacedThumbnailKey = video.getThumbnailUrl();
 
 		video.replaceFile(originalKey, request.durationSec(), request.recordedAt());
 		// 클레임 선행 (MSG-247 1R): original_s3_key 클레임(UPDATE)을 S3 복사보다 먼저 flush 한다.
@@ -319,9 +321,9 @@ public class VideoServiceImpl implements VideoService {
 		// 옛 키 S3 삭제 I/O 뒤에 markStart 가 찍히면 교체 처리 시간이 그만큼 과소 측정된다.
 		// 순서 의존 없음: 인코딩은 encodingExecutor 비동기 제출이고 새 originalKey ≠ replacedKey.
 		triggerEncodingAfterCommit(videoId, originalKey);
-		// 교체된 원본은 참조를 잃는다. 인코딩본·썸네일은 키가 videoId 기반이라 재인코딩이 같은 자리에
-		// 덮어쓰므로 지울 게 없다 — 고아가 되는 건 옛 original 과 블러본(MSG-145)이다.
-		afterCommit(() -> deleteQuietly(replacedKey, replacedBlurredKey));
+		// 파생 키가 인코딩 시도별로 갈리므로 이전 시도의 파일도 전부 참조를 잃는다 (MSG-67).
+		afterCommit(() -> deleteQuietly(
+			replacedKey, replacedEncodedKey, replacedBlurredKey, replacedThumbnailKey));
 		return VideoReplaceResponseDto.from(video);
 	}
 
