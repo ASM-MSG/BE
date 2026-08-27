@@ -48,6 +48,13 @@ public class GridQueryServiceImpl implements GridQueryService {
 	// 페이지 size 상한 (MSG-90 Q2). 기본값 1000 은 컨트롤러 defaultValue 소관.
 	private static final int MAX_PAGE_SIZE = 5000;
 
+	/**
+	 * 무귀속 격자 표시 폴백의 최근접 행정동 거리 상한 (MSG-493, 2026-08-27 정민 확정 3km). 지도 격자망은
+	 * 바다 한가운데도 눌리므로 상한이 없으면 수십 km 떨어진 동 이름이 붙는다. 3km 는 실측된 코스 경유 지점
+	 * 최댓값 2,189m 를 여유 있게 덮으면서 먼바다를 거른다. 상한 밖은 종전처럼 이름 없음이다.
+	 */
+	private static final double NEAREST_REGION_MAX_DISTANCE_METERS = 3_000;
+
 	// WGS84 좌표 유효 범위 — 서비스 범위(KoreaCoordinates)가 아니라 좌표계 자체의 정의역이다.
 	private static final double MIN_LATITUDE_DEG = -90.0;
 	private static final double MAX_LATITUDE_DEG = 90.0;
@@ -87,7 +94,7 @@ public class GridQueryServiceImpl implements GridQueryService {
 		if (KoreaCoordinates.isOutOfService(center.lat(), center.lon())) {
 			return null;
 		}
-		return regionQueryService.resolveNearestByPoint(center.lat(), center.lon())
+		return regionQueryService.resolveNearestByPoint(center.lat(), center.lon(), NEAREST_REGION_MAX_DISTANCE_METERS)
 			.map(RegionView::regionName)
 			.orElse(null);
 	}
