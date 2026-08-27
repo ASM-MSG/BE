@@ -8,6 +8,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.Mockito.never;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -246,14 +248,49 @@ class GridQueryServiceIntegrationTest {
 
 	// 검증: FR-REGION-10
 	@Test
-	@DisplayName("무귀속 격자 단일 조회는 regionName 이 null 이다 (MSG-349 FR-5)")
-	void 무귀속_격자_단일_조회는_regionName이_null이다() {
-		// 합성 행정동 블록에서 멀리 떨어진 서해 공해상 셀 — 어느 행정동도 덮지 않는다.
-		String openSeaGridId = GridEncoder.encode(35.0, 125.0);
+	@DisplayName("무귀속 격자 단일 조회는 가장 가까운 행정동 이름을 준다 (MSG-493 — MSG-349 null 정책 개정)")
+	void 무귀속_격자_단일_조회는_최근접_행정동_이름을_준다() {
+		// 합성 블록 남쪽 약 2km 공해상 — 어느 행정동도 덮지 않지만 상한(3km) 안이고, 실데이터 육지
+		// (약 94km, 태안군 근흥면)보다 합성 블록이 압도적으로 가까워 최근접 판정이 결정적이다.
+		// 표시 전용 폴백이라 저장 라벨·집계는 불변.
+		String openSeaGridId = (baseY - 20) + "_" + baseX;
 
 		GridCellView view = gridQueryService.getCell(me, openSeaGridId);
 
+		assertThat(view.regionName()).isEqualTo(REGION_NAME);
+	}
+
+	// 검증: FR-REGION-10
+	@Test
+	@DisplayName("경계에서 3km 를 넘는 바다 한가운데 격자는 이름이 없다 (MSG-493 거리 상한)")
+	void 상한을_넘는_바다_한가운데_격자는_이름이_없다() {
+		// 합성 블록 남쪽 약 5km — 최근접 행정동은 존재하지만 표시 상한(3km) 밖이라 종전처럼 빈 이름이다.
+		String farSeaGridId = (baseY - 50) + "_" + baseX;
+
+		GridCellView view = gridQueryService.getCell(me, farSeaGridId);
+
 		assertThat(view.regionName()).isNull();
+	}
+
+	// 검증: FR-REGION-10
+	@Test
+	@DisplayName("행정동에 속하는 격자는 최근접 폴백이 돌지 않는다 (정상 경로 추가 쿼리 0, MSG-493 D-2)")
+	void 행정동에_속하는_격자는_최근접_폴백이_돌지_않는다() {
+		gridQueryService.getCell(me, occupiedGridId);
+
+		verify(regionQueryService, never()).resolveNearestByPoint(anyDouble(), anyDouble(), anyDouble());
+	}
+
+	// 검증: FR-REGION-10
+	@Test
+	@DisplayName("행사 위치 벌크 이름 조회에는 폴백이 새지 않는다 — 무귀속이면 종전대로 이름 없음 (MSG-493 D-1)")
+	void 행사_위치_벌크_이름_조회에는_폴백이_새지_않는다() {
+		String openSeaGridId = (baseY - 20) + "_" + baseX;
+
+		Map<String, String> names = gridQueryService.resolveRegionNames(List.of(openSeaGridId, occupiedGridId));
+
+		assertThat(names).containsOnlyKeys(occupiedGridId);
+		verify(regionQueryService, never()).resolveNearestByPoint(anyDouble(), anyDouble(), anyDouble());
 	}
 
 	// 검증: FR-REGION-10

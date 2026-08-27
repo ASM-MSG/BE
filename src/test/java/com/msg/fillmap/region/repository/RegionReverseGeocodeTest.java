@@ -111,4 +111,29 @@ class RegionReverseGeocodeTest {
 		assertThat(first.get().getRegionCode()).isEqualTo(CODE_A);
 		assertThat(second.get().getRegionCode()).isEqualTo(first.get().getRegionCode());
 	}
+
+	// --- MSG-493: 거리 상한 있는 최근접 ---
+
+	@Test
+	@DisplayName("상한 안이면 최근접 행정동을 반환한다")
+	void 상한_안이면_최근접_행정동을_반환한다() {
+		seed(CODE_A, POLYGON_A);
+
+		// A 북쪽 약 1km 바깥 — 3km 상한 안.
+		Optional<RegionProjection> found = regionRepository.findNearestRegionWithin(36.02, 125.0, 3_000);
+
+		assertThat(found).isPresent();
+		assertThat(found.get().getRegionCode()).isEqualTo(CODE_A);
+	}
+
+	@Test
+	@DisplayName("최근접이 존재해도 상한 밖이면 빈 결과다")
+	void 최근접이_존재해도_상한_밖이면_빈_결과다() {
+		seed(CODE_A, POLYGON_A);
+
+		// A 북쪽 약 10km — 최근접은 A 지만 3km 상한을 넘는다.
+		Optional<RegionProjection> found = regionRepository.findNearestRegionWithin(36.1, 125.0, 3_000);
+
+		assertThat(found).isEmpty();
+	}
 }

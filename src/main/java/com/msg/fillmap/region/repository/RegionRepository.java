@@ -90,6 +90,30 @@ public interface RegionRepository extends JpaRepository<Region, String> {
 	Optional<RegionProjection> findNearestRegion(@Param("lat") double lat, @Param("lon") double lon);
 
 	/**
+	 * 거리 상한이 있는 최근접 행정동 (MSG-493). 구조는 findNearestRegion 과 같은 2단 KNN 이고, 바깥 단에서
+	 * 경계까지 거리가 상한을 넘는 후보를 버린다 — 바다 한가운데 격자에 수십 km 떨어진 동 이름이 붙는 것을
+	 * 막는다. 상한 필터가 바깥 단인 이유는 안쪽 LIMIT 이 인덱스 순서 스캔을 끊는 지점이라 WHERE 를 안쪽에
+	 * 넣으면 인덱스 사용이 다시 흔들리기 때문이다(2단 구조의 존재 이유와 같다).
+	 * 호출처는 단일 격자 조회(getCell) 표시 폴백 하나다. 코스 시더는 상한 없는 쪽을 쓴다(MSG-492 D-5).
+	 */
+	@Query(value = """
+		SELECT "regionCode", "regionName", "parentCode"
+		FROM (
+			SELECT region_code AS "regionCode", region_name AS "regionName", parent_code AS "parentCode",
+				boundary_geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography AS distance
+			FROM regions
+			ORDER BY boundary_geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+			LIMIT 8
+		) nearest
+		WHERE distance <= :maxDistanceMeters
+		ORDER BY distance, "regionCode"
+		LIMIT 1
+		""", nativeQuery = true)
+	Optional<RegionProjection> findNearestRegionWithin(
+		@Param("lat") double lat, @Param("lon") double lon,
+		@Param("maxDistanceMeters") double maxDistanceMeters);
+
+	/**
 	 * grids.region_code 멱등 보정 백필 (MSG-167 §D2 보정). V5 백필과 같은 판정·같은 IS NULL 가드다.
 	 * V5 는 Flyway 시점(RegionSeeder 이전)에 돌아, "격자는 있는데 regions 가 빈" 환경에선 no-op 으로 끝나고
 	 * upsertGrid 는 기존 격자를 건너뛰므로 라벨이 영구 NULL 로 남는다 — 시딩 직후 이 보정을 1회 돌려 닫는다.
