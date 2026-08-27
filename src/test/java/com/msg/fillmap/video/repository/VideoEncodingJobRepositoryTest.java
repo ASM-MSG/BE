@@ -183,8 +183,12 @@ class VideoEncodingJobRepositoryTest {
 	void V44_backfill은_원본키가_null인_영상을_제외한다() throws Exception {
 		String migration = new ClassPathResource("db/migration/V44__video_encoding_jobs.sql")
 			.getContentAsString(StandardCharsets.UTF_8);
+		String backfill = migration.substring(migration.indexOf("INSERT INTO video_encoding_jobs"));
+		jdbcTemplate.update("UPDATE videos SET original_s3_key = NULL WHERE id = ?", videoId);
 
-		assertThat(migration).contains("AND original_s3_key IS NOT NULL");
+		jdbcTemplate.execute(backfill);
+
+		assertThat(jobCount()).isZero();
 	}
 
 	@Test
