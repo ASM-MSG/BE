@@ -171,7 +171,18 @@ public class SecurityConfig {
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.
 				.requestMatchers("/api/admin/**").hasRole("ADMIN")
-				.anyRequest().authenticated()
+				// 행사 등재 콘솔(MSG-496) — 행사 운영자(ORG) 전용 프리픽스. ADMIN 에게 열지 않는다:
+				// 관리자는 자기 심사 API(/api/admin/**)를 쓰고, 콘솔 API 에는 소유권 검사가 걸린다.
+				.requestMatchers("/api/org/**").hasRole("ORG")
+				// ORG 도 쓰는 공용 경로 2개 — 아래 catch-all 이 역할 제한이라 여기서 명시 허용해야 한다.
+				// /me 는 GET 한정이다: 형제 쓰기 경로(닉네임·프로필 이미지 등)는 세그먼트가 달라 이 matcher 에
+				// 안 잡히고 catch-all 로 떨어져 ORG 에게 403 이 된다.
+				.requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
+				.requestMatchers("/api/auth/logout").authenticated()
+				// 행사 운영자 권한은 콘솔에만 미친다 (MSG-496 FR-5) — authenticated() 였으면 ORG 토큰이
+				// 영상 업로드·친구 같은 일반 사용자 API 를 그대로 통과한다. 익명은 여기서도 entry point 로
+				// 넘어가 지금과 같은 401 이다(403 아님).
+				.anyRequest().hasAnyRole("USER", "ADMIN")
 			)
 			.exceptionHandling(ex -> ex
 				.authenticationEntryPoint(authenticationEntryPoint)
