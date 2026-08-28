@@ -127,7 +127,7 @@ sequenceDiagram
     participant ADM as 관리자 콘솔
     participant AAPI as 심사 API (ADMIN)
     participant EV as 기존 행사 도메인
-    ORG->>API: POST /api/event-submissions (유형, 기본 정보, 위치 areaRects)
+    ORG->>API: POST /api/org/event-submissions (유형, 기본 정보, 위치 areaRects)
     API-->>ORG: 신청 번호, 상태 = 심사 중
     ADM->>AAPI: GET /api/admin/event-submissions (큐)
     ADM->>AAPI: GET /api/admin/event-submissions/{id} (영역 검토)
@@ -138,7 +138,7 @@ sequenceDiagram
     else 반려
         ADM->>AAPI: POST .../{id}/reject (사유 필수)
         AAPI-->>ORG: 상태 = 반려됨, 사유
-        ORG->>API: PATCH /api/event-submissions/{id} (수정 재제출)
+        ORG->>API: PATCH /api/org/event-submissions/{id} (수정 재제출)
         API-->>ORG: 상태 = 심사 중
     end
 ```
@@ -176,8 +176,8 @@ classDiagram
 
 | 파일 | 변경 | Owner |
 |------|------|-------|
-| `src/main/resources/db/migration/V44__users_role_org.sql` | 신규. `chk_users_role` CHECK에 ORG 추가 (V1이 USER, ADMIN만 허용 중) | B |
-| `src/main/resources/db/migration/V45__event_submissions.sql` | 신규. 신청 테이블(들) 신설, 스키마는 스펙에서 확정 | B |
+| `src/main/resources/db/migration/V45__users_role_org.sql` | 신규. `chk_users_role` CHECK에 ORG 추가 (V1이 USER, ADMIN만 허용 중) | B |
+| `src/main/resources/db/migration/V46__event_submissions.sql` | 신규. 신청 테이블(들) 신설, 스키마는 스펙에서 확정 | B |
 | `user/entity/UserRole.java` | 수정. ORG 상수 추가 (현재 USER, ADMIN) | B |
 | `user/dto/UserProfileResponseDto.java` | 수정. role 필드 추가 (`GET /api/users/me` 응답, 현재 미노출) | B |
 | `user/service/impl/UserServiceImpl.java` | 수정. 프로필 응답에 role 채움 | B |
@@ -188,16 +188,28 @@ classDiagram
 | 비밀번호 흐름 (`auth/` 아래 status·change·reset-request·reset 4개 API, mustChange 게이트) | 신규. 재설정 토큰(30분)·메일 발송 수단은 스펙에서 확정 | B |
 | 승인 행사 관리 (`admin/events` 목록·unpublish) | 신규. unpublish의 기존 회차 생명주기 접점은 스펙에서 확정 | B |
 
+Flyway 번호는 이 표의 값을 그대로 쓰지 말고 **각 티켓 구현 시점에 워크트리
+`src/main/resources/db/migration` 최신 번호를 재실측해 배정한다**(초안의 V44 배정이 이미 붙은
+`V44__video_encoding_jobs.sql`과 충돌해 2026-08-28에 V45·V46으로 정렬한 전례. 표의 번호는
+그 시점의 실측일 뿐이라 병렬 티켓이 먼저 번호를 쓰면 또 밀린다).
+
 로그인(`POST /api/auth/login`)과 비밀번호 해시 경로(`AuthService`, passwordEncoder)는 이미
 있어서 변경이 없거나 확인만 한다. 대표 격자 계산은 `global.geo.RepresentativeGridResolver`
 (MSG-459에서 공용 승격)를 재사용한다.
 
-v2 [관리자 4] 서버 재료 프레임이 명시한 신규 API 전체(21개): event-submissions 4개(ORG) +
+v2 [관리자 4] 서버 재료 프레임이 명시한 신규 API 전체(21개): event-submissions
+4개(ORG, `/api/org/event-submissions`) +
 admin/event-submissions 4개(ADMIN), org-account-requests 1개(비로그인 접수) +
 admin/org-account-requests 4개 + `POST /api/admin/organizations`(공문 선행 건 직접 발급),
 admin/events 2개(목록·unpublish), auth/password 4개(status·change·reset-request·reset),
 `PATCH /api/org/profile`·`POST /api/org/email-change-request`. 기존 재사용은 로그인,
 `GET /api/event-occurrences`, 장소 검색이다.
+
+행사 운영자 콘솔 API의 경로는 `/api/org/**` 프리픽스 하나로 통일이 확정됐다(2026-08-28 사용자
+확정. 후보 비교와 채택 근거는 `docs/spec/MSG-496.md` 미해결 질문의 결정 기록 참조). 시안 서버
+재료의 `POST /api/event-submissions` 표기는 이 확정으로 `POST /api/org/event-submissions`가
+됐고, 위 시퀀스 다이어그램에 반영돼 있다. 비로그인 접수 `POST /api/org-account-requests`는
+로그인 없는 공개 폼이라 이 프리픽스 밖에 그대로 남는다.
 
 ## 8. 미해결 질문
 
