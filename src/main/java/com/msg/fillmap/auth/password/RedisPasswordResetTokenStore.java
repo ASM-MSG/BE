@@ -7,7 +7,6 @@ import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 
-import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -32,7 +31,6 @@ import lombok.RequiredArgsConstructor;
  * DB 백업 저장을 두지 않는 근거다.
  */
 @Component
-@Profile("!test")
 @RequiredArgsConstructor
 public class RedisPasswordResetTokenStore implements PasswordResetTokenStore {
 
