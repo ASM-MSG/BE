@@ -57,6 +57,18 @@ class JwtTokenProviderTest {
 
 			assertThat(principal.role()).isEqualTo(UserRole.ADMIN);
 		}
+
+		// 검증: FR-AUTH-14
+		@Test
+		@DisplayName("성공: ORG role 도 정확히 라운드트립된다 — 행사 운영자 토큰 (MSG-496)")
+		void ORG_역할로_발급한_토큰을_파싱하면_ORG_주체가_된다() {
+			String token = tokenProvider.issueAccessToken(7L, UserRole.ORG);
+
+			AuthPrincipal principal = tokenProvider.parseAccessToken(token);
+
+			assertThat(principal.userId()).isEqualTo(7L);
+			assertThat(principal.role()).isEqualTo(UserRole.ORG);
+		}
 	}
 
 	@Nested
