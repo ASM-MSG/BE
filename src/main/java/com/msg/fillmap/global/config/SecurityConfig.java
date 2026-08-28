@@ -167,6 +167,12 @@ public class SecurityConfig {
 				// 재생의 명시 HEAD 매핑은 GET 한정 matcher 에 안 잡혀 익명 HEAD 가 401 이 된다 — 행사 영상
 				// 상세와 같은 이유로 같은 경로를 HEAD 로도 연다(접근 제어 없이 200, 전 id 동일이라 존재 오라클 아님).
 				.requestMatchers(HttpMethod.HEAD, "/api/videos/{videoId:[0-9]+}").permitAll()
+				// 비밀번호 재설정(MSG-497) — 비로그인 흐름이라 permitAll. 두 경로만 정확히 연다.
+				// /api/auth/password/** 로 넓히면 로그인 상태 전용인 status·change 까지 익명에 풀린다.
+				.requestMatchers("/api/auth/password/reset-request", "/api/auth/password/reset").permitAll()
+				// 비밀번호 상태·변경(MSG-497) — 역할 무관 로그인 필수. 아래 catch-all 이 역할 제한이라
+				// authenticated 명시가 없으면 ORG(정작 주 사용자)가 403 이 된다.
+				.requestMatchers("/api/auth/password/status", "/api/auth/password/change").authenticated()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.
