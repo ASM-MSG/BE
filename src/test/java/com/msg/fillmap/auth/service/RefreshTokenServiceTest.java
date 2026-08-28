@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.msg.fillmap.auth.exception.AuthErrorCode;
+import com.msg.fillmap.auth.jwt.InMemoryInvalidatedTokenStore;
 import com.msg.fillmap.auth.jwt.InMemoryRefreshTokenStore;
 import com.msg.fillmap.auth.jwt.JwtProperties;
 import com.msg.fillmap.auth.jwt.JwtRefreshTokenProvider;
@@ -44,6 +46,7 @@ class RefreshTokenServiceTest {
 	private UserRepository userRepository;
 
 	private InMemoryRefreshTokenStore refreshTokenStore;
+	private InMemoryInvalidatedTokenStore invalidatedTokenStore;
 	private RefreshTokenService refreshTokenService;
 
 	@BeforeEach
@@ -53,8 +56,10 @@ class RefreshTokenServiceTest {
 			"test-only-refresh-secret-must-be-at-least-32-bytes-long", Duration.ofDays(14)
 		);
 		this.refreshTokenStore = new InMemoryRefreshTokenStore();
+		this.invalidatedTokenStore = new InMemoryInvalidatedTokenStore();
 		this.refreshTokenService = new RefreshTokenService(
-			new JwtRefreshTokenProvider(properties), refreshTokenStore, tokenProvider, userRepository, properties
+			new JwtRefreshTokenProvider(properties), refreshTokenStore, tokenProvider, userRepository, properties,
+			invalidatedTokenStore
 		);
 	}
 
@@ -182,6 +187,61 @@ class RefreshTokenServiceTest {
 			assertThat(deviceTwoResult.deviceId()).isEqualTo("device-2");
 			assertThat(refreshTokenStore.findJti(USER_ID, "device-1")).isNotNull();
 			assertThat(refreshTokenStore.findJti(USER_ID, "device-2")).isNotNull();
+		}
+	}
+
+	/**
+	 * 비밀번호 재설정의 재발급 경합 차단 (MSG-497). 검사가 회전 save 뒤라 "세션 전량 삭제와 인터리빙돼
+	 * 옛 리프레시로 세션이 부활하는" 경로가 닫힌다 — 여기서는 무효화 기록만 세워 그 판정을 직접 본다.
+	 */
+	@Nested
+	@DisplayName("reissue — 사용자 단위 무효화 차단")
+	class ResetInvalidation {
+
+		private void 무효화_기록을_세운다(Instant invalidatedAt) {
+			invalidatedTokenStore.invalidateUser(USER_ID, invalidatedAt, Duration.ofDays(14));
+		}
+
+		// 검증: FR-AUTH-16
+		@Test
+		@DisplayName("무효화 이전에 발급된 리프레시의 재발급은 거부되고 회전 세션도 남지 않는다")
+		void 재설정_이전_발급_리프레시의_재발급은_세션을_남기지_않는다() {
+			givenActiveUser();
+			String refreshToken = refreshTokenService.issue(USER_ID, DEVICE_ID);
+			무효화_기록을_세운다(Instant.now().plusSeconds(10));
+
+			assertThatThrownBy(() -> refreshTokenService.reissue(refreshToken))
+				.isInstanceOf(ApiException.class)
+				.satisfies(thrown -> assertThat(apiException(thrown).getErrorCode())
+					.isEqualTo(AuthErrorCode.EXPIRED_REFRESH_TOKEN));
+			assertThat(refreshTokenStore.findJti(USER_ID, DEVICE_ID)).isNull();
+		}
+
+		// 검증: FR-AUTH-16
+		@Test
+		@DisplayName("무효화와 같은 초에 발급된 리프레시도 거부된다 — fail-closed 경계")
+		void 무효화와_같은_초에_발급된_리프레시도_거부된다() {
+			givenActiveUser();
+			String refreshToken = refreshTokenService.issue(USER_ID, DEVICE_ID);
+			무효화_기록을_세운다(Instant.now());
+
+			assertThatThrownBy(() -> refreshTokenService.reissue(refreshToken))
+				.isInstanceOf(ApiException.class);
+			assertThat(refreshTokenStore.findJti(USER_ID, DEVICE_ID)).isNull();
+		}
+
+		// 검증: FR-AUTH-16
+		@Test
+		@DisplayName("무효화 이후 재로그인한 리프레시의 재발급은 통과한다")
+		void 재설정_후_재로그인한_리프레시의_재발급은_통과한다() {
+			givenActiveUser();
+			무효화_기록을_세운다(Instant.now().minusSeconds(10));
+			String refreshToken = refreshTokenService.issue(USER_ID, DEVICE_ID);
+
+			ReissueResult result = refreshTokenService.reissue(refreshToken);
+
+			assertThat(result.accessToken()).isEqualTo("new-access-token");
+			assertThat(refreshTokenStore.findJti(USER_ID, DEVICE_ID)).isNotNull();
 		}
 	}
 }

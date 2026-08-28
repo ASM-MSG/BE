@@ -57,7 +57,8 @@ public class JwtRefreshTokenProvider implements RefreshTokenProvider {
 			return new RefreshTokenClaims(
 				Long.parseLong(claims.getSubject()),
 				claims.get(DEVICE_ID_CLAIM, String.class),
-				claims.getId()
+				claims.getId(),
+				claims.getIssuedAt() == null ? null : claims.getIssuedAt().toInstant()
 			);
 		} catch (NumberFormatException e) {
 			throw new ApiException(AuthErrorCode.INVALID_REFRESH_TOKEN);
