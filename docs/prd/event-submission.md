@@ -202,8 +202,11 @@ v2 [관리자 4] 서버 재료 프레임이 명시한 신규 API 전체(21개): 
 admin/event-submissions 4개(ADMIN), org-account-requests 1개(비로그인 접수) +
 admin/org-account-requests 4개 + `POST /api/admin/organizations`(공문 선행 건 직접 발급),
 admin/events 2개(목록·unpublish), auth/password 4개(status·change·reset-request·reset),
-`PATCH /api/org/profile`·`POST /api/org/email-change-request`. 기존 재사용은 로그인,
-`GET /api/event-occurrences`, 장소 검색이다.
+`GET·PATCH /api/org/profile`·`POST /api/org/email-change-request`. 계정 설정 화면([운영자 11])의
+초기값 조회용 `GET /api/org/profile`은 시안 서버 재료에 없던 것을 2026-08-28 확정으로 추가해
+신규 API는 22개가 됐다(내 프로필 조회 `GET /api/users/me`는 네 응답이 공유하는 DTO라 연락처를
+싣지 않는다. 채택 근거는 `docs/spec/MSG-497.md` 미해결 질문의 결정 기록 참조). 기존 재사용은
+로그인, `GET /api/event-occurrences`, 장소 검색이다.
 
 행사 운영자 콘솔 API의 경로는 `/api/org/**` 프리픽스 하나로 통일이 확정됐다(2026-08-28 사용자
 확정. 후보 비교와 채택 근거는 `docs/spec/MSG-496.md` 미해결 질문의 결정 기록 참조). 시안 서버
