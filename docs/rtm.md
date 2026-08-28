@@ -5,7 +5,7 @@
 **병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(`git checkout --ours docs/rtm.md` 등)
 스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다.
 
-요약: FR 279건 중 테스트 연결 248건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
+요약: FR 284건 중 테스트 연결 250건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 27건, 성격상 테스트 비대상 7건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -199,6 +199,9 @@
 | FR-EVENT-10 | 구현됨 | EventInteractionLockTest, EventLifecycleGuardTest, EventNotificationSubscriptionRepositoryTest, EventSeederScheduleChangeTest, EventVideoQueryServiceTest, EventVideoUploadConcurrencyTest, EventVideoUploadServiceTest |
 | FR-EVENT-11 | 구현됨 | EventViewerCacheFailureControllerTest, EventViewerControllerTest, EventViewerServiceImplTest |
 | FR-EVENT-12 | 구현됨 | MissionAwardQueryTest, MissionProgressQueryTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVisitedGridQueryTest |
+| FR-EVENT-13 | 계획 | (없음) |
+| FR-EVENT-14 | 계획 | (없음) |
+| FR-EVENT-15 | 계획 | (없음) |
 | FR-ROUTE-01 | 진행 중 | AnonymousReadAccessHttpTest, RouteCandidateCollectorTest, RouteControllerTest, RouteIntentClientTest, RouteRecommendServiceTest |
 | FR-ROUTE-02 | 진행 중 | RouteCandidateCollectorTest, RouteRecommendServiceTest |
 | FR-ROUTE-03 | 구현됨 | EventQueryServiceTest, PlaceSearchServiceTest, RouteCandidateCollectorTest, RouteOrderPlannerTest |
@@ -271,8 +274,10 @@
 | FR-AUTH-08 | 구현됨 | AuthControllerTest |
 | FR-AUTH-09 | 구현됨 | AuthControllerTest, AuthServiceTest, JwtFilterIntegrationTest, JwtTokenProviderTest, RedisInvalidatedTokenStoreTest |
 | FR-AUTH-10 | 구현됨 | AuthControllerTest, KakaoAuthCodeExchangerTest |
-| FR-AUTH-11 | **미충족** | AuthControllerTest, AuthServiceTest |
+| FR-AUTH-11 | 구현됨 | AuthControllerTest, AuthServiceTest |
 | FR-AUTH-12 | 계획 | (없음) |
+| FR-AUTH-13 | 진행 중 | AuthControllerTest, AuthServiceTest |
+| FR-AUTH-14 | 구현됨 | JwtTokenProviderTest, OidcLoginServiceTest, OrgAuthorizationTest, UserProfileIntegrationTest, UserRoleOrgPersistenceTest |
 | FR-USER-01 | 구현됨 | UserProfileControllerTest, UserProfileIntegrationTest |
 | FR-USER-02 | 구현됨 | UserProfileControllerTest, UserProfileIntegrationTest |
 | FR-USER-03 | 구현됨 | UserEmaillessPersistenceTest |
@@ -313,6 +318,9 @@
 - FR-EVENT-03 (폐기됨)
 - FR-EVENT-04 (폐기됨)
 - FR-EVENT-05 (폐기됨)
+- FR-EVENT-13 (계획)
+- FR-EVENT-14 (계획)
+- FR-EVENT-15 (계획)
 - FR-ROUTE-15 (계획)
 - FR-NOTI-12 (계획)
 - FR-NOTI-13 (폐기됨)

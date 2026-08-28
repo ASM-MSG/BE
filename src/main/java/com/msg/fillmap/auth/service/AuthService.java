@@ -59,7 +59,7 @@ public class AuthService {
 		}
 		String accessToken = tokenProvider.issueAccessToken(user.getId(), user.getRole());
 		String refreshToken = refreshTokenService.issue(user.getId(), deviceId);
-		return new LoginResponseDto(accessToken, refreshToken);
+		return new LoginResponseDto(accessToken, refreshToken, user.getRole().name());
 	}
 
 	@Transactional

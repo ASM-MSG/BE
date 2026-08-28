@@ -78,7 +78,7 @@ class UserProfileControllerTest {
 	void 내_프로필을_조회한다() throws Exception {
 		// 정확값 스텁 — principal userId(토큰의 USER_ID)가 서비스에 그대로 전달돼야만 매치된다(사용자 격리).
 		given(userService.getMyProfile(USER_ID))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false, "USER"));
 
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
@@ -92,7 +92,7 @@ class UserProfileControllerTest {
 	@DisplayName("카카오 가입 사용자는 email 필드가 존재하되 값이 null 이다 (MSG-310, required+nullable)")
 	void 카카오_가입_사용자는_email_필드가_존재하되_값이_null_이다() throws Exception {
 		given(userService.getMyProfile(USER_ID))
-			.willReturn(new UserProfileResponseDto(null, "카카오유저", null, CREATED_AT, false));
+			.willReturn(new UserProfileResponseDto(null, "카카오유저", null, CREATED_AT, false, "USER"));
 
 		// OpenAPI 계약(required + nullable) 그대로의 와이어 검증 — 필드 존재(hasKey)와 값 null 을 구분해 단언한다.
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -107,7 +107,7 @@ class UserProfileControllerTest {
 	@DisplayName("닉네임을 수정하면 변경 후 프로필을 반환한다 (FR-2·D2)")
 	void 닉네임을_수정하면_변경_후_프로필을_반환한다() throws Exception {
 		given(userService.updateNickname(USER_ID, "새닉네임"))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "새닉네임", null, CREATED_AT, false));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "새닉네임", null, CREATED_AT, false, "USER"));
 
 		mockMvc.perform(put(NICKNAME_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
@@ -156,7 +156,7 @@ class UserProfileControllerTest {
 	@DisplayName("두 글자·스무 글자 닉네임은 통과한다 (FR-2, @Size 경계 안)")
 	void 두_글자와_스무_글자_닉네임은_통과한다() throws Exception {
 		given(userService.updateNickname(eq(USER_ID), anyString()))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "무관", null, CREATED_AT, false));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "무관", null, CREATED_AT, false, "USER"));
 
 		mockMvc.perform(put(NICKNAME_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
@@ -211,7 +211,7 @@ class UserProfileControllerTest {
 	@DisplayName("프로필 응답에 이미지 URL 과 가입 시각이 실린다 — 미설정이면 필드 존재 + null (MSG-373 FR-2·3)")
 	void 프로필_응답에_이미지_URL과_가입_시각이_실린다() throws Exception {
 		given(userService.getMyProfile(USER_ID))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false, "USER"));
 
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
@@ -254,7 +254,7 @@ class UserProfileControllerTest {
 	@DisplayName("프로필 이미지를 변경하면 갱신된 프로필을 반환한다 (MSG-373 FR-1)")
 	void 프로필_이미지를_변경하면_갱신된_프로필을_반환한다() throws Exception {
 		given(userService.updateProfileImage(USER_ID, "profiles/pending/42/uuid.jpg"))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", "https://cdn/img.jpg", CREATED_AT, false));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", "https://cdn/img.jpg", CREATED_AT, false, "USER"));
 
 		mockMvc.perform(put(PROFILE_IMAGE_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
@@ -280,7 +280,7 @@ class UserProfileControllerTest {
 	@DisplayName("프로필 이미지를 제거하면 이미지 URL 이 null 인 프로필을 반환한다 (MSG-373 FR-6)")
 	void 프로필_이미지를_제거하면_null인_프로필을_반환한다() throws Exception {
 		given(userService.removeProfileImage(USER_ID))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false, "USER"));
 
 		mockMvc.perform(delete(PROFILE_IMAGE_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
@@ -292,7 +292,7 @@ class UserProfileControllerTest {
 	@DisplayName("위치정보 사용 동의를 켜면 변경 후 프로필을 반환한다 (MSG-402 FR-2·D-1)")
 	void 위치정보_사용_동의를_켜면_변경_후_프로필을_반환한다() throws Exception {
 		given(userService.updateLocationConsent(USER_ID, true))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, true));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, true, "USER"));
 
 		mockMvc.perform(put(LOCATION_CONSENT_URL)
 				.header(HttpHeaders.AUTHORIZATION, bearer())
@@ -335,7 +335,7 @@ class UserProfileControllerTest {
 	@DisplayName("프로필 응답 JSON 에 locationConsent 키가 항상 존재한다 (required 계약)")
 	void 프로필_응답_JSON에_locationConsent_키가_항상_존재한다() throws Exception {
 		given(userService.getMyProfile(USER_ID))
-			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false));
+			.willReturn(new UserProfileResponseDto("user@fillmap.dev", "채우미", null, CREATED_AT, false, "USER"));
 
 		mockMvc.perform(get(ME_URL).header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
