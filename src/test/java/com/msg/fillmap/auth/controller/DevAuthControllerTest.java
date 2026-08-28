@@ -50,7 +50,7 @@ class DevAuthControllerTest {
 	@DisplayName("성공: (provider, oid)로 액세스+리프레시를 발급하고 X-Device-Id 를 반환한다")
 	void socialLogin_success() throws Exception {
 		given(oidcLoginService.issueForOidcUser(eq(AuthProvider.KAKAO), any(OidcUserInfo.class), anyString()))
-			.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+			.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 		DevSocialLoginRequestDto request = new DevSocialLoginRequestDto("KAKAO", "dev-1", null, null);
 
 		mockMvc.perform(post(DEV_SOCIAL_LOGIN_URL)
@@ -66,7 +66,7 @@ class DevAuthControllerTest {
 	@DisplayName("provider 를 생략하면 KAKAO 로 처리한다")
 	void socialLogin_defaultProvider() throws Exception {
 		given(oidcLoginService.issueForOidcUser(eq(AuthProvider.KAKAO), any(OidcUserInfo.class), anyString()))
-			.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+			.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 		DevSocialLoginRequestDto request = new DevSocialLoginRequestDto(null, "dev-2", null, null);
 
 		mockMvc.perform(post(DEV_SOCIAL_LOGIN_URL)

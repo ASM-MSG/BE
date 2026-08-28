@@ -282,7 +282,7 @@ public class AuthController {
 		}
 		response.addHeader(HttpHeaders.SET_COOKIE,
 			RefreshTokenCookies.issue(issued.refreshToken(), jwtProperties.refreshTokenTtl()));
-		return new LoginResponseDto(issued.accessToken(), null);
+		return new LoginResponseDto(issued.accessToken(), null, issued.role());
 	}
 
 	private boolean isApp(String clientType) {
