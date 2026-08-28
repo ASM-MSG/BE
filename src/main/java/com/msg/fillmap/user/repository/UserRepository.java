@@ -40,6 +40,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 		@Param("email") String email, @Param("nickname") String nickname,
 		@Param("friendCode") String friendCode);
 
+	/**
+	 * 첫 로그인 비밀번호 강제 변경 게이트의 판정 쿼리 (MSG-497). PasswordChangeGateInterceptor 가
+	 * {@code /api/org/**} 요청마다 PK 조회 1회로 부른다 — 플래그 해제가 즉시 반영돼야 해서
+	 * JWT 클레임(발급 시점 스냅숏)이 아니라 DB 를 본다.
+	 */
+	boolean existsByIdAndPasswordMustChangeTrue(Long id);
+
 	/** 친구 코드로 상대 특정 (MSG-185) — friend 도메인의 미리보기·요청이 소비한다. */
 	Optional<User> findByFriendCode(String friendCode);
 

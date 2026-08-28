@@ -107,6 +107,14 @@ fillmap:
         POPUP: 0
         COURSE: 0
 
+  # 메일 발송 (MSG-497) — 기본 off: 로컬·dev 는 실발송 없이 로그로 링크를 확인한다.
+  # reset-link-base-url 은 여기에 기본값을 두지 않는다. 두면 prod 가 상속받아, 실발송이 켜졌는데
+  # URL 이 미주입이면 localhost 링크가 실제 메일로 나간다 — local·dev 프로파일 문서에만 둔다.
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:contact@fillmap.kr}
+    reset-link-base-url: ${MAIL_RESET_LINK_BASE_URL:}
+
   # 알림 발송 파이프라인 (MSG-179) — 기본 off: 로컬·CI 는 Kafka·FCM 없이 그대로 green, dev/prod 만 env 로 on
   notification:
     enabled: ${NOTIFICATION_ENABLED:false}

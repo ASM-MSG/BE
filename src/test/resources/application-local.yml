@@ -39,3 +39,8 @@ fillmap:
   video:
     encoding-job:
       enabled: false
+
+  # 메일 발송 (MSG-497) — 로컬은 실발송 없이 LoggingMailSender 가 링크를 로그로 찍는다.
+  # 이 base URL 은 로그에 찍히는 재설정 링크의 앞부분이다 (화면 라우트는 FE 확정 몫).
+  mail:
+    reset-link-base-url: http://localhost:5173/reset-password
