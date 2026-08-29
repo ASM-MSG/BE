@@ -3,16 +3,21 @@ package com.msg.fillmap.user.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.BDDMockito.willAnswer;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,7 +32,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.jayway.jsonpath.JsonPath;
 
@@ -41,16 +47,20 @@ import com.msg.fillmap.user.repository.UserRepository;
 /**
  * 관리자 계정 직접 발급·재발송·목록 (MSG-499 API 6~8, 실 DB). 발급 계정의 형태와 재발송 대상 판정이
  * 실제 저장 상태에 걸려 있어 목으로는 잡히지 않는다 — 메일 발송만 목으로 갈아 끼운다.
- * {@code @Transactional} 롤백 격리로 공유 로컬 DB 에 계정을 남기지 않는다.
+ *
+ * <p><b>클래스 수준 {@code @Transactional} 을 쓰지 않는다</b> (Codex 1R 지적). 롤백 격리를 걸면 서비스의
+ * TransactionTemplate 이 테스트 트랜잭션에 합류해 커밋이 일어나지 않고, "발송은 커밋 뒤"라는 계약이
+ * 검증되지 않은 채 통과한다. 대신 만든 계정을 {@link #정리한다()} 가 직접 지운다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Transactional
 @DisplayName("관리자 계정 직접 발급·재발송·목록 (MSG-499, 실 DB)")
 class AdminOrgAccountControllerTest {
 
 	private static final String ACCOUNTS_URL = "/api/admin/organizations";
 	private static final String INITIAL_PASSWORD = "Initial1234";
+	private static final String PASSWORD_LABEL = "초기 비밀번호: ";
+	private static final String ISSUED_AT_LABEL = "발급 시각: ";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -67,38 +77,79 @@ class AdminOrgAccountControllerTest {
 	@Autowired
 	private EntityManager entityManager;
 
+	@Autowired
+	private TransactionTemplate transactionTemplate;
+
 	@MockitoBean
 	private MailSender mailSender;
 
+	/** 발송 시점에 트랜잭션이 살아 있었는지 — 커밋 후 발송 계약의 직접 증거다 (미호출이면 null). */
+	private Boolean 발송_시점_트랜잭션_활성;
+	private final List<String> 정리할_이메일 = new ArrayList<>();
 	private String adminToken;
 
 	@BeforeEach
 	void setUp() {
-		User admin = saveUser("admin-" + UUID.randomUUID() + "@fillmap.dev", UserRole.ADMIN, AuthProvider.LOCAL);
+		발송_시점_트랜잭션_활성 = null;
+		willAnswer(invocation -> {
+			발송_시점_트랜잭션_활성 = TransactionSynchronizationManager.isActualTransactionActive();
+			return null;
+		}).given(mailSender).send(any(), any(), any());
+
+		User admin = saveUser(uniqueEmail(), UserRole.ADMIN, AuthProvider.LOCAL);
 		adminToken = "Bearer " + tokenProvider.issueAccessToken(admin.getId(), admin.getRole());
 	}
 
-	private User saveUser(String email, UserRole role, AuthProvider provider) {
-		User user = User.createLocalUser(email, passwordEncoder.encode(INITIAL_PASSWORD), "담당자");
-		ReflectionTestUtils.setField(user, "role", role);
-		ReflectionTestUtils.setField(user, "provider", provider);
-		if (provider != AuthProvider.LOCAL) {
-			ReflectionTestUtils.setField(user, "oid", UUID.randomUUID().toString());
+	@AfterEach
+	void tearDown() {
+		정리한다();
+	}
+
+	/** 커밋된 계정을 직접 지운다 — 이 클래스는 요청 행을 만들지 않아 users 만 지우면 된다. */
+	private void 정리한다() {
+		if (정리할_이메일.isEmpty()) {
+			return;
 		}
-		return userRepository.saveAndFlush(user);
+		transactionTemplate.executeWithoutResult(status -> entityManager
+			.createQuery("DELETE FROM User u WHERE u.email IN :emails")
+			.setParameter("emails", 정리할_이메일)
+			.executeUpdate());
+		정리할_이메일.clear();
+	}
+
+	/** 이 클래스의 모든 이메일이 이 문을 거친다 — 여기서 등록해야 정리에서 빠지는 계정이 없다. */
+	private String uniqueEmail() {
+		String email = "msg499-org-" + UUID.randomUUID() + "@fillmap.dev";
+		정리할_이메일.add(email);
+		return email;
+	}
+
+	private User saveUser(String email, UserRole role, AuthProvider provider) {
+		return transactionTemplate.execute(status -> {
+			User user = User.createLocalUser(email, passwordEncoder.encode(INITIAL_PASSWORD), "담당자");
+			ReflectionTestUtils.setField(user, "role", role);
+			ReflectionTestUtils.setField(user, "provider", provider);
+			if (provider != AuthProvider.LOCAL) {
+				ReflectionTestUtils.setField(user, "oid", UUID.randomUUID().toString());
+			}
+			return userRepository.saveAndFlush(user);
+		});
 	}
 
 	private User saveOrgAccount(String email, String orgName, boolean mustChange) {
-		User user = User.createOrgUser(email, passwordEncoder.encode(INITIAL_PASSWORD), "김담당",
-			"010-1234-5678", orgName);
-		if (!mustChange) {
-			user.changePassword(passwordEncoder.encode("Fillmap5678"));
-		}
-		return userRepository.saveAndFlush(user);
+		return transactionTemplate.execute(status -> {
+			User user = User.createOrgUser(email, passwordEncoder.encode(INITIAL_PASSWORD), "김담당",
+				"010-1234-5678", orgName);
+			if (!mustChange) {
+				user.changePassword(passwordEncoder.encode("Fillmap5678"));
+			}
+			return userRepository.saveAndFlush(user);
+		});
 	}
 
-	private String uniqueEmail() {
-		return "org-" + UUID.randomUUID() + "@fillmap.dev";
+	/** 커밋된 상태를 별도 트랜잭션에서 다시 읽는다 — 테스트가 서비스와 영속성 컨텍스트를 공유하지 않는다. */
+	private User 다시_읽는다(Long userId) {
+		return transactionTemplate.execute(status -> userRepository.findById(userId).orElseThrow());
 	}
 
 	private String createBody(String email) {
@@ -107,12 +158,26 @@ class AdminOrgAccountControllerTest {
 			.formatted(email);
 	}
 
-	private String 발송된_초기_비밀번호() {
-		ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
-		then(mailSender).should().send(any(), any(), bodyCaptor.capture());
-		String body = bodyCaptor.getValue();
-		int begin = body.indexOf("초기 비밀번호: ") + "초기 비밀번호: ".length();
+	private static String 본문에서_뽑는다(String body, String label) {
+		int begin = body.indexOf(label) + label.length();
 		return body.substring(begin, body.indexOf('\n', begin));
+	}
+
+	/** 발송된 본문 전량 — 재발송이 여러 번인 경우 순서대로 담긴다. */
+	private List<String> 발송된_본문들(int expectedCount) {
+		ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+		then(mailSender).should(times(expectedCount)).send(any(), any(), bodyCaptor.capture());
+		return bodyCaptor.getAllValues();
+	}
+
+	private String 발송된_초기_비밀번호() {
+		return 본문에서_뽑는다(발송된_본문들(1).getFirst(), PASSWORD_LABEL);
+	}
+
+	private void 발송은_커밋_뒤였다() {
+		assertThat(발송_시점_트랜잭션_활성)
+			.as("발송이 호출되지 않았거나 트랜잭션 안에서 일어났다")
+			.isFalse();
 	}
 
 	@Nested
@@ -133,6 +198,7 @@ class AdminOrgAccountControllerTest {
 				.andExpect(jsonPath("$.data.emailSent").value(true))
 				.andReturn().getResponse().getContentAsString();
 
+			발송은_커밋_뒤였다();
 			ArgumentCaptor<String> toCaptor = ArgumentCaptor.forClass(String.class);
 			then(mailSender).should().send(toCaptor.capture(), any(), any());
 			assertThat(toCaptor.getValue()).isEqualTo(email);
@@ -140,9 +206,7 @@ class AdminOrgAccountControllerTest {
 			assertThat(body).doesNotContain(plainPassword);
 
 			Long userId = ((Number) JsonPath.read(body, "$.data.userId")).longValue();
-			entityManager.flush();
-			entityManager.clear();
-			User issued = userRepository.findById(userId).orElseThrow();
+			User issued = 다시_읽는다(userId);
 			assertThat(issued.getRole()).isEqualTo(UserRole.ORG);
 			assertThat(issued.getProvider()).isEqualTo(AuthProvider.LOCAL);
 			assertThat(issued.isPasswordMustChange()).isTrue();
@@ -207,10 +271,9 @@ class AdminOrgAccountControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.emailSent").value(true));
 
+			발송은_커밋_뒤였다();
 			String reissued = 발송된_초기_비밀번호();
-			entityManager.flush();
-			entityManager.clear();
-			User reloaded = userRepository.findById(account.getId()).orElseThrow();
+			User reloaded = 다시_읽는다(account.getId());
 			assertThat(passwordEncoder.matches(reissued, reloaded.getPasswordHash())).isTrue();
 			// 강제 변경 플래그는 유지된다 — 여전히 발급자가 아는 값이다.
 			assertThat(reloaded.isPasswordMustChange()).isTrue();
@@ -225,6 +288,32 @@ class AdminOrgAccountControllerTest {
 					.content("""
 						{"email": "%s", "password": "%s"}""".formatted(email, reissued)))
 				.andExpect(status().isOk());
+		}
+
+		// 검증: FR-AUTH-13
+		@Test
+		@DisplayName("같은 분에 두 번 재발송해도 발급 시각으로 두 메일이 구분되고 나중 비밀번호만 유효하다")
+		void 같은_분에_두_번_재발송해도_발급_시각으로_구분되고_나중_비밀번호만_유효하다() throws Exception {
+			User account = saveOrgAccount(uniqueEmail(), "부산진구청", true);
+
+			for (int attempt = 0; attempt < 2; attempt++) {
+				mockMvc.perform(post(resendUrl(account.getId())).header(HttpHeaders.AUTHORIZATION, adminToken))
+					.andExpect(status().isOk());
+			}
+
+			// 연속 두 번이라 사실상 같은 분에 나가지만, 시각 표기가 초 이하까지라 두 메일이 구분된다.
+			// 수신자가 어느 비밀번호를 쓸지 가리는 유일한 단서가 이 값이다.
+			List<String> bodies = 발송된_본문들(2);
+			String firstIssuedAt = 본문에서_뽑는다(bodies.getFirst(), ISSUED_AT_LABEL);
+			String secondIssuedAt = 본문에서_뽑는다(bodies.getLast(), ISSUED_AT_LABEL);
+			assertThat(firstIssuedAt).isNotEqualTo(secondIssuedAt);
+			assertThat(secondIssuedAt).isGreaterThan(firstIssuedAt);
+
+			String firstPassword = 본문에서_뽑는다(bodies.getFirst(), PASSWORD_LABEL);
+			String secondPassword = 본문에서_뽑는다(bodies.getLast(), PASSWORD_LABEL);
+			User reloaded = 다시_읽는다(account.getId());
+			assertThat(passwordEncoder.matches(secondPassword, reloaded.getPasswordHash())).isTrue();
+			assertThat(passwordEncoder.matches(firstPassword, reloaded.getPasswordHash())).isFalse();
 		}
 
 		// 검증: FR-AUTH-13

@@ -40,7 +40,7 @@ import com.msg.fillmap.user.repository.UserRepository;
  * 갈라져 있고, 호출부가 커밋 이후에 발송부를 부른다.
  *
  * <p>초기 비밀번호 평문은 이 클래스 밖으로 응답·로그·DB 어디에도 나가지 않는다 — 생성 직후 해시로
- * 저장하고 메일 본문에 한 번 실은 뒤 버린다. 발송 실패 로그에도 수신 주소와 예외만 남는다
+ * 저장하고 메일 본문에 한 번 실은 뒤 버린다. 발송 실패 로그에는 수신 주소와 예외 <b>타입</b>만 남는다
  * (로컬·dev 의 LoggingMailSender 가 본문을 찍는 것은 MSG-497 이 확정한 유일한 예외이고 prod 에서는
  * 그 빈이 뜰 수 없다).
  */
@@ -57,9 +57,17 @@ public class OrgAccountIssueService {
 	private static final int PASSWORD_LENGTH = 16;
 	private static final SecureRandom PASSWORD_RANDOM = new SecureRandom();
 
-	/** 발급 시각은 사람이 읽는 안내라 KST 로 표기한다 — 저장·전송 축(UTC)과 무관한 메일 본문 표기다. */
+	/**
+	 * 발급 시각은 사람이 읽는 안내라 KST 로 표기한다 — 저장·전송 축(UTC)과 무관한 메일 본문 표기다.
+	 *
+	 * <p>초 이하까지 찍는 이유는 이 값이 안내가 아니라 <b>복구 계약</b>이라서다. 여러 통을 받은 수신자가
+	 * 어느 비밀번호가 유효한지 가리는 유일한 단서가 이 시각인데, 분 단위면 같은 분에 두 번 재발송된
+	 * 두 메일이 같은 값을 달고 나가 구분이 불가능해진다. 재발송은 users 행 잠금으로 직렬화되므로 같은
+	 * 초에 커밋될 수도 있어 마이크로초까지 찍는다(저장 정밀도와 같은 단위).
+	 */
 	private static final ZoneId MAIL_ZONE = ZoneId.of("Asia/Seoul");
-	private static final DateTimeFormatter MAIL_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+	private static final DateTimeFormatter MAIL_TIME_FORMAT =
+		DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
 	private static final String LOGIN_URL = "https://fillmap.kr";
 	private static final String MAIL_SUBJECT = "[필맵] 행사 운영자 계정 발급 안내";
 	private static final String MAIL_BODY_FORMAT = """
@@ -199,8 +207,12 @@ public class OrgAccountIssueService {
 				MAIL_BODY_FORMAT.formatted(LOGIN_URL, issued.email(), issued.plainPassword(), issuedAtLabel));
 			return true;
 		} catch (RuntimeException e) {
-			// 평문은 로그에 섞지 않는다 — 수신 주소와 예외만 남긴다.
-			log.error("[org-account] 초기 비밀번호 메일 발송 실패 — userId={}, to={}", issued.userId(), issued.email(), e);
+			// 예외를 로거에 넘기지 않고 타입만 남긴다. 발송 유틸에 넘긴 본문에 평문이 들어 있어서, 구현이나
+			// SDK 가 그 본문을 예외 메시지에 실어 올리면 스택 트레이스를 통해 평문이 로그로 샌다 — 그때는
+			// 평문 비노출(FR-2)이 이 한 줄에서 깨진다. 원인 추적에 필요한 신호(거부·스로틀 등)는 예외
+			// 타입이 대부분 담고, 상세는 발송 구현 쪽 로그가 갖는다.
+			log.error("[org-account] 초기 비밀번호 메일 발송 실패 — userId={}, to={}, cause={}",
+				issued.userId(), issued.email(), e.getClass().getName());
 			return false;
 		}
 	}
