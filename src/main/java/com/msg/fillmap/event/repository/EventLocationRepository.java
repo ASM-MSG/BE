@@ -42,6 +42,8 @@ public interface EventLocationRepository extends JpaRepository<EventLocation, Lo
 	 * 여러 회차의 위치 일괄 (MSG-457 getLocationsBulk). 회차 노출 판정에 occurrence 가 필요해 fetch join 으로
 	 * 한 번에 당긴다 — 위치 루프 안 지연 로딩은 N+1 이라 금지다. 정렬은 단건 조회 계약(display_order → id)에
 	 * 회차 id 1차 키만 얹은 것이라 그룹핑 뒤에도 회차 안 순서가 유지된다.
+	 * <p>
+	 * 콘솔 승인 이벤트 목록(MSG-501)의 장소 라벨도 이 정렬을 그대로 소비한다 — 회차별 첫 행이 곧 라벨이다.
 	 */
 	@Query("""
 		SELECT l FROM EventLocation l

@@ -22,6 +22,16 @@ public interface EventOccurrenceRepository extends JpaRepository<EventOccurrence
 	List<EventOccurrence> findByVisibleFromLessThanEqual(LocalDateTime now);
 
 	/**
+	 * 행사 운영자 콘솔의 승인 이벤트 후보 — 아직 끝나지 않은 회차 전량 (MSG-501). 종료 정각은 이미 종료라
+	 * 빠진다(파생 상태로 UPCOMING·LIVE 만 남는다). 시·도 필터·이름 검색·집계·정렬은 후보가 수십 건 규모라
+	 * 자바가 한다 — 전체 기준 집계와 필터 적용 목록이 이 한 번의 조회에서 함께 나온다.
+	 * <p>
+	 * 유저 조회의 노출 판정(visibleFrom)은 걸지 않는다 (결정 D-2) — 행사 운영자는 노출 시작 전에 미리 부모
+	 * 이벤트를 골라 참여를 신청할 수 있어야 심사 시간이 행사 시작 안에 든다.
+	 */
+	List<EventOccurrence> findByEndsAtAfter(LocalDateTime now);
+
+	/**
 	 * 상세용 단건 — 시리즈를 함께 읽는다 (MSG-439 API 2). 응답의 seriesId 와 이전 회차 조회 키가 시리즈라
 	 * fetch join 으로 지연 로딩 한 번을 없앤다.
 	 */
