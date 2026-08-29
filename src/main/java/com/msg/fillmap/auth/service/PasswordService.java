@@ -81,7 +81,10 @@ public class PasswordService {
 	 */
 	public void changePassword(Long userId, PasswordChangeRequestDto request) {
 		transactionTemplate.executeWithoutResult(status -> {
-			User user = userRepository.findById(userId)
+			// 잠금 조회다 (MSG-499) — 초기 비밀번호 재발송이 같은 행을 쓰므로, 여기서 잠그지 않으면 이
+			// 트랜잭션의 낡은 스냅숏이 재발송 결과를 되덮는다(lost update). 잠근 뒤 현재 비밀번호를
+			// 대조하므로, 재발송이 먼저 커밋했으면 사용자의 변경 요청은 2442 로 안전하게 실패한다.
+			User user = userRepository.findWithLockById(userId)
 				.orElseThrow(() -> new ApiException(UserErrorCode.USER_NOT_FOUND));
 			if (user.getProvider() != AuthProvider.LOCAL || user.getPasswordHash() == null) {
 				// 비밀번호가 없는 계정의 요청을 "현재 비밀번호 불일치"로 수렴시키면 사용자가 비밀번호를
@@ -145,7 +148,10 @@ public class PasswordService {
 		}
 		try {
 			transactionTemplate.executeWithoutResult(status -> {
-				User user = userRepository.findById(userId)
+				// 변경 경로와 같은 잠금 조회다 (MSG-499) — 비밀번호를 쓰는 세 경로(재발송·변경·재설정)가 전부
+				// 같은 잠금을 거쳐야 낡은 스냅숏이 최신 커밋을 덮는 일이 사라진다. 어느 순서로 인터리빙돼도
+				// 마지막 커밋의 해시와 강제 변경 플래그가 단일 진실이 된다.
+				User user = userRepository.findWithLockById(userId)
 					.orElseThrow(() -> new ApiException(AuthErrorCode.INVALID_RESET_TOKEN));
 				user.changePassword(passwordEncoder.encode(request.newPassword()));
 				// 세션만 지우면 공격자가 이미 쥔 액세스 토큰이 잔여 수명(최대 1시간) 동안 산다.
