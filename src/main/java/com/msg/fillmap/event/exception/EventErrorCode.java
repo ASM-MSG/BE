@@ -41,6 +41,22 @@ public enum EventErrorCode implements ErrorCodeIfs {
 	// 엉뚱한 경계(종료)를 지목해서, 종료 후 30일 동안 댓글을 달아 온 사용자가 31일째에 "종료돼서
 	// 안 된다"는 답을 듣는 모순도 있었다. developCode·HttpStatus 는 불변이고 표시 문자열만 바꿨다.
 	EVENT_INTERACTION_LOCKED(13422, HttpStatus.CONFLICT, "행사 영상 댓글·도움돼요가 마감되었습니다"),
+
+	// 행사 등재 신청 블록 (MSG-498). 13423~13429 를 비워 두는 것은 폐기 이력이 있는 13420·13421 부근을
+	// 피해 번호만 봐도 신청 블록임이 읽히게 하기 위해서다.
+	// 없는 신청과 남의 신청이 같은 코드를 쓰는 것은 존재 은닉이다 (FR-14) — 조회를 항상 id + userId 쌍으로
+	// 하므로 두 경우의 코드 경로 자체가 하나이고, 응답이 갈릴 여지가 없다.
+	SUBMISSION_NOT_FOUND(13430, HttpStatus.NOT_FOUND, "신청을 찾을 수 없습니다"),
+	INVALID_SUBMISSION_AREA(13431, HttpStatus.BAD_REQUEST, "유효하지 않은 위치 영역입니다"),
+	SUBMISSION_AREA_LIMIT_EXCEEDED(13432, HttpStatus.BAD_REQUEST, "위치 하나의 영역은 최대 81칸입니다"),
+	INVALID_SUBMISSION_PERIOD(13433, HttpStatus.BAD_REQUEST, "행사 기간이 유효하지 않습니다"),
+	// 권한이 아니라 신청의 현재 상태와 요청이 충돌하는 거절이라 409 다 (13409 · 11409 선례).
+	SUBMISSION_NOT_EDITABLE(13434, HttpStatus.CONFLICT, "반려된 신청만 수정할 수 있습니다"),
+	SUBMISSION_IMAGE_KEY_INVALID(13435, HttpStatus.BAD_REQUEST, "유효하지 않은 이미지 키입니다"),
+	SUBMISSION_IMAGE_NOT_UPLOADED(13436, HttpStatus.BAD_REQUEST, "업로드되지 않은 이미지입니다"),
+	SUBMISSION_IMAGE_UNSUPPORTED(13437, HttpStatus.UNSUPPORTED_MEDIA_TYPE, "jpg, png 이미지만 올릴 수 있습니다"),
+	SUBMISSION_IMAGE_TOO_LARGE(13438, HttpStatus.PAYLOAD_TOO_LARGE, "이미지는 최대 10MB 입니다"),
+	SUBMISSION_REQUIRED_FIELD_MISSING(13439, HttpStatus.BAD_REQUEST, "등록 유형에 필요한 항목이 올바르지 않습니다"),
 	;
 
 	private final Integer errorCode;
