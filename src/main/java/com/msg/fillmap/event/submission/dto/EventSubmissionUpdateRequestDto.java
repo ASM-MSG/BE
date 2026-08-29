@@ -46,6 +46,6 @@ public record EventSubmissionUpdateRequestDto(
 	String imageS3Key,
 
 	@Schema(description = "행사 위치 목록. 통째로 갈아끼우고 대표 격자를 전부 재계산한다.")
-	@Valid List<EventSubmissionLocationRequestDto> locations
+	List<@NotNull @Valid EventSubmissionLocationRequestDto> locations
 ) implements EventSubmissionForm {
 }

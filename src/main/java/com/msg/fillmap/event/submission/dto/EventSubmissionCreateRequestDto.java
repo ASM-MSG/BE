@@ -49,6 +49,6 @@ public record EventSubmissionCreateRequestDto(
 	@NotBlank String imageS3Key,
 
 	@Schema(description = "행사 위치 목록. 1개 이상 20개 이하이고 이름 필드가 없다.")
-	@Valid List<EventSubmissionLocationRequestDto> locations
+	List<@NotNull @Valid EventSubmissionLocationRequestDto> locations
 ) implements EventSubmissionForm {
 }

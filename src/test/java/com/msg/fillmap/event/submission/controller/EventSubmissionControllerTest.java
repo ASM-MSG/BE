@@ -258,6 +258,14 @@ class EventSubmissionControllerTest {
 
 		// 검증: FR-EVENT-13
 		@Test
+		@DisplayName("위치나 사각형 자리에 null 이 들어오면 400 이다 — 도메인까지 내려가 500 이 되지 않는다")
+		void 목록_원소가_null이면_400이다() throws Exception {
+			신청_실패(organizer, festivalBody(organizer.getId(), "null"), 400, 400);
+			신청_실패(organizer, festivalBody(organizer.getId(), location("null")), 400, 400);
+		}
+
+		// 검증: FR-EVENT-13
+		@Test
 		@DisplayName("정의되지 않은 등록 유형은 400 이다")
 		void 알_수_없는_유형은_400이다() throws Exception {
 			신청_실패(organizer,
@@ -442,6 +450,24 @@ class EventSubmissionControllerTest {
 			assertThat(저장된_신청(id, organizer).getImageKey())
 				.isNotEqualTo(imageKey)
 				.startsWith("event-submissions/original/" + organizer.getId() + "/");
+		}
+
+		// 검증: FR-EVENT-14
+		@Test
+		@DisplayName("재제출도 위치 자리의 null 을 400 으로 막는다 — 상태 전이 앞에서 걸린다")
+		void 재제출_목록_원소가_null이면_400이다() throws Exception {
+			long id = 축제를_신청한다(organizer);
+			반려한다(id, "AREA", "위치를 다시 지정해 주세요");
+
+			mockMvc.perform(patch(URL + "/" + id)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(updateBody("부산불꽃축제", null, "null")))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.developCode").value(400));
+
+			// 검증 실패가 전이 앞이라 상태는 그대로 반려다.
+			assertThat(저장된_신청(id, organizer).getStatus().name()).isEqualTo("REJECTED");
 		}
 
 		// 검증: FR-EVENT-14
