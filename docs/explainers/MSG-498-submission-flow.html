@@ -1,0 +1,174 @@
+<title>MSG-498 행사 등재 신청 흐름</title>
+<style>
+:root{
+	--bg:#f6f9f8; --surface:#ffffff; --ink:#16211e; --sub:#5a6b66; --line:#dde7e4;
+	--accent:#0e8a7d; --accent-soft:#e3f2ef; --warn:#a8730f; --warn-soft:#f7eeda;
+	--brick:#b0442e; --brick-soft:#f6e7e2; --ok:#2e7d43; --ok-soft:#e5f2e8;
+	--grid-line:rgba(14,138,125,.07); --code-bg:#f0f5f3;
+}
+@media (prefers-color-scheme: dark){
+	:root:not([data-theme="light"]){
+		--bg:#0f1514; --surface:#161d1b; --ink:#e6eeeb; --sub:#93a5a0; --line:#26312e;
+		--accent:#34b4a4; --accent-soft:#15302c; --warn:#d8a54a; --warn-soft:#2c2413;
+		--brick:#d97b64; --brick-soft:#2e1c17; --ok:#5fbf7a; --ok-soft:#17281c;
+		--grid-line:rgba(52,180,164,.08); --code-bg:#1b2422;
+	}
+}
+:root[data-theme="dark"]{
+	--bg:#0f1514; --surface:#161d1b; --ink:#e6eeeb; --sub:#93a5a0; --line:#26312e;
+	--accent:#34b4a4; --accent-soft:#15302c; --warn:#d8a54a; --warn-soft:#2c2413;
+	--brick:#d97b64; --brick-soft:#2e1c17; --ok:#5fbf7a; --ok-soft:#17281c;
+	--grid-line:rgba(52,180,164,.08); --code-bg:#1b2422;
+}
+*{box-sizing:border-box}
+body{
+	margin:0; color:var(--ink); background:var(--bg);
+	font:15px/1.7 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI","Malgun Gothic",sans-serif;
+	background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
+	background-size:100px 100px;
+}
+.wrap{max-width:920px;margin:0 auto;padding:40px 20px 64px}
+.eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.08em;color:var(--accent);text-transform:uppercase}
+h1{font-size:26px;line-height:1.3;margin:6px 0 6px;text-wrap:balance;font-weight:750}
+.lede{color:var(--sub);font-size:14px;margin:0 0 8px}
+h2{font-size:17px;margin:38px 0 12px;display:flex;align-items:center;gap:10px}
+h2 .no{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:2px 8px}
+h2::after{content:"";flex:1;height:1px;background:var(--line)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:12px 0}
+p{margin:8px 0}
+ul{margin:8px 0;padding-left:20px} li{margin:5px 0}
+code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--code-bg);padding:1px 5px;border-radius:4px}
+pre{margin:10px 0;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:13px 15px;overflow-x:auto;font:12.5px/1.65 ui-monospace,Menlo,monospace}
+pre code{background:none;padding:0}
+.why{border-left:3px solid var(--accent);padding:2px 0 2px 12px;color:var(--sub);font-size:13.5px;margin:10px 0}
+.danger{background:var(--brick-soft);color:var(--brick);border-radius:6px;padding:1px 7px;font-size:12px;font-weight:650}
+.safe{background:var(--ok-soft);color:var(--ok);border-radius:6px;padding:1px 7px;font-size:12px;font-weight:650}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--sub);font-weight:650}
+.scroll{overflow-x:auto}
+.steps{counter-reset:s;list-style:none;padding:0;margin:10px 0}
+.steps li{counter-increment:s;position:relative;padding:10px 12px 10px 46px;border:1px solid var(--line);border-radius:8px;margin:8px 0;background:var(--surface)}
+.steps li::before{content:counter(s);position:absolute;left:12px;top:10px;width:24px;height:24px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font:650 13px/24px ui-monospace,Menlo,monospace;text-align:center}
+.steps li b{display:block}
+.steps li span{font-size:13px;color:var(--sub)}
+footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--sub)}
+.mermaid{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;overflow-x:auto}
+</style>
+
+<div class="wrap">
+<div class="eyebrow">FillMap BE · Explainer · MSG-498</div>
+<h1>행사 신청이 반려됐다 다시 심사로 돌아가기까지</h1>
+<p class="lede">행사 운영자가 콘솔에서 행사를 신청하고 반려본을 고쳐 다시 내는 API 5개(MSG-498). 알아둘 것은 다섯이다 — 재제출 전이의 순서, 81칸을 세는 방식, 연관관계를 양방향으로 잡은 이유, 이미지가 커밋 경계에서 하는 일, 그리고 인가 코드가 한 줄도 없는 이유.</p>
+
+<h2><span class="no">1</span>전체 흐름 — 신청은 폼 하나로 만들어졌다 폼 하나로 고쳐진다</h2>
+<div class="card">
+<pre class="mermaid">sequenceDiagram
+    autonumber
+    participant O as 행사 운영자(콘솔)
+    participant S3 as S3
+    participant API as EventSubmissionService
+    participant DB as PostgreSQL
+    O->>API: ① POST /image/presigned-url (jpg·png, 10MB)
+    API-->>O: uploadUrl + pending 키
+    O->>S3: ② PUT 업로드 (서버 경유 없음)
+    O->>API: ③ POST /event-submissions (폼 + pending 키)
+    API->>S3: HEAD 실측 → original 로 복사(uuid 신규)
+    API->>DB: 신청 + 위치 + 사각형 + 이력(IN_REVIEW)
+    API-->>O: FM-2026-0007 · IN_REVIEW
+    Note over API,DB: 관리자 심사(MSG-500)가 APPROVED / REJECTED 로 보낸다
+    O->>API: ④ GET /{id} — 반려 항목 코드와 사유 확인
+    O->>API: ⑤ PATCH /{id} (유형 빼고 전체 교체)
+    API->>DB: 조건부 UPDATE → 위치 통째 교체 + 이력(IN_REVIEW)
+    API-->>O: 같은 신청 번호 · IN_REVIEW</pre>
+<ul>
+	<li><b>재제출은 부분 수정이 아니다</b> — 신청 하나가 폼 하나로 쓰였다 폼 하나로 고쳐지는 단위라, 위치 목록은 통째로 갈아끼우고 대표 격자를 전부 다시 계산한다. 검증 3규칙도 제출과 똑같이 다시 탄다.</li>
+	<li><b>유형만 못 바꾼다</b> — 유형이 바뀌면 필수 항목이 통째로 달라져 사실상 새 신청이다. 바꾸려면 새로 낸다(반려된 기존 건은 남아 이력이 보존된다).</li>
+	<li><b>신청 번호는 불변</b> — <code>FM-{KST 연도}-{4자리 순번}</code>, 순번은 전역 시퀀스라 연도별 리셋 기계가 없다. 9999를 넘으면 자릿수가 자연히 늘어난다.</li>
+</ul>
+</div>
+
+<h2><span class="no">2</span>재제출 전이의 순서 계약</h2>
+<div class="card">
+<p>"반려일 때만 재제출"을 <b>읽고 나서 쓰면</b> 동시 요청 둘이 모두 REJECTED를 관찰하고 둘 다 성공한다(이력 두 줄, 진 요청이 남의 이미지를 삭제). 그래서 검사와 갱신이 한 문장이다.</p>
+<pre><code>UPDATE EventSubmission s SET s.status = IN_REVIEW, s.updatedAt = :now
+ WHERE s.id = :id AND s.userId = :userId AND s.status = REJECTED</code></pre>
+<ol class="steps">
+	<li><b>술어에 userId가 있다</b><span>남의 행은 어떤 경로로도 수정되지 않는다 — 뒤의 재로드나 롤백에 기대는 구조가 아니다.</span></li>
+	<li><b>영향 행 0이면 소유 조회로 분기</b><span>행이 없으면 13430, 있는데 REJECTED가 아니면 13434(동시 재제출의 패자 포함). <b>id + status로만 분기하면</b> 남의 REJECTED 행이 13434로 새어 존재가 드러난다 <span class="danger">정보 노출</span> — 분기 기준이 반드시 소유 조회여야 하는 이유.</span></li>
+	<li><b>재로드는 UPDATE 뒤</b><span>순서를 뒤집어 UPDATE 전에 로드한 엔티티를 고쳐 flush하면, 벌크 UPDATE가 영속성 컨텍스트를 우회한 탓에 스테일한 REJECTED가 도로 덮어써진다. <code>clearAutomatically = true</code>가 그 스냅숏을 비운다.</span></li>
+	<li><b>선행 조회는 읽기 전용</b><span>유형은 바꿀 수 없으므로 검증 기준이 저장값이다. 그래서 UPDATE보다 앞에 소유 조회가 한 번 있는데, 아무것도 수정하지 않아 ③의 덮어쓰기 경로를 만들지 않는다.</span></li>
+</ol>
+<div class="why">존재 은닉은 코드 경로 하나로 성립한다 — 모든 조회가 <code>findByIdAndUserId</code>다. 없는 id와 남의 id가 같은 빈 결과가 되어 응답이 갈릴 자리 자체가 없다. 테스트는 두 응답 <b>본문을 문자열로 대조</b>한다.</div>
+</div>
+
+<h2><span class="no">3</span>81칸은 합집합으로 센다</h2>
+<div class="card">
+<p>위치 하나의 영역 상한은 격자 81칸인데, <b>사각형 넓이의 합이 아니라 전개한 격자 집합의 크기</b>로 판정한다.</p>
+<div class="scroll"><table>
+<tr><th>입력</th><th>합산으로 세면</th><th>합집합으로 세면</th></tr>
+<tr><td>9×9 사각형 하나</td><td>81 <span class="safe">통과</span></td><td>81 <span class="safe">통과</span></td></tr>
+<tr><td>같은 9×9를 두 번 그림</td><td>162 <span class="danger">거부</span></td><td>81 <span class="safe">통과</span></td></tr>
+<tr><td>9×9 + 떨어진 1칸</td><td>82 <span class="danger">거부</span></td><td>82 <span class="danger">거부</span></td></tr>
+</table></div>
+<p>같은 영역을 어떤 사각형 조합으로 그렸든 결과가 같아야 한다 — 합산으로 세면 정당한 81칸 영역이 <b>그리는 방식에 따라</b> 거부되는 비결정성이 생긴다. 대표 격자 산출기(<code>RepresentativeGridResolver</code>)가 사각형이 아니라 격자 집합을 입력으로 받는 것과 같은 원칙이다.</p>
+<ul>
+	<li><b>전개 전에 거대 사각형을 거른다</b> — 사각형 하나의 칸 수를 <code>long</code>으로 먼저 구해 81을 넘으면 전개 없이 거부. 이게 없으면 <code>1..99999</code> 사각형 하나가 메모리를 태운다 <span class="danger">OOM</span></li>
+	<li><b>인덱스 범위 검사가 그보다 앞</b> (0 초과 100,000 미만) — 대표 격자 산출기의 long 오버플로 안전 논증이 이 상한 위에 서 있다. 그래서 상수를 <code>RepresentativeGridResolver</code>로 승격해 시더와 신청 접수가 <b>같은 값 하나</b>를 쓴다(사본 금지).</li>
+	<li><b>대표 격자는 서버가 정한다</b> — 홀수 직사각형이면 정중앙(21칸 예시 → <code>16860_11512</code>), 아니면 영역 중심 최근접. 신청자가 지정하는 경로는 없다.</li>
+</ul>
+</div>
+
+<h2><span class="no">4</span>왜 양방향으로 잡나 (단방향으로 가봤다가 배운 것)</h2>
+<div class="card">
+<p>신청 ↔ 위치는 <b>양방향</b>이다. <b>연관 주인은 FK를 가진 자식</b>(<code>EventSubmissionLocation.submission</code>)이고, 부모 컬렉션은 <code>mappedBy</code>로 읽기 쪽이다.</p>
+<pre><code>// 자식 — 연관 주인
+@ManyToOne(fetch = FetchType.LAZY, optional = false)
+@JoinColumn(name = "event_submission_id", nullable = false)
+private EventSubmission submission;
+
+// 부모 — mappedBy 읽기 쪽 (상한 20, 결정 D-10)
+@OneToMany(mappedBy = "submission", cascade = ALL, orphanRemoval = true, fetch = LAZY)
+@OrderBy("displayOrder")
+private List&lt;EventSubmissionLocation&gt; locations = new ArrayList&lt;&gt;();</code></pre>
+<div class="scroll"><table>
+<tr><th>축</th><th>양방향(채택)</th><th>단방향 <code>@OneToMany + @JoinColumn</code></th></tr>
+<tr><td>관행</td><td>김영한 교재의 "일대다 단방향 지양 · 다대일을 연관 주인으로", Vlad Mihalcea의 선호 순위(<code>@ManyToOne</code> ≥ 양방향 &gt; 단방향 <code>@OneToMany</code>)와 합치 <span class="safe">이어받는 사람의 기대와 같음</span></td><td>주류가 권하지 않는 형태 — 이 도메인 하나만 레포에서 다른 모양이 된다 <span class="danger">읽는 비용</span></td></tr>
+<tr><td>연관 주인</td><td>FK를 가진 쪽이 주인이라 매핑과 스키마가 같은 방향을 본다</td><td>FK는 자식 테이블에 있는데 주인은 부모 — 방향이 어긋난 채로 성립한다</td></tr>
+<tr><td>동기화</td><td>두 참조를 맞춰야 하지만 <b>편의 메서드에 가둔다</b> — <code>replaceLocations</code>가 컬렉션·부모 참조·순번을 한 곳에서 세팅하고 서비스는 그것만 부른다</td><td>맞출 참조가 하나뿐. 단 이 이점은 편의 메서드 하나로 상쇄되는 크기다</td></tr>
+<tr><td>프록시·순환</td><td>연관 필드를 <code>equals</code>/<code>hashCode</code>/<code>toString</code>에서 <b>제외</b>해 막는다(컨벤션 영속 계층 3항) — 규칙으로 지키는 자리</td><td>필드가 없어 규칙 자체가 불필요 <span class="safe">구조로 차단</span></td></tr>
+</table></div>
+<p><b>대신 지켜야 하는 것 셋.</b> ① 컬렉션에 크기 상한 근거 주석(위치 20개) — 컨벤션이 컬렉션 매핑에 요구한다. ② 연관 필드는 <code>equals</code>/<code>hashCode</code>/<code>toString</code> 밖. ③ 참조 동기화는 편의 메서드 밖으로 새지 않게. 셋 다 코드에 주석으로 근거를 달아 뒀고, MSG-500이 붙일 매핑도 같은 형태를 쓴다.</p>
+<div class="why"><b>왕복에서 건진 실측</b>: 중간에 단방향(<code>@OneToMany + @JoinColumn</code>)으로 한 번 갔다가 되돌렸는데, 그때 통합 테스트 26건이 <b>NOT NULL 위반 없이 통과</b>했다. "단방향 일대다는 자식을 빈 FK로 INSERT한 뒤 UPDATE해서 NOT NULL에 걸린다"는 통설은 <code>nullable</code>을 지정하지 않은 경우의 이야기고, <code>@JoinColumn(nullable = false)</code>면 Hibernate가 INSERT에 FK를 함께 싣는다. 그러니 이번 선택은 <b>동작 문제를 피한 게 아니라 관행을 따른 것</b>이다 — 근거를 실제보다 세게 적어두면 다음 사람이 잘못된 이유로 이 결정을 인용한다. 스펙 결정 기록 D-12.</div>
+</div>
+
+<h2><span class="no">5</span>대표 이미지 — 커밋 경계에서 벌어지는 일</h2>
+<div class="card scroll">
+<p>이미지 복사(S3)는 트랜잭션 밖 부수효과라, DB 커밋과 어긋나는 두 방향을 각각 막는다.</p>
+<table>
+<tr><th>시점</th><th>하는 일</th><th>안 하면</th></tr>
+<tr><td>확정 중</td><td>내 pending 프리픽스 → HEAD 실존 → 실측 크기 → <code>original/</code> 복사(<b>uuid 신규 발급</b>)</td><td>지어낸 키·0바이트·10MB 초과가 대표 이미지가 된다. uuid를 재사용하면 두 신청이 한 객체를 공유해 재제출 삭제가 남의 이미지를 지운다</td></tr>
+<tr><td>롤백 시</td><td><code>afterCompletion(STATUS_ROLLED_BACK)</code>에서 방금 복사한 original 삭제</td><td>아무도 참조하지 않는 고아가 영구히 남는다(라이프사이클은 pending 전용)</td></tr>
+<tr><td>커밋 후</td><td>복사에 성공한 pending 삭제 · 재제출로 밀려난 이전 확정본 삭제</td><td>같은 pending 키로 두 번 신청할 수 있다(삭제해 두면 재확정 시도가 HEAD 실패 → 13436)</td></tr>
+</table>
+<p><code>STATUS_UNKNOWN</code>(커밋 결과 불명)에는 <b>지우지 않는다</b> — 커밋됐을 수 있는 이미지를 지우면 유실이고, 고아는 비용 문제일 뿐이다. 커밋 후 정리는 전부 베스트 에포트라 실패해도 신청은 유효하다.</p>
+<p><b>재제출의 이미지 유지</b>: <code>imageS3Key</code>를 생략하거나 null로 보내면 기존 이미지 유지, pending 키를 보내면 교체. 상세 응답이 저장 키를 노출하지 않으므로(열람은 presigned GET 하나) 클라이언트가 확정 키를 알 수도, 보낼 수도 없다.</p>
+<div class="why"><b>배포 전 필요</b>: <code>event-submissions/pending/</code> 프리픽스의 S3 라이프사이클 만료 규칙(확정 없이 버려진 업로드 회수). 확정본 <code>event-submissions/original/</code>은 공개 읽기를 열지 않는다 — 열람자가 신청 소유자와 관리자뿐이라 presigned GET으로 충분하다.</div>
+</div>
+
+<h2><span class="no">6</span>인가 코드가 한 줄도 없다</h2>
+<div class="card">
+<p>이 티켓은 역할 검사를 새로 짜지 않는다. <code>/api/org/**</code> 프리픽스 아래에 경로를 만드는 것만으로 두 겹이 자동으로 걸린다.</p>
+<ul>
+	<li><b>SecurityConfig matcher</b>(MSG-496) — 비로그인 401, USER·ADMIN 403. ADMIN도 막힌다(콘솔은 행사 운영자 전용).</li>
+	<li><b>비밀번호 게이트 인터셉터</b>(MSG-497) — 초기 비밀번호 상태의 ORG 계정은 403·2441. 매 요청 DB를 봐서 변경 즉시 풀린다.</li>
+	<li><b>소유권(FR-14)만 서비스 계층 몫</b> — "내 신청인가"는 경로가 아니라 데이터 질문이라 matcher가 답할 수 없다.</li>
+</ul>
+<div class="why">그래서 인가 테스트가 "코드 검증"이 아니라 <b>전제 확인</b>이다 — 새 실경로에 프리픽스 규칙이 실제로 걸리는지 4건으로 확인한다. 필터·인터셉터는 핸들러 앞에서 거절하므로 경로에 오타가 있어도 401·403은 그대로 나온다. 그래서 ORG 200 성공 케이스가 실경로 존재의 시금석이다.</div>
+</div>
+
+<footer>
+정본: <code>docs/spec/MSG-498.md</code>(결정 기록 12건) · PRD <code>docs/prd/event-submission.md</code>(v2.1) · 코드 <code>com.msg.fillmap.event.submission.*</code> · 스키마 <code>V47__event_submissions.sql</code><br>
+검증: 신규 테스트 55건(단위 25 · 통합 30) green, <code>event.*</code>·<code>global.*</code> 415건 회귀 green (2026-08-29). 심사·승인은 MSG-500, 이벤트 참여형은 MSG-501·502
+</footer>
+</div>
