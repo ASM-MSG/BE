@@ -24,7 +24,7 @@ import com.msg.fillmap.response.SuccessResponse;
  * 행사 알림 구독 API (MSG-442). 조회 세 경로(MSG-439)와 달리 쓰기라 로그인이 필요하다 —
  * SecurityConfig 의 행사 permitAll 이 GET 한정이라 이 경로는 별도 등록 없이 인증 대상이다.
  */
-@Tag(name = "행사 (Events)", description = "지도 홈 행사 칩·행사방 헤더·행사 위치 목록 조회 API.")
+@Tag(name = "행사 (Events)", description = "지도 홈 행사 칩·이벤트 헤더·행사 위치 목록 조회 API.")
 @RestController
 @RequiredArgsConstructor
 public class EventNotificationController {
@@ -33,7 +33,7 @@ public class EventNotificationController {
 
 	@Operation(
 		summary = "행사 알림 구독 토글",
-		description = "행사 회차 단위로 알림을 켜고 끈다. 행사방에는 참여 절차가 없어 구독이 사용자와 행사가 "
+		description = "행사 회차 단위로 알림을 켜고 끈다. 이벤트에는 참여 절차가 없어 구독이 사용자와 행사가 "
 			+ "맺는 관계의 전부다. 같은 값을 반복 요청해도 같은 결과로 성공한다.\n\n"
 			+ "응답의 enabled 는 저장된 구독 행의 존재가 아니라 **노출 상태**다 — 구독 행이 있으면서 회차가 "
 			+ "예정이거나 진행 중일 때만 true 이고, 종료된 회차는 행이 남아 있어도 false 다(종료 시점부터 "
