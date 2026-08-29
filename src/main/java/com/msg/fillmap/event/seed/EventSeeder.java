@@ -62,9 +62,6 @@ public class EventSeeder implements ApplicationRunner {
 	/** 위치당 고유 셀 상한 (5km × 5km 상당) — zones 의 남북 26행 캡과 같은 성격의 입력 상한. */
 	static final int MAX_CELLS_PER_LOCATION = 2500;
 
-	/** EPSG:5179 국내 정의역을 넉넉히 포함하는 방어 상한. 정수 제곱 산술의 오버플로 여유도 여기서 나온다. */
-	private static final int GRID_INDEX_UPPER_EXCLUSIVE = 100_000;
-
 	/** 일정 변경 알림 문구 (MSG-442 발송 표 확정값). */
 	private static final String SCHEDULE_CHANGED_BODY = "행사 일정이 변경됐어요. 새 일정을 확인해 보세요";
 
@@ -302,9 +299,9 @@ public class EventSeeder implements ApplicationRunner {
 	}
 
 	private void requireIndex(Integer index, String context) {
-		if (index == null || index <= 0 || index >= GRID_INDEX_UPPER_EXCLUSIVE) {
+		if (index == null || index <= 0 || index >= RepresentativeGridResolver.GRID_INDEX_UPPER_EXCLUSIVE) {
 			throw new IllegalStateException("%s 의 격자 인덱스 %s 가 허용 범위(0 초과 %d 미만) 밖입니다".formatted(
-				context, index, GRID_INDEX_UPPER_EXCLUSIVE));
+				context, index, RepresentativeGridResolver.GRID_INDEX_UPPER_EXCLUSIVE));
 		}
 	}
 
