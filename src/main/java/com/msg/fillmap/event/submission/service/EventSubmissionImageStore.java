@@ -117,13 +117,16 @@ public class EventSubmissionImageStore {
 		}
 
 		String originalKey = "%s%d/%s.%s".formatted(ORIGINAL_PREFIX, userId, UUID.randomUUID(), extension);
+		// 보상 등록이 복사 호출보다 앞이다 (Codex 구현 리뷰 1R). 목적지 키는 복사 전에 이미 정해져 있고,
+		// 복사가 S3 에서는 끝났는데 응답이 유실·타임아웃되면 등록 전에 예외로 빠져나가 고아가 영구히 남는다.
+		// 복사가 진짜 실패한 경우의 보상은 없는 키 삭제라 no-op 다(S3 DeleteObject 는 404 에도 성공한다).
+		deleteOnRollback(originalKey);
 		s3Client.copyObject(CopyObjectRequest.builder()
 			.sourceBucket(awsProperties.s3().bucket())
 			.sourceKey(pendingKey)
 			.destinationBucket(awsProperties.s3().bucket())
 			.destinationKey(originalKey)
 			.build());
-		deleteOnRollback(originalKey);
 		afterCommit(() -> deleteQuietly(pendingKey));
 		return originalKey;
 	}

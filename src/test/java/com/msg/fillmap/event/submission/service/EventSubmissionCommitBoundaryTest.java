@@ -1,6 +1,7 @@
 package com.msg.fillmap.event.submission.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -32,6 +33,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.CopyObjectResponse;
@@ -195,5 +198,25 @@ class EventSubmissionCommitBoundaryTest {
 		then(s3Client).should(times(1)).deleteObject(deleted.capture());
 		assertThat(deleted.getValue().key()).isEqualTo(copied.getValue().destinationKey());
 		assertThat(submissionRepository.findByUserIdOrderByCreatedAtDescIdDesc(userId)).isEmpty();
+	}
+
+	// 검증: FR-EVENT-13
+	@Test
+	@DisplayName("복사 응답이 유실돼도 확정본이 정리된다 — 보상 등록이 복사 호출보다 앞이라서다")
+	void 복사_응답이_유실돼도_확정본이_정리된다() {
+		// S3 쪽에서는 복사가 끝났는데 응답만 유실·타임아웃된 상황(클라이언트에는 예외로 보인다).
+		// 보상 등록이 복사 뒤에 있었다면 등록 전에 빠져나가 아무도 참조하지 않는 original 이 영구히 남는다.
+		given(s3Client.copyObject(any(CopyObjectRequest.class)))
+			.willThrow(SdkClientException.create("복사 응답 유실"));
+
+		assertThatThrownBy(() -> tx.executeWithoutResult(status ->
+			eventSubmissionService.submit(userId, createRequest())))
+			.isInstanceOf(SdkException.class);
+
+		ArgumentCaptor<CopyObjectRequest> copied = ArgumentCaptor.forClass(CopyObjectRequest.class);
+		then(s3Client).should().copyObject(copied.capture());
+		ArgumentCaptor<DeleteObjectRequest> deleted = ArgumentCaptor.forClass(DeleteObjectRequest.class);
+		then(s3Client).should(times(1)).deleteObject(deleted.capture());
+		assertThat(deleted.getValue().key()).isEqualTo(copied.getValue().destinationKey());
 	}
 }

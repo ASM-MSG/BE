@@ -5,11 +5,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -37,7 +37,6 @@ import com.msg.fillmap.event.submission.entity.EventSubmissionStatus;
 import com.msg.fillmap.event.submission.entity.EventSubmissionStatusHistory;
 import com.msg.fillmap.event.submission.entity.EventSubmissionType;
 import com.msg.fillmap.event.submission.repository.EventSubmissionRepository;
-import com.msg.fillmap.event.submission.repository.EventSubmissionStatusCount;
 import com.msg.fillmap.event.submission.repository.EventSubmissionStatusHistoryRepository;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.geo.AreaCell;
@@ -123,20 +122,18 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 	@Override
 	@Transactional(readOnly = true)
 	public EventSubmissionMyListResponseDto getMySubmissions(Long userId) {
-		Map<EventSubmissionStatus, Long> counts = new LinkedHashMap<>();
-		for (EventSubmissionStatusCount row : submissionRepository.countByStatus(userId)) {
-			counts.put(row.status(), row.count());
-		}
-		List<EventSubmissionSummaryResponseDto> submissions =
-			submissionRepository.findByUserIdOrderByCreatedAtDescIdDesc(userId).stream()
-				.map(EventSubmissionSummaryResponseDto::from)
-				.toList();
+		List<EventSubmission> submissions = submissionRepository.findByUserIdOrderByCreatedAtDescIdDesc(userId);
+		// 건수를 GROUP BY 로 따로 세지 않는다 (Codex 구현 리뷰 1R). 페이지네이션이 없어 목록이 곧 전량이라
+		// 세는 재료가 이미 손에 있고, 쿼리를 둘로 나누면 READ COMMITTED 에서 서로 다른 스냅숏을 볼 뿐이다 —
+		// 그 사이 상태가 바뀌면 현황 카드의 합과 목록이 어긋나 보인다. 목록에서 세면 둘이 같은 한 장면이다.
+		Map<EventSubmissionStatus, Long> counts = submissions.stream()
+			.collect(Collectors.groupingBy(EventSubmission::getStatus, Collectors.counting()));
 		return new EventSubmissionMyListResponseDto(
 			new EventSubmissionStatusCountsResponseDto(
 				counts.getOrDefault(EventSubmissionStatus.IN_REVIEW, 0L),
 				counts.getOrDefault(EventSubmissionStatus.APPROVED, 0L),
 				counts.getOrDefault(EventSubmissionStatus.REJECTED, 0L)),
-			submissions);
+			submissions.stream().map(EventSubmissionSummaryResponseDto::from).toList());
 	}
 
 	@Override
@@ -347,7 +344,15 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 		return dtos;
 	}
 
-	/** 현재 반려 사유는 이력 최신 행에서 읽는다 (D-3) — 신청 행에 중복 저장하지 않는다. */
+	/**
+	 * 현재 반려 사유는 이력 최신 행에서 읽는다 (D-3) — 신청 행에 중복 저장하지 않는다.
+	 * <p>
+	 * 엔티티 상태와 이력이 다른 문장에서 읽히므로 READ COMMITTED 에서 둘이 한 찰나만큼 어긋날 수 있다
+	 * (반려 상태인데 반려 행이 아직 안 보이거나, 재제출 직후 상태는 심사 중인데 이력이 반려로 읽히는 경우).
+	 * 수용한다 (Codex 구현 리뷰 1R) — 본인이 자기 신청을 동시에 재제출하는 찰나에만 성립하고, 결과는 카드
+	 * 하나가 잠깐 비거나 남는 표시 문제이며, 다음 조회에서 사라진다. 이 하나를 없애려고 격리 수준을 올리거나
+	 * 이력을 신청 행에 중복 저장(D-3 번복)하는 것은 대가가 훨씬 크다.
+	 */
 	private EventSubmissionRejectionResponseDto toRejection(EventSubmission submission,
 		List<EventSubmissionStatusHistory> history) {
 		if (submission.getStatus() != EventSubmissionStatus.REJECTED || history.isEmpty()) {

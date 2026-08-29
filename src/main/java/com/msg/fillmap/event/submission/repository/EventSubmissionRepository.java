@@ -21,16 +21,11 @@ public interface EventSubmissionRepository extends JpaRepository<EventSubmission
 	@EntityGraph(attributePaths = "locations")
 	Optional<EventSubmission> findByIdAndUserId(Long id, Long userId);
 
-	/** 내 신청 목록 (FR-11). 페이지네이션 없음 — 내부 소수 사용자다. id 는 같은 시각 제출의 결정성 보험이다. */
+	/**
+	 * 내 신청 목록 (FR-11). 페이지네이션 없음 — 내부 소수 사용자다. id 는 같은 시각 제출의 결정성 보험이다.
+	 * 상태별 건수도 이 결과에서 센다 — 목록이 곧 전량이라 GROUP BY 를 따로 날리면 스냅숏만 갈라진다.
+	 */
 	List<EventSubmission> findByUserIdOrderByCreatedAtDescIdDesc(Long userId);
-
-	@Query("""
-		SELECT new com.msg.fillmap.event.submission.repository.EventSubmissionStatusCount(s.status, COUNT(s))
-		FROM EventSubmission s
-		WHERE s.userId = :userId
-		GROUP BY s.status
-		""")
-	List<EventSubmissionStatusCount> countByStatus(@Param("userId") Long userId);
 
 	/**
 	 * 반려본 재제출의 상태 복귀 (FR-13) — 검사와 갱신이 한 문장이라 동시 PATCH 두 건이 둘 다 REJECTED 를
