@@ -209,7 +209,9 @@ admin/events 2개(목록·unpublish), auth/password 4개(status·change·reset-r
 싣지 않는다. 채택 근거는 `docs/spec/MSG-497.md` 미해결 질문의 결정 기록 참조). 기존 재사용은
 로그인, `GET /api/event-occurrences`, 장소 검색이다. 여기에 더해 MSG-501이 승인 이벤트 목록
 조회 `GET /api/org/events` 1개를 신설한다(FR-26. [관리자 4] 서버 재료 프레임은 이 API 미반영
-구판이라 계약은 MSG-501 스펙이 정본이다).
+구판이라 계약은 MSG-501 스펙이 정본이다). MSG-499 스펙은 관리자 계정 목록 조회
+`GET /api/admin/organizations` 1개를 23번째로 더한다(재발송 대상 식별, [관리자 1] 최근 발급
+목록, 직접 발급 크래시 복구 확인 재료. 2026-08-29 승인, 계약은 MSG-499 스펙이 정본).
 
 행사 운영자 콘솔 API의 경로는 `/api/org/**` 프리픽스 하나로 통일이 확정됐다(2026-08-28 사용자
 확정. 후보 비교와 채택 근거는 `docs/spec/MSG-496.md` 미해결 질문의 결정 기록 참조). 시안 서버

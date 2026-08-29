@@ -277,10 +277,10 @@
 | FR-AUTH-10 | 구현됨 | AuthControllerTest, KakaoAuthCodeExchangerTest |
 | FR-AUTH-11 | 구현됨 | AuthControllerTest, AuthServiceTest |
 | FR-AUTH-12 | 계획 | (없음) |
-| FR-AUTH-13 | 진행 중 | AuthControllerTest, AuthServiceTest |
+| FR-AUTH-13 | 구현됨 | AdminOrgAccountControllerTest, AdminOrgAccountRequestControllerTest, AuthControllerTest, AuthServiceTest, InitialPasswordResendConcurrencyTest, OrgAccountApprovalConcurrencyTest, OrgAccountRequestControllerTest, OrgAccountRequestPersistenceTest |
 | FR-AUTH-14 | 구현됨 | JwtTokenProviderTest, OidcLoginServiceTest, OrgAccountControllerTest, OrgAuthorizationTest, PasswordControllerTest, UserProfileIntegrationTest, UserRoleOrgPersistenceTest |
-| FR-AUTH-15 | 구현됨 | OrgAccountControllerTest, OrgAccountSecurityPersistenceTest, PasswordControllerTest |
-| FR-AUTH-16 | 구현됨 | JwtTokenProviderTest, MailSenderConfigurationTest, PasswordControllerTest, PasswordResetInvalidationFailureTest, RedisPasswordResetTokenStoreTest, RefreshTokenServiceTest |
+| FR-AUTH-15 | 구현됨 | AdminOrgAccountControllerTest, OrgAccountControllerTest, OrgAccountSecurityPersistenceTest, PasswordControllerTest |
+| FR-AUTH-16 | 구현됨 | InitialPasswordResendConcurrencyTest, JwtTokenProviderTest, MailSenderConfigurationTest, PasswordControllerTest, PasswordResetInvalidationFailureTest, RedisPasswordResetTokenStoreTest, RefreshTokenServiceTest |
 | FR-USER-01 | 구현됨 | UserProfileControllerTest, UserProfileIntegrationTest |
 | FR-USER-02 | 구현됨 | UserProfileControllerTest, UserProfileIntegrationTest |
 | FR-USER-03 | 구현됨 | UserEmaillessPersistenceTest |
