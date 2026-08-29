@@ -119,9 +119,9 @@ class EventSubmissionCommitBoundaryTest {
 	}
 
 	private EventSubmissionCreateRequestDto createRequest() {
-		return new EventSubmissionCreateRequestDto(EventSubmissionType.FESTIVAL, "부산불꽃축제",
+		return new EventSubmissionCreateRequestDto(EventSubmissionType.FESTIVAL, null, "부산불꽃축제",
 			"부산문화관광축제조직위원회", LocalDate.now(ZoneOffset.UTC).plusDays(30),
-			LocalDate.now(ZoneOffset.UTC).plusDays(31), null, "멀티불꽃쇼, 드론 라이트쇼 운영",
+			LocalDate.now(ZoneOffset.UTC).plusDays(31), null, "멀티불꽃쇼, 드론 라이트쇼 운영", null,
 			"광안리해수욕장 일원에서 열리는 부산 대표 불꽃 축제",
 			"event-submissions/pending/%d/%s.jpg".formatted(userId, UUID.randomUUID()), List.of(location()));
 	}
@@ -130,7 +130,7 @@ class EventSubmissionCommitBoundaryTest {
 	private EventSubmissionUpdateRequestDto updateRequest() {
 		return new EventSubmissionUpdateRequestDto("부산불꽃축제 2026", "부산문화관광축제조직위원회",
 			LocalDate.now(ZoneOffset.UTC).plusDays(30), LocalDate.now(ZoneOffset.UTC).plusDays(31), null,
-			"멀티불꽃쇼, 드론 라이트쇼 운영", "광안리해수욕장 일원에서 열리는 부산 대표 불꽃 축제",
+			"멀티불꽃쇼, 드론 라이트쇼 운영", null, "광안리해수욕장 일원에서 열리는 부산 대표 불꽃 축제",
 			null, List.of(location()));
 	}
 
@@ -140,9 +140,9 @@ class EventSubmissionCommitBoundaryTest {
 			LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 			EventSubmission submission = EventSubmission.submit(
 				"FM-2026-%04d".formatted(submissionRepository.nextSubmissionSequence()),
-				userId, EventSubmissionType.FESTIVAL, now);
+				userId, EventSubmissionType.FESTIVAL, null, now);
 			submission.updateForm("부산불꽃축제", "부산문화관광축제조직위원회", LocalDate.of(2026, 11, 7),
-				LocalDate.of(2026, 11, 7), null, "멀티불꽃쇼", "광안리 일원에서 열리는 부산 대표 불꽃 축제",
+				LocalDate.of(2026, 11, 7), null, "멀티불꽃쇼", null, "광안리 일원에서 열리는 부산 대표 불꽃 축제",
 				"event-submissions/original/%d/kept.jpg".formatted(userId), now);
 			submission.replaceLocations(List.of(new EventSubmissionLocation("16860_11512",
 				List.of(new EventSubmissionAreaRect(16859, 16861, 11509, 11515)))));
