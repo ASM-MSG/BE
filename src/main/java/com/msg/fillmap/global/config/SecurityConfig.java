@@ -170,6 +170,10 @@ public class SecurityConfig {
 				// 비밀번호 재설정(MSG-497) — 비로그인 흐름이라 permitAll. 두 경로만 정확히 연다.
 				// /api/auth/password/** 로 넓히면 로그인 상태 전용인 status·change 까지 익명에 풀린다.
 				.requestMatchers("/api/auth/password/reset-request", "/api/auth/password/reset").permitAll()
+				// 행사 운영자 계정 발급 요청(MSG-499) — 계정이 없는 신청자의 폼이라 permitAll. POST 하나만 연다.
+				// 필터 skip 목록(PUBLIC_AUTH_PATHS)에는 넣지 않는다 — 토큰이 없으면 필터가 그냥 통과시키므로
+				// 접수에 문제가 없고, 무효 토큰을 동봉한 비정상 요청까지 검증을 건너뛸 이유가 없다(MSG-443 교훈).
+				.requestMatchers(HttpMethod.POST, "/api/org-account-requests").permitAll()
 				// 비밀번호 상태·변경(MSG-497) — 역할 무관 로그인 필수. 아래 catch-all 이 역할 제한이라
 				// authenticated 명시가 없으면 ORG(정작 주 사용자)가 403 이 된다.
 				.requestMatchers("/api/auth/password/status", "/api/auth/password/change").authenticated()
