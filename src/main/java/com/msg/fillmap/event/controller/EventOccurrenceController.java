@@ -29,7 +29,7 @@ import com.msg.fillmap.response.SuccessResponse;
  * 않고 쓰기(업로드 MSG-440 · 댓글 MSG-441 · 알림 MSG-442)부터 로그인이다. principal 은 로그인 상태에서만
  * 채워지므로 null 을 정상 입력으로 다룬다.
  */
-@Tag(name = "행사 (Events)", description = "지도 홈 행사 칩·행사방 헤더·행사 위치 목록 조회 API.")
+@Tag(name = "행사 (Events)", description = "지도 홈 행사 칩·이벤트 헤더·행사 위치 목록 조회 API.")
 @RestController
 @RequiredArgsConstructor
 public class EventOccurrenceController {
@@ -64,7 +64,7 @@ public class EventOccurrenceController {
 
 	@Operation(
 		summary = "행사 회차 상세 조회",
-		description = "행사방 헤더 재료 — 행사명, 기간, 업로드 마감(종료 30일 후), 서버 시각 기준 상태, 알림 구독 "
+		description = "이벤트 헤더 재료 — 행사명, 기간, 업로드 마감(종료 30일 후), 서버 시각 기준 상태, 알림 구독 "
 			+ "여부, 같은 시리즈의 지난 회차 목록이다. 상태는 저장값이 아니라 요청 시점 계산이며 경계 정각은 "
 			+ "다음 상태에 속한다(종료 정각부터 UPLOAD_GRACE).\n\n"
 			+ "지난 회차는 최신순이고 예정 회차는 담기지 않는다. 그 회차의 위치·영상은 회차 id 로 위치 목록을 "

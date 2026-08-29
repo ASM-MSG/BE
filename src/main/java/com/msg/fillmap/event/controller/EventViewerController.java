@@ -26,7 +26,7 @@ import com.msg.fillmap.response.SuccessResponse;
  * 로그인이면 principal 의 userId 로 {@code u:{userId}}, 비로그인이면 X-Viewer-Session 헤더로
  * {@code s:{sessionId}} 를 세션 식별자로 쓴다. occurrenceId 존재 검증은 MSG-438 이후 후속.
  */
-@Tag(name = "행사방 (Event)", description = "행사방 열람 인원 heartbeat·조회 API.")
+@Tag(name = "이벤트 (Event)", description = "이벤트 열람 인원 heartbeat·조회 API.")
 @RestController
 @RequestMapping("/api/event-occurrences/{occurrenceId}")
 @RequiredArgsConstructor
@@ -40,7 +40,7 @@ public class EventViewerController {
 
 	@Operation(
 		summary = "열람 heartbeat",
-		description = "행사방을 보는 동안 30초 주기로 보낸다. 마지막 신호가 90초 이내인 세션만 열람 인원에 "
+		description = "이벤트를 보는 동안 30초 주기로 보낸다. 마지막 신호가 90초 이내인 세션만 열람 인원에 "
 			+ "센다. 비로그인은 X-Viewer-Session 헤더(공백 아님·최대 64자) 필수 — 없으면 400. "
 			+ "캐시 장애는 삼켜져 200 이다."
 	)
