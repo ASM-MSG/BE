@@ -4,13 +4,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.msg.fillmap.user.entity.AuthProvider;
 import com.msg.fillmap.user.entity.User;
+import com.msg.fillmap.user.entity.UserRole;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -148,4 +154,27 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	 */
 	@Query(value = "SELECT id FROM users WHERE id = :userId FOR KEY SHARE", nativeQuery = true)
 	Optional<Long> findIdForKeyShare(@Param("userId") Long userId);
+
+	/**
+	 * 비밀번호를 쓰는 세 경로의 공용 잠금 조회 (MSG-499 API 7) — 초기 비밀번호 재발송, 본인 변경
+	 * (PasswordService.changePassword), 재설정(PasswordService.resetPassword).
+	 *
+	 * <p>한 경로만 잠그면 직렬화가 성립하지 않는다: 잠금 없이 읽은 낡은 엔티티가 마지막에 커밋하면
+	 * 그사이 커밋된 변경을 되덮는다(lost update). 재발송이 방금 사용자가 정한 비밀번호를 무효화하고
+	 * 강제 변경 플래그를 되세우는 상태 훼손이 그 구체적 형태라, 이 행을 쓰는 경로를 전부 여기로 모은다.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	Optional<User> findWithLockById(Long id);
+
+	/**
+	 * 관리자 계정 목록 (MSG-499 API 8) — 재발송 대상 식별과 직접 발급 크래시 복구의 확인 수단이다.
+	 * 이 티켓의 발급 경로가 만드는 형태(ORG·LOCAL)로 좁히므로, provider 가 LOCAL 이 아닌 ORG 계정은
+	 * 재발송 대상도 복구 판정 대상도 아니라 목록에서 빠진다(fail-safe).
+	 */
+	Page<User> findAllByRoleAndProviderOrderByCreatedAtDesc(UserRole role, AuthProvider provider,
+		Pageable pageable);
+
+	/** 이메일 완전 일치 필터 — 결과 유무가 곧 직접 발급 성공 여부다(위 목록과 같은 ORG·LOCAL 조건). */
+	Page<User> findAllByRoleAndProviderAndEmailOrderByCreatedAtDesc(UserRole role, AuthProvider provider,
+		String email, Pageable pageable);
 }
