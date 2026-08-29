@@ -129,6 +129,7 @@ class InitialPasswordResendConcurrencyTest {
 	}
 
 	// 검증: FR-AUTH-13
+	// 검증: FR-AUTH-16
 	@Test
 	@DisplayName("재발송이 먼저 커밋한 뒤의 본인 변경은 이전 초기 비밀번호로 2442 다")
 	void 재발송이_먼저_커밋한_뒤의_본인_변경은_이전_초기_비밀번호로_2442다() {
