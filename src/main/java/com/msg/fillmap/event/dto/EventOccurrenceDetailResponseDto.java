@@ -14,7 +14,7 @@ import com.msg.fillmap.event.entity.EventStatus;
  * notificationOn 도 저장값이 아니라 파생값이다 — 구독 행 존재 AND 상태가 예정·진행 중 (MSG-442).
  * 열람 인원(MSG-443)은 이 응답의 범위 밖이다.
  */
-@Schema(description = "행사 회차 상세 — 행사방 헤더",
+@Schema(description = "행사 회차 상세 — 이벤트 헤더",
 	requiredProperties = {"occurrenceId", "seriesId", "title", "startsAt", "endsAt", "uploadClosesAt",
 		"status", "notificationOn", "previousOccurrences"})
 public record EventOccurrenceDetailResponseDto(
