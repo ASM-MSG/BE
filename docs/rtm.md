@@ -201,10 +201,10 @@
 | FR-EVENT-12 | 구현됨 | MissionAwardQueryTest, MissionProgressQueryTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVisitedGridQueryTest |
 | FR-EVENT-13 | 구현됨 | EventSubmissionCommitBoundaryTest, EventSubmissionControllerTest, EventSubmissionImageStoreTest, EventSubmissionValidationTest |
 | FR-EVENT-14 | 구현됨 | EventSubmissionCommitBoundaryTest, EventSubmissionControllerTest |
-| FR-EVENT-15 | 진행 중 | AdminEventSubmissionControllerTest, AdminEventSubmissionReviewTest, EventSubmissionApprovalConcurrencyTest, EventSubmissionImageStoreTest, EventSubmissionReviewSchemaTest, MissionQueryServiceCacheTest |
+| FR-EVENT-15 | 구현됨 | AdminEventParticipationApprovalTest, AdminEventSubmissionControllerTest, AdminEventSubmissionReviewTest, EventParticipationApprovalConcurrencyTest, EventSubmissionApprovalConcurrencyTest, EventSubmissionImageStoreTest, EventSubmissionReviewSchemaTest, MissionQueryServiceCacheTest |
 | FR-EVENT-16 | 구현됨 | EventOccurrenceRepositoryTest, OrgEventControllerTest, OrgEventQueryServiceTest |
 | FR-EVENT-17 | 구현됨 | EventSubmissionControllerTest, EventSubmissionValidationTest |
-| FR-EVENT-18 | 진행 중 | AdminEventUnpublishTest, EventSubmissionApprovalConcurrencyTest |
+| FR-EVENT-18 | 구현됨 | AdminEventParticipationApprovalTest, AdminEventUnpublishTest, EventSubmissionApprovalConcurrencyTest |
 | FR-EVENT-19 | 구현됨 | AdminApprovedEventListTest |
 | FR-ROUTE-01 | 진행 중 | AnonymousReadAccessHttpTest, RouteCandidateCollectorTest, RouteControllerTest, RouteIntentClientTest, RouteRecommendServiceTest |
 | FR-ROUTE-02 | 진행 중 | RouteCandidateCollectorTest, RouteRecommendServiceTest |
