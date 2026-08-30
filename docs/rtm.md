@@ -201,7 +201,7 @@
 | FR-EVENT-12 | 구현됨 | MissionAwardQueryTest, MissionProgressQueryTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVisitedGridQueryTest |
 | FR-EVENT-13 | 구현됨 | EventSubmissionCommitBoundaryTest, EventSubmissionControllerTest, EventSubmissionImageStoreTest, EventSubmissionValidationTest |
 | FR-EVENT-14 | 구현됨 | EventSubmissionCommitBoundaryTest, EventSubmissionControllerTest |
-| FR-EVENT-15 | 구현됨 | AdminEventParticipationApprovalTest, AdminEventSubmissionControllerTest, AdminEventSubmissionReviewTest, EventParticipationApprovalConcurrencyTest, EventSubmissionApprovalConcurrencyTest, EventSubmissionImageStoreTest, EventSubmissionReviewSchemaTest, MissionQueryServiceCacheTest |
+| FR-EVENT-15 | 구현됨 | AdminEventParticipationApprovalTest, AdminEventSubmissionControllerTest, AdminEventSubmissionReviewTest, EventParticipationApprovalConcurrencyTest, EventSeederTest, EventSubmissionApprovalConcurrencyTest, EventSubmissionImageStoreTest, EventSubmissionReviewSchemaTest, MissionQueryServiceCacheTest |
 | FR-EVENT-16 | 구현됨 | EventOccurrenceRepositoryTest, OrgEventControllerTest, OrgEventQueryServiceTest |
 | FR-EVENT-17 | 구현됨 | EventSubmissionControllerTest, EventSubmissionValidationTest |
 | FR-EVENT-18 | 구현됨 | AdminEventParticipationApprovalTest, AdminEventUnpublishTest, EventSubmissionApprovalConcurrencyTest |
