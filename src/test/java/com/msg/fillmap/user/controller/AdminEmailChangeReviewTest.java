@@ -203,9 +203,15 @@ class AdminEmailChangeReviewTest {
 			assertThat(저장된_계정().getEmail()).isEqualTo(requestedEmail);
 		}
 
+		/**
+		 * 응답 코드만 본다. "전이도 함께 롤백된다"는 여기서 관찰할 수 없다 — 선검사가 전이 <b>뒤</b>라
+		 * (같은 요청 동시 재승인을 1428 로 수렴시키기 위한 순서) 되돌리기가 트랜잭션 롤백에 달려 있는데,
+		 * 이 클래스는 롤백 격리라 서비스의 TransactionTemplate 이 테스트 트랜잭션에 합류해 진짜 롤백이
+		 * 일어나지 않는다. 그 검증은 {@code EmailChangeApprovalConcurrencyTest} 가 실커밋으로 한다.
+		 */
 		// 검증: FR-USER-16
 		@Test
-		@DisplayName("요청 이메일이 이미 다른 계정에 있으면 1409 이고 아이디는 그대로다")
+		@DisplayName("요청 이메일이 이미 다른 계정에 있으면 1409 다")
 		void 요청_이메일이_이미_다른_계정에_있으면_1409로_거부된다() throws Exception {
 			String taken = "taken-" + UUID.randomUUID() + "@fillmap.dev";
 			User other = saveUser(UserRole.ORG);
@@ -218,7 +224,6 @@ class AdminEmailChangeReviewTest {
 				.andExpect(jsonPath("$.developCode").value(1409));
 
 			assertThat(저장된_계정().getEmail()).isNotEqualTo(taken);
-			assertThat(저장된_요청().getStatus()).isEqualTo(OrgEmailChangeStatus.PENDING);
 		}
 
 		// 검증: FR-USER-16

@@ -1,6 +1,7 @@
 package com.msg.fillmap.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -38,9 +39,10 @@ import com.msg.fillmap.user.repository.OrgEmailChangeRequestRepository;
 import com.msg.fillmap.user.repository.UserRepository;
 
 /**
- * 아이디 변경 승인의 커밋 경계 (MSG-500 D-13, 실 DB). 두 가지를 본다: 같은 이메일을 노린 동시 승인이
- * <b>읽히는 1409</b> 로 끝나는지(유니크 위반 500 이 아니라), 그리고 승인이 <b>email 컬럼만</b> 갱신해 다른
- * 트랜잭션이 방금 커밋한 값을 되돌리지 않는지다.
+ * 아이디 변경 승인의 커밋 경계 (MSG-500 D-13, 실 DB). 네 가지를 본다: 같은 이메일을 노린 동시 승인이
+ * <b>읽히는 1409</b> 로 끝나는지(유니크 위반 500 이 아니라), <b>같은 요청</b>의 동시 승인이 1428 로
+ * 수렴하는지(1409 로 새면 관리자가 거짓 원인을 본다), 선점 이메일 거절이 요청 전이까지 롤백하는지,
+ * 그리고 승인이 <b>email 컬럼만</b> 갱신해 다른 트랜잭션이 방금 커밋한 값을 되돌리지 않는지다.
  *
  * <p>진짜 커밋이 필요해 클래스 수준 {@code @Transactional} 롤백 격리를 쓸 수 없다 — 동시 승인은 두
  * 트랜잭션이 실제로 경합해야 하고, 컬럼 보존은 "다른 트랜잭션이 먼저 커밋한 상태"가 전제다
@@ -127,6 +129,64 @@ class EmailChangeApprovalConcurrencyTest {
 		} finally {
 			executor.shutdownNow();
 		}
+	}
+
+	// 검증: FR-USER-16
+	@Test
+	@DisplayName("같은 요청을 동시에 두 번 승인하면 늦은 쪽이 1428 이다 — 1409 로 새지 않는다")
+	void 같은_요청의_동시_승인은_늦은_쪽이_1428이다() throws Exception {
+		long userId = 계정을_만든다();
+		String 새_이메일 = "double-" + UUID.randomUUID() + "@fillmap.dev";
+		OrgEmailChangeRequest request = 접수한다(userId, 새_이메일);
+
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		CyclicBarrier barrier = new CyclicBarrier(2);
+		try {
+			Future<EmailChangeApproveResponseDto> left = executor.submit(() -> 승인한다(barrier, request));
+			Future<EmailChangeApproveResponseDto> right = executor.submit(() -> 승인한다(barrier, request));
+
+			List<Throwable> failures = Stream.of(결과를_받는다(left), 결과를_받는다(right))
+				.filter(Objects::nonNull)
+				.toList();
+
+			// users 잠금이 두 트랜잭션을 직렬화하므로 결과가 결정적이다: 이긴 쪽 성공 + 늦은 쪽 1428.
+			// 이메일 선검사가 전이보다 앞이면 늦은 쪽이 "이긴 쪽이 방금 적용한 그 이메일"을 발견해
+			// 1409(다른 계정과 충돌)로 끝난다 — 관리자에게 거짓 원인을 보여주는 그 회귀를 이 단언이 잡는다.
+			assertThat(failures).hasSize(1).first().isInstanceOf(ApiException.class);
+			assertThat(((ApiException) failures.getFirst()).getErrorCode())
+				.isEqualTo(UserErrorCode.EMAIL_CHANGE_REQUEST_ALREADY_PROCESSED);
+			assertThat(jdbcTemplate.queryForObject(
+				"SELECT email FROM users WHERE id = ?", String.class, userId)).isEqualTo(새_이메일);
+			assertThat(jdbcTemplate.queryForObject(
+				"SELECT status FROM org_email_change_requests WHERE id = ?", String.class, request.getId()))
+				.isEqualTo("APPROVED");
+		} finally {
+			executor.shutdownNow();
+		}
+	}
+
+	// 검증: FR-USER-16
+	@Test
+	@DisplayName("선점된 이메일의 승인은 1409 이고 요청 전이도 함께 롤백된다")
+	void 선점된_이메일의_승인은_전이까지_롤백된다() {
+		long takenUserId = 계정을_만든다();
+		String 선점된_이메일 = jdbcTemplate.queryForObject(
+			"SELECT email FROM users WHERE id = ?", String.class, takenUserId);
+		OrgEmailChangeRequest request = 접수한다(계정을_만든다(), 선점된_이메일);
+
+		assertThatThrownBy(() -> adminEmailChangeRequestService.approve(request.getId(),
+			new EmailChangeApproveRequestDto(request.getCreatedAt())))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", UserErrorCode.EMAIL_ALREADY_EXISTS);
+
+		// 선검사가 전이 뒤라 거절 시점엔 이미 APPROVED 로 바뀐 상태였다 — 롤백이 그것을 되돌려야
+		// 관리자가 다시 심사할 수 있다(되돌리지 않으면 승인됨인데 이메일은 옛것인 절반이 남는다).
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT status FROM org_email_change_requests WHERE id = ?", String.class, request.getId()))
+			.isEqualTo("PENDING");
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT processed_at FROM org_email_change_requests WHERE id = ?", String.class, request.getId()))
+			.isNull();
 	}
 
 	/**

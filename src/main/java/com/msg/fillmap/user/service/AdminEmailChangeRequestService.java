@@ -97,35 +97,47 @@ public class AdminEmailChangeRequestService {
 	/**
 	 * 승인 (§API 7, D-13). 실행 순서가 계약이다.
 	 * <p>
-	 * ① 요청을 읽어 상태와 검토 시각을 먼저 본다(빠른 거절, 값도 여기서 챙긴다). ①-1 대상 계정 행을
-	 * 비관 잠금으로 잡는다 — 계정 삭제와 <b>잠금 순서를 맞추기 위한 것</b>이고 근거는 아래
-	 * {@code findWithLockById} 호출부 주석에 있다. ② 새 이메일이 다른 계정에
-	 * 있는지 선검사한다 — 읽히는 1409 를 주기 위한 것이고 <b>경합에는 진다</b>(서로 다른 두 요청이 같은
-	 * 이메일을 노리면 둘 다 통과한다). ③ 조건부 UPDATE 로 전이한다. 술어에 접수 시각이 들어 있어 검토 이후
-	 * 재제출된 요청은 여기서 걸린다. ④ 0행이면 재조회로 가른다(1427·1428·1429). ⑤ 같은 트랜잭션에서 이메일을
-	 * 교체한다 — 벌크 UPDATE 라 uq_users_email 위반이 <b>실행 즉시</b> 뜨므로 그 자리에서 1409 로 번역한다
-	 * (커밋 시점까지 미뤄지면 잡을 자리가 없다). ⑥ 커밋 후 새 이메일로 통지한다.
+	 * ① 요청을 읽어 상태와 검토 시각을 먼저 본다(빠른 거절, 값도 여기서 챙긴다). ② 대상 계정 행을 비관
+	 * 잠금으로 잡는다 — 계정 삭제와 <b>잠금 순서를 맞추기 위한 것</b>이고 근거는 아래
+	 * {@code findWithLockById} 호출부 주석에 있다. ③ 조건부 UPDATE 로 전이한다. 술어에 접수 시각이 들어
+	 * 있어 검토 이후 재제출된 요청은 여기서 걸린다. ④ 0행이면 재조회로 가른다(1427·1428·1429).
+	 * ⑤ 새 이메일이 다른 계정에 있는지 선검사한다 — 읽히는 1409 를 주기 위한 것이고 <b>경합에는 진다</b>
+	 * (서로 다른 두 요청이 같은 이메일을 노리면 둘 다 통과한다). ⑥ 같은 트랜잭션에서 이메일을 교체한다 —
+	 * 벌크 UPDATE 라 uq_users_email 위반이 <b>실행 즉시</b> 뜨므로 그 자리에서 1409 로 번역한다(커밋
+	 * 시점까지 미뤄지면 잡을 자리가 없다). ⑦ 커밋 후 새 이메일로 통지한다.
+	 * <p>
+	 * <b>선검사가 전이보다 뒤인 것이 계약이다</b> (Codex 스톱 게이트 적발). 앞에 두면 같은 요청의 동시
+	 * 재승인에서 늦은 쪽이 1409 로 잘못 수렴한다 — 아래 호출부 주석에 상세가 있다. 순서를 되돌리면
+	 * {@code EmailChangeApprovalConcurrencyTest} 의 동시 재승인 케이스가 1428 대신 1409 를 받아 실패한다.
 	 */
 	public EmailChangeApproveResponseDto approve(Long requestId, EmailChangeApproveRequestDto request) {
 		Approved approved = transactionTemplate.execute(status -> {
 			OrgEmailChangeRequest target = findReviewable(requestId, request.requestedAt());
+			Long userId = target.getUserId();
 			String newEmail = target.getRequestedEmail();
 			// 잠금 순서를 users → 요청 행으로 통일한다. 계정 삭제(UserService)는 users 행을 지우고 FK
 			// ON DELETE CASCADE(V46)가 그 사용자의 요청 행을 잠그므로, 여기서 요청 행을 먼저 잠그면
 			// 반대 순서가 되어 동시 실행이 AB-BA 데드락(한쪽 500)으로 끝난다. 읽기만 하고 버리는
 			// 조회지만 잡는 잠금이 목적이고, 그 사이 탈퇴한 계정은 여기서 1404 로 갈린다.
-			userRepository.findWithLockById(target.getUserId())
+			// 이 조회가 영속성 컨텍스트에 올린 User 는 <b>아무도 다시 쓰지 않는다</b> — 값은 위에서 이미
+			// 챙겼고, 바로 아래 두 벌크 UPDATE 의 clearAutomatically 가 컨텍스트를 비워 스테일 재사용
+			// 경로 자체가 없다(수정한 적이 없으니 비워질 때 나갈 flush 도 없다).
+			userRepository.findWithLockById(userId)
 				.orElseThrow(() -> new ApiException(UserErrorCode.USER_NOT_FOUND));
-			if (userRepository.existsByEmail(newEmail)) {
-				throw new ApiException(UserErrorCode.EMAIL_ALREADY_EXISTS);
-			}
 
 			LocalDateTime now = LocalDateTime.now(clock);
 			if (requestRepository.approvePending(requestId, request.requestedAt(), now) == 0) {
 				throw transitionFailure(requestId, request.requestedAt());
 			}
-			replaceEmail(target.getUserId(), newEmail);
-			return new Approved(target.getUserId(), newEmail);
+			// 이메일 선검사가 전이 <b>뒤</b>인 것이 계약이다. 앞에 두면 같은 요청의 동시 재승인에서 늦은
+			// 쪽이 잠금 대기 후 이긴 쪽이 이미 적용한 그 이메일을 발견해 1409 로 끝난다 — 관리자에게
+			// "다른 계정과 충돌"이라는 거짓 원인을 보여준다. 전이가 먼저면 늦은 쪽은 0행 → 1428 로
+			// 결정적으로 수렴하고, 진짜 충돌(다른 계정 선점)은 여기서 1409 로 잡히며 전이는 롤백된다.
+			if (userRepository.existsByEmail(newEmail)) {
+				throw new ApiException(UserErrorCode.EMAIL_ALREADY_EXISTS);
+			}
+			replaceEmail(userId, newEmail);
+			return new Approved(userId, newEmail);
 		});
 		return new EmailChangeApproveResponseDto(requestId, approved.email(), notify(approved.email()));
 	}
