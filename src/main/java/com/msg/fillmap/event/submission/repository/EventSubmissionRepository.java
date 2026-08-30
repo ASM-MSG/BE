@@ -21,6 +21,16 @@ import com.msg.fillmap.event.submission.entity.EventSubmissionStatus;
 public interface EventSubmissionRepository extends JpaRepository<EventSubmission, Long> {
 
 	/**
+	 * 승인 행사의 파생 탭 식 (MSG-500 D-11) — 목록 필터·항목 표시·탭 건수가 <b>같은 한 식</b>을 써야 한다.
+	 * 네 자리에 같은 CASE 를 손으로 적으면 한 곳만 고쳐지는 순간 뱃지 숫자와 목록 내용이 조용히 갈린다.
+	 * 컴파일 상수라 {@code @Query} 안에서 문자열 연결로 쓸 수 있다.
+	 */
+	String TAB_CASE = """
+		CASE WHEN s.startsOn > :today THEN 'UPCOMING'
+			WHEN s.endsOn < :today THEN 'ENDED'
+			ELSE 'EXPOSED' END""";
+
+	/**
 	 * 소유 조회 (FR-14). 조회를 항상 id + userId 쌍으로 하는 것이 존재 은닉의 구현이다 — 없는 신청과 남의
 	 * 신청이 같은 빈 결과가 되어 응답이 갈릴 코드 경로 자체가 없다.
 	 */
@@ -148,24 +158,20 @@ public interface EventSubmissionRepository extends JpaRepository<EventSubmission
 		SELECT new com.msg.fillmap.event.submission.dto.AdminApprovedEventItemResponseDto(
 			s.id, s.approvalNo, s.submissionNo, s.type, s.title, s.organizerName, u.orgName,
 			s.startsOn, s.endsOn,
-			CASE WHEN s.startsOn > :today THEN 'UPCOMING'
-				WHEN s.endsOn < :today THEN 'ENDED'
-				ELSE 'EXPOSED' END,
-			s.unpublishedAt, s.unpublishReason)
+		""" + TAB_CASE + """
+			, s.unpublishedAt, s.unpublishReason)
 		FROM EventSubmission s, User u
 		WHERE u.id = s.userId
 			AND s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.APPROVED
-			AND (CASE WHEN s.startsOn > :today THEN 'UPCOMING'
-				WHEN s.endsOn < :today THEN 'ENDED'
-				ELSE 'EXPOSED' END) = :tab
+			AND (""" + TAB_CASE + """
+			) = :tab
 		ORDER BY s.startsOn DESC, s.id DESC
 		""",
 		countQuery = """
 			SELECT COUNT(s) FROM EventSubmission s
 			WHERE s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.APPROVED
-				AND (CASE WHEN s.startsOn > :today THEN 'UPCOMING'
-					WHEN s.endsOn < :today THEN 'ENDED'
-					ELSE 'EXPOSED' END) = :tab
+				AND (""" + TAB_CASE + """
+				) = :tab
 			""")
 	Page<AdminApprovedEventItemResponseDto> findApprovedPageByTab(@Param("tab") String tab,
 		@Param("today") LocalDate today, Pageable pageable);
@@ -174,9 +180,8 @@ public interface EventSubmissionRepository extends JpaRepository<EventSubmission
 	@Query("""
 		SELECT COUNT(s) FROM EventSubmission s
 		WHERE s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.APPROVED
-			AND (CASE WHEN s.startsOn > :today THEN 'UPCOMING'
-				WHEN s.endsOn < :today THEN 'ENDED'
-				ELSE 'EXPOSED' END) = :tab
+			AND (""" + TAB_CASE + """
+			) = :tab
 		""")
 	long countApprovedByTab(@Param("tab") String tab, @Param("today") LocalDate today);
 
