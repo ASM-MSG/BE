@@ -97,7 +97,9 @@ public class AdminEmailChangeRequestService {
 	/**
 	 * 승인 (§API 7, D-13). 실행 순서가 계약이다.
 	 * <p>
-	 * ① 요청을 읽어 상태와 검토 시각을 먼저 본다(빠른 거절, 값도 여기서 챙긴다). ② 새 이메일이 다른 계정에
+	 * ① 요청을 읽어 상태와 검토 시각을 먼저 본다(빠른 거절, 값도 여기서 챙긴다). ①-1 대상 계정 행을
+	 * 비관 잠금으로 잡는다 — 계정 삭제와 <b>잠금 순서를 맞추기 위한 것</b>이고 근거는 아래
+	 * {@code findWithLockById} 호출부 주석에 있다. ② 새 이메일이 다른 계정에
 	 * 있는지 선검사한다 — 읽히는 1409 를 주기 위한 것이고 <b>경합에는 진다</b>(서로 다른 두 요청이 같은
 	 * 이메일을 노리면 둘 다 통과한다). ③ 조건부 UPDATE 로 전이한다. 술어에 접수 시각이 들어 있어 검토 이후
 	 * 재제출된 요청은 여기서 걸린다. ④ 0행이면 재조회로 가른다(1427·1428·1429). ⑤ 같은 트랜잭션에서 이메일을
@@ -108,6 +110,12 @@ public class AdminEmailChangeRequestService {
 		Approved approved = transactionTemplate.execute(status -> {
 			OrgEmailChangeRequest target = findReviewable(requestId, request.requestedAt());
 			String newEmail = target.getRequestedEmail();
+			// 잠금 순서를 users → 요청 행으로 통일한다. 계정 삭제(UserService)는 users 행을 지우고 FK
+			// ON DELETE CASCADE(V46)가 그 사용자의 요청 행을 잠그므로, 여기서 요청 행을 먼저 잠그면
+			// 반대 순서가 되어 동시 실행이 AB-BA 데드락(한쪽 500)으로 끝난다. 읽기만 하고 버리는
+			// 조회지만 잡는 잠금이 목적이고, 그 사이 탈퇴한 계정은 여기서 1404 로 갈린다.
+			userRepository.findWithLockById(target.getUserId())
+				.orElseThrow(() -> new ApiException(UserErrorCode.USER_NOT_FOUND));
 			if (userRepository.existsByEmail(newEmail)) {
 				throw new ApiException(UserErrorCode.EMAIL_ALREADY_EXISTS);
 			}
