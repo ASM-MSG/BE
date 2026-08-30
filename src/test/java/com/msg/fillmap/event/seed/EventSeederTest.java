@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -28,6 +29,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import com.msg.fillmap.event.entity.EventLocation;
 import com.msg.fillmap.event.entity.EventLocationGrid;
+import com.msg.fillmap.event.entity.EventLocationType;
 import com.msg.fillmap.event.entity.EventOccurrence;
 import com.msg.fillmap.event.repository.EventLocationGridRepository;
 import com.msg.fillmap.event.repository.EventLocationRepository;
@@ -148,6 +150,30 @@ class EventSeederTest {
 		em.flush();
 		em.clear();
 		return locationRepository.findByLocationKey(locationKey).orElseThrow();
+	}
+
+	private EventOccurrence 회차조회(String occurrenceKey) {
+		em.flush();
+		em.clear();
+		return occurrenceRepository.findByOccurrenceKey(occurrenceKey).orElseThrow();
+	}
+
+	/**
+	 * 관리자 승인(MSG-500 D-8)이 만드는 참여 위치를 흉내 낸다 — 시더 재실행이 그 영역을 지우지 않는지가
+	 * 검증 대상이라, 승인 서비스를 통째로 태우지 않고 산출물 형태(sub- 접두 자연키 + 격자 1칸)만 심는다.
+	 */
+	private void 참여_위치를_심는다(EventOccurrence occurrence, String locationKey, String gridId,
+		LocalDateTime hiddenAt) {
+		EventLocation location = EventLocation.forSubmission(occurrence, locationKey, "참여 부스",
+			EventLocationType.ETC, 90, gridId, "필맵 파트너스", "참여 부스를 운영합니다",
+			LocalDate.now(), LocalDate.now().plusDays(3), "현장 스탬프", null);
+		if (hiddenAt != null) {
+			ReflectionTestUtils.setField(location, "hiddenAt", hiddenAt);
+		}
+		locationRepository.save(location);
+		locationGridRepository.save(new EventLocationGrid(location.getId(), occurrence.getId(), gridId));
+		em.flush();
+		em.clear();
 	}
 
 	private List<String> 격자조회(String locationKey) {
@@ -292,6 +318,54 @@ class EventSeederTest {
 				.doesNotContain((Y + 4) + "_" + (X + 4));
 			assertThat(위치조회("msg438-shrink-loc").getRepresentativeGridId()).isEqualTo((Y + 1) + "_" + (X + 1));
 			assertThatCode(EventSeederTest.this::지연제약검증).doesNotThrowAnyException();
+		}
+
+		// 검증: FR-EVENT-15
+		@Test
+		@DisplayName("승인이 넓힌 노출 영역은 재시드에도 유지된다 — 시드 사각형은 바닥값이다")
+		void 승인이_넓힌_노출_영역은_재시드에도_유지된다() {
+			seeder().seed(json(시리즈("msg500-expand", 회차("msg500-expand-2026",
+				위치("msg500-expand-loc", 사각형(Y, Y, X, X))))));
+			EventOccurrence 회차 = 회차조회("msg500-expand-2026");
+			assertThat(회차.getMaxGridX()).isEqualTo(X + 100);
+
+			// 관리자 승인이 만드는 참여 위치 — 시드 사각형 밖의 칸을 차지하고 회차 영역을 넓힌다.
+			참여_위치를_심는다(회차, "sub-FM-2026-9001-1", (Y + 500) + "_" + (X + 500), null);
+			// 중지된 참여 위치는 영역을 넓히지 않는다 — 재계산 입력이 <b>가시</b> 격자라서다.
+			참여_위치를_심는다(회차, "sub-FM-2026-9002-1", (Y + 900) + "_" + (X + 900),
+				LocalDateTime.now(ZoneOffset.UTC));
+
+			// 재기동 시뮬레이션 — 같은 시드 문서로 다시 돌린다.
+			seeder().seed(json(시리즈("msg500-expand", 회차("msg500-expand-2026",
+				위치("msg500-expand-loc", 사각형(Y, Y, X, X))))));
+
+			EventOccurrence 재시드후 = 회차조회("msg500-expand-2026");
+			// 시드 값으로 되돌아가면 원래 영역 밖의 참여 위치가 뷰포트 필터에서 빠져 칩이 사라진다.
+			assertThat(재시드후.getMaxGridY()).isEqualTo(Y + 500);
+			assertThat(재시드후.getMaxGridX()).isEqualTo(X + 500);
+			// 시드 사각형이 바닥값이라 그 아래로는 줄지 않는다(중지 경로와 다른 점).
+			assertThat(재시드후.getMinGridY()).isEqualTo(Y - 100);
+			assertThat(재시드후.getMinGridX()).isEqualTo(X - 100);
+			// 일정이 그대로라 개정 번호는 오르지 않는다 — 영역 변화는 알릴 일정 변경이 아니다.
+			assertThat(재시드후.getScheduleRevision()).isEqualTo(회차.getScheduleRevision());
+		}
+
+		// 검증: FR-EVENT-15
+		@Test
+		@DisplayName("시드 위치가 줄어든 재시드는 영역을 부풀리지 않는다 — 확장 입력은 참여 위치뿐이다")
+		void 시드_위치가_줄어든_재시드는_영역을_부풀리지_않는다() {
+			// 시드 위치가 노출 사각형 밖(+300)을 덮다가 안(+0)으로 줄어든다. 시더는 회차를 먼저 갱신하고
+			// 위치를 나중에 동기화하므로, 확장 입력이 전 가시 격자였다면 아직 살아 있는 옛 격자(+300)가
+			// 합집합에 들어가 영역이 부푼 채 다음 재기동까지 남는다.
+			seeder().seed(json(시리즈("msg500-shrinkseed", 회차("msg500-shrinkseed-2026",
+				위치("msg500-shrinkseed-loc", 사각형(Y + 300, Y + 300, X + 300, X + 300))))));
+
+			seeder().seed(json(시리즈("msg500-shrinkseed", 회차("msg500-shrinkseed-2026",
+				위치("msg500-shrinkseed-loc", 사각형(Y, Y, X, X))))));
+
+			EventOccurrence 재시드후 = 회차조회("msg500-shrinkseed-2026");
+			assertThat(재시드후.getMaxGridY()).isEqualTo(Y + 100);
+			assertThat(재시드후.getMaxGridX()).isEqualTo(X + 100);
 		}
 
 		@Test
