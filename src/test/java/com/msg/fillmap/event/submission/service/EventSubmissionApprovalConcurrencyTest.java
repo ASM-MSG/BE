@@ -37,11 +37,13 @@ import software.amazon.awssdk.services.s3.model.CopyObjectResponse;
 
 import com.msg.fillmap.event.exception.EventErrorCode;
 import com.msg.fillmap.event.submission.EventSubmissionFixtures;
+import com.msg.fillmap.event.submission.dto.AdminEventUnpublishRequestDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionApproveResponseDto;
 import com.msg.fillmap.event.submission.entity.EventSubmission;
 import com.msg.fillmap.event.submission.entity.EventSubmissionStatus;
 import com.msg.fillmap.event.submission.repository.EventSubmissionRepository;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.global.mail.MailSender;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.dto.ViewportBounds;
@@ -83,6 +85,9 @@ class EventSubmissionApprovalConcurrencyTest {
 	private AdminEventSubmissionService adminEventSubmissionService;
 
 	@Autowired
+	private AdminApprovedEventService adminApprovedEventService;
+
+	@Autowired
 	private MissionQueryService missionQueryService;
 
 	@Autowired
@@ -105,6 +110,10 @@ class EventSubmissionApprovalConcurrencyTest {
 
 	@MockitoBean
 	private S3Client s3Client;
+
+	/** 중지 통지 발송을 갈아 끼운다 — 이 클래스가 보는 것은 발송이 아니라 커밋 후 스냅숏이다. */
+	@MockitoBean
+	private MailSender mailSender;
 
 	private Long organizerId;
 	private Long submissionId;
@@ -212,6 +221,25 @@ class EventSubmissionApprovalConcurrencyTest {
 		List<MissionResponseDto> after = missionQueryService.getMissionsInViewport(viewport, MissionType.EVENT);
 		assertThat(before).extracting(MissionResponseDto::missionId).doesNotContain(missionId);
 		assertThat(after).extracting(MissionResponseDto::missionId).contains(missionId);
+	}
+
+	// 검증: FR-EVENT-17
+	@Test
+	@DisplayName("중지 커밋 후 스냅숏이 무효화되어 TTL 전에도 목록에서 빠진다")
+	void 중지_커밋_후_미션_스냅숏이_무효화되어_TTL_전에도_목록에서_빠진다() {
+		GridPoint center = GridEncoder.center(CENTER_GRID_ID);
+		ViewportBounds viewport = new ViewportBounds(
+			center.lat() - 0.01, center.lon() - 0.01, center.lat() + 0.01, center.lon() + 0.01);
+		long missionId = approveAndReturnMissionId();
+		// 승인 미션이 실린 스냅숏을 적재한다 — 무효화가 없으면 중지 뒤에도 최대 1시간 이 스냅숏이 쓰인다.
+		List<MissionResponseDto> before = missionQueryService.getMissionsInViewport(viewport, MissionType.EVENT);
+
+		adminApprovedEventService.unpublish(submissionId,
+			new AdminEventUnpublishRequestDto("행사가 취소되어 노출을 중지합니다"));
+
+		List<MissionResponseDto> after = missionQueryService.getMissionsInViewport(viewport, MissionType.EVENT);
+		assertThat(before).extracting(MissionResponseDto::missionId).contains(missionId);
+		assertThat(after).extracting(MissionResponseDto::missionId).doesNotContain(missionId);
 	}
 
 	private long approveAndReturnMissionId() {
