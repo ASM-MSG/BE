@@ -1,6 +1,11 @@
 package com.msg.fillmap.event.submission;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
+
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 행사 등재 신청 요청 본문 조립기 (MSG-498 테스트 공용). 본문을 문자열로 만드는 이유는 "필드를 아예 빼면
@@ -25,6 +30,46 @@ public final class EventSubmissionFixtures {
 	public static String location(String... rects) {
 		return """
 			{"areaRects": [%s]}""".formatted(String.join(", ", rects));
+	}
+
+	/**
+	 * 심사 중 신청 1건을 SQL 로 심고 id 를 돌려준다 (MSG-500 테스트 공용). 접수 API 를 타지 않는 이유는
+	 * 기간 때문이다 — 승인 산출물이 <b>지금 활성인</b> 미션이어야 하는 검증(노출·중지)은 오늘을 포함하는
+	 * 기간이 필요한데, 접수 폼은 날짜를 문자열로 고정해 두는 편이 읽기 좋기 때문이다.
+	 * 접수 이력(IN_REVIEW) 한 행도 함께 심는다 — 승인·반려가 이력을 <b>쌓는지</b>를 건수로 보려면 출발점이
+	 * 실제 접수와 같아야 한다.
+	 */
+	public static long seedInReviewSubmission(JdbcTemplate jdbcTemplate, long userId, String submissionNo,
+		LocalDate startsOn, LocalDate endsOn, int minGridY, int maxGridY, int minGridX, int maxGridX,
+		String representativeGridId) {
+		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		jdbcTemplate.update("""
+			INSERT INTO event_submissions
+				(submission_no, user_id, type, status, title, organizer_name, starts_on, ends_on,
+				 program_description, description, image_key, created_at, updated_at)
+			VALUES (?, ?, 'FESTIVAL', 'IN_REVIEW', '광안리 불꽃축제', '부산문화관광축제조직위원회', ?, ?,
+				'멀티불꽃쇼', '광안리 일원에서 열리는 부산 대표 불꽃 축제',
+				'event-submissions/original/1/a.jpg', ?, ?)
+			""", submissionNo, userId, startsOn, endsOn, now, now);
+		Long submissionId = jdbcTemplate.queryForObject(
+			"SELECT id FROM event_submissions WHERE submission_no = ?", Long.class, submissionNo);
+
+		jdbcTemplate.update("""
+			INSERT INTO event_submission_locations (event_submission_id, display_order, representative_grid_id)
+			VALUES (?, 1, ?)
+			""", submissionId, representativeGridId);
+		Long locationId = jdbcTemplate.queryForObject(
+			"SELECT id FROM event_submission_locations WHERE event_submission_id = ?", Long.class, submissionId);
+		jdbcTemplate.update("""
+			INSERT INTO event_submission_location_rects
+				(event_submission_location_id, min_grid_y, max_grid_y, min_grid_x, max_grid_x)
+			VALUES (?, ?, ?, ?, ?)
+			""", locationId, minGridY, maxGridY, minGridX, maxGridX);
+		jdbcTemplate.update("""
+			INSERT INTO event_submission_status_history (event_submission_id, status, created_at)
+			VALUES (?, 'IN_REVIEW', ?)
+			""", submissionId, now);
+		return submissionId;
 	}
 
 	public static String pendingKey(long userId) {

@@ -1,13 +1,12 @@
 package com.msg.fillmap.event.submission.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -30,12 +29,17 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.CopyObjectResponse;
 
 import com.msg.fillmap.event.exception.EventErrorCode;
+import com.msg.fillmap.event.submission.EventSubmissionFixtures;
 import com.msg.fillmap.event.submission.dto.EventSubmissionApproveResponseDto;
+import com.msg.fillmap.event.submission.entity.EventSubmission;
+import com.msg.fillmap.event.submission.entity.EventSubmissionStatus;
 import com.msg.fillmap.event.submission.repository.EventSubmissionRepository;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
@@ -133,30 +137,8 @@ class EventSubmissionApprovalConcurrencyTest {
 	/** 오늘을 포함하는 기간의 심사 중 신청 1건 — 승인하면 지금 활성인 미션이 된다. */
 	private long 심사_중_신청을_심는다() {
 		LocalDate today = LocalDate.now(KST);
-		jdbcTemplate.update("""
-			INSERT INTO event_submissions
-				(submission_no, user_id, type, status, title, organizer_name, starts_on, ends_on,
-				 program_description, description, image_key, created_at, updated_at)
-			VALUES (?, ?, 'FESTIVAL', 'IN_REVIEW', '광안리 불꽃축제', '부산문화관광축제조직위원회', ?, ?,
-				'멀티불꽃쇼', '광안리 일원에서 열리는 부산 대표 불꽃 축제',
-				'event-submissions/original/1/a.jpg', ?, ?)
-			""", submissionNo, organizerId, today.minusDays(1), today.plusDays(1),
-			LocalDateTime.now(ZoneOffset.UTC), LocalDateTime.now(ZoneOffset.UTC));
-		Long id = jdbcTemplate.queryForObject(
-			"SELECT id FROM event_submissions WHERE submission_no = ?", Long.class, submissionNo);
-
-		jdbcTemplate.update("""
-			INSERT INTO event_submission_locations (event_submission_id, display_order, representative_grid_id)
-			VALUES (?, 1, ?)
-			""", id, CENTER_GRID_ID);
-		Long locationId = jdbcTemplate.queryForObject(
-			"SELECT id FROM event_submission_locations WHERE event_submission_id = ?", Long.class, id);
-		jdbcTemplate.update("""
-			INSERT INTO event_submission_location_rects
-				(event_submission_location_id, min_grid_y, max_grid_y, min_grid_x, max_grid_x)
-			VALUES (?, ?, ?, ?, ?)
-			""", locationId, MIN_GRID_Y, MAX_GRID_Y, MIN_GRID_X, MAX_GRID_X);
-		return id;
+		return EventSubmissionFixtures.seedInReviewSubmission(jdbcTemplate, organizerId, submissionNo,
+			today.minusDays(1), today.plusDays(1), MIN_GRID_Y, MAX_GRID_Y, MIN_GRID_X, MAX_GRID_X, CENTER_GRID_ID);
 	}
 
 	private List<Mission> 승인_미션들() {
@@ -188,6 +170,29 @@ class EventSubmissionApprovalConcurrencyTest {
 		} finally {
 			executor.shutdownNow();
 		}
+	}
+
+	// 검증: FR-EVENT-15
+	@Test
+	@DisplayName("승인 산출물 생성이 실패하면 전이와 이력까지 함께 롤백된다 — 절반만 반영되지 않는다")
+	void 승인_산출물_생성이_실패하면_전이와_이력이_함께_롤백된다() {
+		// 전이 뒤에 오는 단계(공개 이미지 복사)를 실패시킨다 — 상태는 이미 APPROVED 로 바뀐 시점이라,
+		// 롤백이 없으면 "승인됐는데 미션이 없는" 절반이 그대로 커밋된다.
+		given(s3Client.copyObject(any(CopyObjectRequest.class)))
+			.willThrow(SdkClientException.create("S3 복사 실패"));
+
+		assertThatThrownBy(() -> adminEventSubmissionService.approve(submissionId))
+			.isInstanceOf(SdkException.class);
+
+		EventSubmission rolledBack = submissionRepository.findById(submissionId).orElseThrow();
+		assertThat(rolledBack.getStatus()).isEqualTo(EventSubmissionStatus.IN_REVIEW);
+		assertThat(rolledBack.getApprovalNo()).isNull();
+		assertThat(rolledBack.getPublishedMissionId()).isNull();
+		assertThat(승인_미션들()).isEmpty();
+		// 이력도 접수 한 행 그대로다 — 승인 행이 남으면 콘솔이 승인됐다 취소된 것처럼 그린다.
+		assertThat(jdbcTemplate.queryForObject(
+			"SELECT COUNT(*) FROM event_submission_status_history WHERE event_submission_id = ?",
+			Long.class, submissionId)).isEqualTo(1L);
 	}
 
 	// 검증: FR-EVENT-15
