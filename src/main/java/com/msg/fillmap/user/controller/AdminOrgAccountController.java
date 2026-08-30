@@ -17,14 +17,19 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.response.SuccessResponse;
+import com.msg.fillmap.user.dto.AdminEmailChangeRequestListResponseDto;
 import com.msg.fillmap.user.dto.AdminOrgAccountListResponseDto;
 import com.msg.fillmap.user.dto.AdminOrgAccountRequestDetailResponseDto;
 import com.msg.fillmap.user.dto.AdminOrgAccountRequestListResponseDto;
+import com.msg.fillmap.user.dto.EmailChangeApproveRequestDto;
+import com.msg.fillmap.user.dto.EmailChangeApproveResponseDto;
+import com.msg.fillmap.user.dto.EmailChangeRejectRequestDto;
 import com.msg.fillmap.user.dto.OrgAccountCreateRequestDto;
 import com.msg.fillmap.user.dto.OrgAccountIssueResponseDto;
 import com.msg.fillmap.user.dto.OrgAccountRequestApproveRequestDto;
 import com.msg.fillmap.user.dto.OrgAccountRequestRejectRequestDto;
 import com.msg.fillmap.user.dto.OrgAccountResendResponseDto;
+import com.msg.fillmap.user.service.AdminEmailChangeRequestService;
 import com.msg.fillmap.user.service.OrgAccountIssueService;
 import com.msg.fillmap.user.service.OrgAccountRequestService;
 
@@ -36,7 +41,8 @@ import com.msg.fillmap.user.service.OrgAccountRequestService;
  */
 @Tag(
 	name = "관리자 행사 운영자 계정 (Admin Org Account)",
-	description = "계정 발급 요청 검토와 계정 발급·초기 비밀번호 재발송 API (MSG-499). ADMIN 권한 필수."
+	description = "계정 발급 요청 검토와 계정 발급·초기 비밀번호 재발송 API (MSG-499), "
+		+ "아이디 변경 요청 심사 (MSG-500). ADMIN 권한 필수."
 )
 @RestController
 @RequestMapping("/api/admin")
@@ -45,6 +51,8 @@ public class AdminOrgAccountController {
 
 	private final OrgAccountRequestService orgAccountRequestService;
 	private final OrgAccountIssueService orgAccountIssueService;
+	// 아이디 변경 요청 심사 (MSG-500) — 계정 축의 한 화면이라 컨트롤러를 새로 만들지 않는다.
+	private final AdminEmailChangeRequestService adminEmailChangeRequestService;
 
 	@Operation(
 		summary = "계정 발급 요청 목록 조회",
@@ -161,5 +169,63 @@ public class AdminOrgAccountController {
 		@RequestParam(required = false) String email
 	) {
 		return SuccessResponse.of(orgAccountIssueService.getAccounts(page, size, email));
+	}
+
+	@Operation(
+		summary = "아이디 변경 요청 목록 조회",
+		description = "행사 운영자가 낸 아이디(공식 이메일) 변경 요청을 상태 필터 기준으로 접수 최신순 조회한다. "
+			+ "기본은 대기(PENDING) 요청이다. 항목에 현재 아이디와 바꾸려는 이메일이 나란히 실려 그대로 대조할 "
+			+ "수 있고, 상태별 건수 3종이 필터와 무관하게 함께 온다.\n\n"
+			+ "응답의 createdAt 은 승인·반려 요청에 되돌려 보내야 하는 검토 기준 시각이다 — 재요청은 같은 대기 "
+			+ "행을 덮어쓰므로, 이 값으로 걸러야 본 적 없는 이메일을 승인하는 사고가 없다.\n\n"
+			+ "지원하지 않는 status 는 400(1424), page 음수나 size 범위(1~100) 밖은 400(1425) 이다."
+	)
+	@GetMapping("/email-change-requests")
+	public SuccessResponse<AdminEmailChangeRequestListResponseDto> getEmailChangeRequests(
+		@Parameter(description = "처리 상태 필터 (PENDING, APPROVED, REJECTED — 대소문자 무관)", example = "PENDING")
+		@RequestParam(defaultValue = "PENDING") String status,
+
+		@Parameter(description = "페이지 번호 (0부터)", example = "0")
+		@RequestParam(defaultValue = "0") int page,
+
+		@Parameter(description = "페이지 크기 (1~100)", example = "20")
+		@RequestParam(defaultValue = "20") int size
+	) {
+		return SuccessResponse.of(adminEmailChangeRequestService.getRequests(status, page, size));
+	}
+
+	@Operation(
+		summary = "아이디 변경 요청 승인",
+		description = "요청한 이메일로 로그인 아이디를 교체하고 <b>새 이메일로 변경 완료를 통지</b>한다. 요청 전이와 "
+			+ "이메일 교체는 한 트랜잭션이라 함께 성공하거나 함께 실패한다. 비밀번호와 세션은 그대로이며 다음 "
+			+ "로그인부터 새 아이디를 쓴다.\n\n"
+			+ "발급·반려 통보와 달리 메일을 보내는 이유는 로그인 수단 자체가 바뀌는 사건이라서다 — 알리지 않으면 "
+			+ "행사 운영자가 계정 접근을 잃는다. 발송이 실패해도 교체는 유지되며 emailSent 가 false 로 온다.\n\n"
+			+ "없는 요청은 404(1427), 이미 처리된 요청은 409(1428), 검토 이후 재요청으로 내용이 바뀌었으면 "
+			+ "409(1429), 요청한 이메일이 이미 다른 계정에 있으면 409(1409) 다."
+	)
+	@PostMapping("/email-change-requests/{requestId}/approve")
+	public SuccessResponse<EmailChangeApproveResponseDto> approveEmailChange(
+		@Parameter(description = "승인할 요청 id", example = "3") @PathVariable Long requestId,
+		@Valid @RequestBody EmailChangeApproveRequestDto request
+	) {
+		return SuccessResponse.of(adminEmailChangeRequestService.approve(requestId, request));
+	}
+
+	@Operation(
+		summary = "아이디 변경 요청 반려",
+		description = "요청을 반려하고 사유를 저장한다. 아이디는 바뀌지 않고 <b>메일도 발송되지 않는다</b> — 반려 "
+			+ "통보는 수기이고 저장된 사유가 그 재료다. 처리 후에는 같은 계정이 다시 접수할 수 있다.\n\n"
+			+ "검토 기준 시각을 승인과 똑같이 요구하는 것은, 검토한 내용과 다른 요청을 그 사유로 반려하는 어긋남을 "
+			+ "막기 위해서다.\n\n"
+			+ "없는 요청은 404(1427), 이미 처리된 요청은 409(1428), 검토 이후 내용이 바뀌었으면 409(1429) 다."
+	)
+	@PostMapping("/email-change-requests/{requestId}/reject")
+	public SuccessResponse<Void> rejectEmailChange(
+		@Parameter(description = "반려할 요청 id", example = "3") @PathVariable Long requestId,
+		@Valid @RequestBody EmailChangeRejectRequestDto request
+	) {
+		adminEmailChangeRequestService.reject(requestId, request);
+		return new SuccessResponse<>(null);
 	}
 }

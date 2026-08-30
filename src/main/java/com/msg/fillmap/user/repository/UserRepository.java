@@ -177,4 +177,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	/** 이메일 완전 일치 필터 — 결과 유무가 곧 직접 발급 성공 여부다(위 목록과 같은 ORG·LOCAL 조건). */
 	Page<User> findAllByRoleAndProviderAndEmailOrderByCreatedAtDesc(UserRole role, AuthProvider provider,
 		String email, Pageable pageable);
+
+	/**
+	 * 로그인 아이디(이메일) 교체 (MSG-500 D-13) — 관리자가 아이디 변경 요청을 승인할 때만 부른다.
+	 *
+	 * <p><b>엔티티 더티 체킹이 아니라 단일 컬럼 UPDATE 인 것이 계약이다.</b> 이 프로젝트는
+	 * {@code @DynamicUpdate} 를 쓰지 않아 관리 엔티티의 flush 가 전 컬럼 UPDATE 를 내보낸다 — 그 경로로
+	 * 교체하면 이메일 승인과 본인의 비밀번호·담당자 수정이 겹칠 때 낡은 승인 스냅숏이 다른 컬럼을 되돌린다.
+	 *
+	 * <p>동시에, 이 문장은 유니크 위반을 <b>실행 즉시</b> 드러낸다. 승인 서비스의 선검사는 경합에 지므로
+	 * (서로 다른 두 요청이 같은 이메일을 노리면 둘 다 통과한다) uq_users_email 위반이 잡을 자리가 필요한데,
+	 * 벌크 UPDATE 는 커밋까지 미뤄지지 않고 여기서 DataIntegrityViolationException 으로 터진다.
+	 * 반환은 영향 행 수 — 0 이면 그 사이 탈퇴한 사용자라 호출자가 1404 로 바꾼다.
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query("UPDATE User u SET u.email = :email WHERE u.id = :userId")
+	int updateEmail(@Param("userId") Long userId, @Param("email") String email);
 }

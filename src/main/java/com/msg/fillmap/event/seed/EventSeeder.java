@@ -38,6 +38,7 @@ import com.msg.fillmap.event.repository.EventLocationRepository;
 import com.msg.fillmap.event.repository.EventNotificationSubscriptionRepository;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventSeriesRepository;
+import com.msg.fillmap.event.support.EventExposureArea;
 import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.global.geo.AreaCell;
 import com.msg.fillmap.global.geo.RepresentativeGridResolver;
@@ -154,14 +155,36 @@ public class EventSeeder implements ApplicationRunner {
 		EventSeed.Rect exposure = seed.exposure();
 		validateRect(exposure, seed.occurrenceKey() + " 노출 영역");
 
+		// 기존 회차는 <b>비관 잠금으로 잡고 시작한다</b> (MSG-500 D-9 계약 편입). 상호 배제는 양쪽이 다
+		// 잠가야 성립하는데 시더만 계약 밖이었다 — 롤링 배포 중 기동 시딩과 관리자 승인이 겹치면, 시더가
+		// 잠금 없이 읽은 스테일 합집합이 방금 승인된 확장을 되쓰거나(영역 유실), 승인 사전 검사를 통과한
+		// 격자 삽입이 시더의 격자 삽입과 커밋 시점에 부딪혀(uq_event_grid_per_occ 지연 제약) 500 이 된다.
+		// 잠금 순서는 승인·중지와 같은 회차 → 위치·격자라 데드락 축이 새로 생기지 않는다.
+		// 신규 회차는 잠글 행 자체가 없어 그대로 만든다(같은 키의 동시 삽입은 자연키 UNIQUE 가 막는다).
 		EventOccurrence occurrence = occurrenceRepository.findByOccurrenceKey(seed.occurrenceKey())
+			.map(found -> occurrenceRepository.findWithLockById(found.getId()).orElse(found))
 			.orElseGet(() -> new EventOccurrence(series, seed.occurrenceKey()));
 		releaseSubscriptionsIfEnded(occurrence, now);
+
+		// 시드 사각형은 <b>바닥값</b>이다 (MSG-500 D-8). 관리자 승인이 넓힌 참여 위치 영역을 여기서 다시
+		// 얹지 않으면, 재기동마다 영역이 시드 값으로 되돌아가 원래 범위 밖의 참여 위치가 뷰포트 필터에서
+		// 빠진다 — 위치 행은 그대로 남는데 지도 칩만 사라지는, 눈에 잘 안 띄는 발견성 손실이다.
+		// 산술은 승인·중지와 같은 한 곳(EventExposureArea)을 쓰고, 입력만 "시드 ∪ 가시 <b>참여</b> 위치"다.
+		// 참여 위치로 한정하는 것이 계약이다 — 위치 동기화(syncGrids)가 이 뒤라, 전 가시 격자를 넣으면
+		// 시드가 줄이거나 옮긴 옛 시드 격자가 아직 살아 있는 채 합집합에 들어가 영역이 부푼다.
+		// 신규 회차는 아직 위치가 없어 시드 사각형 그대로다.
+		EventExposureArea area = EventExposureArea
+			.of(exposure.minGridY(), exposure.maxGridY(), exposure.minGridX(), exposure.maxGridX());
+		if (occurrence.getId() != null) {
+			area = area.union(EventExposureArea.ofGridIds(
+				locationGridRepository.findVisibleGridIdsByOccurrenceIdAndKeyPrefix(
+					occurrence.getId(), EventLocation.SUBMISSION_KEY_PREFIX)));
+		}
 
 		int revisionBefore = occurrence.getScheduleRevision();
 		occurrence.update(series, seed.title(), seed.cityName(),
 			toUtc(seed.startsAt(), seed.occurrenceKey()), toUtc(seed.endsAt(), seed.occurrenceKey()),
-			exposure.minGridY(), exposure.maxGridY(), exposure.minGridX(), exposure.maxGridX());
+			area.minGridY(), area.maxGridY(), area.minGridX(), area.maxGridX());
 		EventOccurrence saved = occurrenceRepository.save(occurrence);
 		if (saved.getScheduleRevision() > revisionBefore) {
 			notifyScheduleChanged(saved);

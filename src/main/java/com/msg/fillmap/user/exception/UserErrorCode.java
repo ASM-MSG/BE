@@ -33,6 +33,12 @@ public enum UserErrorCode implements ErrorCodeIfs {
 	INVALID_ORG_REQUEST_STATUS(1424, HttpStatus.BAD_REQUEST, "지원하지 않는 상태 필터입니다"),
 	INVALID_PAGE_RANGE(1425, HttpStatus.BAD_REQUEST, "페이지 번호 또는 크기가 유효하지 않습니다"),
 	ORG_ACCOUNT_REQUEST_MODIFIED(1426, HttpStatus.CONFLICT, "검토한 이후 요청 내용이 변경되었습니다"),
+	// 아이디 변경 요청 심사 (MSG-500 §API 7). 발급 요청용 1421·1422·1426 을 재사용하지 않는 이유는
+	// 그 메시지가 "발급 요청"을 지목해 이 요청에 어긋나기 때문이다 — 코드는 셋 다 같은 판정의 쌍둥이다.
+	// 이메일 중복은 1409, 없는 사용자는 1404, 상태·페이지 검증은 1424·1425 를 그대로 쓴다(같은 도메인).
+	EMAIL_CHANGE_REQUEST_NOT_FOUND(1427, HttpStatus.NOT_FOUND, "존재하지 않는 아이디 변경 요청입니다"),
+	EMAIL_CHANGE_REQUEST_ALREADY_PROCESSED(1428, HttpStatus.CONFLICT, "이미 처리된 아이디 변경 요청입니다"),
+	EMAIL_CHANGE_REQUEST_MODIFIED(1429, HttpStatus.CONFLICT, "검토한 이후 요청 내용이 변경되었습니다"),
 	;
 
 	private final Integer errorCode;

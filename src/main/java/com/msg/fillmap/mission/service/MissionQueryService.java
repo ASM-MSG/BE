@@ -77,4 +77,14 @@ public interface MissionQueryService {
 	 * 1시간 스냅샷 캐시를 읽지 않는다 — 방금 시작하거나 방금 끝난 미션이 누락되면 안 된다.
 	 */
 	List<GridMissionResponseDto> getMissionsByGrid(String gridId);
+
+	/**
+	 * 목록 스냅숏 무효화 (MSG-500 D-12) — 다음 조회가 TTL 을 기다리지 않고 다시 계산하게 한다.
+	 * 미션이 요청 경로 밖에서 생기거나 숨겨질 때 부르며(관리자 승인·노출 중지), 그렇게 하지 않으면 승인
+	 * 미션이 최대 1시간 지도에 안 실리고 중지 미션이 최대 1시간 계속 보인다.
+	 *
+	 * <p><b>커밋 이후에 부른다.</b> 커밋 전에 비우면 재계산이 아직 안 보이는 미커밋 행을 놓친 스냅숏을
+	 * 도로 채울 수 있다. 시더는 기동 1회라(스냅숏 생성 전) 부를 필요가 없다.
+	 */
+	void invalidateSnapshot();
 }

@@ -26,7 +26,6 @@ import com.msg.fillmap.event.submission.dto.EventSubmissionHistoryResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionImagePresignRequestDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionImagePresignResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionLocationRequestDto;
-import com.msg.fillmap.event.submission.dto.EventSubmissionLocationResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionMyListResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionParentEventResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionRejectionResponseDto;
@@ -44,12 +43,6 @@ import com.msg.fillmap.event.submission.repository.EventSubmissionStatusHistoryR
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.geo.AreaCell;
 import com.msg.fillmap.global.geo.RepresentativeGridResolver;
-import com.msg.fillmap.grid.GridEncoder;
-import com.msg.fillmap.grid.GridEncoder.GridIndex;
-import com.msg.fillmap.grid.service.GridQueryService;
-import com.msg.fillmap.zone.service.ZoneCellName;
-import com.msg.fillmap.zone.service.ZoneNameQueryService;
-import com.msg.fillmap.zone.service.ZoneNameResolver;
 
 /**
  * 행사 등재 신청 접수 (MSG-498). 검증 3규칙(영역·기간·유형별 항목)과 대표 격자 계산이 제출과 재제출에서
@@ -75,8 +68,7 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 	private final EventSubmissionRepository submissionRepository;
 	private final EventSubmissionStatusHistoryRepository historyRepository;
 	private final EventSubmissionImageStore imageStore;
-	private final ZoneNameQueryService zoneNameQueryService;
-	private final GridQueryService gridQueryService;
+	private final EventSubmissionLocationView locationView;
 	private final EventOccurrenceRepository occurrenceRepository;
 	private final Clock clock;
 
@@ -84,21 +76,18 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 	@Autowired
 	public EventSubmissionServiceImpl(EventSubmissionRepository submissionRepository,
 		EventSubmissionStatusHistoryRepository historyRepository, EventSubmissionImageStore imageStore,
-		ZoneNameQueryService zoneNameQueryService, GridQueryService gridQueryService,
-		EventOccurrenceRepository occurrenceRepository) {
-		this(submissionRepository, historyRepository, imageStore, zoneNameQueryService, gridQueryService,
-			occurrenceRepository, Clock.systemUTC());
+		EventSubmissionLocationView locationView, EventOccurrenceRepository occurrenceRepository) {
+		this(submissionRepository, historyRepository, imageStore, locationView, occurrenceRepository,
+			Clock.systemUTC());
 	}
 
 	public EventSubmissionServiceImpl(EventSubmissionRepository submissionRepository,
 		EventSubmissionStatusHistoryRepository historyRepository, EventSubmissionImageStore imageStore,
-		ZoneNameQueryService zoneNameQueryService, GridQueryService gridQueryService,
-		EventOccurrenceRepository occurrenceRepository, Clock clock) {
+		EventSubmissionLocationView locationView, EventOccurrenceRepository occurrenceRepository, Clock clock) {
 		this.submissionRepository = submissionRepository;
 		this.historyRepository = historyRepository;
 		this.imageStore = imageStore;
-		this.zoneNameQueryService = zoneNameQueryService;
-		this.gridQueryService = gridQueryService;
+		this.locationView = locationView;
 		this.occurrenceRepository = occurrenceRepository;
 		this.clock = clock;
 	}
@@ -164,7 +153,7 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 			toParentEvent(submission),
 			submission.getDescription(),
 			imageStore.presignGet(submission.getImageKey()),
-			toLocationDtos(submission),
+			locationView.describe(submission.getLocations()),
 			toRejection(submission, history),
 			history.stream().map(EventSubmissionHistoryResponseDto::from).toList(),
 			submission.getUpdatedAt());
@@ -364,39 +353,6 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 	private String nextSubmissionNo() {
 		return "FM-%d-%04d".formatted(
 			LocalDate.now(clock.withZone(KST)).getYear(), submissionRepository.nextSubmissionSequence());
-	}
-
-	/**
-	 * 위치 응답 (§API 4). 표시명 재료는 대표 격자 기준으로 서버가 계산해 동봉하고 FE 는 조립만 한다 —
-	 * 구역은 요청당 리졸버 1회로 순수 계산하고(MSG-341 계약), 행정동은 대표 격자를 한 번에 넘겨 받는다.
-	 */
-	private List<EventSubmissionLocationResponseDto> toLocationDtos(EventSubmission submission) {
-		List<EventSubmissionLocation> locations = submission.getLocations();
-		List<String> gridIds = locations.stream()
-			.map(EventSubmissionLocation::getRepresentativeGridId)
-			.distinct()
-			.toList();
-		ZoneNameResolver resolver = zoneNameQueryService.resolver();
-		Map<String, String> regionNames = gridQueryService.resolveRegionNames(gridIds);
-
-		List<EventSubmissionLocationResponseDto> dtos = new ArrayList<>();
-		for (EventSubmissionLocation location : locations) {
-			String gridId = location.getRepresentativeGridId();
-			GridIndex index = GridEncoder.decode(gridId);
-			ZoneCellName zone = resolver.name(index.gridY(), index.gridX());
-			List<EventSubmissionAreaRectDto> rects = location.getRects().stream()
-				.map(EventSubmissionAreaRectDto::from)
-				.toList();
-			dtos.add(new EventSubmissionLocationResponseDto(
-				location.getDisplayOrder(),
-				gridId,
-				zone.zoneName(),
-				zone.zoneCell(),
-				regionNames.get(gridId),
-				expand(rects).size(),
-				rects));
-		}
-		return dtos;
 	}
 
 	/**

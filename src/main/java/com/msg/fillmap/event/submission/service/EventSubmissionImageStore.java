@@ -62,6 +62,10 @@ public class EventSubmissionImageStore {
 	private static final String PENDING_PREFIX = "event-submissions/pending/";
 	private static final String ORIGINAL_PREFIX = "event-submissions/original/";
 
+	/** 승인 산출물이 공개 URL 로 읽는 자리 (MSG-500 D-6) — 미션 카드와 참여형 위치가 각자 프리픽스를 쓴다. */
+	private static final String MISSION_PUBLIC_PREFIX = "missions/org-submission/";
+	private static final String LOCATION_PUBLIC_PREFIX = "event-locations/org-submission/";
+
 	private final S3Presigner s3Presigner;
 	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
@@ -131,6 +135,39 @@ public class EventSubmissionImageStore {
 		return originalKey;
 	}
 
+	/**
+	 * 승인 미션의 공개 사본 (MSG-500 D-6). 확정본 프리픽스에는 공개 읽기가 없어 presigned GET 으로만 열리는데,
+	 * 미션 카드는 사용자 대면 목록이라 공개 URL 로 소비된다(image_url 선례) — 그래서 승인 시점에 공개
+	 * 프리픽스로 복사한다. <b>원본 확정본은 지우지 않는다</b>: 심사 상세와 콘솔 상세가 계속 읽는다.
+	 * <p>
+	 * 보상 등록이 복사 호출보다 앞인 것과 롤백 시 삭제하는 이유는 {@link #confirm} 과 같다 — 승인
+	 * 트랜잭션이 뒤에서 실패하면 아무도 참조하지 않는 사본이 남는다.
+	 */
+	public String copyToMissionImage(String originalKey) {
+		return copyToPublic(originalKey, MISSION_PUBLIC_PREFIX);
+	}
+
+	/**
+	 * 참여형 승인 위치의 공개 사본 (MSG-500 D-6). 미션 사본과 프리픽스만 다르다 — 소비처가 미션 카드가
+	 * 아니라 회차 상세의 위치 목록이라 저장하는 것도 주소가 아니라 <b>키</b>다(조립은 조회 시점).
+	 * <b>신청 하나에 사본 하나</b>다 — 위치가 여럿이어도 같은 키를 공유한다(위치별 재복사는 같은 바이트의 중복).
+	 */
+	public String copyToLocationImage(String originalKey) {
+		return copyToPublic(originalKey, LOCATION_PUBLIC_PREFIX);
+	}
+
+	private String copyToPublic(String originalKey, String publicPrefix) {
+		String publicKey = "%s%s.%s".formatted(publicPrefix, UUID.randomUUID(), extensionOf(originalKey));
+		deleteOnRollback(publicKey);
+		s3Client.copyObject(CopyObjectRequest.builder()
+			.sourceBucket(awsProperties.s3().bucket())
+			.sourceKey(originalKey)
+			.destinationBucket(awsProperties.s3().bucket())
+			.destinationKey(publicKey)
+			.build());
+		return publicKey;
+	}
+
 	/** 열람용 presigned GET (§API 4). 발급 방식·TTL 은 썸네일 선례 상수를 그대로 쓴다. */
 	public String presignGet(String imageKey) {
 		return thumbnailUrlPresigner.presign(imageKey);
@@ -141,6 +178,20 @@ public class EventSubmissionImageStore {
 		if (imageKey != null) {
 			afterCommit(() -> deleteQuietly(imageKey));
 		}
+	}
+
+	/**
+	 * 저장 키의 확장자. 확정본 키는 이 클래스가 만든 값이라(화이트리스트 확장자 + uuid) 형식이 보장되지만,
+	 * 그래도 없으면 jpg 로 떨어뜨린다 — 승인이 확장자 때문에 실패하는 것보다 낫고, 실제 바이트는 복사로
+	 * 그대로 옮겨진다.
+	 */
+	private String extensionOf(String s3Key) {
+		int extensionAt = s3Key.lastIndexOf('.');
+		if (extensionAt < 0) {
+			return "jpg";
+		}
+		String extension = s3Key.substring(extensionAt + 1).toLowerCase();
+		return ALLOWED_IMAGE_TYPES.containsKey(extension) ? extension : "jpg";
 	}
 
 	private String validatePendingKey(Long userId, String pendingKey) {

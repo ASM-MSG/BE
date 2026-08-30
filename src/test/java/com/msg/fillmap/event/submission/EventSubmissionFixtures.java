@@ -1,8 +1,11 @@
 package com.msg.fillmap.event.submission;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
+
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 행사 등재 신청 요청 본문 조립기 (MSG-498 테스트 공용). 본문을 문자열로 만드는 이유는 "필드를 아예 빼면
@@ -33,6 +36,46 @@ public final class EventSubmissionFixtures {
 	}
 
 	/**
+	 * 심사 중 신청 1건을 SQL 로 심고 id 를 돌려준다 (MSG-500 테스트 공용). 접수 API 를 타지 않는 이유는
+	 * 기간 때문이다 — 승인 산출물이 <b>지금 활성인</b> 미션이어야 하는 검증(노출·중지)은 오늘을 포함하는
+	 * 기간이 필요한데, 접수 폼은 날짜를 문자열로 고정해 두는 편이 읽기 좋기 때문이다.
+	 * 접수 이력(IN_REVIEW) 한 행도 함께 심는다 — 승인·반려가 이력을 <b>쌓는지</b>를 건수로 보려면 출발점이
+	 * 실제 접수와 같아야 한다.
+	 */
+	public static long seedInReviewSubmission(JdbcTemplate jdbcTemplate, long userId, String submissionNo,
+		LocalDate startsOn, LocalDate endsOn, int minGridY, int maxGridY, int minGridX, int maxGridX,
+		String representativeGridId) {
+		LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+		jdbcTemplate.update("""
+			INSERT INTO event_submissions
+				(submission_no, user_id, type, status, title, organizer_name, starts_on, ends_on,
+				 program_description, description, image_key, created_at, updated_at)
+			VALUES (?, ?, 'FESTIVAL', 'IN_REVIEW', '광안리 불꽃축제', '부산문화관광축제조직위원회', ?, ?,
+				'멀티불꽃쇼', '광안리 일원에서 열리는 부산 대표 불꽃 축제',
+				'event-submissions/original/1/a.jpg', ?, ?)
+			""", submissionNo, userId, startsOn, endsOn, now, now);
+		Long submissionId = jdbcTemplate.queryForObject(
+			"SELECT id FROM event_submissions WHERE submission_no = ?", Long.class, submissionNo);
+
+		jdbcTemplate.update("""
+			INSERT INTO event_submission_locations (event_submission_id, display_order, representative_grid_id)
+			VALUES (?, 1, ?)
+			""", submissionId, representativeGridId);
+		Long locationId = jdbcTemplate.queryForObject(
+			"SELECT id FROM event_submission_locations WHERE event_submission_id = ?", Long.class, submissionId);
+		jdbcTemplate.update("""
+			INSERT INTO event_submission_location_rects
+				(event_submission_location_id, min_grid_y, max_grid_y, min_grid_x, max_grid_x)
+			VALUES (?, ?, ?, ?, ?)
+			""", locationId, minGridY, maxGridY, minGridX, maxGridX);
+		jdbcTemplate.update("""
+			INSERT INTO event_submission_status_history (event_submission_id, status, created_at)
+			VALUES (?, 'IN_REVIEW', ?)
+			""", submissionId, now);
+		return submissionId;
+	}
+
+	/**
 	 * 실행일 기준 상대 날짜 (EventSubmissionCommitBoundaryTest 선례). 기간을 고정 날짜로 박으면 그날이 지나는
 	 * 순간 모든 성공 경로가 기간 검증(13433)에서 먼저 깨진다 — 달력이 트리거인 시한폭탄이라 상대값으로 만든다.
 	 * KST 오늘 이상이면 통과이고 UTC 오늘은 KST 오늘보다 앞서지 않으므로, 양수 offset 은 두 시간대 어디서도 안전하다.
@@ -58,6 +101,22 @@ public final class EventSubmissionFixtures {
 	public static String pastFestivalBody(long userId, String... locations) {
 		return body("2020 부산불꽃축제", "2020-11-06", "2020-11-07",
 			"광안리해수욕장 일원에서 열렸던 부산 대표 불꽃 축제", pendingKey(userId), locations);
+	}
+
+	/** 팝업 신청 — 유형별 필수 항목이 축제와 반대다(운영 시간 있음·주요 프로그램 없음). */
+	public static String popupBody(long userId, String... locations) {
+		return """
+			{
+				"type": "POPUP",
+				"title": "필맵 팝업스토어",
+				"organizerName": "필맵 주식회사",
+				"startsOn": "2026-11-07",
+				"endsOn": "2026-11-07",
+				"operatingHours": "11:00 ~ 20:00",
+				"description": "광안리 해변가에서 여는 필맵 브랜드 팝업스토어",
+				"imageS3Key": "%s",
+				"locations": [%s]
+			}""".formatted(pendingKey(userId), String.join(", ", locations));
 	}
 
 	public static String festivalBodyWithTitle(long userId, String title, String... locations) {
