@@ -1,5 +1,6 @@
 package com.msg.fillmap.event.submission.repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +13,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.msg.fillmap.event.submission.dto.AdminApprovedEventItemResponseDto;
 import com.msg.fillmap.event.submission.dto.AdminEventSubmissionItemResponseDto;
 import com.msg.fillmap.event.submission.entity.EventSubmission;
 import com.msg.fillmap.event.submission.entity.EventSubmissionStatus;
@@ -113,6 +115,70 @@ public interface EventSubmissionRepository extends JpaRepository<EventSubmission
 			AND s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.IN_REVIEW
 		""")
 	int rejectInReview(@Param("id") Long id, @Param("now") LocalDateTime now);
+
+	/**
+	 * 노출 중지 (MSG-500 D-3) — 승인됐고 아직 중지되지 않은 행에만 걸린다. 조건부 UPDATE 한 문장이라
+	 * 동시 중지 두 건이 둘 다 성공해 사유가 덮이는 경합이 없고, 0행이면 호출자가 재조회로 가른다:
+	 * 없거나 미승인이면 13430, 이미 중지면 13453 이다.
+	 * <p>
+	 * {@code flushAutomatically} 를 걸지 않은 것은 이 전이 앞에 엔티티 쓰기가 없기 때문이다(읽기만 한다).
+	 * 나중에 앞쪽에 엔티티 수정이 생기면 그 변경이 flush 되지 않은 채 이 UPDATE 가 먼저 나가 순서가
+	 * 뒤집히므로, 그때는 플래그가 필요하다.
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query("""
+		UPDATE EventSubmission s
+		SET s.unpublishedAt = :now, s.unpublishReason = :reason, s.updatedAt = :now
+		WHERE s.id = :id
+			AND s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.APPROVED
+			AND s.unpublishedAt IS NULL
+		""")
+	int unpublishApproved(@Param("id") Long id, @Param("reason") String reason, @Param("now") LocalDateTime now);
+
+	/**
+	 * 승인 행사 목록 (MSG-500 §API 5, D-11) — 원천은 신청 테이블의 APPROVED 행이고 안정 식별자는 신청 id 다.
+	 * 탭 상태는 저장하지 않고 <b>KST 오늘</b>과 기간으로 파생한다: 시작 전이면 UPCOMING, 기간 안이면 EXPOSED,
+	 * 종료 후면 ENDED 다(경계일 양끝 포함). 그래서 today 가 파라미터이고, 같은 CASE 가 항목의 status 필드도
+	 * 만든다 — 필터와 표시가 한 식에서 나와야 둘이 어긋나지 않는다.
+	 * <p>
+	 * 중지된 행사도 파생 탭에 그대로 남는다(D-11) — 목록에서 지우지 않고 unpublished 필드로 구분한다.
+	 * 기관명은 심사 큐와 같은 이유로 users 세타 조인이다.
+	 */
+	@Query(value = """
+		SELECT new com.msg.fillmap.event.submission.dto.AdminApprovedEventItemResponseDto(
+			s.id, s.approvalNo, s.submissionNo, s.type, s.title, s.organizerName, u.orgName,
+			s.startsOn, s.endsOn,
+			CASE WHEN s.startsOn > :today THEN 'UPCOMING'
+				WHEN s.endsOn < :today THEN 'ENDED'
+				ELSE 'EXPOSED' END,
+			s.unpublishedAt, s.unpublishReason)
+		FROM EventSubmission s, User u
+		WHERE u.id = s.userId
+			AND s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.APPROVED
+			AND (CASE WHEN s.startsOn > :today THEN 'UPCOMING'
+				WHEN s.endsOn < :today THEN 'ENDED'
+				ELSE 'EXPOSED' END) = :tab
+		ORDER BY s.startsOn DESC, s.id DESC
+		""",
+		countQuery = """
+			SELECT COUNT(s) FROM EventSubmission s
+			WHERE s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.APPROVED
+				AND (CASE WHEN s.startsOn > :today THEN 'UPCOMING'
+					WHEN s.endsOn < :today THEN 'ENDED'
+					ELSE 'EXPOSED' END) = :tab
+			""")
+	Page<AdminApprovedEventItemResponseDto> findApprovedPageByTab(@Param("tab") String tab,
+		@Param("today") LocalDate today, Pageable pageable);
+
+	/** 탭 뱃지용 건수 — 목록과 같은 파생식을 쓴다(식이 갈리면 뱃지 숫자와 목록 건수가 어긋난다). */
+	@Query("""
+		SELECT COUNT(s) FROM EventSubmission s
+		WHERE s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.APPROVED
+			AND (CASE WHEN s.startsOn > :today THEN 'UPCOMING'
+				WHEN s.endsOn < :today THEN 'ENDED'
+				ELSE 'EXPOSED' END) = :tab
+		""")
+	long countApprovedByTab(@Param("tab") String tab, @Param("today") LocalDate today);
 
 	/**
 	 * 신청 번호의 순번 (D-4). 연도별 리셋이 없는 전역 증가값이라 리셋 기계 없이 UNIQUE 가 보장된다.
