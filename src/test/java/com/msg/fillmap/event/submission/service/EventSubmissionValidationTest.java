@@ -36,8 +36,6 @@ import com.msg.fillmap.event.submission.entity.EventSubmissionType;
 import com.msg.fillmap.event.submission.repository.EventSubmissionRepository;
 import com.msg.fillmap.event.submission.repository.EventSubmissionStatusHistoryRepository;
 import com.msg.fillmap.global.exception.ApiException;
-import com.msg.fillmap.grid.service.GridQueryService;
-import com.msg.fillmap.zone.service.ZoneNameQueryService;
 
 /**
  * 신청 검증 3규칙과 대표 격자 계산 (MSG-498 §도메인 로직). DB·S3 가 필요 없는 순수 판정이라 목으로 짠다 —
@@ -64,7 +62,7 @@ class EventSubmissionValidationTest {
 		given(imageStore.confirm(anyLong(), anyString())).willReturn("event-submissions/original/42/a.jpg");
 		service = new EventSubmissionServiceImpl(submissionRepository,
 			mock(EventSubmissionStatusHistoryRepository.class), imageStore,
-			mock(ZoneNameQueryService.class), mock(GridQueryService.class), KST_NEW_DAY);
+			mock(EventSubmissionLocationView.class), KST_NEW_DAY);
 	}
 
 	private EventSubmissionCreateRequestDto festival() {
