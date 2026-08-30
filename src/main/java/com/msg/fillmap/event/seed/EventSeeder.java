@@ -155,7 +155,14 @@ public class EventSeeder implements ApplicationRunner {
 		EventSeed.Rect exposure = seed.exposure();
 		validateRect(exposure, seed.occurrenceKey() + " 노출 영역");
 
+		// 기존 회차는 <b>비관 잠금으로 잡고 시작한다</b> (MSG-500 D-9 계약 편입). 상호 배제는 양쪽이 다
+		// 잠가야 성립하는데 시더만 계약 밖이었다 — 롤링 배포 중 기동 시딩과 관리자 승인이 겹치면, 시더가
+		// 잠금 없이 읽은 스테일 합집합이 방금 승인된 확장을 되쓰거나(영역 유실), 승인 사전 검사를 통과한
+		// 격자 삽입이 시더의 격자 삽입과 커밋 시점에 부딪혀(uq_event_grid_per_occ 지연 제약) 500 이 된다.
+		// 잠금 순서는 승인·중지와 같은 회차 → 위치·격자라 데드락 축이 새로 생기지 않는다.
+		// 신규 회차는 잠글 행 자체가 없어 그대로 만든다(같은 키의 동시 삽입은 자연키 UNIQUE 가 막는다).
 		EventOccurrence occurrence = occurrenceRepository.findByOccurrenceKey(seed.occurrenceKey())
+			.map(found -> occurrenceRepository.findWithLockById(found.getId()).orElse(found))
 			.orElseGet(() -> new EventOccurrence(series, seed.occurrenceKey()));
 		releaseSubscriptionsIfEnded(occurrence, now);
 
