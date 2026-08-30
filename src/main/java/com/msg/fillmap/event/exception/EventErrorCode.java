@@ -57,6 +57,17 @@ public enum EventErrorCode implements ErrorCodeIfs {
 	SUBMISSION_IMAGE_UNSUPPORTED(13437, HttpStatus.UNSUPPORTED_MEDIA_TYPE, "jpg, png 이미지만 올릴 수 있습니다"),
 	SUBMISSION_IMAGE_TOO_LARGE(13438, HttpStatus.PAYLOAD_TOO_LARGE, "이미지는 최대 10MB 입니다"),
 	SUBMISSION_REQUIRED_FIELD_MISSING(13439, HttpStatus.BAD_REQUEST, "등록 유형에 필요한 항목이 올바르지 않습니다"),
+
+	// 관리자 심사 블록 (MSG-500). 13440 대는 MSG-502(참여형) 예약이라 13450 부터 쓴다.
+	// 목록 파라미터 두 코드는 판정과 메시지가 MSG-499 관리자 큐(1424·1425)와 같고 대역만 event 다 —
+	// 도메인 예외는 도메인이 갖는다는 규칙(뷰포트 두 코드가 mission·grid 와 같은 판정에 다른 대역인 것과 같은 결).
+	SUBMISSION_STATUS_NOT_REVIEWABLE(13450, HttpStatus.CONFLICT, "심사 중인 신청만 승인하거나 반려할 수 있습니다"),
+	SUBMISSION_PERIOD_PASSED(13451, HttpStatus.CONFLICT, "행사 기간이 이미 지나 승인할 수 없습니다"),
+	SUBMISSION_GRID_CONFLICT(13452, HttpStatus.CONFLICT, "신청 영역이 부모 이벤트의 다른 위치와 겹칩니다"),
+	EVENT_ALREADY_UNPUBLISHED(13453, HttpStatus.CONFLICT, "이미 노출이 중지된 행사입니다"),
+	INVALID_REJECT_REASON(13454, HttpStatus.BAD_REQUEST, "반려 항목 코드가 올바르지 않습니다"),
+	INVALID_SUBMISSION_STATUS_FILTER(13455, HttpStatus.BAD_REQUEST, "지원하지 않는 상태 필터입니다"),
+	INVALID_PAGE_RANGE(13456, HttpStatus.BAD_REQUEST, "페이지 번호 또는 크기가 유효하지 않습니다"),
 	;
 
 	private final Integer errorCode;
