@@ -45,4 +45,15 @@ public class OrgEmailChangeRequest {
 	/** 접수 시각(UTC). 쓰기 경로가 native UPSERT 하나라 서비스가 주입받은 Clock 값을 바인딩한다. */
 	@Column(name = "created_at", nullable = false)
 	private LocalDateTime createdAt;
+
+	/**
+	 * 심사 처리 시각·반려 사유 (V51, MSG-500 D-13). 전이는 조건부 UPDATE 한 문장이 상태와 함께 채우므로
+	 * 여기서는 관리자 큐가 읽기만 한다. 두 컬럼의 CHECK 가 "PENDING 이면 처리 시각 없음"과
+	 * "반려면 사유 있음"을 DB 에서 강제한다.
+	 */
+	@Column(name = "processed_at")
+	private LocalDateTime processedAt;
+
+	@Column(name = "reject_reason")
+	private String rejectReason;
 }

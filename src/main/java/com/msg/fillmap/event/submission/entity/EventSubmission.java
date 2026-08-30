@@ -89,6 +89,24 @@ public class EventSubmission {
 	@Column(name = "updated_at", nullable = false)
 	private LocalDateTime updatedAt;
 
+	/**
+	 * 심사 결과 4종 (MSG-500 V51). 승인 번호와 상태 전이는 조건부 UPDATE 가 한 문장으로 채우고(동시 심사
+	 * 직렬화), 여기서는 그 결과를 읽는다 — 그래서 approve 전이 메서드가 없다.
+	 * chk_event_sub_approval 이 "승인 행 = 승인 번호 있는 행"을 DB 에서 강제한다.
+	 */
+	@Column(name = "approval_no", length = 20, unique = true)
+	private String approvalNo;
+
+	/** 승인 산출물 링크 — 미션 경로에서만 값을 갖는다. 참여형은 위치가 여러 행이라 locationKey 접두로 역산한다. */
+	@Column(name = "published_mission_id")
+	private Long publishedMissionId;
+
+	@Column(name = "unpublished_at")
+	private LocalDateTime unpublishedAt;
+
+	@Column(name = "unpublish_reason")
+	private String unpublishReason;
+
 	// 컬렉션 매핑의 근거(컨벤션 영속 계층 2항): 신청은 폼 하나로 통째로 만들어졌다 통째로 교체되는
 	// 애그리거트이고 위치 수 상한이 20이라(D-10) 크기가 분명하다. 연관 주인은 FK 를 가진 자식 쪽
 	// @ManyToOne 이고 여기는 mappedBy 읽기 쪽이다 — 그래야 자식 INSERT 한 번으로 FK 가 채워진다.
@@ -141,5 +159,14 @@ public class EventSubmission {
 			location.attachTo(this, displayOrder++);
 			locations.add(location);
 		}
+	}
+
+	/**
+	 * 승인 산출물 링크 기록 (MSG-500 D-2) — 상태 전이는 조건부 UPDATE 가 이미 끝냈고, 그 뒤 재로드한
+	 * 애그리거트에 미션 id 를 달아 더티 체킹이 UPDATE 를 내보낸다 (setter 를 열지 않는 상태 전이 메서드,
+	 * {@code Video.markBlinded()} 선례).
+	 */
+	public void linkPublishedMission(Long missionId) {
+		this.publishedMissionId = missionId;
 	}
 }

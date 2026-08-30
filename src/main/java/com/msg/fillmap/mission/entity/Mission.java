@@ -83,6 +83,14 @@ public class Mission {
 	@Column(name = "representative_grid_id", length = 20)
 	private String representativeGridId;
 
+	/**
+	 * 노출 중지 시각 (V51, MSG-500 D-3). NULL = 노출 중이고, 값이 있으면 사용자 대면 조회·스탬프 판정에서
+	 * 빠진다. 시드 미션은 전부 NULL 이라 기존 동작이 불변이다. 삭제가 아니라 숨김인 것은 user_missions FK 가
+	 * 스탬프 걸린 미션의 하드삭제를 막고, 이미 받은 스탬프를 뺏는 것이 비회수 원칙과 충돌하기 때문이다.
+	 */
+	@Column(name = "hidden_at")
+	private LocalDateTime hiddenAt;
+
 	/** insertable=false — DB DEFAULT(CURRENT_TIMESTAMP) 위임. save 직후엔 null, 재조회 시 채워진다(MSG-224). */
 	@Column(name = "created_at", nullable = false, insertable = false, updatable = false)
 	private LocalDateTime createdAt;

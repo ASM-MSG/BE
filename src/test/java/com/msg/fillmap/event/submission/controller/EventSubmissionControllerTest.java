@@ -159,9 +159,11 @@ class EventSubmissionControllerTest {
 		entityManager.clear();
 	}
 
+	/** 승인 번호를 함께 넣는다 — V51 의 chk_event_sub_approval 이 "승인 행 = 승인 번호 있는 행"을 강제한다(MSG-500). */
 	private void 승인한다(long submissionId) {
 		entityManager.flush();
-		jdbcTemplate.update("UPDATE event_submissions SET status = 'APPROVED' WHERE id = ?", submissionId);
+		jdbcTemplate.update("UPDATE event_submissions SET status = 'APPROVED', approval_no = ? WHERE id = ?",
+			"APR-2026-" + submissionId, submissionId);
 		entityManager.clear();
 	}
 
