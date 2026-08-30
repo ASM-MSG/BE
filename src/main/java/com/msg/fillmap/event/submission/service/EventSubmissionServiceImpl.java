@@ -15,7 +15,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.event.entity.EventOccurrence;
 import com.msg.fillmap.event.exception.EventErrorCode;
+import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.submission.dto.EventSubmissionAreaRectDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionCreateRequestDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionDetailResponseDto;
@@ -26,6 +28,7 @@ import com.msg.fillmap.event.submission.dto.EventSubmissionImagePresignResponseD
 import com.msg.fillmap.event.submission.dto.EventSubmissionLocationRequestDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionLocationResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionMyListResponseDto;
+import com.msg.fillmap.event.submission.dto.EventSubmissionParentEventResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionRejectionResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionStatusCountsResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionSubmitResponseDto;
@@ -74,25 +77,29 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 	private final EventSubmissionImageStore imageStore;
 	private final ZoneNameQueryService zoneNameQueryService;
 	private final GridQueryService gridQueryService;
+	private final EventOccurrenceRepository occurrenceRepository;
 	private final Clock clock;
 
 	/** 프로덕션 생성자 — clock 을 systemUTC 로 고정해 전체 생성자로 위임한다 (EventVideoServiceImpl 선례). */
 	@Autowired
 	public EventSubmissionServiceImpl(EventSubmissionRepository submissionRepository,
 		EventSubmissionStatusHistoryRepository historyRepository, EventSubmissionImageStore imageStore,
-		ZoneNameQueryService zoneNameQueryService, GridQueryService gridQueryService) {
+		ZoneNameQueryService zoneNameQueryService, GridQueryService gridQueryService,
+		EventOccurrenceRepository occurrenceRepository) {
 		this(submissionRepository, historyRepository, imageStore, zoneNameQueryService, gridQueryService,
-			Clock.systemUTC());
+			occurrenceRepository, Clock.systemUTC());
 	}
 
 	public EventSubmissionServiceImpl(EventSubmissionRepository submissionRepository,
 		EventSubmissionStatusHistoryRepository historyRepository, EventSubmissionImageStore imageStore,
-		ZoneNameQueryService zoneNameQueryService, GridQueryService gridQueryService, Clock clock) {
+		ZoneNameQueryService zoneNameQueryService, GridQueryService gridQueryService,
+		EventOccurrenceRepository occurrenceRepository, Clock clock) {
 		this.submissionRepository = submissionRepository;
 		this.historyRepository = historyRepository;
 		this.imageStore = imageStore;
 		this.zoneNameQueryService = zoneNameQueryService;
 		this.gridQueryService = gridQueryService;
+		this.occurrenceRepository = occurrenceRepository;
 		this.clock = clock;
 	}
 
@@ -105,13 +112,13 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 	@Override
 	@Transactional
 	public EventSubmissionSubmitResponseDto submit(Long userId, EventSubmissionCreateRequestDto request) {
-		validateForm(request.type(), request);
+		validateForm(request.type(), request, request.parentOccurrenceId());
 		List<EventSubmissionLocation> locations = buildLocations(request.locations());
 
 		LocalDateTime now = LocalDateTime.now(clock);
 		String imageKey = imageStore.confirm(userId, request.imageS3Key());
-		EventSubmission submission =
-			EventSubmission.submit(nextSubmissionNo(), userId, request.type(), now);
+		EventSubmission submission = EventSubmission.submit(nextSubmissionNo(), userId, request.type(),
+			request.parentOccurrenceId(), now);
 		applyForm(submission, request, imageKey, locations, now);
 
 		submissionRepository.save(submission);
@@ -153,6 +160,8 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 			submission.getEndsOn(),
 			submission.getOperatingHours(),
 			submission.getProgramDescription(),
+			submission.getParticipationMethod(),
+			toParentEvent(submission),
 			submission.getDescription(),
 			imageStore.presignGet(submission.getImageKey()),
 			toLocationDtos(submission),
@@ -178,8 +187,9 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 	@Transactional
 	public EventSubmissionSubmitResponseDto resubmit(Long userId, Long submissionId,
 		EventSubmissionUpdateRequestDto request) {
-		EventSubmissionType type = findOwned(userId, submissionId).getType();
-		validateForm(type, request);
+		EventSubmission owned = findOwned(userId, submissionId);
+		// 부모는 재제출로 바뀌지 않으므로(D-3) 저장값을 그대로 검증에 넘긴다 — 종료(13441)만 다시 걸린다.
+		validateForm(owned.getType(), request, owned.getParentEventOccurrenceId());
 		List<EventSubmissionLocation> locations = buildLocations(request.locations());
 
 		LocalDateTime now = LocalDateTime.now(clock);
@@ -204,6 +214,19 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 		return EventSubmissionSubmitResponseDto.from(submission);
 	}
 
+	/**
+	 * 부모 이벤트 (MSG-502 §API 4) — EVENT 신청만 값이 있다. 이름의 원천이 회차 title 하나라 모달에서 고른
+	 * 이름과 상세에 보이는 이름이 어긋나지 않는다. 부모 행의 존재는 FK 가 보장한다.
+	 */
+	private EventSubmissionParentEventResponseDto toParentEvent(EventSubmission submission) {
+		if (submission.getParentEventOccurrenceId() == null) {
+			return null;
+		}
+		return occurrenceRepository.findById(submission.getParentEventOccurrenceId())
+			.map(parent -> new EventSubmissionParentEventResponseDto(parent.getId(), parent.getTitle()))
+			.orElseThrow(() -> new ApiException(EventErrorCode.PARENT_EVENT_NOT_FOUND));
+	}
+
 	/** 존재 은닉의 단일 진입점 (FR-14) — 없는 신청과 남의 신청이 여기서 같은 13430 이 된다. */
 	private EventSubmission findOwned(Long userId, Long submissionId) {
 		return submissionRepository.findByIdAndUserId(submissionId, userId)
@@ -213,22 +236,54 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 	private void applyForm(EventSubmission submission, EventSubmissionForm form, String imageKey,
 		List<EventSubmissionLocation> locations, LocalDateTime now) {
 		submission.updateForm(form.title(), form.organizerName(), form.startsOn(), form.endsOn(),
-			form.operatingHours(), form.programDescription(), form.description(), imageKey, now);
+			form.operatingHours(), form.programDescription(), form.participationMethod(), form.description(),
+			imageKey, now);
 		submission.replaceLocations(locations);
 	}
 
 	/**
-	 * 유형별 필수 항목과 기간 (§도메인 로직). 자기 유형이 아닌 필드는 무시하지 않고 거부한다 — 폼에 없는
-	 * 값이 저장되면 관리자 화면이 출처 불명 데이터를 그린다.
+	 * 유형별 필수 항목과 기간과 부모 회차 (§도메인 로직). 자기 유형이 아닌 필드는 무시하지 않고 거부한다 —
+	 * 폼에 없는 값이 저장되면 관리자 화면이 출처 불명 데이터를 그린다.
+	 * <p>
+	 * 유형마다 항목이 정확히 하나씩 대응하므로 판정은 "값이 있다 == 그 유형이다" 등식들이다 (MSG-502 에서
+	 * 두 유형 이분기를 대체했다 — 유형이 늘어도 등식 한 줄이 는다). 부모 회차만 폼이 아니라 인자로 따로
+	 * 받는 것은 재제출 DTO 에 부모 필드가 없기 때문이다: 제출은 요청 본문 값이, 재제출은 저장값이 들어와
+	 * 같은 규칙을 탄다 (D-3).
 	 */
-	private void validateForm(EventSubmissionType type, EventSubmissionForm form) {
-		boolean festival = type == EventSubmissionType.FESTIVAL;
-		boolean hasProgram = hasText(form.programDescription());
-		boolean hasHours = hasText(form.operatingHours());
-		if (festival ? (!hasProgram || hasHours) : (!hasHours || hasProgram)) {
+	private void validateForm(EventSubmissionType type, EventSubmissionForm form, Long parentOccurrenceId) {
+		boolean event = type == EventSubmissionType.EVENT;
+		if (hasText(form.programDescription()) != (type == EventSubmissionType.FESTIVAL)
+			|| hasText(form.operatingHours()) != (type == EventSubmissionType.POPUP)
+			|| hasText(form.participationMethod()) != event
+			|| (parentOccurrenceId != null) != event) {
+			throw new ApiException(EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
+		}
+		// EVENT 는 대표 위치 정확히 1곳이다 (D-2). 0곳은 유형 무관 공통 규칙이라 여기서 세지 않고
+		// buildLocations 의 13431 로 흘려보낸다 — 같은 실패를 두 코드로 내지 않기 위해서다.
+		if (event && form.locations() != null && form.locations().size() > 1) {
 			throw new ApiException(EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
 		}
 		validatePeriod(form.startsOn(), form.endsOn());
+		validateParentEvent(type, parentOccurrenceId);
+	}
+
+	/**
+	 * 부모 이벤트 회차 검증 (MSG-502 §도메인 로직). 존재를 은닉하지 않는다 — 승인 이벤트 목록(MSG-501)이
+	 * 행사 운영자 전원에게 같은 전량을 보여주므로 회차의 존재는 비밀이 아니고, 은닉 대상은 남의 신청(13430)이다.
+	 * <p>
+	 * 종료 판정 {@code endsAt <= now} 는 그 목록의 노출 조건({@code endsAt > now})의 정확한 여집합이라,
+	 * 종료 정각을 포함한 어떤 시각에도 모달에 보이는 회차와 신청이 되는 회차가 일치한다. 재제출도 저장 부모로
+	 * 이 메서드를 다시 타는데, 저장 부모의 존재는 FK 가 보장하므로 13440 은 사실상 제출 전용이다.
+	 */
+	private void validateParentEvent(EventSubmissionType type, Long parentOccurrenceId) {
+		if (type != EventSubmissionType.EVENT) {
+			return;
+		}
+		EventOccurrence parent = occurrenceRepository.findById(parentOccurrenceId)
+			.orElseThrow(() -> new ApiException(EventErrorCode.PARENT_EVENT_NOT_FOUND));
+		if (!parent.getEndsAt().isAfter(LocalDateTime.now(clock))) {
+			throw new ApiException(EventErrorCode.PARENT_EVENT_CLOSED);
+		}
 	}
 
 	/**

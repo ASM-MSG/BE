@@ -11,8 +11,10 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
- * 반려본 수정 재제출 요청 (MSG-498 FR-13). 제출 요청에서 유형을 뺀 전체이고, 부분 수정이 아니라 전체
- * 교체다 — 신청 하나가 폼 하나로 쓰였다 폼 하나로 고쳐지는 단위라서다 (D-8). 유형을 바꾸려면 새로 제출한다.
+ * 반려본 수정 재제출 요청 (MSG-498 FR-13). 제출 요청에서 유형과 부모 회차를 뺀 전체이고, 부분 수정이 아니라
+ * 전체 교체다 — 신청 하나가 폼 하나로 쓰였다 폼 하나로 고쳐지는 단위라서다 (D-8). 유형을 바꾸려면 새로
+ * 제출한다. 이벤트 참여형의 부모 회차도 같은 이유로 불변이라 필드가 없다 (MSG-502 D-3) — 본문에
+ * {@code parentOccurrenceId} 를 실어 보내도 역직렬화에서 버려지고 저장된 부모가 그대로 유지된다.
  * <p>
  * 이미지만 예외적으로 유지 선택이 있다 — {@code imageS3Key} 를 null 로 보내거나 생략하면 기존 이미지가
  * 유지되고, pending 키를 보내면 교체다. 상세 응답이 저장 키를 노출하지 않으므로 클라이언트가 확정 키를
@@ -37,6 +39,10 @@ public record EventSubmissionUpdateRequestDto(
 
 	@Schema(description = "주요 프로그램 — FESTIVAL 전용 필수", example = "멀티불꽃쇼, 뮤직 불꽃쇼, 드론 라이트쇼 운영")
 	@Size(min = 10, max = 2000) String programDescription,
+
+	@Schema(description = "참여 방식 — EVENT 전용 필수. 부모 이벤트는 재제출로 바꿀 수 없어 이 요청에 필드가 없다",
+		example = "부스 방문 후 현장에서 인증 영상을 촬영해 업로드하면 참여가 완료됩니다")
+	@Size(min = 10, max = 2000) String participationMethod,
 
 	@Schema(description = "행사 소개", example = "광안리해수욕장 일원에서 열리는 부산 대표 불꽃 축제")
 	@NotBlank @Size(min = 10, max = 2000) String description,

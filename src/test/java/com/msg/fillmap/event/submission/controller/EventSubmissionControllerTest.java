@@ -2,6 +2,10 @@ package com.msg.fillmap.event.submission.controller;
 
 import static com.msg.fillmap.event.submission.EventSubmissionFixtures.GWANGALLI_CENTER;
 import static com.msg.fillmap.event.submission.EventSubmissionFixtures.GWANGALLI_RECT;
+import static com.msg.fillmap.event.submission.EventSubmissionFixtures.PARTICIPATION_METHOD;
+import static com.msg.fillmap.event.submission.EventSubmissionFixtures.eventBody;
+import static com.msg.fillmap.event.submission.EventSubmissionFixtures.eventBodyWithMethod;
+import static com.msg.fillmap.event.submission.EventSubmissionFixtures.eventUpdateBody;
 import static com.msg.fillmap.event.submission.EventSubmissionFixtures.festivalBody;
 import static com.msg.fillmap.event.submission.EventSubmissionFixtures.festivalBodyWithDescription;
 import static com.msg.fillmap.event.submission.EventSubmissionFixtures.festivalBodyWithTitle;
@@ -54,6 +58,10 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
+import com.msg.fillmap.event.entity.EventOccurrence;
+import com.msg.fillmap.event.entity.EventSeries;
+import com.msg.fillmap.event.repository.EventOccurrenceRepository;
+import com.msg.fillmap.event.repository.EventSeriesRepository;
 import com.msg.fillmap.event.submission.entity.EventSubmission;
 import com.msg.fillmap.event.submission.entity.EventSubmissionLocation;
 import com.msg.fillmap.event.submission.repository.EventSubmissionRepository;
@@ -86,6 +94,12 @@ class EventSubmissionControllerTest {
 
 	@Autowired
 	private EventSubmissionRepository submissionRepository;
+
+	@Autowired
+	private EventSeriesRepository seriesRepository;
+
+	@Autowired
+	private EventOccurrenceRepository occurrenceRepository;
 
 	@Autowired
 	private PasswordEncoder passwordEncoder;
@@ -377,6 +391,162 @@ class EventSubmissionControllerTest {
 					.header(HttpHeaders.AUTHORIZATION, bearer(organizer)))
 				.andExpect(status().isNotFound())
 				.andReturn().getResponse().getContentAsString();
+		}
+	}
+
+	/**
+	 * 이벤트 참여형 (MSG-502). 부모 회차와 신청이 실제로 이어지는지, 상세가 회차 title 을 읽어 오는지, 재제출이
+	 * 저장 부모를 다시 검증하는지가 전부 DB 동작이라 여기서 본다 — 부모 종료 정각 경계만 고정 Clock 이 필요해
+	 * EventSubmissionValidationTest 몫이다.
+	 * <p>
+	 * 격리: 회차는 {@code msg502-*} 합성 자연키로 만들고 {@code @Transactional} 롤백에 정리를 맡긴다.
+	 */
+	@Nested
+	@DisplayName("이벤트 참여형")
+	class Participation {
+
+		private long 이벤트_회차(String title) {
+			EventSeries series = seriesRepository.save(
+				new EventSeries("msg502-series-" + UUID.randomUUID().toString().substring(0, 8), title));
+			EventOccurrence occurrence = new EventOccurrence(series,
+				"msg502-occ-" + UUID.randomUUID().toString().substring(0, 8));
+			LocalDateTime startsAt = LocalDateTime.now(ZoneOffset.UTC).minusDays(5);
+			occurrence.update(series, title, "부산", startsAt, startsAt.plusDays(10), 16859, 16861, 11509, 11515);
+			return occurrenceRepository.saveAndFlush(occurrence).getId();
+		}
+
+		/** 부모 회차를 종료 상태로 민다 — starts_at < ends_at CHECK 를 지키려 시작도 함께 과거로 옮긴다. */
+		private void 회차를_종료시킨다(long occurrenceId) {
+			entityManager.flush();
+			LocalDateTime endsAt = LocalDateTime.now(ZoneOffset.UTC).minusDays(1);
+			jdbcTemplate.update("""
+				UPDATE event_occurrences
+				SET starts_at = ?, ends_at = ?, visible_from = ? - INTERVAL '14 days'
+				WHERE id = ?
+				""", endsAt.minusDays(9), endsAt, endsAt.minusDays(9), occurrenceId);
+			entityManager.clear();
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("참여를 신청하면 부모 참조와 참여 방식이 저장되고 심사 중 상태가 된다")
+		void 이벤트_신청이_부모_참조와_참여_방식을_저장한다() throws Exception {
+			long occurrenceId = 이벤트_회차("부산국제영화제");
+
+			long id = 신청한다(organizer, eventBody(organizer.getId(), occurrenceId, location(GWANGALLI_RECT)));
+
+			EventSubmission saved = 저장된_신청(id, organizer);
+			assertThat(saved.getType().name()).isEqualTo("EVENT");
+			assertThat(saved.getParentEventOccurrenceId()).isEqualTo(occurrenceId);
+			assertThat(saved.getParticipationMethod()).isEqualTo(PARTICIPATION_METHOD);
+			assertThat(saved.getStatus().name()).isEqualTo("IN_REVIEW");
+			assertThat(saved.getSubmissionNo()).matches("FM-\\d{4}-\\d{4,}");
+			assertThat(saved.getLocations()).singleElement()
+				.extracting(EventSubmissionLocation::getRepresentativeGridId)
+				.isEqualTo(GWANGALLI_CENTER);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("없는 회차로 신청하면 13440, 종료된 회차로 신청하면 13441 이다")
+		void 없는_회차와_종료된_회차는_신청이_거부된다() throws Exception {
+			long occurrenceId = 이벤트_회차("부산국제영화제");
+			회차를_종료시킨다(occurrenceId);
+
+			신청_실패(eventBody(organizer.getId(), 999_999_999L, location(GWANGALLI_RECT)), 404, 13440);
+			신청_실패(eventBody(organizer.getId(), occurrenceId, location(GWANGALLI_RECT)), 409, 13441);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("참여 방식이 10자 미만이거나 2000자를 넘으면 공통 400 이다")
+		void 참여_방식_길이_위반은_400이다() throws Exception {
+			long occurrenceId = 이벤트_회차("부산국제영화제");
+
+			for (String participationMethod : List.of("짧은설명", "가".repeat(2001))) {
+				신청_실패(eventBodyWithMethod(organizer.getId(), occurrenceId, participationMethod,
+					location(GWANGALLI_RECT)),
+					400, 400);
+			}
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("이벤트 신청 상세에 참여 방식과 부모 이벤트 이름이 실린다")
+		void 이벤트_신청_상세에_부모_이벤트_이름이_실린다() throws Exception {
+			long occurrenceId = 이벤트_회차("부산국제영화제");
+			long id = 신청한다(organizer, eventBody(organizer.getId(), occurrenceId, location(GWANGALLI_RECT)));
+
+			mockMvc.perform(get(URL + "/" + id).header(HttpHeaders.AUTHORIZATION, bearer(organizer)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.type").value("EVENT"))
+				.andExpect(jsonPath("$.data.participationMethod").value(PARTICIPATION_METHOD))
+				.andExpect(jsonPath("$.data.parentEvent.occurrenceId").value(occurrenceId))
+				.andExpect(jsonPath("$.data.parentEvent.name").value("부산국제영화제"))
+				.andExpect(jsonPath("$.data.operatingHours").isEmpty())
+				.andExpect(jsonPath("$.data.programDescription").isEmpty());
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("축제 신청 상세의 참여형 필드는 null 이다")
+		void 축제_신청_상세의_참여형_필드는_null이다() throws Exception {
+			long id = 축제를_신청한다(organizer);
+
+			mockMvc.perform(get(URL + "/" + id).header(HttpHeaders.AUTHORIZATION, bearer(organizer)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.participationMethod").isEmpty())
+				.andExpect(jsonPath("$.data.parentEvent").isEmpty());
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("반려된 이벤트 신청을 수정하면 심사 중으로 돌아가고 본문의 부모 변경 시도는 무시된다")
+		void 재제출_본문의_부모_변경_시도는_무시되고_부모가_불변이다() throws Exception {
+			long occurrenceId = 이벤트_회차("부산국제영화제");
+			long otherOccurrenceId = 이벤트_회차("서울세계불꽃축제");
+			long id = 신청한다(organizer, eventBody(organizer.getId(), occurrenceId, location(GWANGALLI_RECT)));
+			반려한다(id, "INFO", "기본 정보를 확인해 주세요");
+
+			mockMvc.perform(patch(URL + "/" + id)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(eventUpdateBody("필맵 스탬프 투어 2026", otherOccurrenceId, location(GWANGALLI_RECT))))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.status").value("IN_REVIEW"));
+
+			EventSubmission saved = 저장된_신청(id, organizer);
+			assertThat(saved.getTitle()).isEqualTo("필맵 스탬프 투어 2026");
+			assertThat(saved.getParentEventOccurrenceId()).isEqualTo(occurrenceId);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("재제출 시점에 저장된 부모가 종료됐으면 13441 이다 — 참여할 자리가 사라진 신청은 살릴 수 없다")
+		void 재제출_시점에_저장_부모가_종료됐으면_거부한다() throws Exception {
+			long occurrenceId = 이벤트_회차("부산국제영화제");
+			long id = 신청한다(organizer, eventBody(organizer.getId(), occurrenceId, location(GWANGALLI_RECT)));
+			반려한다(id, "INFO", "기본 정보를 확인해 주세요");
+			회차를_종료시킨다(occurrenceId);
+
+			mockMvc.perform(patch(URL + "/" + id)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(eventUpdateBody("필맵 스탬프 투어 2026", null, location(GWANGALLI_RECT))))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.developCode").value(13441));
+
+			// 검증 실패가 전이 앞이라 상태는 그대로 반려다.
+			assertThat(저장된_신청(id, organizer).getStatus().name()).isEqualTo("REJECTED");
+		}
+
+		private void 신청_실패(String body, int httpStatus, int developCode) throws Exception {
+			mockMvc.perform(post(URL)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(body))
+				.andExpect(status().is(httpStatus))
+				.andExpect(jsonPath("$.developCode").value(developCode));
 		}
 	}
 

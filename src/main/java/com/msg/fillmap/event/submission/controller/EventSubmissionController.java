@@ -58,8 +58,10 @@ public class EventSubmissionController {
 		summary = "행사 등재 신청 제출",
 		description = "심사 중 상태로 접수하고 신청 번호(FM-2026-XXXX 꼴)를 부여한다. 위치마다 대표 격자를 "
 			+ "서버가 계산해 저장하며, 위치 하나의 영역은 겹침을 한 번만 세는 합집합 기준 최대 81칸이다.\n\n"
-			+ "유형별 필수 항목이 다르다 — FESTIVAL 은 주요 프로그램, POPUP 은 운영 시간이고 자기 유형이 "
-			+ "아닌 항목이 실려 오면 거부한다. 위치에는 이름 필드가 없고 배열 순서가 곧 순번이다."
+			+ "유형별 필수 항목이 다르다 — FESTIVAL 은 주요 프로그램, POPUP 은 운영 시간, EVENT 는 참여 방식과 "
+			+ "참여할 승인 이벤트 회차(parentOccurrenceId)이고 자기 유형이 아닌 항목이 실려 오면 거부한다. "
+			+ "EVENT 의 위치는 대표 위치 정확히 1곳이고, 참여할 회차가 이미 끝났으면 접수하지 않는다.\n\n"
+			+ "위치에는 이름 필드가 없고 배열 순서가 곧 순번이다."
 	)
 	@PostMapping
 	public SuccessResponse<EventSubmissionSubmitResponseDto> submit(
