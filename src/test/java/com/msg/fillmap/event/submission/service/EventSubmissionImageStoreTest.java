@@ -6,12 +6,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionSynchronizationUtils;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -188,6 +193,73 @@ class EventSubmissionImageStoreTest {
 			assertThatThrownBy(() -> imageStore.confirm(USER_ID, PENDING_KEY))
 				.isInstanceOf(ApiException.class)
 				.hasFieldOrPropertyWithValue("errorCode", EventErrorCode.SUBMISSION_IMAGE_TOO_LARGE);
+		}
+	}
+
+	@Nested
+	@DisplayName("승인 공개 사본 (MSG-500)")
+	class MissionCopy {
+
+		private static final String ORIGINAL_KEY = "event-submissions/original/42/8b1c.png";
+
+		@BeforeEach
+		void 트랜잭션을_연다() {
+			// 보상 등록은 동기화가 살아 있을 때만 걸린다 — 승인 트랜잭션 안에서 도는 실제 상황을 흉내낸다.
+			TransactionSynchronizationManager.initSynchronization();
+		}
+
+		@AfterEach
+		void 트랜잭션을_닫는다() {
+			if (TransactionSynchronizationManager.isSynchronizationActive()) {
+				TransactionSynchronizationManager.clearSynchronization();
+			}
+		}
+
+		// 검증: FR-EVENT-15
+		@Test
+		@DisplayName("승인 사본은 미션 공개 프리픽스로 복사되고 확장자를 유지한다 — 원본은 남는다")
+		void 승인_이미지는_공개_프리픽스로_복사된다() {
+			업로드된_객체가_있다(1024L);
+
+			String publicKey = imageStore.copyToMissionImage(ORIGINAL_KEY);
+
+			assertThat(publicKey).matches("missions/org-submission/[0-9a-f-]{36}\\.png");
+			ArgumentCaptor<CopyObjectRequest> captor = ArgumentCaptor.forClass(CopyObjectRequest.class);
+			then(s3Client).should().copyObject(captor.capture());
+			assertThat(captor.getValue().sourceKey()).isEqualTo(ORIGINAL_KEY);
+			assertThat(captor.getValue().destinationKey()).isEqualTo(publicKey);
+			// 확정본은 심사·콘솔 상세가 계속 읽는다 — 복사가 원본을 지우지 않는다.
+			then(s3Client).should(never()).deleteObject(any(DeleteObjectRequest.class));
+		}
+
+		// 검증: FR-EVENT-15
+		@Test
+		@DisplayName("승인이 롤백되면 방금 만든 공개 사본이 정리된다 — 아무도 참조하지 않는 고아를 남기지 않는다")
+		void 승인이_롤백되면_공개_사본이_정리된다() {
+			업로드된_객체가_있다(1024L);
+			String publicKey = imageStore.copyToMissionImage(ORIGINAL_KEY);
+
+			TransactionSynchronizationUtils.invokeAfterCompletion(
+				TransactionSynchronizationManager.getSynchronizations(),
+				TransactionSynchronization.STATUS_ROLLED_BACK);
+
+			ArgumentCaptor<DeleteObjectRequest> captor = ArgumentCaptor.forClass(DeleteObjectRequest.class);
+			then(s3Client).should().deleteObject(captor.capture());
+			assertThat(captor.getValue().key()).isEqualTo(publicKey);
+		}
+
+		// 검증: FR-EVENT-15
+		@Test
+		@DisplayName("커밋되면 공개 사본을 지우지 않는다 — 미션 카드가 그 주소를 읽는다")
+		void 커밋되면_공개_사본을_지우지_않는다() {
+			업로드된_객체가_있다(1024L);
+			imageStore.copyToMissionImage(ORIGINAL_KEY);
+
+			TransactionSynchronizationUtils.invokeAfterCompletion(
+				TransactionSynchronizationManager.getSynchronizations(),
+				TransactionSynchronization.STATUS_COMMITTED);
+
+			then(s3Client).should(never()).deleteObject(any(DeleteObjectRequest.class));
 		}
 	}
 }

@@ -1,10 +1,8 @@
 package com.msg.fillmap.event.submission.service;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
@@ -12,9 +10,7 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.event.submission.dto.EventSubmissionAreaRectDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionLocationResponseDto;
-import com.msg.fillmap.event.submission.entity.EventSubmissionAreaRect;
 import com.msg.fillmap.event.submission.entity.EventSubmissionLocation;
-import com.msg.fillmap.global.geo.AreaCell;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.service.GridQueryService;
@@ -56,25 +52,9 @@ public class EventSubmissionLocationView {
 				zone.zoneName(),
 				zone.zoneCell(),
 				regionNames.get(gridId),
-				cellCount(location.getRects()),
+				EventSubmissionCells.of(location).size(),
 				location.getRects().stream().map(EventSubmissionAreaRectDto::from).toList()));
 		}
 		return dtos;
-	}
-
-	/**
-	 * 합집합 칸 수 (D-7) — 겹치는 사각형을 두 번 세지 않는다. 저장된 사각형은 접수 검증을 이미 통과했으므로
-	 * (위치당 81칸 상한·인덱스 범위) 여기서 다시 검증하지 않고 세기만 한다.
-	 */
-	private int cellCount(List<EventSubmissionAreaRect> rects) {
-		Set<AreaCell> cells = new LinkedHashSet<>();
-		for (EventSubmissionAreaRect rect : rects) {
-			for (int gridY = rect.getMinGridY(); gridY <= rect.getMaxGridY(); gridY++) {
-				for (int gridX = rect.getMinGridX(); gridX <= rect.getMaxGridX(); gridX++) {
-					cells.add(new AreaCell(gridY, gridX));
-				}
-			}
-		}
-		return cells.size();
 	}
 }

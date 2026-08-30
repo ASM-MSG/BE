@@ -83,9 +83,45 @@ public interface EventSubmissionRepository extends JpaRepository<EventSubmission
 	Optional<EventSubmission> findWithLocationsById(Long id);
 
 	/**
+	 * 승인 전이 (MSG-500 D-1) — 상태 확인과 갱신이 한 문장이라 동시 승인 두 건이 둘 다 IN_REVIEW 를
+	 * 관찰하고 둘 다 성공하는 경합이 성립하지 않는다. 승인 번호를 같은 문장에서 채우는 것은 DDL CHECK
+	 * (chk_event_sub_approval)가 "승인 행 = 승인 번호 있는 행"을 요구하기 때문이다.
+	 * <p>
+	 * 영향 행이 0이면 호출자가 재조회로 가른다 — 행이 없으면 13430, 있으면 13450(동시 승인의 패자 포함)이다.
+	 * {@code clearAutomatically} 는 벌크 UPDATE 가 우회한 영속성 컨텍스트의 스테일 스냅숏을 비운다 —
+	 * 호출자가 산출물 링크를 달기 전에 새 상태를 다시 읽어야 하기 때문이다.
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query("""
+		UPDATE EventSubmission s
+		SET s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.APPROVED,
+			s.approvalNo = :approvalNo,
+			s.updatedAt = :now
+		WHERE s.id = :id
+			AND s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.IN_REVIEW
+		""")
+	int approveInReview(@Param("id") Long id, @Param("approvalNo") String approvalNo,
+		@Param("now") LocalDateTime now);
+
+	/** 반려 전이 (MSG-500 §반려) — 승인과 같은 원자 전이다. 사유는 신청 행이 아니라 이력 행에 쌓인다(D-3). */
+	@Modifying(clearAutomatically = true)
+	@Query("""
+		UPDATE EventSubmission s
+		SET s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.REJECTED,
+			s.updatedAt = :now
+		WHERE s.id = :id
+			AND s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.IN_REVIEW
+		""")
+	int rejectInReview(@Param("id") Long id, @Param("now") LocalDateTime now);
+
+	/**
 	 * 신청 번호의 순번 (D-4). 연도별 리셋이 없는 전역 증가값이라 리셋 기계 없이 UNIQUE 가 보장된다.
 	 * PostgreSQL 시퀀스 함수라 native 다 (JPA 표준에 동등 표현이 없다).
 	 */
 	@Query(value = "SELECT nextval('event_submission_no_seq')", nativeQuery = true)
 	long nextSubmissionSequence();
+
+	/** 승인 번호의 순번 (MSG-500 D-4) — 신청 번호와 같은 구조의 전역 시퀀스다(연도별 리셋 없음). */
+	@Query(value = "SELECT nextval('event_submission_approval_no_seq')", nativeQuery = true)
+	long nextApprovalSequence();
 }

@@ -53,9 +53,32 @@ public class EventSubmissionStatusHistory {
 
 	/** 심사 중 전이 기록 (제출·재제출). 사유가 없는 상태 행이라 인자에도 사유가 없다. */
 	public static EventSubmissionStatusHistory inReview(Long eventSubmissionId, LocalDateTime now) {
+		return of(eventSubmissionId, EventSubmissionStatus.IN_REVIEW, now);
+	}
+
+	/** 승인 전이 기록 (MSG-500). 승인에도 사유가 없다 — 사유는 반려 행만 갖는다(DDL CHECK). */
+	public static EventSubmissionStatusHistory approved(Long eventSubmissionId, LocalDateTime now) {
+		return of(eventSubmissionId, EventSubmissionStatus.APPROVED, now);
+	}
+
+	/**
+	 * 반려 전이 기록 (MSG-500 FR-19) — 반려 사유의 저장 원천이 이 행 하나다(D-3). 항목 코드 1개 이상과
+	 * 본문이 <b>둘 다</b> 있어야 하고 그 강제는 DDL CHECK 두 개가 한다. 호출자(승인 서비스)가 코드 목록을
+	 * 이미 검증해 넘긴다.
+	 */
+	public static EventSubmissionStatusHistory rejected(Long eventSubmissionId,
+		List<EventSubmissionReasonCode> reasonCodes, String reasonText, LocalDateTime now) {
+		EventSubmissionStatusHistory history = of(eventSubmissionId, EventSubmissionStatus.REJECTED, now);
+		history.reasonCodes = reasonCodes;
+		history.reasonText = reasonText;
+		return history;
+	}
+
+	private static EventSubmissionStatusHistory of(Long eventSubmissionId, EventSubmissionStatus status,
+		LocalDateTime now) {
 		EventSubmissionStatusHistory history = new EventSubmissionStatusHistory();
 		history.eventSubmissionId = eventSubmissionId;
-		history.status = EventSubmissionStatus.IN_REVIEW;
+		history.status = status;
 		history.createdAt = now;
 		return history;
 	}
