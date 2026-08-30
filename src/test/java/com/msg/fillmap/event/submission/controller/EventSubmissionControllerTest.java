@@ -427,7 +427,7 @@ class EventSubmissionControllerTest {
 			entityManager.clear();
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("참여를 신청하면 부모 참조와 참여 방식이 저장되고 심사 중 상태가 된다")
 		void 이벤트_신청이_부모_참조와_참여_방식을_저장한다() throws Exception {
@@ -446,7 +446,7 @@ class EventSubmissionControllerTest {
 				.isEqualTo(GWANGALLI_CENTER);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("없는 회차로 신청하면 13440, 종료된 회차로 신청하면 13441 이다")
 		void 없는_회차와_종료된_회차는_신청이_거부된다() throws Exception {
@@ -457,7 +457,7 @@ class EventSubmissionControllerTest {
 			신청_실패(eventBody(organizer.getId(), occurrenceId, location(GWANGALLI_RECT)), 409, 13441);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("참여 방식이 10자 미만이거나 2000자를 넘으면 공통 400 이다")
 		void 참여_방식_길이_위반은_400이다() throws Exception {
@@ -470,7 +470,7 @@ class EventSubmissionControllerTest {
 			}
 		}
 
-		// 검증: FR-EVENT-14
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("이벤트 신청 상세에 참여 방식과 부모 이벤트 이름이 실린다")
 		void 이벤트_신청_상세에_부모_이벤트_이름이_실린다() throws Exception {
@@ -487,7 +487,7 @@ class EventSubmissionControllerTest {
 				.andExpect(jsonPath("$.data.programDescription").isEmpty());
 		}
 
-		// 검증: FR-EVENT-14
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("축제 신청 상세의 참여형 필드는 null 이다")
 		void 축제_신청_상세의_참여형_필드는_null이다() throws Exception {
@@ -499,7 +499,7 @@ class EventSubmissionControllerTest {
 				.andExpect(jsonPath("$.data.parentEvent").isEmpty());
 		}
 
-		// 검증: FR-EVENT-14
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("반려된 이벤트 신청을 수정하면 심사 중으로 돌아가고 본문의 부모 변경 시도는 무시된다")
 		void 재제출_본문의_부모_변경_시도는_무시되고_부모가_불변이다() throws Exception {
@@ -520,7 +520,7 @@ class EventSubmissionControllerTest {
 			assertThat(saved.getParentEventOccurrenceId()).isEqualTo(occurrenceId);
 		}
 
-		// 검증: FR-EVENT-14
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("재제출 시점에 저장된 부모가 종료됐으면 13441 이다 — 참여할 자리가 사라진 신청은 살릴 수 없다")
 		void 재제출_시점에_저장_부모가_종료됐으면_거부한다() throws Exception {

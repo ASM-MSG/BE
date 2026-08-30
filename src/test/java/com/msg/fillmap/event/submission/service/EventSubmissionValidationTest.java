@@ -395,7 +395,7 @@ class EventSubmissionValidationTest {
 				.hasFieldOrPropertyWithValue("errorCode", errorCode);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("없는 회차로 참여를 신청하면 13440 이다 — 존재를 은닉하지 않는다")
 		void 없는_회차로_참여_신청하면_거부한다() {
@@ -404,7 +404,7 @@ class EventSubmissionValidationTest {
 			거부된다(이벤트_신청(), EventErrorCode.PARENT_EVENT_NOT_FOUND);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("종료된 회차로 참여를 신청하면 13441 이다")
 		void 종료된_회차로_참여_신청하면_거부한다() {
@@ -413,7 +413,7 @@ class EventSubmissionValidationTest {
 			거부된다(이벤트_신청(), EventErrorCode.PARENT_EVENT_CLOSED);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("종료 정각의 회차는 신청이 거부된다 — 승인 이벤트 목록에서 빠지는 순간과 같은 경계다")
 		void 종료_정각의_회차는_참여_신청이_거부된다() {
@@ -422,7 +422,7 @@ class EventSubmissionValidationTest {
 			거부된다(이벤트_신청(), EventErrorCode.PARENT_EVENT_CLOSED);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("영상 업로드 유예 중인 회차도 신청이 거부된다 — 유예는 이미 종료 이후다")
 		void 유예_중인_회차도_참여_신청이_거부된다() {
@@ -431,7 +431,7 @@ class EventSubmissionValidationTest {
 			거부된다(이벤트_신청(), EventErrorCode.PARENT_EVENT_CLOSED);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("종료 직전 회차는 신청이 된다 — 목록 노출 조건과 같은 판정이다")
 		void 종료_직전_회차는_참여_신청이_된다() {
@@ -440,7 +440,7 @@ class EventSubmissionValidationTest {
 			assertThatCode(() -> service.submit(USER_ID, 이벤트_신청())).doesNotThrowAnyException();
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("이벤트 신청에 부모 회차가 없으면 13439 다")
 		void 이벤트_신청에_부모_회차가_없으면_거부한다() {
@@ -448,7 +448,7 @@ class EventSubmissionValidationTest {
 				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("축제 신청에 부모 회차가 실려 오면 13439 다 — 자기 유형이 아닌 필드다")
 		void 축제_신청에_부모_회차가_실려_오면_거부한다() {
@@ -458,7 +458,7 @@ class EventSubmissionValidationTest {
 				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("축제 신청에 참여 방식이 실려 오면 13439 다")
 		void 축제_신청에_참여_방식이_실려_오면_거부한다() {
@@ -469,7 +469,7 @@ class EventSubmissionValidationTest {
 				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("이벤트 신청에 참여 방식이 없으면 13439 다")
 		void 이벤트_신청에_참여_방식이_없으면_거부한다() {
@@ -481,7 +481,7 @@ class EventSubmissionValidationTest {
 				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("이벤트 신청에 주요 프로그램이나 운영 시간이 실려 오면 13439 다")
 		void 이벤트_신청에_다른_유형의_항목이_실려_오면_거부한다() {
@@ -499,7 +499,7 @@ class EventSubmissionValidationTest {
 				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("이벤트 신청의 위치는 1곳이면 통과하고 대표 격자가 계산된다")
 		void 이벤트_신청의_위치는_1곳이면_통과한다() {
@@ -512,7 +512,7 @@ class EventSubmissionValidationTest {
 				.isEqualTo("16860_11512");
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("이벤트 신청에 위치가 2곳이면 13439 다 — 대표 위치는 한 곳이다")
 		void 이벤트_신청에_위치가_2곳이면_거부한다() {
@@ -523,7 +523,7 @@ class EventSubmissionValidationTest {
 				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("이벤트 신청에 위치가 없으면 13431 이다 — 유형 무관 공통 규칙 그대로다")
 		void 이벤트_신청에_위치가_없으면_거부한다() {
@@ -532,7 +532,7 @@ class EventSubmissionValidationTest {
 			거부된다(이벤트_신청(PARENT_ID, List.of()), EventErrorCode.INVALID_SUBMISSION_AREA);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("이벤트 위치도 81칸 상한이 적용된다 — 기존 검증 경로를 분기 없이 탄다")
 		void 이벤트_위치도_81칸_상한이_적용된다() {
@@ -542,7 +542,7 @@ class EventSubmissionValidationTest {
 				EventErrorCode.SUBMISSION_AREA_LIMIT_EXCEEDED);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-17
 		@Test
 		@DisplayName("이벤트 신청이 부모 참조와 참여 방식을 저장하고 심사 중 상태와 FM 꼴 번호를 받는다")
 		void 이벤트_신청이_부모_참조와_참여_방식을_저장한다() {
