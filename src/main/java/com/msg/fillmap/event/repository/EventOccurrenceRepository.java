@@ -4,7 +4,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -57,4 +60,14 @@ public interface EventOccurrenceRepository extends JpaRepository<EventOccurrence
 		""")
 	List<EventOccurrence> findStartNotificationCandidates(
 		@Param("now") LocalDateTime now, @Param("windowFloor") LocalDateTime windowFloor);
+
+	/**
+	 * 승인·중지의 회차 직렬화 잠금 (MSG-500 D-9) — 참여형 승인이 격자 겹침을 검사하고 삽입하는 사이에
+	 * 다른 승인이 끼어드는 경합을 트랜잭션 순서로 막는다. 잠금이 없으면 두 사전 검사가 모두 통과하고,
+	 * uq_event_grid_per_occ 가 <b>지연 제약</b>이라 지는 쪽이 커밋 시점 500 으로 끝난다(관리자에게 읽을 수
+	 * 없는 오류다). 중지도 같은 잠금을 <b>같은 순서로</b> 잡는다 — 승인과 중지가 노출 영역을 함께 고쳐서다.
+	 * {@code EventLocationRepository.findWithLockByLocationKey} 와 같은 패턴이다.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	Optional<EventOccurrence> findWithLockById(Long id);
 }

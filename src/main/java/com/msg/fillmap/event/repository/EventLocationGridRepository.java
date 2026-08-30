@@ -34,4 +34,39 @@ public interface EventLocationGridRepository extends JpaRepository<EventLocation
 		WHERE g.id.gridId = :gridId
 		""")
 	List<EventLocation> findLocationsByGridId(@Param("gridId") String gridId);
+
+	/**
+	 * 회차의 전 격자 (MSG-500 D-9 겹침 사전 검사) — <b>숨긴 위치의 격자도 포함한다.</b>
+	 * uq_event_grid_per_occ 는 행이 있으면 걸리는 제약이라 숨김 여부를 보지 않기 때문이다. 가시 격자만
+	 * 세면 중지된 위치와 같은 칸을 새 승인이 집어 커밋 시점 500 이 된다.
+	 */
+	@Query("SELECT g.id.gridId FROM EventLocationGrid g WHERE g.eventOccurrenceId = :occurrenceId")
+	List<String> findGridIdsByOccurrenceId(@Param("occurrenceId") Long occurrenceId);
+
+	/**
+	 * 회차의 <b>가시</b> 격자 (MSG-500 D-3 노출 영역 재계산) — 위 조회와 정확히 반대 용도다. 노출 영역은
+	 * "보이는 위치들을 감싸는 범위"라는 불변식이라 숨긴 위치의 칸이 들어가면 중지가 영역을 줄이지 못한다.
+	 */
+	@Query("""
+		SELECT g.id.gridId FROM EventLocationGrid g
+		JOIN g.location l
+		WHERE g.eventOccurrenceId = :occurrenceId AND l.hiddenAt IS NULL
+		""")
+	List<String> findVisibleGridIdsByOccurrenceId(@Param("occurrenceId") Long occurrenceId);
+
+	/**
+	 * 회차의 가시 격자 중 <b>승인 산출물 위치(locationKey 접두 {@code sub-})의 것만</b> (MSG-500 재시드 보존).
+	 * 위 조회와 갈라 둔 것은 시더가 <b>순서에 무관</b>해야 하기 때문이다 — 시더는 회차를 먼저 갱신하고 위치를
+	 * 나중에 동기화하므로, 전 가시 격자를 합집합에 넣으면 시드가 줄이거나 옮긴 <b>옛 시드 격자</b>가 아직 살아
+	 * 있는 채로 들어가 부풀린 영역이 다음 재기동까지 남는다. 시드 위치의 기여는 시드 사각형이 정본이므로
+	 * 확장 입력에서 빼는 것이 의미상으로도 맞다.
+	 */
+	@Query("""
+		SELECT g.id.gridId FROM EventLocationGrid g
+		JOIN g.location l
+		WHERE g.eventOccurrenceId = :occurrenceId AND l.hiddenAt IS NULL
+			AND l.locationKey LIKE CONCAT(:locationKeyPrefix, '%')
+		""")
+	List<String> findVisibleGridIdsByOccurrenceIdAndKeyPrefix(@Param("occurrenceId") Long occurrenceId,
+		@Param("locationKeyPrefix") String locationKeyPrefix);
 }

@@ -1,5 +1,6 @@
 package com.msg.fillmap.event.repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -8,6 +9,7 @@ import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -52,4 +54,24 @@ public interface EventLocationRepository extends JpaRepository<EventLocation, Lo
 		ORDER BY l.occurrence.id ASC, l.displayOrder ASC, l.id ASC
 		""")
 	List<EventLocation> findWithOccurrenceByOccurrenceIdIn(@Param("occurrenceIds") Collection<Long> occurrenceIds);
+
+	/**
+	 * 승인 산출물 위치 조회 (MSG-500 D-3) — 신청 하나가 만든 위치는 locationKey 접두
+	 * {@code sub-{submissionNo}-} 로 결정적으로 역산된다(위치가 여러 행이라 신청 행에 단일 FK 를 두지 않았다).
+	 */
+	List<EventLocation> findByLocationKeyStartingWith(String locationKeyPrefix);
+
+	/**
+	 * 노출 중지 (MSG-500 D-3) — 접두로 잡히는 위치를 한 문장에 숨긴다. 엔티티 더티 체킹을 쓰지 않는 것은
+	 * {@code @DynamicUpdate} 부재로 전 컬럼 UPDATE 가 나가 같은 시각의 재시드 갱신을 되덮기 때문이다
+	 * (missions.hidden_at 과 같은 규칙). {@code hidden_at IS NULL} 술어가 재중지를 0행으로 만들어 첫 중지
+	 * 시각을 보존하고, clearAutomatically 는 뒤이은 노출 영역 재계산이 새 상태를 읽게 한다.
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query("""
+		UPDATE EventLocation l SET l.hiddenAt = :now
+		WHERE l.locationKey LIKE CONCAT(:locationKeyPrefix, '%') AND l.hiddenAt IS NULL
+		""")
+	int hideByLocationKeyPrefix(@Param("locationKeyPrefix") String locationKeyPrefix,
+		@Param("now") LocalDateTime now);
 }
