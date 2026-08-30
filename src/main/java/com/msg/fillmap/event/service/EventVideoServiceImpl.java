@@ -129,6 +129,8 @@ public class EventVideoServiceImpl implements EventVideoService {
 			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_NOT_FOUND));
 		EventLocation location = locationRepository.findWithLockById(locationId)
 			.filter(found -> found.getOccurrence().getId().equals(occurrenceId))
+			// 중지된 위치에는 올릴 수 없다 (MSG-500 D-3) — 없는 위치와 같은 404 로 수렴한다.
+			.filter(found -> found.getHiddenAt() == null)
 			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_LOCATION_NOT_FOUND));
 		// 잠금 획득 후 회차 재독 — 위 조회는 잠금이 없어, 잠금 대기 사이 부팅 리시드(롤링 배포 중 새
 		// 인스턴스의 멱등 UPSERT)가 일정을 바꾸면 영속성 컨텍스트에 캐시된 startsAt·endsAt 이 낡은 값으로
@@ -169,6 +171,8 @@ public class EventVideoServiceImpl implements EventVideoService {
 			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_NOT_FOUND));
 		locationRepository.findById(locationId)
 			.filter(found -> found.getOccurrence().getId().equals(occurrenceId))
+			// 중지된 위치의 영상 목록도 없는 위치와 같은 404 다 (MSG-500 D-3).
+			.filter(found -> found.getHiddenAt() == null)
 			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_LOCATION_NOT_FOUND));
 
 		int pageSize = size < 1 ? PAGE_DEFAULT_SIZE : Math.min(size, PAGE_MAX_SIZE);
@@ -237,6 +241,10 @@ public class EventVideoServiceImpl implements EventVideoService {
 			throw new ApiException(EventErrorCode.EVENT_VIDEO_NOT_FOUND);
 		}
 		EventLocation location = link.getLocation();
+		// 중지된 위치의 영상은 알던 videoId 로도 열리지 않는다 (MSG-500 D-3) — 기존 존재 은닉과 같은 404 다.
+		if (location.getHiddenAt() != null) {
+			throw new ApiException(EventErrorCode.EVENT_VIDEO_NOT_FOUND);
+		}
 		EventOccurrence occurrence = location.getOccurrence();
 		// 정상 데이터에선 도달하지 않지만(노출 전 회차엔 영상이 없다) 은닉 판정을 명시해 일관성을 지킨다.
 		if (!isVisible(occurrence, now)) {

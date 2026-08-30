@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.event.dto.EventLocationResponseDto;
+
 import com.msg.fillmap.event.dto.EventOccurrenceChipResponseDto;
 import com.msg.fillmap.event.dto.EventOccurrenceDetailResponseDto;
 import com.msg.fillmap.event.dto.EventOccurrenceDetailResponseDto.PreviousOccurrenceDto;
@@ -33,6 +34,7 @@ import com.msg.fillmap.event.repository.EventLocationRepository;
 import com.msg.fillmap.event.repository.EventLocationVideoCount;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventVideoRepository;
+import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
@@ -100,6 +102,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 	private final GridQueryService gridQueryService;
 	private final ZoneNameQueryService zoneNameQueryService;
 	private final EventNotificationService eventNotificationService;
+	private final AwsProperties awsProperties;
 	private final Clock clock;
 
 	/**
@@ -115,10 +118,11 @@ public class EventQueryServiceImpl implements EventQueryService {
 		EventVideoRepository eventVideoRepository,
 		GridQueryService gridQueryService,
 		ZoneNameQueryService zoneNameQueryService,
-		EventNotificationService eventNotificationService
+		EventNotificationService eventNotificationService,
+		AwsProperties awsProperties
 	) {
 		this(occurrenceRepository, locationRepository, locationGridRepository, eventVideoRepository,
-			gridQueryService, zoneNameQueryService, eventNotificationService, Clock.systemUTC());
+			gridQueryService, zoneNameQueryService, eventNotificationService, awsProperties, Clock.systemUTC());
 	}
 
 	public EventQueryServiceImpl(
@@ -129,6 +133,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		GridQueryService gridQueryService,
 		ZoneNameQueryService zoneNameQueryService,
 		EventNotificationService eventNotificationService,
+		AwsProperties awsProperties,
 		Clock clock
 	) {
 		this.occurrenceRepository = occurrenceRepository;
@@ -138,6 +143,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		this.gridQueryService = gridQueryService;
 		this.zoneNameQueryService = zoneNameQueryService;
 		this.eventNotificationService = eventNotificationService;
+		this.awsProperties = awsProperties;
 		this.clock = clock;
 	}
 
@@ -181,7 +187,11 @@ public class EventQueryServiceImpl implements EventQueryService {
 		occurrenceRepository.findById(occurrenceId)
 			.filter(found -> isVisible(found, now))
 			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_NOT_FOUND));
-		List<EventLocation> locations = locationRepository.findByOccurrenceIdOrderByDisplayOrderAscIdAsc(occurrenceId);
+		// 노출 중지된 위치는 목록에서 빠진다 (MSG-500 D-3) — 중지가 "즉시 사라진다"를 만드는 자리 중 하나다.
+		List<EventLocation> locations = locationRepository.findByOccurrenceIdOrderByDisplayOrderAscIdAsc(occurrenceId)
+			.stream()
+			.filter(location -> location.getHiddenAt() == null)
+			.toList();
 		if (locations.isEmpty()) {
 			return List.of();
 		}
@@ -208,6 +218,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		// 미노출 회차는 키 자체가 빠진다 — 단건 조회의 13404 은닉과 같은 결이다. occurrence 는 fetch join 으로
 		// 이미 로딩돼 있어 노출 판정·그룹핑이 추가 쿼리를 만들지 않는다.
 		return locationRepository.findWithOccurrenceByOccurrenceIdIn(occurrenceIds).stream()
+			.filter(location -> location.getHiddenAt() == null)
 			.filter(location -> isVisible(location.getOccurrence(), now))
 			.collect(Collectors.groupingBy(location -> location.getOccurrence().getId(), LinkedHashMap::new,
 				Collectors.mapping(
@@ -220,6 +231,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		LocalDateTime now = LocalDateTime.now(clock);
 		// 미노출 예정 회차는 배열에서 아예 뺀다 — 노출 전 회차는 존재 자체가 비공개 정보다 (§API 4).
 		List<EventLocation> locations = locationGridRepository.findLocationsByGridId(gridId).stream()
+			.filter(location -> location.getHiddenAt() == null)
 			.filter(location -> isVisible(location.getOccurrence(), now))
 			.sorted(reverseLookupOrder(now))
 			.toList();
@@ -299,7 +311,15 @@ public class EventQueryServiceImpl implements EventQueryService {
 			name.zoneName(),
 			name.zoneCell(),
 			name.regionName(),
-			videoCounts.getOrDefault(location.getId(), 0L));
+			videoCounts.getOrDefault(location.getId(), 0L),
+			// 참여 속성 5종 (MSG-500 D-8) — 시드 위치는 전부 null 이라 기존 응답이 값 없이 필드만 는다.
+			// 이미지는 키만 저장하고 공개 주소는 여기서 조립한다(키가 없으면 주소도 null).
+			location.getOrganizerName(),
+			location.getDescription(),
+			location.getStartsOn(),
+			location.getEndsOn(),
+			location.getParticipationMethod(),
+			awsProperties.publicUrl(location.getImageKey()));
 	}
 
 	private GridEventLocationResponseDto toGridLocationDto(EventLocation location, LocalDateTime now,
