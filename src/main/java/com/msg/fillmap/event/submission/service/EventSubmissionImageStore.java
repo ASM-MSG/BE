@@ -62,8 +62,9 @@ public class EventSubmissionImageStore {
 	private static final String PENDING_PREFIX = "event-submissions/pending/";
 	private static final String ORIGINAL_PREFIX = "event-submissions/original/";
 
-	/** 승인 미션 카드가 공개 URL 로 읽는 자리 (MSG-500 D-6). 참여형 위치용 프리픽스는 그 분기와 함께 온다. */
+	/** 승인 산출물이 공개 URL 로 읽는 자리 (MSG-500 D-6) — 미션 카드와 참여형 위치가 각자 프리픽스를 쓴다. */
 	private static final String MISSION_PUBLIC_PREFIX = "missions/org-submission/";
+	private static final String LOCATION_PUBLIC_PREFIX = "event-locations/org-submission/";
 
 	private final S3Presigner s3Presigner;
 	private final S3Client s3Client;
@@ -143,7 +144,20 @@ public class EventSubmissionImageStore {
 	 * 트랜잭션이 뒤에서 실패하면 아무도 참조하지 않는 사본이 남는다.
 	 */
 	public String copyToMissionImage(String originalKey) {
-		String publicKey = "%s%s.%s".formatted(MISSION_PUBLIC_PREFIX, UUID.randomUUID(), extensionOf(originalKey));
+		return copyToPublic(originalKey, MISSION_PUBLIC_PREFIX);
+	}
+
+	/**
+	 * 참여형 승인 위치의 공개 사본 (MSG-500 D-6). 미션 사본과 프리픽스만 다르다 — 소비처가 미션 카드가
+	 * 아니라 회차 상세의 위치 목록이라 저장하는 것도 주소가 아니라 <b>키</b>다(조립은 조회 시점).
+	 * <b>신청 하나에 사본 하나</b>다 — 위치가 여럿이어도 같은 키를 공유한다(위치별 재복사는 같은 바이트의 중복).
+	 */
+	public String copyToLocationImage(String originalKey) {
+		return copyToPublic(originalKey, LOCATION_PUBLIC_PREFIX);
+	}
+
+	private String copyToPublic(String originalKey, String publicPrefix) {
+		String publicKey = "%s%s.%s".formatted(publicPrefix, UUID.randomUUID(), extensionOf(originalKey));
 		deleteOnRollback(publicKey);
 		s3Client.copyObject(CopyObjectRequest.builder()
 			.sourceBucket(awsProperties.s3().bucket())

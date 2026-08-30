@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -14,12 +15,21 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.event.entity.EventLocation;
+import com.msg.fillmap.event.entity.EventLocationGrid;
+import com.msg.fillmap.event.entity.EventLocationType;
+import com.msg.fillmap.event.entity.EventOccurrence;
 import com.msg.fillmap.event.exception.EventErrorCode;
+import com.msg.fillmap.event.repository.EventLocationGridRepository;
+import com.msg.fillmap.event.repository.EventLocationRepository;
+import com.msg.fillmap.event.repository.EventOccurrenceRepository;
+import com.msg.fillmap.event.support.EventExposureArea;
 import com.msg.fillmap.event.submission.dto.AdminEventSubmissionDetailResponseDto;
 import com.msg.fillmap.event.submission.dto.AdminEventSubmissionListResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionApproveResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionAreaRectDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionHistoryResponseDto;
+import com.msg.fillmap.event.submission.dto.EventSubmissionParentEventResponseDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionRejectRequestDto;
 import com.msg.fillmap.event.submission.entity.EventSubmission;
 import com.msg.fillmap.event.submission.entity.EventSubmissionAreaRect;
@@ -55,6 +65,9 @@ public class AdminEventSubmissionService {
 	private static final int MIN_PAGE_SIZE = 1;
 	private static final int MAX_PAGE_SIZE = 100;
 
+	/** event_locations.name 컬럼 길이 — 순번 접미사를 붙여도 넘지 않게 제목을 먼저 자르는 기준이다 (D-8). */
+	private static final int MAX_LOCATION_NAME_LENGTH = 100;
+
 	/** 승인 번호의 연도 라벨과 기간 판정의 "오늘"은 사용자·관리자가 읽는 값이라 KST 다 (D-4, 접수 선례). */
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -64,6 +77,9 @@ public class AdminEventSubmissionService {
 	private final EventSubmissionLocationView locationView;
 	private final UserRepository userRepository;
 	private final MissionRegistrationService missionRegistrationService;
+	private final EventOccurrenceRepository occurrenceRepository;
+	private final EventLocationRepository locationRepository;
+	private final EventLocationGridRepository locationGridRepository;
 	private final Clock clock;
 
 	/** 프로덕션 생성자 — clock 을 systemUTC 로 고정해 전체 생성자로 위임한다 (EventSubmissionServiceImpl 선례). */
@@ -71,21 +87,28 @@ public class AdminEventSubmissionService {
 	public AdminEventSubmissionService(EventSubmissionRepository submissionRepository,
 		EventSubmissionStatusHistoryRepository historyRepository, EventSubmissionImageStore imageStore,
 		EventSubmissionLocationView locationView, UserRepository userRepository,
-		MissionRegistrationService missionRegistrationService) {
+		MissionRegistrationService missionRegistrationService, EventOccurrenceRepository occurrenceRepository,
+		EventLocationRepository locationRepository, EventLocationGridRepository locationGridRepository) {
 		this(submissionRepository, historyRepository, imageStore, locationView, userRepository,
-			missionRegistrationService, Clock.systemUTC());
+			missionRegistrationService, occurrenceRepository, locationRepository, locationGridRepository,
+			Clock.systemUTC());
 	}
 
 	public AdminEventSubmissionService(EventSubmissionRepository submissionRepository,
 		EventSubmissionStatusHistoryRepository historyRepository, EventSubmissionImageStore imageStore,
 		EventSubmissionLocationView locationView, UserRepository userRepository,
-		MissionRegistrationService missionRegistrationService, Clock clock) {
+		MissionRegistrationService missionRegistrationService, EventOccurrenceRepository occurrenceRepository,
+		EventLocationRepository locationRepository, EventLocationGridRepository locationGridRepository,
+		Clock clock) {
 		this.submissionRepository = submissionRepository;
 		this.historyRepository = historyRepository;
 		this.imageStore = imageStore;
 		this.locationView = locationView;
 		this.userRepository = userRepository;
 		this.missionRegistrationService = missionRegistrationService;
+		this.occurrenceRepository = occurrenceRepository;
+		this.locationRepository = locationRepository;
+		this.locationGridRepository = locationGridRepository;
 		this.clock = clock;
 	}
 
@@ -133,6 +156,8 @@ public class AdminEventSubmissionService {
 			submission.getEndsOn(),
 			submission.getOperatingHours(),
 			submission.getProgramDescription(),
+			submission.getParticipationMethod(),
+			toParentEvent(submission),
 			submission.getDescription(),
 			imageStore.presignGet(submission.getImageKey()),
 			applicant.getOrgName(),
@@ -174,7 +199,11 @@ public class AdminEventSubmissionService {
 
 		EventSubmission approved = submissionRepository.findWithLocationsById(submissionId)
 			.orElseThrow(() -> new ApiException(EventErrorCode.SUBMISSION_NOT_FOUND));
-		approved.linkPublishedMission(publish(approved));
+		// 참여형은 산출물이 여러 위치라 실을 단일 링크가 없다 — 그 경우 publish 가 null 을 준다.
+		Long missionId = publish(approved);
+		if (missionId != null) {
+			approved.linkPublishedMission(missionId);
+		}
 		return new EventSubmissionApproveResponseDto(submissionId, approvalNo,
 			EventSubmissionStatus.APPROVED.name());
 	}
@@ -197,19 +226,28 @@ public class AdminEventSubmissionService {
 	}
 
 	/**
-	 * 승인 산출물 (D-2) — 지역축제·팝업스토어는 미션 1건이 된다. 위치가 여럿이어도 칩 카드는 하나가
-	 * 자연스럽다.
+	 * 승인 산출물 (D-1 유형별 분기) — 지역축제·팝업스토어는 <b>미션 1건</b>이 되고(위치가 여럿이어도 칩
+	 * 카드는 하나가 자연스럽다), 이벤트 참여형은 부모 회차 아래 <b>행사 위치</b>가 된다.
 	 * <p>
-	 * switch 에 default 를 두지 않는 것은 <b>의도된 미구현 가드</b>다: MSG-502 가 참여형 유형 값을 추가하는
-	 * 순간 이 분기가 컴파일되지 않아, 참여형 승인이 채워지지 않은 채 미션으로 잘못 흘러가는 경로가 만들어질
-	 * 수 없다. 지금은 V49 CHECK 가 두 값만 허용해 도달 자체가 불가능하다.
+	 * switch 에 default 를 두지 않는다 — 유형이 또 늘면 여기서 컴파일이 깨져 새 유형이 아무 산출물 없이
+	 * 승인되는 경로가 만들어지지 않는다(MSG-502 참여형 값 추가 때 실제로 이 가드가 발화했다).
+	 *
+	 * @return 미션 경로면 미션 id, 참여형이면 null (산출물이 여러 위치라 신청 행에 실을 단일 링크가 없다)
 	 */
-	private long publish(EventSubmission submission) {
-		MissionType missionType = switch (submission.getType()) {
-			case FESTIVAL -> MissionType.EVENT;   // 지도 홈 "축제" 칩 — 행사 카테고리 "이벤트"와 무관하다
-			case POPUP -> MissionType.POPUP;
+	private Long publish(EventSubmission submission) {
+		return switch (submission.getType()) {
+			// 지도 홈 "축제" 칩 — 행사 카테고리 "이벤트"와 무관하다.
+			case FESTIVAL -> registerMission(submission, MissionType.EVENT);
+			case POPUP -> registerMission(submission, MissionType.POPUP);
+			case EVENT -> {
+				publishParticipation(submission);
+				yield null;
+			}
 		};
-		// 운영 시간은 팝업만 값을 갖는다 — 접수 검증이 축제의 운영 시간을 애초에 거부하므로 분기가 필요 없다.
+	}
+
+	/** 미션 등재 (D-2). 운영 시간은 팝업만 값을 갖는다 — 접수 검증이 축제의 운영 시간을 애초에 거부한다. */
+	private long registerMission(EventSubmission submission, MissionType missionType) {
 		return missionRegistrationService.register(new MissionRegistration(
 			missionType,
 			submission.getTitle(),
@@ -220,6 +258,118 @@ public class AdminEventSubmissionService {
 			submission.getOperatingHours(),
 			imageStore.copyToMissionImage(submission.getImageKey()),
 			EventSubmissionCells.union(submission.getLocations()).stream().map(AreaCell::gridId).toList()));
+	}
+
+	/**
+	 * 이벤트 참여형 → 부모 회차 아래 행사 위치 (D-8·D-9). 순서가 계약이다.
+	 * <p>
+	 * ① 부모 회차를 <b>비관 잠금</b>으로 잡아 같은 회차의 승인을 직렬화한다 — 잠금이 없으면 서로 다른 두
+	 * 신청의 겹침 사전 검사가 모두 통과하고, 회차 내 격자 단일 귀속이 지연 제약이라 지는 쪽이 커밋 시점
+	 * 500 이 된다. ② 끝난 회차는 반영할 노출이 없으므로 13451 이다. ③ 겹침을 <b>두 방향</b>으로 검사한다:
+	 * 회차의 기존 격자와, 이번 신청의 위치들끼리. 후자가 필요한 이유는 접수 검증이 위치를 독립적으로 봐서
+	 * 위치 간 겹침이 심사까지 통과해 오기 때문이다. 어느 쪽이든 13452 이고 관리자의 다음 조작은 AREA 반려다.
+	 * ④ 위치를 전개하며 참여 속성을 복사하고 ⑤ 노출 영역을 합집합으로 넓힌다.
+	 * <p>
+	 * 커버 이미지 공개 사본은 <b>신청당 한 번</b> 복사해 위치들이 공유한다.
+	 */
+	private void publishParticipation(EventSubmission submission) {
+		EventOccurrence occurrence = occurrenceRepository.findWithLockById(submission.getParentEventOccurrenceId())
+			.orElseThrow(() -> new ApiException(EventErrorCode.PARENT_EVENT_NOT_FOUND));
+		if (!occurrence.getEndsAt().isAfter(LocalDateTime.now(clock))) {
+			throw new ApiException(EventErrorCode.SUBMISSION_PERIOD_PASSED);
+		}
+
+		List<EventSubmissionLocation> locations = submission.getLocations();
+		Set<AreaCell> newCells = requireNoGridConflict(occurrence, locations);
+		String imageKey = imageStore.copyToLocationImage(submission.getImageKey());
+		int displayOrder = nextDisplayOrder(occurrence.getId());
+
+		for (EventSubmissionLocation location : locations) {
+			EventLocation created = locationRepository.save(EventLocation.forSubmission(
+				occurrence,
+				"%s%s-%d".formatted(EventLocation.SUBMISSION_KEY_PREFIX, submission.getSubmissionNo(),
+					location.getDisplayOrder()),
+				locationName(submission, locations.size(), location.getDisplayOrder()),
+				// 참여 방식 문자열은 위치 유형이 아니다 — 넷에 안 걸리는 위치의 도피처가 ETC 다.
+				EventLocationType.ETC,
+				displayOrder++,
+				// 접수 때 계산해 저장한 위치별 대표 격자를 그대로 쓴다 (FR-9) — 셀 집합 소속이 이미
+				// 성립해 지연 FK(fk_event_loc_rep_grid)를 통과한다.
+				location.getRepresentativeGridId(),
+				submission.getOrganizerName(),
+				submission.getDescription(),
+				submission.getStartsOn(),
+				submission.getEndsOn(),
+				submission.getParticipationMethod(),
+				imageKey));
+			locationGridRepository.saveAll(EventSubmissionCells.of(location).stream()
+				.map(cell -> new EventLocationGrid(created.getId(), occurrence.getId(), cell.gridId()))
+				.toList());
+		}
+		expandExposure(occurrence, newCells);
+	}
+
+	/**
+	 * 위치 이름 (D-8) — 신청 위치에는 이름이 없어서(접수 정책 #102) 신청 제목을 쓰고, 여럿이면 순번을
+	 * 붙인다. name·title 이 둘 다 VARCHAR(100) 이라 <b>접미사 길이만큼 제목을 먼저 잘라낸다</b> — 100자
+	 * 제목이 그대로 들어오면 접미사를 붙이는 순간 길이 초과로 승인이 DB 오류로 죽는다.
+	 * <p>
+	 * <b>순번 분기는 현재 입력으로는 도달하지 않는다</b> — PRD v2.2 FR-8 이 참여형 신청의 위치를 대표
+	 * 위치 한 곳으로 제한하고 접수가 2곳 이상을 13439 로 막는다. 그래도 남겨 두는 것은 이 메서드가 위치
+	 * N개를 전제로 쓰인 D-8 규칙의 구현이고, 제한이 풀리는 날 이름이 조용히 겹치거나 길이로 죽는 것보다
+	 * 낫기 때문이다. 검증은 접수를 우회한 SQL 시드로 들어온다
+	 * ({@code AdminEventParticipationApprovalTest} 의 두 위치 케이스).
+	 */
+	private String locationName(EventSubmission submission, int locationCount, int displayOrder) {
+		String title = submission.getTitle();
+		if (locationCount == 1) {
+			return title;
+		}
+		String suffix = " " + displayOrder;
+		int room = MAX_LOCATION_NAME_LENGTH - suffix.length();
+		return (title.length() <= room ? title : title.substring(0, room)) + suffix;
+	}
+
+	/**
+	 * 겹침 사전 검사 (D-9) — 회차 기존 격자와의 겹침, 그리고 이번 신청 위치들 상호 겹침. 삽입 전에
+	 * 13452 로 거부하는 것은 지연 제약 위반이 커밋 시점 DataIntegrityViolation 으로 터져 관리자에게
+	 * 읽을 수 없는 500 이 되기 때문이다(제약은 그대로 백스톱으로 남는다).
+	 *
+	 * @return 이번 신청이 새로 차지하는 격자 집합 (노출 영역 확장의 입력)
+	 */
+	private Set<AreaCell> requireNoGridConflict(EventOccurrence occurrence,
+		List<EventSubmissionLocation> locations) {
+		Set<String> existing = Set.copyOf(locationGridRepository.findGridIdsByOccurrenceId(occurrence.getId()));
+		Set<AreaCell> claimed = new LinkedHashSet<>();
+		for (EventSubmissionLocation location : locations) {
+			for (AreaCell cell : EventSubmissionCells.of(location)) {
+				if (existing.contains(cell.gridId()) || !claimed.add(cell)) {
+					throw new ApiException(EventErrorCode.SUBMISSION_GRID_CONFLICT);
+				}
+			}
+		}
+		return claimed;
+	}
+
+	/** 부모 회차의 다음 표시 순번 — 기존 위치 뒤에 이어 붙인다(기존 위치의 순번은 건드리지 않는다). */
+	private int nextDisplayOrder(Long occurrenceId) {
+		return locationRepository.findByOccurrenceIdOrderByDisplayOrderAscIdAsc(occurrenceId).stream()
+			.mapToInt(EventLocation::getDisplayOrder)
+			.max()
+			.orElse(0) + 1;
+	}
+
+	/**
+	 * 노출 영역 확장 (D-8) — "노출 영역 = 위치 사각형들을 감싸는 범위"라는 기존 불변식을 유지한다.
+	 * {@code EventOccurrence.update} 를 그대로 쓰는 것이 계약이다: 시각을 바꾸지 않으므로
+	 * scheduleRevision 이 오르지 않아 <b>일정 변경 알림이 나가지 않는다</b>(영역이 넓어진 것은 구독자에게
+	 * 알릴 일정 변경이 아니다).
+	 */
+	private void expandExposure(EventOccurrence occurrence, Set<AreaCell> newCells) {
+		EventExposureArea area = EventExposureArea.of(occurrence).union(EventExposureArea.ofCells(newCells));
+		occurrence.update(occurrence.getSeries(), occurrence.getTitle(), occurrence.getCityName(),
+			occurrence.getStartsAt(), occurrence.getEndsAt(),
+			area.minGridY(), area.maxGridY(), area.minGridX(), area.maxGridX());
 	}
 
 	/** 심사 대상 조회 — 없으면 13430, 심사 중이 아니면 13450 (전이 전 빠른 거절). */
@@ -278,6 +428,20 @@ public class AdminEventSubmissionService {
 	private String nextApprovalNo() {
 		return "APR-%d-%04d".formatted(
 			LocalDate.now(clock.withZone(KST)).getYear(), submissionRepository.nextApprovalSequence());
+	}
+
+	/**
+	 * 부모 이벤트 회차 요약 (§API 2) — 참여형이 아니면 null 이다. 행사 운영자 상세(MSG-502)와 같은 타입·같은
+	 * 원천({@code event_occurrences.title})을 쓴다. 회차가 사라진 신청(부모 삭제)은 null 로 두고 승인 시점에
+	 * 13440 으로 갈린다 — 조회가 500 으로 죽는 것보다 심사 화면이 열리는 편이 낫다.
+	 */
+	private EventSubmissionParentEventResponseDto toParentEvent(EventSubmission submission) {
+		if (submission.getParentEventOccurrenceId() == null) {
+			return null;
+		}
+		return occurrenceRepository.findById(submission.getParentEventOccurrenceId())
+			.map(parent -> new EventSubmissionParentEventResponseDto(parent.getId(), parent.getTitle()))
+			.orElse(null);
 	}
 
 	/**

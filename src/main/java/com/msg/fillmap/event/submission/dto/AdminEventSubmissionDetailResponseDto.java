@@ -11,11 +11,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * 더한다 — 신청 계정 정보(누가 냈나), 노출 영역 사각형(어디에 깔리나), 상태 이력이다.
  * <p>
  * 존재 은닉이 없다: 없는 id 는 그대로 404 다(관리자는 전체를 보는 주체라 숨길 것이 없다).
+ * <p>
+ * 참여형 재료 둘({@code participationMethod}·{@code parentEvent})은 EVENT 유형에만 값이 있다 — 승인이
+ * 부모 회차 아래 위치를 만드는 경로라(D-8) <b>어느 이벤트에 무슨 방식으로 실리는지</b>를 보지 못하면
+ * 관리자가 대상을 모르는 채 승인하게 된다. 부모 표현은 행사 운영자 상세(MSG-502)와 <b>같은 타입</b>을
+ * 쓴다: 두 화면이 같은 회차를 다른 이름으로 부르면 심사 대화가 어긋난다.
  */
 @Schema(description = "관리자 심사 상세",
 	requiredProperties = {"id", "submissionNo", "type", "status", "title", "organizerName", "startsOn", "endsOn",
-		"operatingHours", "programDescription", "description", "imageUrl", "orgName", "contactName", "email",
-		"locations", "exposureRect", "history", "createdAt", "updatedAt"})
+		"operatingHours", "programDescription", "participationMethod", "parentEvent", "description", "imageUrl",
+		"orgName", "contactName", "email", "locations", "exposureRect", "history", "createdAt", "updatedAt"})
 public record AdminEventSubmissionDetailResponseDto(
 	@Schema(description = "신청 id", example = "7")
 	Long id,
@@ -46,6 +51,12 @@ public record AdminEventSubmissionDetailResponseDto(
 
 	@Schema(description = "주요 프로그램 — FESTIVAL 만 값이 있다", nullable = true)
 	String programDescription,
+
+	@Schema(description = "참여 방식 — EVENT(참여형)만 값이 있다", nullable = true)
+	String participationMethod,
+
+	@Schema(description = "참여할 부모 이벤트 회차 — EVENT(참여형)만 값이 있다", nullable = true)
+	EventSubmissionParentEventResponseDto parentEvent,
 
 	@Schema(description = "행사 소개")
 	String description,
