@@ -256,13 +256,17 @@ public class FestivalMissionSeeder implements ApplicationRunner {
 		return gridIds;
 	}
 
-	/** start_at = KST 00:00:00 의 UTC 순간 (D5). */
-	static LocalDateTime toUtcStart(LocalDate kstDate) {
+	/**
+	 * start_at = KST 00:00:00 의 UTC 순간 (D5). public 인 것은 관리자 승인 등재
+	 * (MissionRegistrationServiceImpl, MSG-500)가 같은 규칙을 써야 하기 때문이다 — 기간 변환 규칙이 두
+	 * 벌이 되면 시더 미션과 승인 미션의 하루 경계가 서로 다르게 잘린다.
+	 */
+	public static LocalDateTime toUtcStart(LocalDate kstDate) {
 		return kstDate.atStartOfDay(KST).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
 	}
 
-	/** end_at = KST 23:59:59 의 UTC 순간 — 판정이 양끝 포함이라 종료일 자정 직전까지 인정된다 (D5). */
-	static LocalDateTime toUtcEnd(LocalDate kstDate) {
+	/** end_at = KST 23:59:59 의 UTC 순간 — 판정이 양끝 포함이라 종료일 자정 직전까지 인정된다 (D5, toUtcStart 와 같은 이유로 public). */
+	public static LocalDateTime toUtcEnd(LocalDate kstDate) {
 		return kstDate.atTime(23, 59, 59).atZone(KST).withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime();
 	}
 
