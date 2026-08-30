@@ -4,8 +4,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import jakarta.validation.Valid;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.event.submission.dto.AdminEventSubmissionDetailResponseDto;
 import com.msg.fillmap.event.submission.dto.AdminEventSubmissionListResponseDto;
+import com.msg.fillmap.event.submission.dto.EventSubmissionApproveResponseDto;
+import com.msg.fillmap.event.submission.dto.EventSubmissionRejectRequestDto;
 import com.msg.fillmap.event.submission.service.AdminEventSubmissionService;
 import com.msg.fillmap.response.SuccessResponse;
 
@@ -67,5 +73,42 @@ public class AdminEventSubmissionController {
 		@Parameter(description = "조회할 신청 id", example = "7") @PathVariable Long submissionId
 	) {
 		return SuccessResponse.of(adminEventSubmissionService.getSubmission(submissionId));
+	}
+
+	@Operation(
+		summary = "신청 승인",
+		description = "신청을 승인하고 승인 번호(APR-2026-XXXX 꼴)를 부여한다. 요청 본문이 없다 — 승인 입력은 "
+			+ "전부 저장된 신청에서 나온다.\n\n"
+			+ "지역축제는 지도 홈 <b>축제 칩</b> 미션으로, 팝업스토어는 <b>팝업 칩</b> 미션으로 등재되어 "
+			+ "재기동이나 재시드 없이 기존 미션 조회 API 에 즉시 나타난다. 판정 격자는 신청한 전 위치의 셀 "
+			+ "합집합이고 대표 격자는 서버가 그 합집합에서 다시 계산한다.\n\n"
+			+ "전이·이력·미션 등재가 한 트랜잭션이라 절반만 반영되는 결과가 없다. 응답을 받지 못했으면 "
+			+ "상세를 재조회해 APPROVED 인지 확인한다 — 같은 신청을 다시 승인하면 409(13450) 다.\n\n"
+			+ "없는 신청은 404(13430), 심사 중이 아니거나 동시 승인의 늦은 쪽은 409(13450), 종료일이 이미 "
+			+ "지난 신청은 409(13451) 다."
+	)
+	@PostMapping("/{submissionId}/approve")
+	public SuccessResponse<EventSubmissionApproveResponseDto> approve(
+		@Parameter(description = "승인할 신청 id", example = "7") @PathVariable Long submissionId
+	) {
+		return SuccessResponse.of(adminEventSubmissionService.approve(submissionId));
+	}
+
+	@Operation(
+		summary = "신청 반려",
+		description = "신청을 반려하고 항목 코드와 사유를 이력에 남긴다. 항목 코드는 1개 이상이어야 하고 "
+			+ "PERIOD·AREA·IMAGE·INFO 만 쓸 수 있으며 중복은 허용하지 않는다. 사유 본문도 필수다.\n\n"
+			+ "<b>메일은 발송되지 않는다</b> — 행사 운영자가 콘솔 상세에서 항목과 사유를 보고 고쳐서 다시 낸다. "
+			+ "승인 시 격자 겹침(13452)을 만난 경우의 다음 조작도 이 반려이고, 항목 코드는 AREA 다.\n\n"
+			+ "없는 신청은 404(13430), 심사 중이 아니면 409(13450), 항목 코드가 비었거나 허용 밖이거나 "
+			+ "중복이면 400(13454) 이다."
+	)
+	@PostMapping("/{submissionId}/reject")
+	public SuccessResponse<Void> reject(
+		@Parameter(description = "반려할 신청 id", example = "7") @PathVariable Long submissionId,
+		@Valid @RequestBody EventSubmissionRejectRequestDto request
+	) {
+		adminEventSubmissionService.reject(submissionId, request);
+		return new SuccessResponse<>(null);
 	}
 }

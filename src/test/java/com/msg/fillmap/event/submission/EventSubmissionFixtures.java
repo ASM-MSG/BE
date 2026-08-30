@@ -46,6 +46,22 @@ public final class EventSubmissionFixtures {
 			"광안리해수욕장 일원에서 열렸던 부산 대표 불꽃 축제", pendingKey(userId), locations);
 	}
 
+	/** 팝업 신청 — 유형별 필수 항목이 축제와 반대다(운영 시간 있음·주요 프로그램 없음). */
+	public static String popupBody(long userId, String... locations) {
+		return """
+			{
+				"type": "POPUP",
+				"title": "필맵 팝업스토어",
+				"organizerName": "필맵 주식회사",
+				"startsOn": "2026-11-07",
+				"endsOn": "2026-11-07",
+				"operatingHours": "11:00 ~ 20:00",
+				"description": "광안리 해변가에서 여는 필맵 브랜드 팝업스토어",
+				"imageS3Key": "%s",
+				"locations": [%s]
+			}""".formatted(pendingKey(userId), String.join(", ", locations));
+	}
+
 	public static String festivalBodyWithTitle(long userId, String title, String... locations) {
 		return body(title, "2026-11-07", "2026-11-07",
 			"광안리해수욕장 일원에서 열리는 부산 대표 불꽃 축제", pendingKey(userId), locations);
