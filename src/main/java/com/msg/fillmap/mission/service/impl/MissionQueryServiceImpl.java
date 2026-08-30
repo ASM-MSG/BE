@@ -301,7 +301,10 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 	public MissionDetailResponseDto getMissionDetail(long missionId, Long userId) {
 		// 기간 판정은 하지 않는다 — 기간이 끝난 미션도 행이 남아 있으면 상세를 연다(§API 명세).
+		// 노출 중지된 미션은 없는 미션과 <b>같은 404</b> 다 (MSG-500 D-3) — 목록에서 사라진 미션이 상세로는
+		// 열리면 "있는데 안 보이는" 상태가 되어 은닉이 갈라진다.
 		Mission mission = missionRepository.findById(missionId)
+			.filter(found -> found.getHiddenAt() == null)
 			.orElseThrow(() -> new ApiException(MissionErrorCode.MISSION_NOT_FOUND));
 		List<MissionGrid> grids = missionGridRepository.findByMissionIds(List.of(missionId));
 		// findById 직후라 진행도 행은 사실상 하나다. READ_COMMITTED 는 문장 사이 스냅샷이 갱신되므로
@@ -327,7 +330,7 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	 */
 	@Override
 	public List<GridMissionResponseDto> getMissionsByGrid(String gridId) {
-		List<Mission> missions = missionRepository.findByRepresentativeGridIdOrderById(gridId);
+		List<Mission> missions = missionRepository.findByRepresentativeGridIdAndHiddenAtIsNullOrderById(gridId);
 		if (missions.isEmpty()) {
 			return List.of();
 		}
