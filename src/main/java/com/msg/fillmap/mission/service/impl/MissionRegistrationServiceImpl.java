@@ -1,5 +1,7 @@
 package com.msg.fillmap.mission.service.impl;
 
+import java.time.LocalDateTime;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -70,6 +72,15 @@ public class MissionRegistrationServiceImpl implements MissionRegistrationServic
 
 		invalidateSnapshotAfterCommit();
 		return mission.getId();
+	}
+
+	@Override
+	@Transactional
+	public void hide(long missionId, LocalDateTime now) {
+		// 0행 = 이미 숨겨진 미션. 그래도 무효화는 건다 — 값이 없어도 비용이 다음 조회 한 번의 재계산뿐이고,
+		// 실패로 보고할 사건이 아니다(중지의 목표 상태는 이미 성립해 있다).
+		missionRepository.hide(missionId, now);
+		invalidateSnapshotAfterCommit();
 	}
 
 	/**
