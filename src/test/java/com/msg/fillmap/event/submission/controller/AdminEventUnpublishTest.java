@@ -163,7 +163,7 @@ class AdminEventUnpublishTest {
 	@DisplayName("사용자 대면 노출")
 	class UserFacing {
 
-		// 검증: FR-EVENT-17
+		// 검증: FR-EVENT-18
 		@Test
 		@DisplayName("중지하면 미션이 활성 조회와 스탬프 후보 판정에서 사라진다")
 		void 중지하면_미션이_활성_조회와_스탬프_판정에서_사라진다() throws Exception {
@@ -179,7 +179,7 @@ class AdminEventUnpublishTest {
 				.doesNotContain(missionId);
 		}
 
-		// 검증: FR-EVENT-17
+		// 검증: FR-EVENT-18
 		@Test
 		@DisplayName("중지된 미션은 격자 선택 조회에서도 빠진다")
 		void 중지된_미션은_격자_선택_조회에서도_빠진다() throws Exception {
@@ -196,7 +196,7 @@ class AdminEventUnpublishTest {
 				.andExpect(jsonPath("$.data[?(@.missionId == %d)]".formatted(missionId)).doesNotExist());
 		}
 
-		// 검증: FR-EVENT-17
+		// 검증: FR-EVENT-18
 		@Test
 		@DisplayName("중지된 미션의 상세와 영상 피드는 없는 미션과 같은 404 다")
 		void 중지된_미션의_상세와_영상_피드는_404다() throws Exception {
@@ -216,7 +216,7 @@ class AdminEventUnpublishTest {
 				.andExpect(jsonPath("$.developCode").value(12404));
 		}
 
-		// 검증: FR-EVENT-17
+		// 검증: FR-EVENT-18
 		@Test
 		@DisplayName("중지해도 진행도 조회는 남는다 — 기록은 회수하지 않는다")
 		void 이미_완료한_사용자의_진행도는_중지_후에도_남는다() throws Exception {
@@ -236,7 +236,7 @@ class AdminEventUnpublishTest {
 	@DisplayName("중지 처리")
 	class Unpublishing {
 
-		// 검증: FR-EVENT-17
+		// 검증: FR-EVENT-18
 		@Test
 		@DisplayName("중지 사유가 신청 계정의 공식 이메일로 발송된다")
 		void 중지_사유가_공식_이메일로_발송된다() throws Exception {
@@ -251,7 +251,7 @@ class AdminEventUnpublishTest {
 			assertThat(body.getValue()).contains("행사가 취소되어 노출을 중지합니다");
 		}
 
-		// 검증: FR-EVENT-17
+		// 검증: FR-EVENT-18
 		@Test
 		@DisplayName("발송이 실패해도 중지는 유지되고 emailSent 가 거짓이다")
 		void 발송이_실패해도_중지는_유지된다() throws Exception {
@@ -267,7 +267,7 @@ class AdminEventUnpublishTest {
 			assertThat(활성_목록에_있다()).isFalse();
 		}
 
-		// 검증: FR-EVENT-17
+		// 검증: FR-EVENT-18
 		@Test
 		@DisplayName("이미 중지된 행사의 재중지는 13453 이고 첫 중지 사유가 유지된다")
 		void 이미_중지된_행사의_재중지는_13453이다() throws Exception {
@@ -282,7 +282,7 @@ class AdminEventUnpublishTest {
 				.isEqualTo("행사가 취소되어 노출을 중지합니다");
 		}
 
-		// 검증: FR-EVENT-17
+		// 검증: FR-EVENT-18
 		@Test
 		@DisplayName("승인되지 않은 신청과 없는 id 의 중지는 둘 다 13430 이다")
 		void 미승인_신청_id의_중지는_13430이다() throws Exception {
@@ -299,7 +299,7 @@ class AdminEventUnpublishTest {
 				.andExpect(jsonPath("$.developCode").value(13430));
 		}
 
-		// 검증: FR-EVENT-17
+		// 검증: FR-EVENT-18
 		@Test
 		@DisplayName("중지된 뒤에도 미션 행은 남는다 — 삭제가 아니라 숨김이다")
 		void 중지는_삭제가_아니라_숨김이다() throws Exception {

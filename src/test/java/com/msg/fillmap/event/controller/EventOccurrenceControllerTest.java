@@ -154,7 +154,8 @@ class EventOccurrenceControllerTest {
 		void 위치_목록_응답에_표시명_재료가_실린다() throws Exception {
 			given(eventQueryService.getLocations(OCCURRENCE_ID)).willReturn(List.of(
 				new EventLocationResponseDto(31L, "부산역 팝업", "POPUP", "11:00 ~ 20:00",
-					List.of("19443_9582", "19443_9583"), "19443_9582", "서면", "A-14", "부전동", 7L)));
+					List.of("19443_9582", "19443_9583"), "19443_9582", "서면", "A-14", "부전동", 7L,
+					null, null, null, null, null, null)));
 
 			mockMvc.perform(get("/api/event-occurrences/{id}/locations", OCCURRENCE_ID))
 				.andExpect(status().isOk())

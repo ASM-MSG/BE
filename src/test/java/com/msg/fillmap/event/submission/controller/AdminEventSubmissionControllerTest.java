@@ -250,7 +250,11 @@ class AdminEventSubmissionControllerTest {
 				.andExpect(jsonPath("$.data.locations[0].cellCount").value(21))
 				.andExpect(jsonPath("$.data.imageUrl").value("https://signed.example/image.jpg"))
 				.andExpect(jsonPath("$.data.history.length()").value(1))
-				.andExpect(jsonPath("$.data.history[0].status").value("IN_REVIEW"));
+				.andExpect(jsonPath("$.data.history[0].status").value("IN_REVIEW"))
+				// 참여형 재료 둘은 축제·팝업 신청에서 키만 있고 값이 없다 (EVENT 전용) — 키 자체는
+				// 스키마 계약상 항상 나간다(required + nullable 병기).
+				.andExpect(jsonPath("$.data.participationMethod").isEmpty())
+				.andExpect(jsonPath("$.data.parentEvent").isEmpty());
 		}
 
 		// 검증: FR-EVENT-15

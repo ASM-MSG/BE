@@ -223,7 +223,7 @@ class EventSubmissionApprovalConcurrencyTest {
 		assertThat(after).extracting(MissionResponseDto::missionId).contains(missionId);
 	}
 
-	// 검증: FR-EVENT-17
+	// 검증: FR-EVENT-18
 	@Test
 	@DisplayName("중지 커밋 후 스냅숏이 무효화되어 TTL 전에도 목록에서 빠진다")
 	void 중지_커밋_후_미션_스냅숏이_무효화되어_TTL_전에도_목록에서_빠진다() {

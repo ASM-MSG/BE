@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -207,13 +208,17 @@ class AdminEventSubmissionReviewTest {
 			assertThat(mission.getSourceKey()).isEqualTo(저장된_신청(id).getSubmissionNo());
 			assertThat(mission.getTargetCount()).isEqualTo(1);
 			// KST 날짜 라벨 → UTC 순간 (축제 시더와 같은 규칙): 시작 KST 00:00, 끝 KST 23:59:59.
-			assertThat(mission.getStartAt()).isEqualTo(LocalDateTime.of(2026, 11, 6, 15, 0, 0));
-			assertThat(mission.getEndAt()).isEqualTo(LocalDateTime.of(2026, 11, 7, 14, 59, 59));
+			// 기대값은 픽스처와 같은 상대 날짜에서 만들되 변환은 여기서 독립적으로 쓴다(KST = UTC+9 고정).
+			// 축제 픽스처는 당일 행사라 시작일과 종료일이 같다(둘 다 +30일).
+			LocalDate 시작일 = LocalDate.now(ZoneOffset.UTC).plusDays(30);
+			LocalDate 종료일 = 시작일;
+			assertThat(mission.getStartAt()).isEqualTo(시작일.atStartOfDay().minusHours(9));
+			assertThat(mission.getEndAt()).isEqualTo(종료일.atTime(23, 59, 59).minusHours(9));
 			assertThat(mission.getDescription()).isEqualTo("광안리해수욕장 일원에서 열리는 부산 대표 불꽃 축제");
 			assertThat(mission.getOperationTime()).isNull();
 
 			// 재시드·재기동 없이 기존 활성 조회 술어에 그대로 잡힌다 (기간 안의 시각으로 확인).
-			assertThat(missionRepository.findActive(LocalDateTime.of(2026, 11, 7, 3, 0)))
+			assertThat(missionRepository.findActive(시작일.atTime(3, 0)))
 				.extracting(Mission::getId)
 				.contains(mission.getId());
 		}

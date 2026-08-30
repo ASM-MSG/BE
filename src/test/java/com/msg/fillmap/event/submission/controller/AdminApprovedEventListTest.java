@@ -31,6 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
+import com.msg.fillmap.event.repository.EventLocationGridRepository;
+import com.msg.fillmap.event.repository.EventLocationRepository;
+import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.submission.dto.AdminApprovedEventItemResponseDto;
 import com.msg.fillmap.event.submission.dto.AdminApprovedEventListResponseDto;
 import com.msg.fillmap.event.submission.repository.EventSubmissionRepository;
@@ -70,6 +73,15 @@ class AdminApprovedEventListTest {
 	private EventSubmissionRepository submissionRepository;
 
 	@Autowired
+	private EventOccurrenceRepository occurrenceRepository;
+
+	@Autowired
+	private EventLocationRepository locationRepository;
+
+	@Autowired
+	private EventLocationGridRepository locationGridRepository;
+
+	@Autowired
 	private UserRepository userRepository;
 
 	@Autowired
@@ -97,7 +109,8 @@ class AdminApprovedEventListTest {
 		admin = saveUser(UserRole.ADMIN);
 		// 목록은 미션도 메일도 건드리지 않는다 — 중지 경로 의존이라 목으로 채운다.
 		service = new AdminApprovedEventService(submissionRepository, mock(MissionRegistrationService.class),
-			userRepository, mock(MailSender.class), transactionTemplate, KST_NEW_DAY);
+			userRepository, mock(MailSender.class), transactionTemplate, occurrenceRepository, locationRepository,
+			locationGridRepository, KST_NEW_DAY);
 	}
 
 	private User saveUser(UserRole role) {
@@ -141,7 +154,7 @@ class AdminApprovedEventListTest {
 	@DisplayName("파생 탭")
 	class DerivedTab {
 
-		// 검증: FR-EVENT-18
+		// 검증: FR-EVENT-19
 		@Test
 		@DisplayName("탭 상태는 KST 오늘과 기간으로 파생되고 경계일은 양끝 포함이다")
 		void 승인_행사_목록의_탭_상태는_KST_오늘과_기간으로_파생된다() {
@@ -164,7 +177,7 @@ class AdminApprovedEventListTest {
 			assertThat(목록("EXPOSED").events()).allMatch(event -> "EXPOSED".equals(event.status()));
 		}
 
-		// 검증: FR-EVENT-18
+		// 검증: FR-EVENT-19
 		@Test
 		@DisplayName("탭 건수 3종은 탭 필터와 무관한 전체 집계다")
 		void 탭_건수는_필터와_무관한_전체_집계다() {
@@ -180,7 +193,7 @@ class AdminApprovedEventListTest {
 			assertThat(나중.endedCount()).isEqualTo(처음.endedCount() + 1);
 		}
 
-		// 검증: FR-EVENT-18
+		// 검증: FR-EVENT-19
 		@Test
 		@DisplayName("중지된 행사는 파생 탭에 남고 unpublished 가 참이다")
 		void 중지된_행사는_파생_탭에_남고_unpublished가_참이다() {
@@ -204,7 +217,7 @@ class AdminApprovedEventListTest {
 	@DisplayName("파라미터와 인가")
 	class Guards {
 
-		// 검증: FR-EVENT-18
+		// 검증: FR-EVENT-19
 		@Test
 		@DisplayName("지원하지 않는 탭은 13455, 페이지 범위 밖은 13456 이다")
 		void 파라미터_거절은_심사_큐와_같은_코드다() throws Exception {
@@ -216,7 +229,7 @@ class AdminApprovedEventListTest {
 				.andExpect(jsonPath("$.developCode").value(13456));
 		}
 
-		// 검증: FR-EVENT-18
+		// 검증: FR-EVENT-19
 		@Test
 		@DisplayName("관리자가 아니면 승인 행사 목록에 접근할 수 없다")
 		void 관리자가_아니면_접근할_수_없다() throws Exception {
@@ -225,7 +238,7 @@ class AdminApprovedEventListTest {
 			mockMvc.perform(get(URL)).andExpect(status().isUnauthorized());
 		}
 
-		// 검증: FR-EVENT-18
+		// 검증: FR-EVENT-19
 		@Test
 		@DisplayName("기본 탭은 노출 중이다")
 		void 기본_탭은_노출_중이다() throws Exception {
