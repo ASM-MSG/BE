@@ -21,8 +21,14 @@ public interface EventSubmissionForm {
 	/** POPUP 전용 필수. FESTIVAL 에 실려 오면 13439 다. */
 	String operatingHours();
 
-	/** FESTIVAL 전용 필수. POPUP 에 실려 오면 13439 다. */
+	/** FESTIVAL 전용 필수. POPUP·EVENT 에 실려 오면 13439 다. */
 	String programDescription();
+
+	/**
+	 * EVENT 전용 필수 (MSG-502). 다른 유형에 실려 오면 13439 다.
+	 * 부모 회차는 여기 없다 — 재제출로 바꿀 수 없어(D-3) 재제출 DTO 에 필드 자체가 없기 때문이다.
+	 */
+	String participationMethod();
 
 	String description();
 

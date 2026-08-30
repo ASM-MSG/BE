@@ -77,6 +77,17 @@ public class EventSubmission {
 	@Column(name = "program_description")
 	private String programDescription;
 
+	@Column(name = "participation_method")
+	private String participationMethod;
+
+	/**
+	 * 참여 대상 승인 이벤트 회차 (MSG-502) — EVENT 유형에만 값이 있고 재제출로도 바뀌지 않는다 (D-3).
+	 * 연관 없이 id 만 보관하는 것은 이 티켓이 부모에서 읽는 값이 상세의 title 하나뿐이라 조인이 필요 없어서다
+	 * ({@code userId} 와 같은 근거). 유형과 값의 짝은 DB CHECK(chk_event_sub_parent)가 강제한다.
+	 */
+	@Column(name = "parent_event_occurrence_id")
+	private Long parentEventOccurrenceId;
+
 	@Column(name = "description", nullable = false)
 	private String description;
 
@@ -114,19 +125,24 @@ public class EventSubmission {
 	@OrderBy("displayOrder")
 	private List<EventSubmissionLocation> locations = new ArrayList<>();
 
-	private EventSubmission(String submissionNo, Long userId, EventSubmissionType type, LocalDateTime now) {
+	private EventSubmission(String submissionNo, Long userId, EventSubmissionType type,
+		Long parentEventOccurrenceId, LocalDateTime now) {
 		this.submissionNo = submissionNo;
 		this.userId = userId;
 		this.type = type;
+		this.parentEventOccurrenceId = parentEventOccurrenceId;
 		this.status = EventSubmissionStatus.IN_REVIEW;
 		this.createdAt = now;
 		this.updatedAt = now;
 	}
 
-	/** 제출 (FR-10). 접수된 신청은 언제나 심사 중에서 시작한다. 폼 내용은 {@link #updateForm} 가 채운다. */
+	/**
+	 * 제출 (FR-10). 접수된 신청은 언제나 심사 중에서 시작한다. 폼 내용은 {@link #updateForm} 가 채운다.
+	 * 부모 회차는 유형과 함께 여기서만 정해진다 — 둘 다 재제출로 바꿀 수 없어 {@link #updateForm} 에 없다.
+	 */
 	public static EventSubmission submit(String submissionNo, Long userId, EventSubmissionType type,
-		LocalDateTime now) {
-		return new EventSubmission(submissionNo, userId, type, now);
+		Long parentEventOccurrenceId, LocalDateTime now) {
+		return new EventSubmission(submissionNo, userId, type, parentEventOccurrenceId, now);
 	}
 
 	/**
@@ -134,13 +150,15 @@ public class EventSubmission {
 	 * (D-8 — 유형만 불변이라 인자에 없다).
 	 */
 	public void updateForm(String title, String organizerName, LocalDate startsOn, LocalDate endsOn,
-		String operatingHours, String programDescription, String description, String imageKey, LocalDateTime now) {
+		String operatingHours, String programDescription, String participationMethod, String description,
+		String imageKey, LocalDateTime now) {
 		this.title = title;
 		this.organizerName = organizerName;
 		this.startsOn = startsOn;
 		this.endsOn = endsOn;
 		this.operatingHours = operatingHours;
 		this.programDescription = programDescription;
+		this.participationMethod = participationMethod;
 		this.description = description;
 		this.imageKey = imageKey;
 		this.updatedAt = now;

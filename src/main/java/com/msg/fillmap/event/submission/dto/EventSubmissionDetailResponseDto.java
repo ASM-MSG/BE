@@ -12,8 +12,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "신청 상세",
 	requiredProperties = {"id", "submissionNo", "type", "status", "title", "organizerName", "startsOn", "endsOn",
-		"operatingHours", "programDescription", "description", "imageUrl", "locations", "rejection", "history",
-		"updatedAt"})
+		"operatingHours", "programDescription", "participationMethod", "parentEvent", "description", "imageUrl",
+		"locations", "rejection", "history", "updatedAt"})
 public record EventSubmissionDetailResponseDto(
 	@Schema(description = "신청 id", example = "7")
 	Long id,
@@ -44,6 +44,12 @@ public record EventSubmissionDetailResponseDto(
 
 	@Schema(description = "주요 프로그램 — FESTIVAL 만 값이 있다", nullable = true)
 	String programDescription,
+
+	@Schema(description = "참여 방식 — EVENT 만 값이 있다", nullable = true)
+	String participationMethod,
+
+	@Schema(description = "참여할 부모 이벤트 — EVENT 만 값이 있다", nullable = true)
+	EventSubmissionParentEventResponseDto parentEvent,
 
 	@Schema(description = "행사 소개")
 	String description,

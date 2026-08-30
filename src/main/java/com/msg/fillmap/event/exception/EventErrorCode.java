@@ -58,6 +58,12 @@ public enum EventErrorCode implements ErrorCodeIfs {
 	SUBMISSION_IMAGE_TOO_LARGE(13438, HttpStatus.PAYLOAD_TOO_LARGE, "이미지는 최대 10MB 입니다"),
 	SUBMISSION_REQUIRED_FIELD_MISSING(13439, HttpStatus.BAD_REQUEST, "등록 유형에 필요한 항목이 올바르지 않습니다"),
 
+	// 이벤트 참여형의 부모 회차 검증 (MSG-502). 존재를 은닉하지 않는 것은 승인 이벤트 목록이 행사 운영자
+	// 전원에게 같은 전량을 보여줘 회차의 존재가 비밀이 아니기 때문이다 — 은닉 대상은 남의 신청(13430)뿐이다.
+	PARENT_EVENT_NOT_FOUND(13440, HttpStatus.NOT_FOUND, "참여할 이벤트를 찾을 수 없습니다"),
+	// 종료 판정(endsAt <= now)은 목록 노출 조건의 여집합이라 정각에도 둘이 갈리지 않는다. 상태 충돌 409 (13434 선례).
+	PARENT_EVENT_CLOSED(13441, HttpStatus.CONFLICT, "종료된 이벤트에는 참여를 신청할 수 없습니다"),
+
 	// 관리자 심사 블록 (MSG-500). 13440 대는 MSG-502(참여형) 예약이라 13450 부터 쓴다.
 	// 목록 파라미터 두 코드는 판정과 메시지가 MSG-499 관리자 큐(1424·1425)와 같고 대역만 event 다 —
 	// 도메인 예외는 도메인이 갖는다는 규칙(뷰포트 두 코드가 mission·grid 와 같은 판정에 다른 대역인 것과 같은 결).

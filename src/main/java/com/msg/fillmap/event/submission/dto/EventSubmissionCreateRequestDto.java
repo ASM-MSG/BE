@@ -19,8 +19,13 @@ import com.msg.fillmap.event.submission.entity.EventSubmissionType;
  */
 @Schema(description = "행사 등재 신청 제출 요청")
 public record EventSubmissionCreateRequestDto(
-	@Schema(description = "등록 유형 — FESTIVAL(지역축제) 또는 POPUP(팝업스토어)", example = "FESTIVAL")
+	@Schema(description = "등록 유형 — FESTIVAL(지역축제)·POPUP(팝업스토어)·EVENT(이벤트 참여형)", example = "FESTIVAL")
 	@NotNull EventSubmissionType type,
+
+	@Schema(description = "참여할 승인 이벤트 회차 id — EVENT 전용 필수. 승인 이벤트 목록 응답의 occurrenceId 를 "
+		+ "그대로 넣는다. 없는 회차면 13440, 이미 종료된 회차면 13441, 다른 유형에 실려 오면 13439",
+		example = "1", nullable = true)
+	Long parentOccurrenceId,
 
 	@Schema(description = "축제명 / 팝업명", example = "부산불꽃축제")
 	@NotBlank @Size(max = 100) String title,
@@ -37,9 +42,13 @@ public record EventSubmissionCreateRequestDto(
 	@Schema(description = "운영 시간 — POPUP 전용 필수. FESTIVAL 에 실려 오면 13439", example = "11:00 ~ 20:00")
 	@Size(max = 100) String operatingHours,
 
-	@Schema(description = "주요 프로그램 — FESTIVAL 전용 필수. POPUP 에 실려 오면 13439",
+	@Schema(description = "주요 프로그램 — FESTIVAL 전용 필수. 다른 유형에 실려 오면 13439",
 		example = "멀티불꽃쇼, 뮤직 불꽃쇼, 드론 라이트쇼 운영")
 	@Size(min = 10, max = 2000) String programDescription,
+
+	@Schema(description = "참여 방식 — EVENT 전용 필수. 다른 유형에 실려 오면 13439",
+		example = "부스 방문 후 현장에서 인증 영상을 촬영해 업로드하면 참여가 완료됩니다")
+	@Size(min = 10, max = 2000) String participationMethod,
 
 	@Schema(description = "행사 소개", example = "광안리해수욕장 일원에서 열리는 부산 대표 불꽃 축제")
 	@NotBlank @Size(min = 10, max = 2000) String description,

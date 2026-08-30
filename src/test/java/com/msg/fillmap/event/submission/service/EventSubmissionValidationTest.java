@@ -15,9 +15,11 @@ import static org.mockito.Mockito.never;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +28,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import com.msg.fillmap.event.entity.EventOccurrence;
+import com.msg.fillmap.event.entity.EventSeries;
 import com.msg.fillmap.event.exception.EventErrorCode;
+import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.submission.dto.EventSubmissionAreaRectDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionCreateRequestDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionLocationRequestDto;
@@ -52,17 +57,19 @@ class EventSubmissionValidationTest {
 
 	private EventSubmissionRepository submissionRepository;
 	private EventSubmissionImageStore imageStore;
+	private EventOccurrenceRepository occurrenceRepository;
 	private EventSubmissionServiceImpl service;
 
 	@BeforeEach
 	void setUp() {
 		submissionRepository = mock(EventSubmissionRepository.class);
 		imageStore = mock(EventSubmissionImageStore.class);
+		occurrenceRepository = mock(EventOccurrenceRepository.class);
 		given(submissionRepository.nextSubmissionSequence()).willReturn(7L);
 		given(imageStore.confirm(anyLong(), anyString())).willReturn("event-submissions/original/42/a.jpg");
 		service = new EventSubmissionServiceImpl(submissionRepository,
 			mock(EventSubmissionStatusHistoryRepository.class), imageStore,
-			mock(EventSubmissionLocationView.class), KST_NEW_DAY);
+			mock(EventSubmissionLocationView.class), occurrenceRepository, KST_NEW_DAY);
 	}
 
 	private EventSubmissionCreateRequestDto festival() {
@@ -73,9 +80,15 @@ class EventSubmissionValidationTest {
 	private EventSubmissionCreateRequestDto request(EventSubmissionType type, String programDescription,
 		String operatingHours, LocalDate startsOn, LocalDate endsOn,
 		List<EventSubmissionLocationRequestDto> locations) {
-		return new EventSubmissionCreateRequestDto(type, "부산불꽃축제", "부산문화관광축제조직위원회",
-			startsOn, endsOn, operatingHours, programDescription, "광안리 일원에서 열리는 부산 대표 불꽃 축제",
-			"event-submissions/pending/42/a.jpg", locations);
+		return request(type, null, programDescription, operatingHours, null, startsOn, endsOn, locations);
+	}
+
+	private EventSubmissionCreateRequestDto request(EventSubmissionType type, Long parentOccurrenceId,
+		String programDescription, String operatingHours, String participationMethod, LocalDate startsOn,
+		LocalDate endsOn, List<EventSubmissionLocationRequestDto> locations) {
+		return new EventSubmissionCreateRequestDto(type, parentOccurrenceId, "부산불꽃축제", "부산문화관광축제조직위원회",
+			startsOn, endsOn, operatingHours, programDescription, participationMethod,
+			"광안리 일원에서 열리는 부산 대표 불꽃 축제", "event-submissions/pending/42/a.jpg", locations);
 	}
 
 	private EventSubmissionCreateRequestDto withLocations(List<EventSubmissionLocationRequestDto> locations) {
@@ -338,6 +351,208 @@ class EventSubmissionValidationTest {
 			given(submissionRepository.nextSubmissionSequence()).willReturn(10_000L);
 
 			assertThat(submitted(festival()).getSubmissionNo()).isEqualTo("FM-2026-10000");
+		}
+	}
+
+	/**
+	 * 이벤트 참여형 (MSG-502). 부모 종료 판정이 서버 시각과의 비교라 정각 경계를 고정 Clock 으로만 잡을 수
+	 * 있고, 그 Clock 을 실 컨텍스트에 꽂을 수 없어 여기(목)에서 검증한다 — 저장·상세·재제출의 DB 동작은
+	 * EventSubmissionControllerTest 의 이벤트 참여형 묶음이 실 DB 로 본다.
+	 */
+	@Nested
+	@DisplayName("이벤트 참여형 (MSG-502)")
+	class Participation {
+
+		/** 고정 Clock 의 서버 시각 — 부모 종료 판정의 기준이다. */
+		private static final LocalDateTime NOW = LocalDateTime.of(2026, 11, 6, 16, 30);
+
+		private static final long PARENT_ID = 1L;
+
+		private EventSubmissionCreateRequestDto 이벤트_신청(Long parentOccurrenceId,
+			List<EventSubmissionLocationRequestDto> locations) {
+			return request(EventSubmissionType.EVENT, parentOccurrenceId, null, null,
+				"부스 방문 후 현장에서 인증 영상을 촬영해 업로드하면 참여가 완료됩니다",
+				LocalDate.of(2026, 11, 7), LocalDate.of(2026, 11, 15), locations);
+		}
+
+		private EventSubmissionCreateRequestDto 이벤트_신청() {
+			return 이벤트_신청(PARENT_ID, List.of(location(rect(16859, 16861, 11509, 11515))));
+		}
+
+		/** 부모 회차 스텁 — 이 검증이 읽는 것은 종료 시각 하나다. */
+		private void 부모가_있다(LocalDateTime endsAt) {
+			EventOccurrence parent = new EventOccurrence(new EventSeries("msg502-series", "부산국제영화제"),
+				"msg502-occ");
+			parent.update(parent.getSeries(), "부산국제영화제", "부산", endsAt.minusDays(9), endsAt, 1, 2, 1, 2);
+			given(occurrenceRepository.findById(PARENT_ID)).willReturn(Optional.of(parent));
+		}
+
+		private void 거부된다(EventSubmissionCreateRequestDto request, EventErrorCode errorCode) {
+			assertThatThrownBy(() -> service.submit(USER_ID, request))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", errorCode);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("없는 회차로 참여를 신청하면 13440 이다 — 존재를 은닉하지 않는다")
+		void 없는_회차로_참여_신청하면_거부한다() {
+			given(occurrenceRepository.findById(PARENT_ID)).willReturn(Optional.empty());
+
+			거부된다(이벤트_신청(), EventErrorCode.PARENT_EVENT_NOT_FOUND);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("종료된 회차로 참여를 신청하면 13441 이다")
+		void 종료된_회차로_참여_신청하면_거부한다() {
+			부모가_있다(NOW.minusDays(1));
+
+			거부된다(이벤트_신청(), EventErrorCode.PARENT_EVENT_CLOSED);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("종료 정각의 회차는 신청이 거부된다 — 승인 이벤트 목록에서 빠지는 순간과 같은 경계다")
+		void 종료_정각의_회차는_참여_신청이_거부된다() {
+			부모가_있다(NOW);
+
+			거부된다(이벤트_신청(), EventErrorCode.PARENT_EVENT_CLOSED);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("영상 업로드 유예 중인 회차도 신청이 거부된다 — 유예는 이미 종료 이후다")
+		void 유예_중인_회차도_참여_신청이_거부된다() {
+			부모가_있다(NOW.minusDays(3));
+
+			거부된다(이벤트_신청(), EventErrorCode.PARENT_EVENT_CLOSED);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("종료 직전 회차는 신청이 된다 — 목록 노출 조건과 같은 판정이다")
+		void 종료_직전_회차는_참여_신청이_된다() {
+			부모가_있다(NOW.plusSeconds(1));
+
+			assertThatCode(() -> service.submit(USER_ID, 이벤트_신청())).doesNotThrowAnyException();
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("이벤트 신청에 부모 회차가 없으면 13439 다")
+		void 이벤트_신청에_부모_회차가_없으면_거부한다() {
+			거부된다(이벤트_신청(null, List.of(location(rect(100, 100, 200, 200)))),
+				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("축제 신청에 부모 회차가 실려 오면 13439 다 — 자기 유형이 아닌 필드다")
+		void 축제_신청에_부모_회차가_실려_오면_거부한다() {
+			거부된다(request(EventSubmissionType.FESTIVAL, PARENT_ID, "멀티불꽃쇼, 드론 라이트쇼", null, null,
+					LocalDate.of(2026, 11, 7), LocalDate.of(2026, 11, 7),
+					List.of(location(rect(100, 100, 200, 200)))),
+				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("축제 신청에 참여 방식이 실려 오면 13439 다")
+		void 축제_신청에_참여_방식이_실려_오면_거부한다() {
+			거부된다(request(EventSubmissionType.FESTIVAL, null, "멀티불꽃쇼, 드론 라이트쇼", null,
+					"부스 방문 후 현장에서 인증 영상을 촬영해 업로드하면 참여가 완료됩니다",
+					LocalDate.of(2026, 11, 7), LocalDate.of(2026, 11, 7),
+					List.of(location(rect(100, 100, 200, 200)))),
+				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("이벤트 신청에 참여 방식이 없으면 13439 다")
+		void 이벤트_신청에_참여_방식이_없으면_거부한다() {
+			부모가_있다(NOW.plusDays(10));
+
+			거부된다(request(EventSubmissionType.EVENT, PARENT_ID, null, null, null,
+					LocalDate.of(2026, 11, 7), LocalDate.of(2026, 11, 15),
+					List.of(location(rect(100, 100, 200, 200)))),
+				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("이벤트 신청에 주요 프로그램이나 운영 시간이 실려 오면 13439 다")
+		void 이벤트_신청에_다른_유형의_항목이_실려_오면_거부한다() {
+			부모가_있다(NOW.plusDays(10));
+			String 참여_방식 = "부스 방문 후 현장에서 인증 영상을 촬영해 업로드하면 참여가 완료됩니다";
+
+			거부된다(request(EventSubmissionType.EVENT, PARENT_ID, "멀티불꽃쇼, 드론 라이트쇼", null, 참여_방식,
+					LocalDate.of(2026, 11, 7), LocalDate.of(2026, 11, 15),
+					List.of(location(rect(100, 100, 200, 200)))),
+				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
+
+			거부된다(request(EventSubmissionType.EVENT, PARENT_ID, null, "11:00 ~ 20:00", 참여_방식,
+					LocalDate.of(2026, 11, 7), LocalDate.of(2026, 11, 15),
+					List.of(location(rect(100, 100, 200, 200)))),
+				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("이벤트 신청의 위치는 1곳이면 통과하고 대표 격자가 계산된다")
+		void 이벤트_신청의_위치는_1곳이면_통과한다() {
+			부모가_있다(NOW.plusDays(10));
+
+			EventSubmission submission = submitted(이벤트_신청());
+
+			assertThat(submission.getLocations()).singleElement()
+				.extracting(EventSubmissionLocation::getRepresentativeGridId)
+				.isEqualTo("16860_11512");
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("이벤트 신청에 위치가 2곳이면 13439 다 — 대표 위치는 한 곳이다")
+		void 이벤트_신청에_위치가_2곳이면_거부한다() {
+			부모가_있다(NOW.plusDays(10));
+
+			거부된다(이벤트_신청(PARENT_ID,
+					List.of(location(rect(100, 100, 200, 200)), location(rect(300, 300, 400, 400)))),
+				EventErrorCode.SUBMISSION_REQUIRED_FIELD_MISSING);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("이벤트 신청에 위치가 없으면 13431 이다 — 유형 무관 공통 규칙 그대로다")
+		void 이벤트_신청에_위치가_없으면_거부한다() {
+			부모가_있다(NOW.plusDays(10));
+
+			거부된다(이벤트_신청(PARENT_ID, List.of()), EventErrorCode.INVALID_SUBMISSION_AREA);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("이벤트 위치도 81칸 상한이 적용된다 — 기존 검증 경로를 분기 없이 탄다")
+		void 이벤트_위치도_81칸_상한이_적용된다() {
+			부모가_있다(NOW.plusDays(10));
+
+			거부된다(이벤트_신청(PARENT_ID, List.of(location(rect(100, 108, 200, 208), rect(300, 300, 400, 400)))),
+				EventErrorCode.SUBMISSION_AREA_LIMIT_EXCEEDED);
+		}
+
+		// 검증: FR-EVENT-17
+		@Test
+		@DisplayName("이벤트 신청이 부모 참조와 참여 방식을 저장하고 심사 중 상태와 FM 꼴 번호를 받는다")
+		void 이벤트_신청이_부모_참조와_참여_방식을_저장한다() {
+			부모가_있다(NOW.plusDays(10));
+
+			EventSubmission submission = submitted(이벤트_신청());
+
+			assertThat(submission.getParentEventOccurrenceId()).isEqualTo(PARENT_ID);
+			assertThat(submission.getParticipationMethod())
+				.isEqualTo("부스 방문 후 현장에서 인증 영상을 촬영해 업로드하면 참여가 완료됩니다");
+			assertThat(submission.getStatus().name()).isEqualTo("IN_REVIEW");
+			assertThat(submission.getSubmissionNo()).isEqualTo("FM-2026-0007");
 		}
 	}
 
