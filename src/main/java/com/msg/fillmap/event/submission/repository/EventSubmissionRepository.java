@@ -4,13 +4,17 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.msg.fillmap.event.submission.dto.AdminEventSubmissionItemResponseDto;
 import com.msg.fillmap.event.submission.entity.EventSubmission;
+import com.msg.fillmap.event.submission.entity.EventSubmissionStatus;
 
 public interface EventSubmissionRepository extends JpaRepository<EventSubmission, Long> {
 
@@ -46,6 +50,37 @@ public interface EventSubmissionRepository extends JpaRepository<EventSubmission
 			AND s.status = com.msg.fillmap.event.submission.entity.EventSubmissionStatus.REJECTED
 		""")
 	int reopenRejected(@Param("id") Long id, @Param("userId") Long userId, @Param("now") LocalDateTime now);
+
+	/**
+	 * 관리자 심사 큐 (MSG-500 §API 1). 신청자의 기관명(users.org_name)이 목록 재료라 세타 조인 + 생성자
+	 * 프로젝션이다 — EventSubmission 은 userId 를 연관 없이 보관하는 기존 엔티티라 컨벤션의 혼재 허용 조항을
+	 * 따른다(소급 리팩터링 금지). {@code size(s.locations)} 는 위치 수를 상관 서브쿼리 한 번으로 세어,
+	 * 항목마다 위치를 다시 읽는 N+1 을 만들지 않는다.
+	 * <p>
+	 * 정렬은 접수 최신순이고 id 는 같은 시각 접수의 결정성 보험이다(내 신청 목록과 같은 규칙).
+	 * countQuery 를 따로 주는 것은 프로젝션·조인이 붙은 자동 생성 count 가 부정확해질 여지를 없애기 위해서다.
+	 */
+	@Query(value = """
+		SELECT new com.msg.fillmap.event.submission.dto.AdminEventSubmissionItemResponseDto(
+			s.id, s.submissionNo, s.type, s.status, s.title, s.organizerName, u.orgName,
+			s.startsOn, s.endsOn, size(s.locations), s.createdAt, s.updatedAt)
+		FROM EventSubmission s, User u
+		WHERE u.id = s.userId AND s.status = :status
+		ORDER BY s.createdAt DESC, s.id DESC
+		""",
+		countQuery = "SELECT COUNT(s) FROM EventSubmission s WHERE s.status = :status")
+	Page<AdminEventSubmissionItemResponseDto> findAdminPageByStatus(
+		@Param("status") EventSubmissionStatus status, Pageable pageable);
+
+	/** 탭 뱃지용 상태별 전체 건수 — 필터와 무관하다 (MSG-499 요청 큐 선례). */
+	long countByStatus(EventSubmissionStatus status);
+
+	/**
+	 * 관리자 심사 상세 (MSG-500 §API 2). 소유 술어가 없다 — 관리자 조회에는 존재 은닉이 없어 없는 id 가
+	 * 그대로 404 다. 위치는 상세 응답이 통째로 그리므로 EntityGraph 로 함께 든다.
+	 */
+	@EntityGraph(attributePaths = "locations")
+	Optional<EventSubmission> findWithLocationsById(Long id);
 
 	/**
 	 * 신청 번호의 순번 (D-4). 연도별 리셋이 없는 전역 증가값이라 리셋 기계 없이 UNIQUE 가 보장된다.
