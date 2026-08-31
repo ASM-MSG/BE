@@ -21,9 +21,11 @@ public final class RouteOrderPlanner {
 
 	/**
 	 * 1) preferred_order 힌트와 이름이 부분 일치하는 후보를 힌트 순서대로 앞에 배치한다 — 일치하지 않는
-	 * 힌트는 무시하고 후보를 만들지 않는다(FR-ROUTE-03). 2) 나머지는 최근접 이웃으로 잇는다. 시작점은
-	 * origin(FR-ROUTE-11), 없으면 힌트 배치의 마지막 지점, 그것도 없으면 뷰포트 중심이다.
-	 * 3) 거리 동률은 gridId 사전순으로 끊는다.
+	 * 힌트는 무시하고 후보를 만들지 않는다(FR-ROUTE-03). 힌트는 사용자가 순서 자체를 지목한 것이라
+	 * 관심사보다 강한 신호다(MSG-514 §도메인 로직 3). 2) 나머지는 (관심사 일치 여부, 거리, gridId) 비교
+	 * 키의 최근접 이웃으로 잇는다 — 일치 지점이 남아 있는 동안 그중 최근접이 먼저 뽑히므로 일치 전부가
+	 * 미일치보다 앞에 온다. 시작점은 origin(FR-ROUTE-11), 없으면 힌트 배치의 마지막 지점, 그것도 없으면
+	 * 뷰포트 중심이다. 3) 거리 동률은 gridId 사전순으로 끊는다.
 	 */
 	public static List<RouteCandidate> order(List<RouteCandidate> candidates, List<String> preferredOrder,
 		OriginDto origin, double viewportCenterLat, double viewportCenterLng) {
@@ -58,7 +60,8 @@ public final class RouteOrderPlanner {
 			double fromLng = lng;
 			RouteCandidate next = remaining.stream()
 				.min(Comparator
-					.comparingDouble((RouteCandidate candidate) ->
+					.comparing((RouteCandidate candidate) -> candidate.matchedInterest() == null)
+					.thenComparingDouble(candidate ->
 						distanceMeters(fromLat, fromLng, candidate.lat(), candidate.lng()))
 					.thenComparing(RouteCandidate::gridId))
 				.orElseThrow();

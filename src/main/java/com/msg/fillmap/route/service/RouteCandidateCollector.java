@@ -67,24 +67,27 @@ public class RouteCandidateCollector {
 	private final PlaceSearchService placeSearchService;
 	private final GridQueryService gridQueryService;
 	private final ObjectMapper objectMapper;
+	private final InterestMatcher interestMatcher;
 	private final Clock clock;
 
 	/** 프로덕션 생성자 — UTC 고정 위임 (EventQueryServiceImpl 선례). 전체 생성자는 재필터 검증용 고정 클럭 주입에 쓴다. */
 	@Autowired
 	public RouteCandidateCollector(MissionQueryService missionQueryService, EventQueryService eventQueryService,
-		PlaceSearchService placeSearchService, GridQueryService gridQueryService, ObjectMapper objectMapper) {
+		PlaceSearchService placeSearchService, GridQueryService gridQueryService, ObjectMapper objectMapper,
+		InterestMatcher interestMatcher) {
 		this(missionQueryService, eventQueryService, placeSearchService, gridQueryService, objectMapper,
-			Clock.systemUTC());
+			interestMatcher, Clock.systemUTC());
 	}
 
 	public RouteCandidateCollector(MissionQueryService missionQueryService, EventQueryService eventQueryService,
 		PlaceSearchService placeSearchService, GridQueryService gridQueryService, ObjectMapper objectMapper,
-		Clock clock) {
+		InterestMatcher interestMatcher, Clock clock) {
 		this.missionQueryService = missionQueryService;
 		this.eventQueryService = eventQueryService;
 		this.placeSearchService = placeSearchService;
 		this.gridQueryService = gridQueryService;
 		this.objectMapper = objectMapper;
+		this.interestMatcher = interestMatcher;
 		this.clock = clock;
 	}
 
@@ -120,11 +123,14 @@ public class RouteCandidateCollector {
 					continue;
 				}
 				Kind kind = missionKind(type);
+				// 판정 재료 = 제목 + 유형 라벨 + 소개문 + 장소명 (MSG-514 — placeName 신설, §도메인 로직 1 표)
+				String haystack = mission.title() + " " + typeLabel(type)
+					+ (mission.description() == null ? "" : " " + mission.description())
+					+ (mission.placeName() == null ? "" : " " + mission.placeName());
 				candidates.add(new RouteCandidate(
 					mission.title(), kind, point.lat(), point.lon(), GridEncoder.encode(point.lat(), point.lon()),
 					mission.missionId(), null, mission.startAt(), mission.endAt(),
-					matchedInterest(intent, mission.title() + " " + typeLabel(type)
-						+ (mission.description() == null ? "" : " " + mission.description()))));
+					interestMatcher.firstMatch(intent.interests(), haystack), missionDetailFacts(type, mission)));
 			}
 		}
 		return candidates;
@@ -150,10 +156,11 @@ public class RouteCandidateCollector {
 			for (LocationPoint location : locations.getOrDefault(chip.occurrenceId(), List.of())) {
 				GridPoint center = GridEncoder.center(location.representativeGridId());
 				if (contains(bounds, center.lat(), center.lon())) {
+					// 행사 지점 고유 사실은 없음 (MSG-514 §도메인 로직 4) — 칩 DTO 에 제목과 기간뿐이라 재료가 없다.
 					candidates.add(new RouteCandidate(
 						chip.title(), Kind.EVENT, center.lat(), center.lon(), location.representativeGridId(),
 						null, chip.occurrenceId(), chip.startsAt(), chip.endsAt(),
-						matchedInterest(intent, chip.title() + " 행사")));
+						interestMatcher.firstMatch(intent.interests(), chip.title() + " 행사"), List.of()));
 					break;
 				}
 			}
@@ -193,7 +200,8 @@ public class RouteCandidateCollector {
 				.filter(place -> contains(bounds, place.lat(), place.lng()))
 				.limit(PLACE_RESULT_LIMIT)
 				.map(place -> new RouteCandidate(place.name(), Kind.PLACE, place.lat(), place.lng(),
-					place.gridId(), null, null, null, null, unmet))
+					place.gridId(), null, null, null, null, unmet,
+					place.address() == null ? List.of() : List.of(place.address())))
 				.toList();
 		} catch (ApiException e) {
 			log.warn("[route] 장소 검색 실패 — 장소 후보 0으로 진행 (미션·행사 후보만으로 부분 결과): developCode={}",
@@ -282,12 +290,73 @@ public class RouteCandidateCollector {
 		return new GridPoint(path.spots().get(0).lat(), path.spots().get(0).lng());
 	}
 
-	/** 첫 일치 관심사 (해석 결과 배열 순서) — 제목·유형 라벨·소개문 묶음에 포함되면 일치다(§선별 규칙). */
-	private static String matchedInterest(ParsedIntent intent, String haystack) {
-		return intent.interests().stream()
-			.filter(interest -> !interest.isBlank() && haystack.contains(interest))
-			.findFirst()
-			.orElse(null);
+	/**
+	 * 미션 지점 고유 사실 (MSG-514 §도메인 로직 4) — 코스는 스펙 합성 문장 + 소개문, 축제·팝업은 장소명 +
+	 * 소개문. null 재료는 항목 생략이라 조립 규칙상 최대 2건이 자연 보장된다. 운영시간은 칸이 남는 미래
+	 * 확장 후보로 미뤘다(소개문 우선 — PRD FR-6).
+	 */
+	private static List<String> missionDetailFacts(MissionType type, MissionResponseDto mission) {
+		List<String> facts = new ArrayList<>(2);
+		if (type == MissionType.COURSE) {
+			String spec = courseSpecFact(mission);
+			if (spec != null) {
+				facts.add(spec);
+			}
+		} else if (mission.placeName() != null) {
+			facts.add(mission.placeName());
+		}
+		if (mission.description() != null) {
+			facts.add(mission.description());
+		}
+		return List.copyOf(facts);
+	}
+
+	/**
+	 * 코스 스펙 합성 문장 — "총 14km, 약 5시간 30분, 난이도 보통". null 인 항목은 빼고 조립하고, 셋 다
+	 * null 이면 문장 자체를 만들지 않는다(§도메인 로직 4).
+	 */
+	private static String courseSpecFact(MissionResponseDto mission) {
+		List<String> parts = new ArrayList<>(3);
+		if (mission.distanceMeters() != null) {
+			parts.add("총 " + formatKm(mission.distanceMeters()) + "km");
+		}
+		if (mission.durationMinutes() != null) {
+			parts.add("약 " + formatDuration(mission.durationMinutes()));
+		}
+		String difficulty = difficultyLabel(mission.difficulty());
+		if (difficulty != null) {
+			parts.add("난이도 " + difficulty);
+		}
+		return parts.isEmpty() ? null : String.join(", ", parts);
+	}
+
+	/** km 단위 소수 첫째 자리(반올림) — 끝이 .0 이면 정수 표기 (14000m → "14", 14500m → "14.5"). */
+	private static String formatKm(int meters) {
+		double km = Math.round(meters / 100.0) / 10.0;
+		return km == Math.floor(km) ? String.valueOf((long) km) : String.valueOf(km);
+	}
+
+	/** "{시}시간 {분}분" — 60분 미만은 분만, 정시는 시간만 (§도메인 로직 4). */
+	private static String formatDuration(int minutes) {
+		int hours = minutes / 60;
+		int rest = minutes % 60;
+		if (hours == 0) {
+			return rest + "분";
+		}
+		return rest == 0 ? hours + "시간" : hours + "시간 " + rest + "분";
+	}
+
+	/** 두루누비 등급 라벨 — 범위 밖 값(null 포함)은 항목 생략을 뜻하는 null 이다. */
+	private static String difficultyLabel(Integer difficulty) {
+		if (difficulty == null) {
+			return null;
+		}
+		return switch (difficulty) {
+			case 1 -> "쉬움";
+			case 2 -> "보통";
+			case 3 -> "어려움";
+			default -> null;
+		};
 	}
 
 	/** 검색어의 지역 폴백 — 뷰포트 중심 격자의 행정동 이름. 무귀속(해상 등)이면 null 로 관심사만 남는다. */

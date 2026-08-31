@@ -1,12 +1,15 @@
 package com.msg.fillmap.route.service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 경로 추천 후보 지점 하나 (MSG-457 §도메인 로직 1). 서버 조회 세 출처(활성 미션·행사·장소 검색 실조회)
  * 에서만 만들어진다 — 해석 결과의 문자열이 이 record 를 직접 만들 수 없는 것이 FR-ROUTE-03 의 구조적
  * 보장이다. period 두 값은 기간 겹침 필터와 facts 문장 재료(장소 검색 후보는 null), matchedInterest 는
- * 선별 우선순위와 "관심사 일치" facts 재료다.
+ * 선별 우선순위와 "관심사 일치" facts 재료다. detailFacts 는 지점 고유 사실(최대 2건, MSG-514 §도메인
+ * 로직 4) — 원천 DTO 가 손에 있는 수집 시점에 조립되고, 발송 순서 편성·상한·절단은 facts 조립
+ * (RouteRecommendServiceImpl) 몫이다.
  */
 public record RouteCandidate(
 	String name,
@@ -18,7 +21,8 @@ public record RouteCandidate(
 	Long occurrenceId,
 	LocalDateTime periodStart,
 	LocalDateTime periodEnd,
-	String matchedInterest
+	String matchedInterest,
+	List<String> detailFacts
 ) {
 
 	/** 응답 kind 다섯 값 (FE 마커 분기 계약, §API 응답 표). explain 요청에는 소문자로 나간다(이유 문장화 절). */
