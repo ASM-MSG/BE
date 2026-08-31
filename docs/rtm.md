@@ -5,9 +5,9 @@
 **병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(`git checkout --ours docs/rtm.md` 등)
 스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다.
 
-요약: FR 292건 중 테스트 연결 261건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
+요약: FR 293건 중 테스트 연결 262건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
 
-AC 요약: 스펙 성공 기준 0건 중 테스트 연결 0건, 미커버 0건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
+AC 요약: 스펙 성공 기준 10건 중 테스트 연결 10건, 미커버 0건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -226,6 +226,7 @@ AC 요약: 스펙 성공 기준 0건 중 테스트 연결 0건, 미커버 0건 �
 | FR-ROUTE-16 | 진행 중 | RouteControllerTest, RouteWalkPathServiceTest, RouteWalkSegmentCacheTest, TmapWalkClientTest |
 | FR-ROUTE-17 | 진행 중 | RouteWalkDailyLimiterTest, RouteWalkPathServiceTest, TmapWalkClientTest |
 | FR-ROUTE-18 | 구현됨 | InterestMatcherTest, RouteCandidateCollectorTest, RouteOrderPlannerTest, RouteRecommendServiceTest |
+| FR-ROUTE-19 | 진행 중 | RouteIntentClientTest, RouteRecommendServiceTest |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
 | FR-NOTI-02 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest, NotificationRelayTest |
 | FR-NOTI-03 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest |
@@ -368,7 +369,16 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 
 | AC ID | 스펙 | 검증 테스트 |
 |---|---|---|
-| (정의된 AC 없음 — 신규 스펙부터 쌓인다) | | |
+| AC-513-01 | MSG-513 | RouteIntentClientTest, RouteRecommendServiceTest |
+| AC-513-02 | MSG-513 | RouteRecommendServiceTest |
+| AC-513-03 | MSG-513 | RouteRecommendServiceTest |
+| AC-513-04 | MSG-513 | RouteIntentClientTest |
+| AC-513-05 | MSG-513 | RouteIntentClientTest |
+| AC-513-06 | MSG-513 | RouteRecommendServiceTest |
+| AC-513-07 | MSG-513 | RouteRecommendServiceTest |
+| AC-513-08 | MSG-513 | RouteRecommendServiceTest |
+| AC-513-09 | MSG-513 | RouteRecommendServiceTest |
+| AC-513-10 | MSG-513 | RouteRecommendServiceTest |
 
 ## 미커버 AC (보고만 — 실패 아님)
 
