@@ -161,6 +161,26 @@ class AuthServiceTest {
 			verify(refreshTokenService).issue(42L, "device-1");
 		}
 
+		// 검증: FR-AUTH-13
+		@Test
+		@DisplayName("성공: 행사 운영자 계정으로 로그인하면 응답에 ORG 역할이 실린다 (MSG-496)")
+		void ORG_계정으로_로그인하면_응답에_ORG_역할이_실린다() {
+			User user = User.createLocalUser(request.email(), "encoded-hash", "행사운영자");
+			ReflectionTestUtils.setField(user, "id", 77L);
+			ReflectionTestUtils.setField(user, "role", UserRole.ORG);
+
+			given(userRepository.findByEmail(request.email())).willReturn(Optional.of(user));
+			given(passwordEncoder.matches(request.password(), "encoded-hash")).willReturn(true);
+			given(tokenProvider.issueAccessToken(77L, UserRole.ORG)).willReturn("org-jwt");
+			given(refreshTokenService.issue(77L, "device-1")).willReturn("refresh-token");
+
+			LoginResponseDto response = authService.login(request, "device-1");
+
+			assertThat(response.role()).isEqualTo("ORG");
+			// 토큰의 role 클레임도 ORG 여야 화면 라우팅과 인가가 같은 값을 본다
+			verify(tokenProvider).issueAccessToken(77L, UserRole.ORG);
+		}
+
 		@Test
 		@DisplayName("실패: 이메일이 존재하지 않으면 INVALID_CREDENTIALS 를 던지고 후속 호출 없음")
 		void login_emailNotFound() {

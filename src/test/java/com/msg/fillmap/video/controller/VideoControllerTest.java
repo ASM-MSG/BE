@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import tools.jackson.databind.ObjectMapper;
 
+import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.dto.PresignedUrlRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.service.HighlightPreviewService;
@@ -40,6 +41,11 @@ class VideoControllerTest {
 
 	@Autowired
 	private ObjectMapper objectMapper;
+
+	/** WebConfig 가 등록하는 비밀번호 게이트 인터셉터(MSG-497)의 의존 — 이 슬라이스는 /api/org/** 를
+	 * 부르지 않아 동작에 관여하지 않는다. */
+	@MockitoBean
+	private UserRepository userRepository;
 
 	@MockitoBean
 	private VideoService videoService;

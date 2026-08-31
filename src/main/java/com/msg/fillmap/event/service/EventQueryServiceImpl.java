@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -15,10 +16,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.event.dto.EventLocationResponseDto;
+
 import com.msg.fillmap.event.dto.EventOccurrenceChipResponseDto;
 import com.msg.fillmap.event.dto.EventOccurrenceDetailResponseDto;
 import com.msg.fillmap.event.dto.EventOccurrenceDetailResponseDto.PreviousOccurrenceDto;
 import com.msg.fillmap.event.dto.GridEventLocationResponseDto;
+import com.msg.fillmap.event.dto.OrgEventCityCountResponseDto;
+import com.msg.fillmap.event.dto.OrgEventItemResponseDto;
+import com.msg.fillmap.event.dto.OrgEventListResponseDto;
 import com.msg.fillmap.event.entity.EventLocation;
 import com.msg.fillmap.event.entity.EventLocationGrid;
 import com.msg.fillmap.event.entity.EventOccurrence;
@@ -29,6 +34,7 @@ import com.msg.fillmap.event.repository.EventLocationRepository;
 import com.msg.fillmap.event.repository.EventLocationVideoCount;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventVideoRepository;
+import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
@@ -64,6 +70,15 @@ public class EventQueryServiceImpl implements EventQueryService {
 			.thenComparing(EventOccurrence::getStartsAt)
 			.thenComparing(EventOccurrence::getId);
 
+	/** 콘솔 목록 정렬 (MSG-501) — 가까운 이벤트 먼저, 시작 시각이 같으면 회차 id 오름차순 타이브레이커다. */
+	private static final Comparator<EventOccurrence> ORG_EVENT_ORDER =
+		Comparator.comparing(EventOccurrence::getStartsAt).thenComparing(EventOccurrence::getId);
+
+	/** 시·도 칩 정렬 (MSG-501) — 건수 내림차순, 동수는 이름 오름차순이라 매 요청 같은 순서다. */
+	private static final Comparator<OrgEventCityCountResponseDto> CITY_COUNT_ORDER =
+		Comparator.comparingInt(OrgEventCityCountResponseDto::count).reversed()
+			.thenComparing(OrgEventCityCountResponseDto::cityName);
+
 	/**
 	 * 투영 보정 — viewportRange 는 꼭짓점 네 점만 환산해 min/max 를 잡는데, 뷰포트가 중앙자오선(경도 127.5도)을
 	 * 품으면 남쪽 변이 두 귀퉁이보다 처져(실측 최대 이탈 29.6m) 남쪽 한 행이 통째로 빠진다. 0.5도 상한 안에서
@@ -87,6 +102,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 	private final GridQueryService gridQueryService;
 	private final ZoneNameQueryService zoneNameQueryService;
 	private final EventNotificationService eventNotificationService;
+	private final AwsProperties awsProperties;
 	private final Clock clock;
 
 	/**
@@ -102,10 +118,11 @@ public class EventQueryServiceImpl implements EventQueryService {
 		EventVideoRepository eventVideoRepository,
 		GridQueryService gridQueryService,
 		ZoneNameQueryService zoneNameQueryService,
-		EventNotificationService eventNotificationService
+		EventNotificationService eventNotificationService,
+		AwsProperties awsProperties
 	) {
 		this(occurrenceRepository, locationRepository, locationGridRepository, eventVideoRepository,
-			gridQueryService, zoneNameQueryService, eventNotificationService, Clock.systemUTC());
+			gridQueryService, zoneNameQueryService, eventNotificationService, awsProperties, Clock.systemUTC());
 	}
 
 	public EventQueryServiceImpl(
@@ -116,6 +133,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		GridQueryService gridQueryService,
 		ZoneNameQueryService zoneNameQueryService,
 		EventNotificationService eventNotificationService,
+		AwsProperties awsProperties,
 		Clock clock
 	) {
 		this.occurrenceRepository = occurrenceRepository;
@@ -125,6 +143,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		this.gridQueryService = gridQueryService;
 		this.zoneNameQueryService = zoneNameQueryService;
 		this.eventNotificationService = eventNotificationService;
+		this.awsProperties = awsProperties;
 		this.clock = clock;
 	}
 
@@ -168,7 +187,11 @@ public class EventQueryServiceImpl implements EventQueryService {
 		occurrenceRepository.findById(occurrenceId)
 			.filter(found -> isVisible(found, now))
 			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_NOT_FOUND));
-		List<EventLocation> locations = locationRepository.findByOccurrenceIdOrderByDisplayOrderAscIdAsc(occurrenceId);
+		// 노출 중지된 위치는 목록에서 빠진다 (MSG-500 D-3) — 중지가 "즉시 사라진다"를 만드는 자리 중 하나다.
+		List<EventLocation> locations = locationRepository.findByOccurrenceIdOrderByDisplayOrderAscIdAsc(occurrenceId)
+			.stream()
+			.filter(location -> location.getHiddenAt() == null)
+			.toList();
 		if (locations.isEmpty()) {
 			return List.of();
 		}
@@ -195,6 +218,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		// 미노출 회차는 키 자체가 빠진다 — 단건 조회의 13404 은닉과 같은 결이다. occurrence 는 fetch join 으로
 		// 이미 로딩돼 있어 노출 판정·그룹핑이 추가 쿼리를 만들지 않는다.
 		return locationRepository.findWithOccurrenceByOccurrenceIdIn(occurrenceIds).stream()
+			.filter(location -> location.getHiddenAt() == null)
 			.filter(location -> isVisible(location.getOccurrence(), now))
 			.collect(Collectors.groupingBy(location -> location.getOccurrence().getId(), LinkedHashMap::new,
 				Collectors.mapping(
@@ -207,6 +231,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		LocalDateTime now = LocalDateTime.now(clock);
 		// 미노출 예정 회차는 배열에서 아예 뺀다 — 노출 전 회차는 존재 자체가 비공개 정보다 (§API 4).
 		List<EventLocation> locations = locationGridRepository.findLocationsByGridId(gridId).stream()
+			.filter(location -> location.getHiddenAt() == null)
 			.filter(location -> isVisible(location.getOccurrence(), now))
 			.sorted(reverseLookupOrder(now))
 			.toList();
@@ -217,6 +242,60 @@ public class EventQueryServiceImpl implements EventQueryService {
 		return locations.stream()
 			.map(location -> toGridLocationDto(location, now, displayNames))
 			.toList();
+	}
+
+	/**
+	 * 승인 이벤트 목록 (MSG-501). 후보는 종료 전 회차 전량이고(결정 D-1, 노출 판정은 걸지 않는다 — D-2),
+	 * 필터·검색·집계·정렬은 자바가 한다: 후보가 수십 건 규모라 쿼리를 갈래로 나눌 이유가 없고, 전체 기준
+	 * 집계와 필터 적용 목록이 같은 후보 집합 하나에서 나온다. 쿼리는 회차 1회 + 위치 일괄 1회로 고정이다.
+	 */
+	@Override
+	public OrgEventListResponseDto getApprovedEvents(String city, String name) {
+		LocalDateTime now = LocalDateTime.now(clock);
+		List<EventOccurrence> candidates = occurrenceRepository.findByEndsAtAfter(now);
+		List<EventOccurrence> filtered = candidates.stream()
+			.filter(occurrence -> city == null || occurrence.getCityName().equals(city))
+			.filter(occurrence -> matchesName(occurrence, name))
+			.sorted(ORG_EVENT_ORDER)
+			.toList();
+		Map<Long, String> placeLabels = placeLabels(filtered);
+		List<OrgEventItemResponseDto> events = filtered.stream()
+			.map(occurrence -> OrgEventItemResponseDto.of(occurrence, placeLabels.get(occurrence.getId())))
+			.toList();
+		// 건수는 필터·검색 전 후보 기준이다 — 칩이 내비게이션이라 검색 중에 숫자가 흔들리면 안 된다.
+		return new OrgEventListResponseDto(candidates.size(), cityCounts(candidates), events);
+	}
+
+	/** 이름 검색 — 회차 제목 부분 일치, 대소문자 무시. 파라미터가 없으면 전체 통과다. */
+	private boolean matchesName(EventOccurrence occurrence, String name) {
+		return name == null
+			|| occurrence.getTitle().toLowerCase(Locale.ROOT).contains(name.toLowerCase(Locale.ROOT));
+	}
+
+	private List<OrgEventCityCountResponseDto> cityCounts(List<EventOccurrence> candidates) {
+		return candidates.stream()
+			.collect(Collectors.groupingBy(EventOccurrence::getCityName, Collectors.counting()))
+			.entrySet().stream()
+			.map(entry -> new OrgEventCityCountResponseDto(entry.getKey(), entry.getValue().intValue()))
+			.sorted(CITY_COUNT_ORDER)
+			.toList();
+	}
+
+	/**
+	 * 회차별 장소 라벨 (§API placeLabel) — 위치를 회차 id 로 묶어 한 번에 읽는다. 루프 안 지연 로딩이면
+	 * 회차 수만큼 쿼리가 늘어난다. 정렬 계약(display_order → id)이 쿼리에 있어 회차별 첫 행이 곧 라벨이고,
+	 * 위치가 없는 회차는 키가 없어 null 이 된다.
+	 */
+	private Map<Long, String> placeLabels(List<EventOccurrence> occurrences) {
+		if (occurrences.isEmpty()) {
+			return Map.of();
+		}
+		List<Long> occurrenceIds = occurrences.stream().map(EventOccurrence::getId).toList();
+		Map<Long, String> labels = new LinkedHashMap<>();
+		for (EventLocation location : locationRepository.findWithOccurrenceByOccurrenceIdIn(occurrenceIds)) {
+			labels.putIfAbsent(location.getOccurrence().getId(), location.getName());
+		}
+		return labels;
 	}
 
 	private EventLocationResponseDto toLocationDto(EventLocation location, Map<Long, List<String>> gridIds,
@@ -232,7 +311,15 @@ public class EventQueryServiceImpl implements EventQueryService {
 			name.zoneName(),
 			name.zoneCell(),
 			name.regionName(),
-			videoCounts.getOrDefault(location.getId(), 0L));
+			videoCounts.getOrDefault(location.getId(), 0L),
+			// 참여 속성 5종 (MSG-500 D-8) — 시드 위치는 전부 null 이라 기존 응답이 값 없이 필드만 는다.
+			// 이미지는 키만 저장하고 공개 주소는 여기서 조립한다(키가 없으면 주소도 null).
+			location.getOrganizerName(),
+			location.getDescription(),
+			location.getStartsOn(),
+			location.getEndsOn(),
+			location.getParticipationMethod(),
+			awsProperties.publicUrl(location.getImageKey()));
 	}
 
 	private GridEventLocationResponseDto toGridLocationDto(EventLocation location, LocalDateTime now,

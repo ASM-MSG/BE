@@ -147,6 +147,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		JOIN mission_grids mg ON mg.grid_id = v.grid_id
 		JOIN missions m ON m.id = mg.mission_id
 		WHERE mg.mission_id = :missionId
+		  AND m.hidden_at IS NULL
 		  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
 		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
@@ -167,6 +168,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		JOIN mission_grids mg ON mg.grid_id = v.grid_id
 		JOIN missions m ON m.id = mg.mission_id
 		WHERE mg.mission_id = :missionId
+		  AND m.hidden_at IS NULL
 		  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
 		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
@@ -195,6 +197,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		JOIN mission_grids mg ON mg.grid_id = v.grid_id
 		JOIN missions m ON m.id = mg.mission_id
 		WHERE mg.mission_id = :missionId
+		  AND m.hidden_at IS NULL
 		  AND v.status = 'ACTIVE'
 		  AND v.visibility = 'PUBLIC'
 		  AND v.processing_status = 'READY'
@@ -218,6 +221,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		JOIN mission_grids mg ON mg.grid_id = v.grid_id
 		JOIN missions m ON m.id = mg.mission_id
 		WHERE m.id IN (:missionIds)
+		  AND m.hidden_at IS NULL
 		  AND v.status = 'ACTIVE'
 		  AND v.visibility = 'PUBLIC'
 		  AND v.processing_status = 'READY'
@@ -227,6 +231,19 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		GROUP BY m.id
 		""", nativeQuery = true)
 	List<MissionTotalVideoCountProjection> countVideosByMissionIds(@Param("missionIds") Collection<Long> missionIds);
+
+	/**
+	 * 미션 숨김 여부 (MSG-500 D-3) — 미션 영상 피드가 노출 중지된 미션에 <b>미션 상세와 같은 404</b> 를
+	 * 주기 위해 본다. 위 네 쿼리의 hidden_at 술어만으로는 결과가 빈 200 이 되는데, 그러면 목록에서 사라진
+	 * 미션이 "존재하지만 비어 있다"로 읽혀 은닉이 갈라진다.
+	 * <p>
+	 * missions 를 video 리포지토리에서 읽는 것은 용도가 영상 목록이기 때문이다 — 엔티티를 띄우지 않는
+	 * 스칼라 조회이고, 같은 결의 선례가 {@code UserRepository.findAllS3KeysByUserId}(videos 를 읽는 user
+	 * 리포지토리) 다. 없는 미션은 false — 그 경우의 빈 페이지 계약(MSG-390)은 그대로다.
+	 */
+	@Query(value = "SELECT EXISTS (SELECT 1 FROM missions WHERE id = :missionId AND hidden_at IS NOT NULL)",
+		nativeQuery = true)
+	boolean isMissionHidden(@Param("missionId") long missionId);
 
 	/**
 	 * 격자 전역 시간대 분포 (MSG-372). findGlobalVideos 와 같은 후보 집합을 세어 업로드 시각의 KST 시로

@@ -23,10 +23,12 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 	 * start 전 미래 이벤트는 노출하지 않는다. 양쪽 NULL(코스·지속)은 항상 활성.
 	 * ORDER BY m.id 는 표시 정렬이 아니라 결정성 확보다 (MSG-398 D12) — 없으면 스냅샷이 갱신될 때마다
 	 * 목록 카드가 이유 없이 뒤바뀐다. findBySource·findCompleted 가 같은 이유로 id 정렬을 걸어 두었다.
+	 * hidden_at 술어(MSG-500 D-3)는 노출 중지된 승인 미션을 뺀다 — 시드 미션은 전부 NULL 이라 동작 불변이다.
 	 */
 	@Query("""
 		SELECT m FROM Mission m
-		WHERE (m.startAt IS NULL OR m.startAt <= :now)
+		WHERE m.hiddenAt IS NULL
+		  AND (m.startAt IS NULL OR m.startAt <= :now)
 		  AND (m.endAt IS NULL OR :now <= m.endAt)
 		ORDER BY m.id
 		""")
@@ -81,6 +83,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 		FROM mission_grids mg
 		JOIN missions m ON m.id = mg.mission_id
 		WHERE mg.grid_id = :gridId
+		  AND m.hidden_at IS NULL
 		  AND (m.start_at IS NULL OR m.start_at <= statement_timestamp() AT TIME ZONE 'UTC')
 		  AND (m.end_at IS NULL OR statement_timestamp() AT TIME ZONE 'UTC' <= m.end_at)
 		  AND NOT EXISTS (SELECT 1 FROM user_missions um
@@ -110,6 +113,7 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 			AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 			AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		WHERE m.id IN (:candidateIds)
+		  AND m.hidden_at IS NULL
 		GROUP BY m.id, m.title, m.type, m.target_count
 		HAVING COUNT(DISTINCT v.grid_id) >= m.target_count
 		ORDER BY m.id
@@ -128,10 +132,11 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 	 * <p>
 	 * 기간 조건이 없다 — 끝난 축제도 나와야 그 격자를 눌러 무슨 축제였는지 되짚을 수 있다(FR-15).
 	 * 어느 미션의 대표 격자도 아닌 값과 격자 포맷이 아닌 문자열은 빈 목록이다(예외 아님).
+	 * 노출 중지된 미션은 빠진다 (MSG-500 D-3) — 목록에서 사라진 미션이 격자 선택으로는 계속 보이면 안 된다.
 	 * 표시 정렬(진행 중 → 시작 전 → 종료)은 서비스가 잡는다 — 서버 시각과 견주는 순위라 SQL 에 굳히지
 	 * 않는다. id 정렬은 그 앞의 결정성 확보다(findBySource 와 같은 이유).
 	 */
-	List<Mission> findByRepresentativeGridIdOrderById(String representativeGridId);
+	List<Mission> findByRepresentativeGridIdAndHiddenAtIsNullOrderById(String representativeGridId);
 
 	/**
 	 * 시더 dedupe DB 대조용 (MSG-224 D3·D7) — 해당 러너 산출물만 기간과 함께 로드해 메모리 대조한다.
@@ -165,4 +170,18 @@ public interface MissionRepository extends JpaRepository<Mission, Long> {
 		  AND NOT EXISTS (SELECT 1 FROM user_missions um WHERE um.mission_id = m.id)
 		""", nativeQuery = true)
 	int deleteEndedBySourceWithoutStamps(@Param("source") String source);
+
+	/**
+	 * 노출 중지 (MSG-500 D-3) — 관리자가 승인 행사를 내릴 때 그 산출물 미션을 숨긴다. 삭제가 아닌 이유는
+	 * user_missions FK 가 스탬프 걸린 미션의 하드삭제를 막고, 이미 준 스탬프를 뺏는 것이 비회수 원칙과
+	 * 충돌하기 때문이다.
+	 * <p>
+	 * 엔티티를 로드해 더티 체킹으로 바꾸지 않고 <b>단일 컬럼 UPDATE</b> 인 것이 계약이다 — 이 프로젝트는
+	 * {@code @DynamicUpdate} 를 쓰지 않아 관리 엔티티의 flush 가 전 컬럼 UPDATE 를 내보내고, 그러면 중지가
+	 * 같은 시각의 다른 갱신(시더 메타데이터 백필·대표 격자 재산출)을 낡은 스냅숏으로 되덮는다.
+	 * {@code hidden_at IS NULL} 술어는 재중지를 0행으로 만들어 첫 중지 시각을 보존한다.
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query("UPDATE Mission m SET m.hiddenAt = :now WHERE m.id = :missionId AND m.hiddenAt IS NULL")
+	int hide(@Param("missionId") long missionId, @Param("now") LocalDateTime now);
 }

@@ -16,6 +16,13 @@ import java.util.Set;
  */
 public final class RepresentativeGridResolver {
 
+	/**
+	 * EPSG:5179 국내 정의역을 넉넉히 포함하는 격자 인덱스 방어 상한 (0 초과 이 값 미만). 이 산출기의 long
+	 * 정수 산술이 오버플로하지 않는다는 논증이 이 상한 위에 서 있으므로, 셀 집합을 만드는 쪽(시딩·신청 접수)이
+	 * 전부 같은 값으로 걸러야 한다 — 그래서 값의 자리가 산출기 옆 한 곳이다 (MSG-498 에서 EventSeeder 승격).
+	 */
+	public static final int GRID_INDEX_UPPER_EXCLUSIVE = 100_000;
+
 	private RepresentativeGridResolver() {
 	}
 

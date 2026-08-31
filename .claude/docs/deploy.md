@@ -155,6 +155,13 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    200이 아니면 시더를 돌리지 않는다. 403인 채로 적재하면 전량을 나중에 다시 손봐야 한다.
    dev 버킷은 2026-08-14 적용을 마쳤다(`PublicReadProfileOriginal`과 나란히 두 번째 Statement).
    prod 버킷은 아직이다.
+4. **`event-locations/org-submission/*` 공개 읽기 버킷 정책** (MSG-500) — 이벤트 참여형 승인이
+   커버 이미지를 이 프리픽스로 복사해 위치 목록 응답에 완성 공개 URL로 싣는다. 승인 미션
+   이미지가 쓰는 `missions/org-submission/`은 위 3번의 `missions/*` 정책이 이미 덮으므로 별도
+   조치가 없지만, 이 프리픽스는 **새 Statement가 필요하다**(3번과 같은 형태, Resource만
+   `event-locations/org-submission/*`). 열어 두지 않으면 참여형 승인 위치의 imageUrl이 403이다.
+   dev·prod 모두 미적용(2026-08-30 기준) — MSG-500 배포 전에 dev부터 적용하고 3번과 같은
+   curl 검증을 거친다.
 
 ### ⚠️ AWS 프로파일 — 로컬에 계정이 둘이고 기본값이 남의 계정이다
 

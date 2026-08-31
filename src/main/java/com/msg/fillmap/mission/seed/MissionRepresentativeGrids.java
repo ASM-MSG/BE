@@ -11,11 +11,12 @@ import com.msg.fillmap.mission.entity.Mission;
 import com.msg.fillmap.mission.entity.MissionType;
 
 /**
- * 시더의 대표 격자 유지 규칙 (MSG-459 D-6) — 축제·팝업 두 시더가 적재·갱신 경로에서 함께 쓴다.
+ * 대표 격자 유지 규칙 (MSG-459 D-6) — 축제·팝업 두 시더가 적재·갱신 경로에서 함께 쓰고, 관리자 승인
+ * 등재(MSG-500)도 같은 규칙을 부른다(적재 주체가 늘어도 규칙은 한 벌이다).
  * 산출 자체는 행사방과 같은 클래스 하나({@link RepresentativeGridResolver})가 하고, 여기서는
  * <b>언제 다시 산출하는가</b>만 정한다.
  */
-final class MissionRepresentativeGrids {
+public final class MissionRepresentativeGrids {
 
 	/** 대표 격자를 갖는 유형 — chk_missions_rep_grid_type 과 같은 집합이어야 한다. */
 	private static final Set<MissionType> ELIGIBLE_TYPES = Set.of(MissionType.EVENT, MissionType.POPUP);
@@ -36,7 +37,7 @@ final class MissionRepresentativeGrids {
 	 * @param gridIds 그 미션의 현재 판정 격자 집합
 	 * @return 값을 새로 산출해 넣었으면 true (호출자가 경고 로그·건수 집계에 쓴다)
 	 */
-	static boolean reassignIfOutside(Mission mission, Collection<String> gridIds) {
+	public static boolean reassignIfOutside(Mission mission, Collection<String> gridIds) {
 		if (!ELIGIBLE_TYPES.contains(mission.getType()) || mission.getTargetCount() != 1 || gridIds.isEmpty()) {
 			return false;
 		}

@@ -29,6 +29,13 @@ public interface RegionQueryService {
 	 */
 	Optional<RegionView> resolveNearestByPoint(double lat, double lon);
 
+	/**
+	 * 거리 상한이 있는 최근접 행정동 (MSG-493). 경계까지 거리가 상한(미터)을 넘으면 Optional.empty 다 —
+	 * 바다 한가운데 좌표에 먼 동 이름이 붙지 않게 한다. 상한 값은 소비처의 표시 정책이라 이 계약이 정하지
+	 * 않는다(현재 소비처는 단일 격자 조회 하나, 3km). 상한 없는 오버로드는 코스 시더 전용이다(MSG-492 D-5).
+	 */
+	Optional<RegionView> resolveNearestByPoint(double lat, double lon, double maxDistanceMeters);
+
 	/** 언급 지명 대조: 시도(접미 보정), 시군구, 동 세 단위 완전 일치 그룹. 매칭 없으면 빈 리스트. */
 	List<MentionedRegionMatch> matchMentionedRegions(String name, ViewportBounds viewport);
 

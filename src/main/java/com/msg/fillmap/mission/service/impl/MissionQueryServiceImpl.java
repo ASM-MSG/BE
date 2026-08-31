@@ -301,7 +301,10 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	@Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
 	public MissionDetailResponseDto getMissionDetail(long missionId, Long userId) {
 		// 기간 판정은 하지 않는다 — 기간이 끝난 미션도 행이 남아 있으면 상세를 연다(§API 명세).
+		// 노출 중지된 미션은 없는 미션과 <b>같은 404</b> 다 (MSG-500 D-3) — 목록에서 사라진 미션이 상세로는
+		// 열리면 "있는데 안 보이는" 상태가 되어 은닉이 갈라진다.
 		Mission mission = missionRepository.findById(missionId)
+			.filter(found -> found.getHiddenAt() == null)
 			.orElseThrow(() -> new ApiException(MissionErrorCode.MISSION_NOT_FOUND));
 		List<MissionGrid> grids = missionGridRepository.findByMissionIds(List.of(missionId));
 		// findById 직후라 진행도 행은 사실상 하나다. READ_COMMITTED 는 문장 사이 스냅샷이 갱신되므로
@@ -327,7 +330,7 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	 */
 	@Override
 	public List<GridMissionResponseDto> getMissionsByGrid(String gridId) {
-		List<Mission> missions = missionRepository.findByRepresentativeGridIdOrderById(gridId);
+		List<Mission> missions = missionRepository.findByRepresentativeGridIdAndHiddenAtIsNullOrderById(gridId);
 		if (missions.isEmpty()) {
 			return List.of();
 		}
@@ -456,6 +459,20 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 		}
 		return mission.maxGridY() >= view.minGridY() - pad && mission.minGridY() <= view.maxGridY() + pad
 			&& mission.maxGridX() >= view.minGridX() - pad && mission.minGridX() <= view.maxGridX() + pad;
+	}
+
+	/**
+	 * 스냅숏 무효화 (MSG-500 D-12) — 홀더를 비워 다음 조회가 재계산하게 한다. 재계산 락 안에서 비우는 것은
+	 * 이미 진행 중인 재계산이 방금 비운 홀더를 옛 결과로 도로 채우는 순서를 막기 위해서다. 그래도 남는
+	 * 경합이 하나 있다: 무효화 직전에 락을 잡아 재계산을 마친 스레드의 결과는 지워진다(그 재계산은 무효화를
+	 * 부른 변경을 못 봤을 수 있다). 호출부가 커밋 <b>후에</b> 부르므로 그 창은 커밋 시점과 이 호출 사이로
+	 * 좁고, 최악의 결과는 다음 조회 한 번이 옛 스냅숏을 보는 것이다(TTL 1시간 지연과 비교하면 미미하다).
+	 */
+	@Override
+	public void invalidateSnapshot() {
+		synchronized (refreshLock) {
+			this.cache = null;
+		}
 	}
 
 	private List<CachedMission> snapshot() {

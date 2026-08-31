@@ -191,6 +191,22 @@ class MissionQueryServiceCacheTest {
 		verify(missionRepository, times(2)).findActive(any());
 	}
 
+	// 검증: FR-EVENT-15
+	@Test
+	@DisplayName("무효화하면 TTL 전에도 다시 계산한다 — 승인 미션이 최대 1시간 안 실리는 창을 없앤다 (MSG-500 D-12)")
+	void 무효화하면_TTL_전에도_다시_계산한다() {
+		MutableClock clock = new MutableClock(Instant.ofEpochMilli(0));
+		MissionQueryService service = newService(clock);
+		given(missionRepository.findActive(any())).willReturn(List.of());
+
+		service.getMissionsInViewport(강남_뷰포트, MissionType.EVENT);
+		service.invalidateSnapshot();
+		// 시각은 그대로다 — TTL 이 아직 한참 남았는데도 다시 계산해야 무효화가 성립한다.
+		service.getMissionsInViewport(강남_뷰포트, MissionType.EVENT);
+
+		verify(missionRepository, times(2)).findActive(any());
+	}
+
 	@Test
 	@DisplayName("재계산된 스냅샷에도 사각형이 함께 들어온다 — 만료 후에도 뷰포트 판정이 유지된다 (MSG-398 D2)")
 	void 재계산된_스냅샷에도_사각형이_함께_들어온다() {

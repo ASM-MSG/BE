@@ -40,6 +40,11 @@ logging:
 
 # zone 시딩 — 기동마다 seed/zones.json 멱등 UPSERT (MSG-259 D-8). 코드 기본값 false — 로컬·테스트 무영향
 fillmap:
+  # 메일 발송 (MSG-497) — dev 는 실발송 없이 로그로 링크를 확인한다(enabled 는 공통 기본 false).
+  # 링크 base URL 은 여기에만 둔다 — 공통에 두면 prod 가 상속받아 localhost 링크가 실제로 발송된다.
+  mail:
+    reset-link-base-url: ${MAIL_RESET_LINK_BASE_URL:http://localhost:5173/reset-password}
+
   zone:
     seed:
       enabled: true

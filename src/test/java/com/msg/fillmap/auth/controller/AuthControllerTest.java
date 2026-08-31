@@ -57,6 +57,7 @@ import com.msg.fillmap.auth.support.RefreshTokenCookies;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.entity.AuthProvider;
 import com.msg.fillmap.user.exception.UserErrorCode;
+import com.msg.fillmap.user.repository.UserRepository;
 
 @WebMvcTest(AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -98,6 +99,11 @@ class AuthControllerTest {
 
 	@Autowired
 	private ObjectMapper objectMapper;
+
+	/** WebConfig 가 등록하는 비밀번호 게이트 인터셉터(MSG-497)의 의존 — 이 슬라이스는 /api/org/** 를
+	 * 부르지 않아 동작에 관여하지 않는다. */
+	@MockitoBean
+	private UserRepository userRepository;
 
 	@MockitoBean
 	private AuthService authService;
@@ -214,7 +220,7 @@ class AuthControllerTest {
 		void login_web_setsCookie() throws Exception {
 			LoginRequestDto request = new LoginRequestDto("test@example.com", "password123");
 			given(authService.login(any(LoginRequestDto.class), anyString()))
-				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 
 			mockMvc.perform(post(LOGIN_URL)
 					.contentType(MediaType.APPLICATION_JSON)
@@ -226,13 +232,29 @@ class AuthControllerTest {
 				.andExpect(header().exists(DEVICE_ID_HEADER));
 		}
 
+		// 검증: FR-AUTH-13
+		@Test
+		@DisplayName("성공(웹): 리프레시를 비우며 DTO 를 재조립해도 역할은 그대로 실린다 (MSG-496)")
+		void 웹_전송에서도_로그인_응답의_역할이_유지된다() throws Exception {
+			LoginRequestDto request = new LoginRequestDto("org@example.com", "password123");
+			given(authService.login(any(LoginRequestDto.class), anyString()))
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "ORG"));
+
+			mockMvc.perform(post(LOGIN_URL)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.refreshToken").isEmpty())
+				.andExpect(jsonPath("$.data.role").value("ORG"));
+		}
+
 		// 검증: FR-AUTH-08
 		@Test
 		@DisplayName("성공(앱): 리프레시를 body 로 내리고 쿠키는 없다")
 		void login_app_returnsBody() throws Exception {
 			LoginRequestDto request = new LoginRequestDto("test@example.com", "password123");
 			given(authService.login(any(LoginRequestDto.class), anyString()))
-				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 
 			mockMvc.perform(post(LOGIN_URL)
 					.header(CLIENT_TYPE_HEADER, "app")
@@ -249,7 +271,7 @@ class AuthControllerTest {
 		void login_echoesDeviceId() throws Exception {
 			LoginRequestDto request = new LoginRequestDto("test@example.com", "password123");
 			given(authService.login(any(LoginRequestDto.class), anyString()))
-				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 
 			mockMvc.perform(post(LOGIN_URL)
 					.header(DEVICE_ID_HEADER, "device-abc")
@@ -301,7 +323,7 @@ class AuthControllerTest {
 		void oauthLogin_success() throws Exception {
 			OidcLoginRequestDto request = new OidcLoginRequestDto("kakao-id-token");
 			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString()))
-				.willReturn(new LoginResponseDto("jwt-token", "refresh-jwt"));
+				.willReturn(new LoginResponseDto("jwt-token", "refresh-jwt", "USER"));
 
 			mockMvc.perform(post(OAUTH_URL)
 					.header(CLIENT_TYPE_HEADER, "app")
@@ -434,7 +456,7 @@ class AuthControllerTest {
 		void 유효한_인가_코드로_로그인하면_웹은_액세스_토큰과_리프레시_쿠키가_발급된다() throws Exception {
 			given(kakaoAuthCodeExchanger.exchange(CODE, REDIRECT_URI, NONCE)).willReturn("kakao-id-token");
 			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString()))
-				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 
 			mockMvc.perform(post(OAUTH_CODE_URL)
 					.cookie(nonceCookie())
@@ -454,7 +476,7 @@ class AuthControllerTest {
 		void 앱_클라이언트는_리프레시_토큰이_body로_내려간다() throws Exception {
 			given(kakaoAuthCodeExchanger.exchange(CODE, REDIRECT_URI, NONCE)).willReturn("kakao-id-token");
 			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString()))
-				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 
 			mockMvc.perform(post(OAUTH_CODE_URL)
 					.cookie(nonceCookie())
@@ -473,7 +495,7 @@ class AuthControllerTest {
 		void 디바이스_ID_헤더가_없으면_서버가_생성해_응답_헤더로_반환한다() throws Exception {
 			given(kakaoAuthCodeExchanger.exchange(CODE, REDIRECT_URI, NONCE)).willReturn("kakao-id-token");
 			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString()))
-				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 
 			mockMvc.perform(post(OAUTH_CODE_URL)
 					.cookie(nonceCookie())
@@ -491,7 +513,7 @@ class AuthControllerTest {
 		void 로그인_성공_시_논스_쿠키가_만료된다() throws Exception {
 			given(kakaoAuthCodeExchanger.exchange(CODE, REDIRECT_URI, NONCE)).willReturn("kakao-id-token");
 			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString()))
-				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+				.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 
 			mockMvc.perform(post(OAUTH_CODE_URL)
 					.cookie(nonceCookie())
