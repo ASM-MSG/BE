@@ -186,5 +186,5 @@ server:
 
 cors:
   # 콤마 구분 허용 origin 목록. 로컬 기본값 외에는 CORS_ALLOWED_ORIGINS 환경변수로 주입
-  # (예: S3 website URL, https://fillmap.kr). Vite 로컬 dev = localhost:5173
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  # (예: S3 website URL, https://fillmap.kr). Vite 로컬 dev = localhost:5173~5180 (FE 워크트리 병렬, MSG-532)
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177,http://localhost:5178,http://localhost:5179,http://localhost:5180}
