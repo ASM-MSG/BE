@@ -75,6 +75,21 @@ class InterestMatcherTest {
 
 	// 검증: FR-ROUTE-18
 	@Test
+	@DisplayName("\"업데이트\"만 있는 재료는 \"데이트\" 관심사와 이어지지 않는다 — 차단어 전처리 (FR-5, PR #248)")
+	void 업데이트만_있는_재료는_데이트_관심사와_이어지지_않는다() {
+		// 시드 실측 34건 전부가 이 문형이다 — 원문 포함(규칙 1)은 evidence 수정과 별개 경로라 차단어로 막는다.
+		assertThat(matcher.firstMatch(List.of("데이트"), "2026년도 축제 내용은 업데이트 중에 있습니다")).isNull();
+	}
+
+	// 검증: FR-ROUTE-18
+	@Test
+	@DisplayName("차단어를 지워도 진짜 데이트 표기는 일치한다 — 전처리가 인접한 정상 일치를 깨지 않는다")
+	void 차단어를_지워도_진짜_데이트_표기는_일치한다() {
+		assertThat(matcher.firstMatch(List.of("데이트"), "최근 업데이트된 연인 데이트 명소 소개")).isEqualTo("데이트");
+	}
+
+	// 검증: FR-ROUTE-18
+	@Test
 	void 관심사_배열의_앞_항목이_먼저_일치한다() {
 		// 재료에 야경 근거어(불빛)와 음식 근거어(국밥)가 다 있다 — 배열 앞 항목이 이긴다.
 		assertThat(matcher.firstMatch(List.of("야경", "맛집"), "불빛 축제와 국밥 골목")).isEqualTo("야경");
@@ -87,6 +102,11 @@ class InterestMatcherTest {
 		JsonNode root;
 		try (InputStream in = getClass().getResourceAsStream("/route/interest-synonyms.json")) {
 			root = new ObjectMapper().readTree(in);
+		}
+		// 차단어(exclusions) — 다른 말을 품어 오탐을 만드는 합성어. 빈 배열은 허용, 항목은 트림 후 2자 이상.
+		for (JsonNode word : root.path("exclusions")) {
+			assertThat(word.asString().trim().length())
+				.as("exclusions 2자 미만: %s", word).isGreaterThanOrEqualTo(2);
 		}
 		JsonNode concepts = root.path("concepts");
 		assertThat(concepts.isArray()).isTrue();

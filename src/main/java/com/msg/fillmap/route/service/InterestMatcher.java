@@ -14,7 +14,12 @@ import tools.jackson.databind.ObjectMapper;
  * 관심사 이어짐 판정 (MSG-514 §도메인 로직 1) — 판정 규칙과 동의어 사전 데이터를 한 곳에 모은다.
  * 관심사 배열 순서대로 (1) 원문 포함(트림 후 두 글자 이상만 — 한 글자는 "회"가 "시민회관"에 걸리는
  * 부분 문자열 오탐이라 건너뛴다), (2) 사전 경유(관심사가 걸린 개념들의 근거어 합집합 contains)를 보고
- * 첫 일치 관심사를 돌려준다. 사전은 classpath 리소스를 기동 시 1회 로드해 불변으로 보관하고, 스키마
+ * 첫 일치 관심사를 돌려준다. 판정 전에 차단어(exclusions — "업데이트"처럼 다른 말을 품어 오탐을 만드는
+ * 합성어)를 재료에서 제거한다. 규칙 1이 evidence 편성과 별개 경로라 사전 수정만으로는 같은 오탐이
+ * 남기 때문이다(PR #248 적발 — "데이트" 관심사가 "업데이트 중" 소개문에 걸리던 FR-5 위반). 관심사
+ * 문자열은 전처리하지 않는다 — 다만 재료 쪽에서 지워지므로 차단어 자체를 관심사로 적으면 어디에도
+ * 걸리지 않는다(차단어를 늘릴 때 이 성질을 감안할 것).
+ * 사전은 classpath 리소스를 기동 시 1회 로드해 불변으로 보관하고, 스키마
  * 위반은 기동 실패다 — 조용한 미적용이 커버리지 하락으로 잠복하는 것을 막는다(결정 2). 순수 함수 판정이라
  * 같은 해석·같은 재료면 같은 결과다(FR-ROUTE-10).
  */
@@ -24,18 +29,31 @@ public class InterestMatcher {
 	static final String DICTIONARY_RESOURCE = "/route/interest-synonyms.json";
 
 	private final List<Concept> concepts;
+	private final List<String> exclusions;
 
 	public InterestMatcher(ObjectMapper objectMapper) {
-		this.concepts = load(objectMapper);
+		DictionaryFile file = load(objectMapper);
+		this.concepts = validate(file);
+		this.exclusions = validateExclusions(file.exclusions());
 	}
 
 	/** 첫 일치 관심사 (해석 결과 배열 순서) — 빈 항목은 건너뛰고, 어느 규칙에도 안 걸리면 null 이다. */
 	public String firstMatch(List<String> interests, String haystack) {
+		String cleaned = stripExclusions(haystack);
 		return interests.stream()
 			.filter(interest -> !interest.isBlank())
-			.filter(interest -> matches(interest.trim(), haystack))
+			.filter(interest -> matches(interest.trim(), cleaned))
 			.findFirst()
 			.orElse(null);
+	}
+
+	/** 차단어 전처리 — 규칙 1·2 공통 진입점 한 곳에서 재료 쪽만 지운다. 제거는 리스트 순서 고정이라 결정적이다. */
+	private String stripExclusions(String haystack) {
+		String cleaned = haystack;
+		for (String exclusion : exclusions) {
+			cleaned = cleaned.replace(exclusion, "");
+		}
+		return cleaned;
 	}
 
 	private boolean matches(String interest, String haystack) {
@@ -50,17 +68,15 @@ public class InterestMatcher {
 			.anyMatch(haystack::contains);
 	}
 
-	private static List<Concept> load(ObjectMapper objectMapper) {
-		DictionaryFile file;
+	private static DictionaryFile load(ObjectMapper objectMapper) {
 		try (InputStream in = InterestMatcher.class.getResourceAsStream(DICTIONARY_RESOURCE)) {
 			if (in == null) {
 				throw new IllegalStateException("동의어 사전 리소스가 없습니다: " + DICTIONARY_RESOURCE);
 			}
-			file = objectMapper.readValue(in, DictionaryFile.class);
+			return objectMapper.readValue(in, DictionaryFile.class);
 		} catch (IOException e) {
 			throw new IllegalStateException("동의어 사전을 읽을 수 없습니다: " + DICTIONARY_RESOURCE, e);
 		}
-		return validate(file);
 	}
 
 	/** 기동 시 스키마 검증 (결정 2) — key 중복·빈 배열·빈 alias·한 글자 근거어가 하나라도 있으면 기동 실패. */
@@ -96,8 +112,24 @@ public class InterestMatcher {
 			.toList();
 	}
 
+	/** 차단어 검증 — 항목은 트림 후 2자 이상(빈 문자열 금지), 빈 배열·필드 부재는 차단어 없음으로 허용한다. */
+	private static List<String> validateExclusions(List<String> values) {
+		if (values == null) {
+			return List.of();
+		}
+		return values.stream()
+			.map(value -> {
+				String word = value == null ? "" : value.trim();
+				if (word.length() < 2) {
+					throw new IllegalStateException("동의어 사전 exclusions 에 2자 미만 항목이 있습니다: '" + value + "'");
+				}
+				return word;
+			})
+			.toList();
+	}
+
 	/** 사전 파일 형태 (결정 2 스키마) — 로드 전용이라 record 로 받는다. */
-	private record DictionaryFile(List<ConceptEntry> concepts) {
+	private record DictionaryFile(List<String> exclusions, List<ConceptEntry> concepts) {
 	}
 
 	private record ConceptEntry(String key, List<String> aliases, List<String> evidence) {

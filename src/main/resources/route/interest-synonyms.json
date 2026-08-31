@@ -1,4 +1,5 @@
 {
+	"exclusions": ["업데이트"],
 	"concepts": [
 		{
 			"key": "food",
