@@ -15,7 +15,8 @@ public record RouteRecommendResponseDto(
 	@Schema(description = "방문 순서대로 정렬된 지점 목록 (최대 8개)")
 	List<RoutePointDto> points,
 
-	@Schema(description = "후보 부족 안내 — 지점 3개 이상이면 null, 0~2개면 안내 문구", nullable = true)
+	@Schema(description = "안내 문구 — 후보 부족(0~2개)이면 부족 안내, 여행과 무관한 문장(MSG-513)이면 무관 안내. "
+		+ "지점 3개 이상 정상 추천이면 null", nullable = true)
 	String notice,
 
 	@Schema(description = "언급 지역 신호 (MSG-468) — 문장이 화면 밖 지역을 말했으면 이동·축소 제안 재료가 실린다. "
