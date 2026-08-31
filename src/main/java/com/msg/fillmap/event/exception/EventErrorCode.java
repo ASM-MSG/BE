@@ -41,6 +41,39 @@ public enum EventErrorCode implements ErrorCodeIfs {
 	// 엉뚱한 경계(종료)를 지목해서, 종료 후 30일 동안 댓글을 달아 온 사용자가 31일째에 "종료돼서
 	// 안 된다"는 답을 듣는 모순도 있었다. developCode·HttpStatus 는 불변이고 표시 문자열만 바꿨다.
 	EVENT_INTERACTION_LOCKED(13422, HttpStatus.CONFLICT, "행사 영상 댓글·도움돼요가 마감되었습니다"),
+
+	// 행사 등재 신청 블록 (MSG-498). 13423~13429 를 비워 두는 것은 폐기 이력이 있는 13420·13421 부근을
+	// 피해 번호만 봐도 신청 블록임이 읽히게 하기 위해서다.
+	// 없는 신청과 남의 신청이 같은 코드를 쓰는 것은 존재 은닉이다 (FR-14) — 조회를 항상 id + userId 쌍으로
+	// 하므로 두 경우의 코드 경로 자체가 하나이고, 응답이 갈릴 여지가 없다.
+	SUBMISSION_NOT_FOUND(13430, HttpStatus.NOT_FOUND, "신청을 찾을 수 없습니다"),
+	INVALID_SUBMISSION_AREA(13431, HttpStatus.BAD_REQUEST, "유효하지 않은 위치 영역입니다"),
+	SUBMISSION_AREA_LIMIT_EXCEEDED(13432, HttpStatus.BAD_REQUEST, "위치 하나의 영역은 최대 81칸입니다"),
+	INVALID_SUBMISSION_PERIOD(13433, HttpStatus.BAD_REQUEST, "행사 기간이 유효하지 않습니다"),
+	// 권한이 아니라 신청의 현재 상태와 요청이 충돌하는 거절이라 409 다 (13409 · 11409 선례).
+	SUBMISSION_NOT_EDITABLE(13434, HttpStatus.CONFLICT, "반려된 신청만 수정할 수 있습니다"),
+	SUBMISSION_IMAGE_KEY_INVALID(13435, HttpStatus.BAD_REQUEST, "유효하지 않은 이미지 키입니다"),
+	SUBMISSION_IMAGE_NOT_UPLOADED(13436, HttpStatus.BAD_REQUEST, "업로드되지 않은 이미지입니다"),
+	SUBMISSION_IMAGE_UNSUPPORTED(13437, HttpStatus.UNSUPPORTED_MEDIA_TYPE, "jpg, png 이미지만 올릴 수 있습니다"),
+	SUBMISSION_IMAGE_TOO_LARGE(13438, HttpStatus.PAYLOAD_TOO_LARGE, "이미지는 최대 10MB 입니다"),
+	SUBMISSION_REQUIRED_FIELD_MISSING(13439, HttpStatus.BAD_REQUEST, "등록 유형에 필요한 항목이 올바르지 않습니다"),
+
+	// 이벤트 참여형의 부모 회차 검증 (MSG-502). 존재를 은닉하지 않는 것은 승인 이벤트 목록이 행사 운영자
+	// 전원에게 같은 전량을 보여줘 회차의 존재가 비밀이 아니기 때문이다 — 은닉 대상은 남의 신청(13430)뿐이다.
+	PARENT_EVENT_NOT_FOUND(13440, HttpStatus.NOT_FOUND, "참여할 이벤트를 찾을 수 없습니다"),
+	// 종료 판정(endsAt <= now)은 목록 노출 조건의 여집합이라 정각에도 둘이 갈리지 않는다. 상태 충돌 409 (13434 선례).
+	PARENT_EVENT_CLOSED(13441, HttpStatus.CONFLICT, "종료된 이벤트에는 참여를 신청할 수 없습니다"),
+
+	// 관리자 심사 블록 (MSG-500). 13440 대는 MSG-502(참여형) 예약이라 13450 부터 쓴다.
+	// 목록 파라미터 두 코드는 판정과 메시지가 MSG-499 관리자 큐(1424·1425)와 같고 대역만 event 다 —
+	// 도메인 예외는 도메인이 갖는다는 규칙(뷰포트 두 코드가 mission·grid 와 같은 판정에 다른 대역인 것과 같은 결).
+	SUBMISSION_STATUS_NOT_REVIEWABLE(13450, HttpStatus.CONFLICT, "심사 중인 신청만 승인하거나 반려할 수 있습니다"),
+	SUBMISSION_PERIOD_PASSED(13451, HttpStatus.CONFLICT, "행사 기간이 이미 지나 승인할 수 없습니다"),
+	SUBMISSION_GRID_CONFLICT(13452, HttpStatus.CONFLICT, "신청 영역이 부모 이벤트의 다른 위치와 겹칩니다"),
+	EVENT_ALREADY_UNPUBLISHED(13453, HttpStatus.CONFLICT, "이미 노출이 중지된 행사입니다"),
+	INVALID_REJECT_REASON(13454, HttpStatus.BAD_REQUEST, "반려 항목 코드가 올바르지 않습니다"),
+	INVALID_SUBMISSION_STATUS_FILTER(13455, HttpStatus.BAD_REQUEST, "지원하지 않는 상태 필터입니다"),
+	INVALID_PAGE_RANGE(13456, HttpStatus.BAD_REQUEST, "페이지 번호 또는 크기가 유효하지 않습니다"),
 	;
 
 	private final Integer errorCode;

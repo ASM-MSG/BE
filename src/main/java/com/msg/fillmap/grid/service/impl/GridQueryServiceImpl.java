@@ -48,6 +48,13 @@ public class GridQueryServiceImpl implements GridQueryService {
 	// 페이지 size 상한 (MSG-90 Q2). 기본값 1000 은 컨트롤러 defaultValue 소관.
 	private static final int MAX_PAGE_SIZE = 5000;
 
+	/**
+	 * 무귀속 격자 표시 폴백의 최근접 행정동 거리 상한 (MSG-493, 2026-08-27 정민 확정 3km). 지도 격자망은
+	 * 바다 한가운데도 눌리므로 상한이 없으면 수십 km 떨어진 동 이름이 붙는다. 3km 는 실측된 코스 경유 지점
+	 * 최댓값 2,189m 를 여유 있게 덮으면서 먼바다를 거른다. 상한 밖은 종전처럼 이름 없음이다.
+	 */
+	private static final double NEAREST_REGION_MAX_DISTANCE_METERS = 3_000;
+
 	// WGS84 좌표 유효 범위 — 서비스 범위(KoreaCoordinates)가 아니라 좌표계 자체의 정의역이다.
 	private static final double MIN_LATITUDE_DEG = -90.0;
 	private static final double MAX_LATITUDE_DEG = 90.0;
@@ -63,12 +70,33 @@ public class GridQueryServiceImpl implements GridQueryService {
 		GridIndex index = validateGridId(gridId);
 		// 격자는 논리 개념이라 grids row·점령 여부와 무관하게 이름이 계산된다 (MSG-341 FR-4)
 		ZoneCellName name = zoneNameQueryService.resolver().name(index.gridY(), index.gridX());
-		String regionName = resolveRegionName(gridId);
+		String regionName = resolveRegionNameWithFallback(gridId);
 		Integer videoCount = gridRepository.findVideoCount(userId, gridId).orElse(null);
 		if (videoCount == null) {
 			return new GridCellView(gridId, false, 0, name.zoneName(), name.zoneCell(), regionName);
 		}
 		return new GridCellView(gridId, true, videoCount, name.zoneName(), name.zoneCell(), regionName);
+	}
+
+	/**
+	 * 단일 격자 조회 전용 — 품는 행정동이 없으면(해안) 가장 가까운 행정동 이름으로 대신한다 (MSG-493).
+	 * 표시 전용 폴백이라 저장 라벨·수집률·탐험률 귀속은 그대로다. 공유 헬퍼(resolveRegionName)에 넣지 않는
+	 * 이유는 행사 위치 벌크(resolveRegionNames)까지 바뀌어 확정 범위("보이는 문제가 있는 데만")를 넘고,
+	 * 그쪽은 격자 수만큼 공간 조회가 늘기 때문이다(스펙 D-1). 서비스 범위 밖 가드는 헬퍼가 먼저 null 을
+	 * 돌려 최근접까지 오지 않는다.
+	 */
+	private String resolveRegionNameWithFallback(String gridId) {
+		String contained = resolveRegionName(gridId);
+		if (contained != null) {
+			return contained;
+		}
+		GridPoint center = GridEncoder.center(gridId);
+		if (KoreaCoordinates.isOutOfService(center.lat(), center.lon())) {
+			return null;
+		}
+		return regionQueryService.resolveNearestByPoint(center.lat(), center.lon(), NEAREST_REGION_MAX_DISTANCE_METERS)
+			.map(RegionView::regionName)
+			.orElse(null);
 	}
 
 	/**
@@ -92,7 +120,8 @@ public class GridQueryServiceImpl implements GridQueryService {
 	/**
 	 * 격자마다 중심점 재판정을 돌려 이름을 모은다 (MSG-439). 저장 라벨(grids.region_code)을 섞지 않고 전량
 	 * 중심점으로 가는 이유는 호출부인 행사 대표 격자에 grids row 가 없는 게 정상 케이스라, 저장 라벨 조회를
-	 * 먼저 태워봐야 대부분 miss 라서다. 판정 술어가 getCell 과 같아 두 경로의 답이 갈리지 않는다(MSG-349 FR-6).
+	 * 먼저 태워봐야 대부분 miss 라서다. 포함 판정 술어는 getCell 과 같지만, getCell 은 무귀속에서 최근접 폴백을 더 타므로(MSG-493)
+	 * 무귀속 격자에 한해 두 경로의 답이 다르다 — 여기는 종전대로 이름 없음이 의도된 동작이다(FR-REGION-11 예외).
 	 * 벌크 계약이지만 내부는 격자당 resolveByPoint(ST_Covers) 1회를 도는 루프다 — RegionQueryService 에
 	 * 다중 점 판정이 없고, 호출부가 소수 격자(행사 위치 목록 수준, 회차당 한 자릿수)라 스펙이 용인한 형태다.
 	 * 수백 건 규모 소비처가 생기면 점 배열을 한 번에 판정하는 벌크 쿼리로 올린다.

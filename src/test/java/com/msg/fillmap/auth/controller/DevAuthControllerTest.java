@@ -28,6 +28,7 @@ import com.msg.fillmap.auth.dto.LoginResponseDto;
 import com.msg.fillmap.auth.oidc.OidcUserInfo;
 import com.msg.fillmap.auth.service.OidcLoginService;
 import com.msg.fillmap.user.entity.AuthProvider;
+import com.msg.fillmap.user.repository.UserRepository;
 
 @WebMvcTest(DevAuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -43,6 +44,11 @@ class DevAuthControllerTest {
 	@Autowired
 	private ObjectMapper objectMapper;
 
+	/** WebConfig 가 등록하는 비밀번호 게이트 인터셉터(MSG-497)의 의존 — 이 슬라이스는 /api/org/** 를
+	 * 부르지 않아 동작에 관여하지 않는다. */
+	@MockitoBean
+	private UserRepository userRepository;
+
 	@MockitoBean
 	private OidcLoginService oidcLoginService;
 
@@ -50,7 +56,7 @@ class DevAuthControllerTest {
 	@DisplayName("성공: (provider, oid)로 액세스+리프레시를 발급하고 X-Device-Id 를 반환한다")
 	void socialLogin_success() throws Exception {
 		given(oidcLoginService.issueForOidcUser(eq(AuthProvider.KAKAO), any(OidcUserInfo.class), anyString()))
-			.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+			.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 		DevSocialLoginRequestDto request = new DevSocialLoginRequestDto("KAKAO", "dev-1", null, null);
 
 		mockMvc.perform(post(DEV_SOCIAL_LOGIN_URL)
@@ -66,7 +72,7 @@ class DevAuthControllerTest {
 	@DisplayName("provider 를 생략하면 KAKAO 로 처리한다")
 	void socialLogin_defaultProvider() throws Exception {
 		given(oidcLoginService.issueForOidcUser(eq(AuthProvider.KAKAO), any(OidcUserInfo.class), anyString()))
-			.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt"));
+			.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
 		DevSocialLoginRequestDto request = new DevSocialLoginRequestDto(null, "dev-2", null, null);
 
 		mockMvc.perform(post(DEV_SOCIAL_LOGIN_URL)

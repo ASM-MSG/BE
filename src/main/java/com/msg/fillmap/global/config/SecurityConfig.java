@@ -167,11 +167,32 @@ public class SecurityConfig {
 				// 재생의 명시 HEAD 매핑은 GET 한정 matcher 에 안 잡혀 익명 HEAD 가 401 이 된다 — 행사 영상
 				// 상세와 같은 이유로 같은 경로를 HEAD 로도 연다(접근 제어 없이 200, 전 id 동일이라 존재 오라클 아님).
 				.requestMatchers(HttpMethod.HEAD, "/api/videos/{videoId:[0-9]+}").permitAll()
+				// 비밀번호 재설정(MSG-497) — 비로그인 흐름이라 permitAll. 두 경로만 정확히 연다.
+				// /api/auth/password/** 로 넓히면 로그인 상태 전용인 status·change 까지 익명에 풀린다.
+				.requestMatchers("/api/auth/password/reset-request", "/api/auth/password/reset").permitAll()
+				// 행사 운영자 계정 발급 요청(MSG-499) — 계정이 없는 신청자의 폼이라 permitAll. POST 하나만 연다.
+				// 필터 skip 목록(PUBLIC_AUTH_PATHS)에는 넣지 않는다 — 토큰이 없으면 필터가 그냥 통과시키므로
+				// 접수에 문제가 없고, 무효 토큰을 동봉한 비정상 요청까지 검증을 건너뛸 이유가 없다(MSG-443 교훈).
+				.requestMatchers(HttpMethod.POST, "/api/org-account-requests").permitAll()
+				// 비밀번호 상태·변경(MSG-497) — 역할 무관 로그인 필수. 아래 catch-all 이 역할 제한이라
+				// authenticated 명시가 없으면 ORG(정작 주 사용자)가 403 이 된다.
+				.requestMatchers("/api/auth/password/status", "/api/auth/password/change").authenticated()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.
 				.requestMatchers("/api/admin/**").hasRole("ADMIN")
-				.anyRequest().authenticated()
+				// 행사 등재 콘솔(MSG-496) — 행사 운영자(ORG) 전용 프리픽스. ADMIN 에게 열지 않는다:
+				// 관리자는 자기 심사 API(/api/admin/**)를 쓰고, 콘솔 API 에는 소유권 검사가 걸린다.
+				.requestMatchers("/api/org/**").hasRole("ORG")
+				// ORG 도 쓰는 공용 경로 2개 — 아래 catch-all 이 역할 제한이라 여기서 명시 허용해야 한다.
+				// /me 는 GET 한정이다: 형제 쓰기 경로(닉네임·프로필 이미지 등)는 세그먼트가 달라 이 matcher 에
+				// 안 잡히고 catch-all 로 떨어져 ORG 에게 403 이 된다.
+				.requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
+				.requestMatchers("/api/auth/logout").authenticated()
+				// 행사 운영자 권한은 콘솔에만 미친다 (MSG-496 FR-5) — authenticated() 였으면 ORG 토큰이
+				// 영상 업로드·친구 같은 일반 사용자 API 를 그대로 통과한다. 익명은 여기서도 entry point 로
+				// 넘어가 지금과 같은 401 이다(403 아님).
+				.anyRequest().hasAnyRole("USER", "ADMIN")
 			)
 			.exceptionHandling(ex -> ex
 				.authenticationEntryPoint(authenticationEntryPoint)

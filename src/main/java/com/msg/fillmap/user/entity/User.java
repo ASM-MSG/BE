@@ -73,6 +73,22 @@ public class User {
 	private LocalDateTime lastLoginAt;
 
 	/**
+	 * 첫 로그인 비밀번호 강제 변경 플래그 (MSG-497 FR-21). true 면 {@code /api/org/**} 가 전부 2441 로
+	 * 막힌다 — 관리자가 발급한 초기 비밀번호를 발급자도 아는 상태에서는 행위자를 특정할 수 없어서다.
+	 * true 로 세우는 경로는 계정 발급(MSG-499)이고, 이 티켓은 해제만 한다.
+	 */
+	@Column(name = "password_must_change", nullable = false)
+	private boolean passwordMustChange;
+
+	/** 담당자 연락처 (MSG-497 FR-23). ORG 계정만 쓰는 값이라 null 허용 — 그 외 역할은 항상 null 이다. */
+	@Column(name = "contact_phone", length = 20)
+	private String contactPhone;
+
+	/** 기관명 (MSG-499 FR-1). 발급 계정(role ORG)만 쓰는 값이라 null 허용 — contactPhone 과 같은 방식. */
+	@Column(name = "org_name", length = 100)
+	private String orgName;
+
+	/**
 	 * 가입 시각. @CreationTimestamp 를 쓰지 않고 생성자에서 UTC 로 직접 넣는다 (MSG-376) —
 	 * 그 애너테이션은 JVM 기본 존의 벽시계를 만들어 KST 개발 머신에서 +9h 가 저장되는데, 이 값은
 	 * 응답에 실려 전역 코덱이 UTC 로 표기하므로 저장 축이 UTC 여야 한다.
@@ -173,6 +189,26 @@ public class User {
 			.build();
 	}
 
+	/**
+	 * 행사 운영자 계정 발급 (MSG-499 FR-1·2). 관리자 승인·직접 발급이 공유하는 유일한 생성 경로다.
+	 * 담당자 이름이 곧 nickname 이라는 전제는 MSG-497 이 세운 것이고, 강제 변경 플래그를 true 로
+	 * 세우는 코드 경로도 여기 하나뿐이다 — 발급자가 아는 초기 비밀번호로는 콘솔에 못 들어간다.
+	 */
+	public static User createOrgUser(String email, String encodedPassword, String contactName,
+		String contactPhone, String orgName) {
+		User user = User.builder()
+			.provider(AuthProvider.LOCAL)
+			.email(email)
+			.passwordHash(encodedPassword)
+			.nickname(contactName)
+			.role(UserRole.ORG)
+			.build();
+		user.contactPhone = contactPhone;
+		user.orgName = orgName;
+		user.passwordMustChange = true;
+		return user;
+	}
+
 	/** 닉네임 변경 (MSG-203). 길이 검증은 요청 DTO 몫 — 엔티티는 전달값을 그대로 반영한다(더티 체킹 UPDATE). */
 	public void updateNickname(String nickname) {
 		this.nickname = nickname;
@@ -185,5 +221,30 @@ public class User {
 	 */
 	public void changeProfileImage(String profileImageUrl) {
 		this.profileImageUrl = profileImageUrl;
+	}
+
+	/**
+	 * 비밀번호 교체 (MSG-497). 로그인 상태 변경과 이메일 재설정이 공유한다 — 어느 쪽이든 본인만 아는
+	 * 값이 되므로 강제 변경 플래그를 함께 내린다. 해시 계산·정책 검증은 서비스 몫이고 엔티티는
+	 * 전달값만 반영한다(updateNickname 과 같은 규칙).
+	 */
+	public void changePassword(String newPasswordHash) {
+		this.passwordHash = newPasswordHash;
+		this.passwordMustChange = false;
+	}
+
+	/**
+	 * 초기 비밀번호 재발급 (MSG-499 FR-2). 평문을 저장하지 않아 보냈던 값을 다시 보낼 수 없으므로,
+	 * 재발송은 새 비밀번호로의 교체다(이전 초기 비밀번호는 즉시 무효). {@link #changePassword} 와 달리
+	 * 강제 변경 플래그를 유지한다 — 발급자가 아는 값이라는 성질이 그대로다.
+	 */
+	public void resetInitialPassword(String newPasswordHash) {
+		this.passwordHash = newPasswordHash;
+	}
+
+	/** 담당자 이름·연락처 변경 (MSG-497 FR-23). ORG 계정의 nickname 이 곧 담당자 이름이다. */
+	public void updateOrgContact(String contactName, String contactPhone) {
+		this.nickname = contactName;
+		this.contactPhone = contactPhone;
 	}
 }

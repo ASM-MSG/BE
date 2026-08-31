@@ -142,6 +142,9 @@ public class MissionVideoServiceImpl implements MissionVideoService {
 	private Mission requireUploadable(Optional<Mission> found, LocalDateTime recordedAt) {
 		LocalDateTime now = LocalDateTime.now(clock);
 		return found
+			// 노출 중지된 미션은 업로드 대상이 아니다 (MSG-500 D-3) — 목록에서 빠진 미션에 계속 올릴 수 있으면
+			// 중지가 반쪽이 된다. 없는 미션과 같은 12409 로 수렴한다(존재 오라클을 열지 않는 기존 규칙).
+			.filter(mission -> mission.getHiddenAt() == null)
 			.filter(mission -> UPLOADABLE_TYPES.contains(mission.getType()))
 			.filter(mission -> mission.getRepresentativeGridId() != null)
 			.filter(mission -> within(mission, now))

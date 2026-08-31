@@ -36,6 +36,7 @@ import com.msg.fillmap.event.repository.EventNotificationSubscriptionRepository;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventSeriesRepository;
 import com.msg.fillmap.event.repository.EventVideoRepository;
+import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
@@ -67,6 +68,10 @@ import com.msg.fillmap.zone.service.ZoneNameQueryService;
 @Transactional
 @DisplayName("EventQueryService 행사 조회 (실 PostgreSQL)")
 class EventQueryServiceTest {
+
+	/** 참여형 위치의 커버 이미지 공개 주소 조립에만 쓰인다 — 시드 위치는 키가 없어 결과가 null 이다. */
+	private static final AwsProperties AWS_PROPERTIES = new AwsProperties("ap-northeast-2",
+		new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 
 	/** 고정 서버 시각 — 상태·노출 판정의 기준. UTC 저장 컬럼과 같은 축이라 존 스큐가 없다. */
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 6, 1, 0, 0);
@@ -137,7 +142,7 @@ class EventQueryServiceTest {
 	private EventQueryService service(LocalDateTime now) {
 		return new EventQueryServiceImpl(occurrenceRepository, locationRepository, locationGridRepository,
 			eventVideoRepository, gridQueryService, zoneNameQueryService, eventNotificationService,
-			Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+			AWS_PROPERTIES, Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 
 	/* ---------- 픽스처 ---------- */

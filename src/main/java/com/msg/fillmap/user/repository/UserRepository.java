@@ -4,13 +4,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.LockModeType;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.msg.fillmap.user.entity.AuthProvider;
 import com.msg.fillmap.user.entity.User;
+import com.msg.fillmap.user.entity.UserRole;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -39,6 +45,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	int insertOAuthUserIgnoreConflict(@Param("provider") String provider, @Param("oid") String oid,
 		@Param("email") String email, @Param("nickname") String nickname,
 		@Param("friendCode") String friendCode);
+
+	/**
+	 * 첫 로그인 비밀번호 강제 변경 게이트의 판정 쿼리 (MSG-497). PasswordChangeGateInterceptor 가
+	 * {@code /api/org/**} 요청마다 PK 조회 1회로 부른다 — 플래그 해제가 즉시 반영돼야 해서
+	 * JWT 클레임(발급 시점 스냅숏)이 아니라 DB 를 본다.
+	 */
+	boolean existsByIdAndPasswordMustChangeTrue(Long id);
 
 	/** 친구 코드로 상대 특정 (MSG-185) — friend 도메인의 미리보기·요청이 소비한다. */
 	Optional<User> findByFriendCode(String friendCode);
@@ -141,4 +154,43 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	 */
 	@Query(value = "SELECT id FROM users WHERE id = :userId FOR KEY SHARE", nativeQuery = true)
 	Optional<Long> findIdForKeyShare(@Param("userId") Long userId);
+
+	/**
+	 * 비밀번호를 쓰는 세 경로의 공용 잠금 조회 (MSG-499 API 7) — 초기 비밀번호 재발송, 본인 변경
+	 * (PasswordService.changePassword), 재설정(PasswordService.resetPassword).
+	 *
+	 * <p>한 경로만 잠그면 직렬화가 성립하지 않는다: 잠금 없이 읽은 낡은 엔티티가 마지막에 커밋하면
+	 * 그사이 커밋된 변경을 되덮는다(lost update). 재발송이 방금 사용자가 정한 비밀번호를 무효화하고
+	 * 강제 변경 플래그를 되세우는 상태 훼손이 그 구체적 형태라, 이 행을 쓰는 경로를 전부 여기로 모은다.
+	 */
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	Optional<User> findWithLockById(Long id);
+
+	/**
+	 * 관리자 계정 목록 (MSG-499 API 8) — 재발송 대상 식별과 직접 발급 크래시 복구의 확인 수단이다.
+	 * 이 티켓의 발급 경로가 만드는 형태(ORG·LOCAL)로 좁히므로, provider 가 LOCAL 이 아닌 ORG 계정은
+	 * 재발송 대상도 복구 판정 대상도 아니라 목록에서 빠진다(fail-safe).
+	 */
+	Page<User> findAllByRoleAndProviderOrderByCreatedAtDesc(UserRole role, AuthProvider provider,
+		Pageable pageable);
+
+	/** 이메일 완전 일치 필터 — 결과 유무가 곧 직접 발급 성공 여부다(위 목록과 같은 ORG·LOCAL 조건). */
+	Page<User> findAllByRoleAndProviderAndEmailOrderByCreatedAtDesc(UserRole role, AuthProvider provider,
+		String email, Pageable pageable);
+
+	/**
+	 * 로그인 아이디(이메일) 교체 (MSG-500 D-13) — 관리자가 아이디 변경 요청을 승인할 때만 부른다.
+	 *
+	 * <p><b>엔티티 더티 체킹이 아니라 단일 컬럼 UPDATE 인 것이 계약이다.</b> 이 프로젝트는
+	 * {@code @DynamicUpdate} 를 쓰지 않아 관리 엔티티의 flush 가 전 컬럼 UPDATE 를 내보낸다 — 그 경로로
+	 * 교체하면 이메일 승인과 본인의 비밀번호·담당자 수정이 겹칠 때 낡은 승인 스냅숏이 다른 컬럼을 되돌린다.
+	 *
+	 * <p>동시에, 이 문장은 유니크 위반을 <b>실행 즉시</b> 드러낸다. 승인 서비스의 선검사는 경합에 지므로
+	 * (서로 다른 두 요청이 같은 이메일을 노리면 둘 다 통과한다) uq_users_email 위반이 잡을 자리가 필요한데,
+	 * 벌크 UPDATE 는 커밋까지 미뤄지지 않고 여기서 DataIntegrityViolationException 으로 터진다.
+	 * 반환은 영향 행 수 — 0 이면 그 사이 탈퇴한 사용자라 호출자가 1404 로 바꾼다.
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query("UPDATE User u SET u.email = :email WHERE u.id = :userId")
+	int updateEmail(@Param("userId") Long userId, @Param("email") String email);
 }

@@ -33,7 +33,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 		PathPatternRequestMatcher.pathPattern("/api/auth/login"),
 		PathPatternRequestMatcher.pathPattern("/api/auth/oauth/**"),
 		PathPatternRequestMatcher.pathPattern("/api/auth/reissue"),
-		PathPatternRequestMatcher.pathPattern("/api/auth/dev/**")
+		PathPatternRequestMatcher.pathPattern("/api/auth/dev/**"),
+		// 비밀번호 재설정(MSG-497) — 만료 토큰이 헤더에 실려 와도 비로그인 재설정이 막히면 안 되므로
+		// 토큰을 아예 무시한다. 로그인 상태 전용인 status·change 는 여기 없다(인증이 필요하다).
+		PathPatternRequestMatcher.pathPattern("/api/auth/password/reset-request"),
+		PathPatternRequestMatcher.pathPattern("/api/auth/password/reset")
 	);
 
 	private final TokenProvider tokenProvider;

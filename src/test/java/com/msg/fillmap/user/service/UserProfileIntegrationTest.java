@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import software.amazon.awssdk.services.s3.S3Client;
@@ -21,6 +22,7 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.dto.UserProfileResponseDto;
 import com.msg.fillmap.user.entity.AuthProvider;
 import com.msg.fillmap.user.entity.User;
+import com.msg.fillmap.user.entity.UserRole;
 import com.msg.fillmap.user.exception.UserErrorCode;
 import com.msg.fillmap.user.repository.UserRepository;
 
@@ -64,6 +66,19 @@ class UserProfileIntegrationTest {
 
 		assertThat(profile.email()).isEqualTo(email);
 		assertThat(profile.nickname()).isEqualTo("채우미");
+	}
+
+	// 검증: FR-AUTH-14
+	@Test
+	@DisplayName("내 프로필 응답에 역할이 실린다 — 화면 진입 분기 재료 (MSG-496)")
+	void 내_프로필_응답에_역할이_실린다() {
+		assertThat(userService.getMyProfile(userId).role()).isEqualTo("USER");
+
+		User organizer = User.createLocalUser("org-" + UUID.randomUUID() + "@example.com", "hash", "행사운영자");
+		ReflectionTestUtils.setField(organizer, "role", UserRole.ORG);
+		long organizerId = userRepository.save(organizer).getId();
+
+		assertThat(userService.getMyProfile(organizerId).role()).isEqualTo("ORG");
 	}
 
 	// 검증: FR-USER-02

@@ -81,6 +81,22 @@ class OidcLoginServiceTest {
 			verify(userRepository, never()).insertOAuthUserIgnoreConflict(any(), any(), any(), any(), any());
 		}
 
+		// 검증: FR-AUTH-14
+		@Test
+		@DisplayName("성공: 카카오 로그인 응답에는 USER 역할이 실린다 — 소셜 가입자는 항상 일반 사용자 (MSG-496)")
+		void 카카오_로그인_응답에는_USER_역할이_실린다() {
+			given(kakaoVerifier.verify("id-token")).willReturn(info);
+			User existing = User.createOAuthUser(AuthProvider.KAKAO, info.oid(), info.email(), info.nickname());
+			ReflectionTestUtils.setField(existing, "id", 11L);
+			given(userRepository.findByProviderAndOid(AuthProvider.KAKAO, info.oid())).willReturn(Optional.of(existing));
+			given(tokenProvider.issueAccessToken(11L, UserRole.USER)).willReturn("jwt-token");
+			given(refreshTokenService.issue(11L, "device-1")).willReturn("refresh-token");
+
+			LoginResponseDto response = oidcLoginService.login(AuthProvider.KAKAO, "id-token", "device-1");
+
+			assertThat(response.role()).isEqualTo("USER");
+		}
+
 		// 검증: FR-AUTH-01
 		@Test
 		@DisplayName("성공: 처음 로그인하는 유저면 자동 가입 후 토큰을 발급한다")

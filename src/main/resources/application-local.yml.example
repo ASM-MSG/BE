@@ -39,3 +39,9 @@ oauth:
     client-id: CHANGE_ME_KAKAO_CLIENT_ID
     # http://localhost 는 Secure 쿠키를 저장하지 않는다 — 켜두면 nonce 쿠키가 안 실려 웹 로그인이 전부 2423 (MSG-345)
     nonce-cookie-secure: false
+
+# 메일 발송 (MSG-497) — 로컬은 실발송 없이 LoggingMailSender 가 링크를 로그로 찍는다.
+# 이 base URL 은 로그에 찍히는 재설정 링크의 앞부분이다 (화면 라우트는 FE 확정 몫).
+fillmap:
+  mail:
+    reset-link-base-url: http://localhost:5173/reset-password

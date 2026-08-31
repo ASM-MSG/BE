@@ -54,6 +54,7 @@ import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.dto.MissionAwardResult;
+import com.msg.fillmap.mission.exception.MissionErrorCode;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
@@ -579,6 +580,11 @@ public class VideoServiceImpl implements VideoService {
 	@Override
 	@Transactional(readOnly = true)
 	public GridVideoPageResponseDto getMissionVideos(long missionId, String cursor, int size) {
+		// 노출 중지된 미션은 미션 상세와 같은 404 다 (MSG-500 D-3) — 빈 200 을 주면 목록에서 사라진 미션이
+		// "존재하지만 비어 있다"로 읽혀, 알던 missionId 로 존재를 확인하는 경로가 남는다.
+		if (videoRepository.isMissionHidden(missionId)) {
+			throw new ApiException(MissionErrorCode.MISSION_NOT_FOUND);
+		}
 		int pageSize = size < 1 ? GLOBAL_PAGE_DEFAULT_SIZE : Math.min(size, GLOBAL_PAGE_MAX_SIZE);
 		List<Video> rows = queryMissionPage(missionId, cursor, pageSize + 1);
 		boolean hasNext = rows.size() > pageSize;

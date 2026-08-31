@@ -8,6 +8,7 @@ import com.msg.fillmap.event.dto.EventLocationResponseDto;
 import com.msg.fillmap.event.dto.EventOccurrenceChipResponseDto;
 import com.msg.fillmap.event.dto.EventOccurrenceDetailResponseDto;
 import com.msg.fillmap.event.dto.GridEventLocationResponseDto;
+import com.msg.fillmap.event.dto.OrgEventListResponseDto;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 
 /**
@@ -16,6 +17,10 @@ import com.msg.fillmap.grid.dto.ViewportBounds;
  * 네 조회가 공유하는 규칙 둘: 상태는 {@code EventOccurrence.statusAt} 파생값 하나고, 미노출 예정 회차
  * (UPCOMING 인데 visibleFrom 이 아직 미래)는 목록·역조회에서 빠지고 id 직접 조회에서는 없는 회차와 같은
  * 404(13404)다 — 다른 응답을 주면 순차 id 대입만으로 미공개 행사의 존재가 드러난다.
+ * <p>
+ * 두 규칙의 적용 범위는 유저 대면 네 조회다. 콘솔 조회({@link #getApprovedEvents}, MSG-501)는 둘 다
+ * 의도적으로 벗어난다 — 노출 조건이 저장 컬럼 하나(endsAt)라 statusAt 을 거치지 않고, 미노출 예정 회차도
+ * 그대로 담는다(결정 D-1·D-2). 유저 경로에 이 예외를 옮겨 붙이면 존재 은닉이 깨진다.
  */
 public interface EventQueryService {
 
@@ -41,6 +46,13 @@ public interface EventQueryService {
 	 * 키가 없는 회차는 위치가 없거나 미노출(존재 은닉 — 단건 조회의 13404 와 같은 결) 회차다.
 	 */
 	Map<Long, List<LocationPoint>> getLocationsBulk(Collection<Long> occurrenceIds);
+
+	/**
+	 * 행사 운영자 콘솔의 승인 이벤트 목록 (MSG-501). 종료 전 회차만 담기고, 유저 조회와 달리 노출 시작 전
+	 * 예정 회차도 담긴다 (결정 D-1·D-2). city 는 시·도 정확 일치, name 은 이벤트 이름 부분 일치(대소문자
+	 * 무시)이며 둘 다 null 이면 전체다 — 없는 시·도 값은 실패가 아니라 빈 목록이다.
+	 */
+	OrgEventListResponseDto getApprovedEvents(String city, String name);
 
 	/** 위치 지점 경량 표현 — 대표 좌표는 소비처가 대표 격자에서 산출한다 (GridEncoder.center). */
 	record LocationPoint(String name, String representativeGridId) {

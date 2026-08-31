@@ -174,6 +174,10 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 		if (!link.getLocation().getOccurrence().isVisibleAt(now)) {
 			throw new ApiException(EventErrorCode.EVENT_VIDEO_NOT_FOUND);
 		}
+		// 중지된 위치의 영상은 댓글·도움돼요도 막힌다 (MSG-500 D-3) — 상세와 같은 술어여야 화면이 갈리지 않는다.
+		if (link.getLocation().getHiddenAt() != null) {
+			throw new ApiException(EventErrorCode.EVENT_VIDEO_NOT_FOUND);
+		}
 		return link;
 	}
 
