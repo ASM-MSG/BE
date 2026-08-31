@@ -133,7 +133,8 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		}
 		long startMillis = clock.millis();
 		long[] spans = {-1L, -1L};	// [parse_ms, explain_ms] — 도달 전 실패는 -1 로 남는다
-		int[] counts = {0, 0};	// [interests, matched] (MSG-514 §도메인 로직 5) — 도달 전 실패는 0 으로 남는다
+		// [interests, matched, trimmed] (MSG-514 §도메인 로직 5 · MSG-515 결정 3) — 도달 전 실패는 0 으로 남는다
+		int[] counts = {0, 0, 0};
 		RateLimitClaim claim = null;	// 청구 자체가 거부(14429)되면 null 그대로다 — 지표 exempt=false
 		try {
 			claim = claimRateLimitWindow(userId, startMillis);
@@ -170,7 +171,6 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		// 재현한다. 결과는 아래 두 반환 경로(빈 후보 조기 반환·정상 assemble) 모두에 실린다 (§판정 위치).
 		MentionedAreaDto mentionedArea = mentionedAreaResolver.resolve(intent.region(), bounds);
 		List<RouteCandidate> candidates = candidateCollector.collect(bounds, intent);
-		counts[1] = (int) candidates.stream().filter(candidate -> candidate.matchedInterest() != null).count();
 		if (candidates.isEmpty()) {
 			// 빈 후보는 explain 을 부르지 않는다 (FR-ROUTE-07) — AI 계약이 points 0개를 422 로 거부하므로
 			// 태우면 성공이어야 할 응답이 14502 실패로 뒤집힌다 (§도메인 로직 도입부 분기).
@@ -179,6 +179,14 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		}
 		List<RouteCandidate> ordered = RouteOrderPlanner.order(candidates, intent.preferredOrder(), request.origin(),
 			(viewport.minLat() + viewport.maxLat()) / 2, (viewport.minLng() + viewport.maxLng()) / 2);
+		// matched 는 절단 후 응답 시퀀스에서 센다 (MSG-515 결정 3) — 분모(points)와 같은 집합이어야 비율이 성립한다.
+		counts[1] = (int) ordered.stream().filter(candidate -> candidate.matchedInterest() != null).count();
+		counts[2] = candidates.size() - ordered.size();
+		if (ordered.isEmpty()) {
+			// 도보 예산 절단(MSG-515)으로 빈 동선 — explain 계약이 points 0개를 422 로 거부하므로 태우지 않고
+			// 빈 후보 조기 반환과 같은 형태로 합류한다 (§도메인 로직 도입부 분기와 같은 이유).
+			return new RouteRecommendResponseDto(List.of(), EMPTY_NOTICE, mentionedArea);
+		}
 
 		long explainStart = clock.millis();
 		List<String> reasons = intentClient.explain(explainPoints(ordered));
@@ -327,15 +335,17 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	 * 지표 로그 (비기능 운영) — 사용자 문장 원문과 AI 응답 원문은 남기지 않는다. 집계는 이 라인으로 한다.
 	 * signal 은 언급 지역 신호 발화 빈도의 실측 재료다 (MSG-468 §지표 로그) — 지역 이름 자체는 남기지 않는다.
 	 * exempt 는 자동 이동 재요청 예외 발동 빈도 — 비용 조항(한 실행에 요청 최대 두 번)의 실측 재료다 (MSG-487).
-	 * interests(해석의 비공백 관심사 수)·matched(선별 지점 중 일치 수)는 일치 비율 matched/points 의 재료다
-	 * (MSG-514 §도메인 로직 5) — 관심사 원문은 종전 정책대로 남기지 않아 비율 추이로만 관측한다.
+	 * interests(해석의 비공백 관심사 수)·matched(절단 후 응답 지점 중 일치 수 — MSG-515 결정 3 재계산)는
+	 * 일치 비율 matched/points 의 재료다 (MSG-514 §도메인 로직 5) — 관심사 원문은 종전 정책대로 남기지 않아
+	 * 비율 추이로만 관측한다. trimmed(선별 후보 수 - 절단 후 지점 수)는 도보 예산 상한의 발동 빈도와 강도의
+	 * 실측 재료다 (MSG-515 결정 3) — 절단으로 빈 목록이 된 응답은 points=0 에 trimmed=선별 수로 구분된다.
 	 */
 	private void logMetrics(String outcome, long startMillis, long[] spans, int points, String signal,
 		boolean exempt, int[] counts) {
 		log.info("[route] outcome={} total_ms={} parse_ms={} explain_ms={} points={} signal={} exempt={}"
-				+ " interests={} matched={}",
+				+ " interests={} matched={} trimmed={}",
 			outcome, clock.millis() - startMillis, spans[0], spans[1], points, signal, exempt,
-			counts[0], counts[1]);
+			counts[0], counts[1], counts[2]);
 	}
 
 	/** 신호 지표 값 — none·move·zoom_out (MSG-468 §지표 로그). */
