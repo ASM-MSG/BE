@@ -62,6 +62,7 @@ import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.region.service.RegionQueryService.MentionedRegionMatch;
 import com.msg.fillmap.route.config.RouteAiProperties;
 import com.msg.fillmap.route.dto.RouteRecommendRequestDto;
+import com.msg.fillmap.route.dto.RouteRecommendRequestDto.OriginDto;
 import com.msg.fillmap.route.dto.RouteRecommendRequestDto.ViewportDto;
 import com.msg.fillmap.route.dto.RouteRecommendResponseDto;
 import com.msg.fillmap.route.dto.RouteRecommendResponseDto.MentionedAreaDto;
@@ -665,6 +666,108 @@ class RouteRecommendServiceTest {
 					.filter(message -> message.contains("outcome="))
 					.findFirst().orElseThrow();
 				assertThat(line).contains("interests=1").contains("matched=1");
+			} finally {
+				logger.detachAppender(appender);
+			}
+		}
+	}
+
+	@Nested
+	@DisplayName("도보 예산 절단 (MSG-515) — 절단 후 목록만 explain·응답·지표에 실린다")
+	class WalkBudgetTrim {
+
+		private static final ViewportDto 서울_뷰포트 = new ViewportDto(37.45, 126.85, 37.65, 127.10);
+
+		/** 세 번째 지점이 보정 누적 13,010m 로 잘리는 배치 — 순서는 카페→서점→먼곳이고 두 지점이 남는다. */
+		private List<RouteCandidate> 넓은_배치_후보() {
+			return List.of(장소후보("카페", 35.15, 129.08), 장소후보("서점", 35.16, 129.08),
+				장소후보("먼곳", 35.24, 129.08));
+		}
+
+		// 검증: FR-ROUTE-13
+		@Test
+		@DisplayName("절단된 지점은 explain 에도 응답에도 실리지 않는다 — AI 입력과 응답 points 가 절단 후 수로 일치")
+		void 절단된_지점은_explain에도_응답에도_실리지_않는다() {
+			given(collector.collect(any(), any())).willReturn(넓은_배치_후보());
+			parse는_빈해석을_준다();
+			server.expect(requestTo(EXPLAIN_URL))
+				.andExpect(jsonPath("$.points.length()", is(2)))
+				.andRespond(withSuccess("{\"reasons\": [\"r1\", \"r2\"]}", MediaType.APPLICATION_JSON));
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
+
+			assertThat(response.points()).extracting(RoutePointDto::name).containsExactly("카페", "서점");
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-13
+		@Test
+		@DisplayName("절단으로 빈 목록이면 explain 없이 빈 응답과 안내가 온다 — 언급 지역 신호도 동봉된다")
+		void 절단으로_빈_목록이면_explain_없이_빈_응답과_안내가_온다() {
+			// origin(서울 남서귀)→유일 후보(북동귀)가 직선 약 31km — 첫 구간부터 상한 초과라 동선이 빈다.
+			given(collector.collect(any(), any())).willReturn(List.of(장소후보("카페", 37.65, 127.10)));
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(
+				new MentionedRegionMatch("부산광역시", 35.1985, 129.0538,
+					35.0512, 128.7602, 35.3891, 129.2723, false)));
+			server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
+				"{\"region\": \"부산\", \"period\": null, \"interests\": [], \"preferred_order\": []}",
+				MediaType.APPLICATION_JSON));	// explain 기대는 걸지 않는다 — 나갔다면 verify 가 실패한다
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, new RouteRecommendRequestDto(
+				"부산 축제 보고 싶어", 서울_뷰포트, new OriginDto(37.45, 126.85)));
+
+			assertThat(response.points()).isEmpty();
+			assertThat(response.notice())
+				.isEqualTo("조건에 맞는 곳을 찾지 못했어요. 문장을 바꾸거나 다른 지역에서 다시 짜 보세요.");
+			assertThat(response.mentionedArea()).isNotNull();	// 빈 후보 조기 반환과 같은 형태로 합류한다
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-13
+		@Test
+		@DisplayName("절단으로 2개가 남으면 기존 부족 안내가 붙는다 — FR-ROUTE-07 임계 동작 불변, 축소 전용 안내 없음")
+		void 절단으로_2개가_남으면_기존_부족_안내가_붙는다() {
+			given(collector.collect(any(), any())).willReturn(넓은_배치_후보());
+			parse는_빈해석을_준다();
+			explain은_이유를_준다("r1", "r2");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
+
+			assertThat(response.points()).hasSize(2);
+			assertThat(response.notice())
+				.isEqualTo("조건에 맞는 곳을 2곳만 찾았어요. 문장을 바꾸거나 다른 지역에서 다시 짜 보세요.");
+		}
+
+		// 검증: FR-ROUTE-13
+		@Test
+		@DisplayName("지표 로그에 trimmed 가 남는다 — 축소 발동 시 matched 는 응답에 남은 일치 지점 수다 (결정 3)")
+		void 지표_로그에_trimmed가_남는다() {
+			Logger logger = (Logger) LoggerFactory.getLogger(RouteRecommendServiceImpl.class);
+			ListAppender<ILoggingEvent> appender = new ListAppender<>();
+			appender.start();
+			logger.addAppender(appender);
+			try {
+				RouteCandidate 일치근처 = new RouteCandidate("국밥 골목", Kind.PLACE, 35.15, 129.08,
+					GridEncoder.encode(35.15, 129.08), null, null, null, null, "맛집", List.of());
+				RouteCandidate 일치먼곳 = new RouteCandidate("먼 국밥집", Kind.PLACE, 35.24, 129.08,
+					GridEncoder.encode(35.24, 129.08), null, null, null, null, "맛집", List.of());
+				RouteCandidate 미일치 = 장소후보("서점", 35.151, 129.08);
+				given(collector.collect(any(), any()))
+					.willReturn(List.of(일치근처, 일치먼곳, 미일치))	// 첫 요청 — 일치 먼곳부터 접두 절단
+					.willReturn(List.of(일치근처, 미일치));	// 둘째 요청 — 좁은 배치라 무축소
+				parse는_관심사를_준다("맛집");	// parse 기대는 한 번 — 둘째 요청은 캐시 히트다
+				explain은_이유를_준다("r1");
+				explain은_이유를_준다("r1", "r2");
+
+				service.recommend(USER_ID, 요청());
+				clock.advance(Duration.ofSeconds(10));
+				service.recommend(USER_ID, 요청());
+
+				List<String> lines = appender.list.stream().map(ILoggingEvent::getFormattedMessage)
+					.filter(message -> message.contains("outcome=")).toList();
+				// 선별 3 - 응답 1 = trimmed 2. 일치 후보는 둘이었지만 matched 는 절단 후 목록의 1이다 (결정 3).
+				assertThat(lines.get(0)).contains("points=1").contains("matched=1").contains("trimmed=2");
+				assertThat(lines.get(1)).contains("points=2").contains("trimmed=0");
 			} finally {
 				logger.detachAppender(appender);
 			}
