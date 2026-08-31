@@ -58,5 +58,8 @@ __pycache__/
 ### OMC 런타임 상태 (세션 id·타임스탬프가 실행마다 바뀐다 — 버전 관리 대상 아님)
 .omc/state/
 .omc/logs/
+
+### 스킬 호출 로그 (MSG-529) — PostToolUse hook이 세션마다 쌓는 런타임 기록
+.claude/logs/
 .omc/notepad.md
 .omc/project-memory.json
