@@ -14,6 +14,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 - `@.claude/rules/coding-principles.md` — 코딩 행동 원칙 (Karpathy 4원칙)
 - `@.claude/rules/project-conventions.md` — 네이버 Java 컨벤션 · DTO 네이밍
 - `@.claude/rules/response-pattern.md` — 공통 응답 · 예외 처리 패턴
+- `@.claude/rules/agent-response-contract.md` — 에이전트 응답 컨트랙트 (작업 마무리 응답 형식 · 카나리)
 - `@.claude/rules/subagent-orchestration.md` — 서브에이전트 팀 운영 원칙 (에이전트 팀 스킬 실행 시)
 
 ## Reference — 필요 시 참조 (문서)
@@ -144,6 +145,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 | 2026-08-15 | convention-reviewer 정의에 `model: opus` 고정 — 07-26 전면 상속 결정의 부분 번복(reviewer 한정), subagent-orchestration.md에 예외 명문화 | convention-reviewer, rules/subagent-orchestration.md | 사용량 보고 실측 — 사용량 100%가 서브에이전트 헤비 세션이고 Fable 주간 소진(36%)이 전체(20%)를 크게 앞섬. 체크리스트 검증(빌드 실행·컨벤션 grep·계약 대조)은 기계적이라 Fable 불요, 성민 지시. general-purpose 단순 조회도 호출 시 `model: "opus"` 명시(메모리 규칙, 2026-07-30 확정의 재확인) |
 | 2026-08-14 | 마무리에 SRS 상태 갱신·rtm 재생성 단계 신설 (finalize.md 2-1) — 테스트에 `// 검증: FR-...` 주석을 먼저 달고, 요구사항 상태와 검증 테스트를 같은 브랜치에 함께 커밋한다. 일부 구현은 `구현됨`이 아니라 `진행 중` | spec-driven-dev (finalize.md) | MSG-390 실측 — 마무리에 status.md와 작업 로그는 있었지만 SRS·rtm이 없어, 구현된 요구가 `계획`으로 실리고 연결 테스트 0건인 채 develop에 머지됐다. 뒤늦게 문서 브랜치에서 상태만 올리자 CI의 RTM 신선도 검사가 막았다(그 브랜치엔 테스트가 없어 검증 공백 1건). 상태와 검증을 갈라 커밋하면 추적이 끊긴다는 것이 이 단계의 요지 |
 | 2026-08-31 | 스킬 정의 이원화 해소 — `.agents/skills` 사본 10개를 `.claude/skills` 심볼릭 링크로 대체, 재분기는 CI 가드가 차단 | 전체 스킬 | `.agents` 미러(MSG-336)가 생성 하루 만에 갈라져 4종 전부 판본이 어긋남 — Codex 세션이 낡은 커밋 게이트·리뷰 루프 절차를 읽던 상태. 정본은 `.claude`(08-13 이후 개정 4건이 이쪽에만 쌓임 — 내용 대조로 판정), 링크 방향은 실패 비용 비대칭(`.claude` 링크화는 Claude Code 추종 미검증, `.agents`는 소비자 0)으로 티켓 제안을 번복해 성민 승인 (MSG-525) |
+| 2026-08-31 | 에이전트 응답 컨트랙트 신설 — 작업 마무리 응답에 Applied rules·Applied skills(없으면 "없음" 명시)·Why this routing·수정하지 않은 파일 4항목 MUST, 존댓말 카나리로 컨텍스트 유실 판정 | rules/agent-response-contract.md(신설), CLAUDE.md, AGENTS.md, 전체 에이전트 | 2026-08-29 멘토 리뷰 — 에이전트가 잘못 동작해도 어떤 룰·스킬·라우팅을 탔는지 기록이 없어 되짚을 수단이 없음(.claude 전체 grep 0건). 리뷰를 통째로 건너뛴 사고를 결과를 보고서야 발견한 실측 — 컨트랙트가 있었으면 "Applied skills: 없음"이 그 자리에서 보였다. 형식 자체가 유실 탐지기 (MSG-527) |
 
 ## Quick Commands
 

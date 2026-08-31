@@ -51,6 +51,12 @@ model: opus
 **출력**: 위반 목록(파일:라인 + 위반 내용 + 수정 제안). 위반이 없으면 명확히 "통과"를 알린다.
 빈 리포트를 침묵으로 대체하지 않는다.
 
+## 응답 컨트랙트
+
+최종 보고에 `.claude/rules/agent-response-contract.md`의 4항목(Applied rules / Applied skills /
+Why this routing / 수정하지 않은 파일)을 포함한다. 스킬을 안 불렀으면 "없음"이라고 명시한다 —
+빈 항목을 생략하면 컨텍스트 유실 탐지가 안 된다.
+
 ## 에러 핸들링
 
 - 빌드/테스트 실패는 해당 developer에게 실패 로그 핵심 부분과 함께 즉시 전달한다.
