@@ -120,9 +120,13 @@ SPEC_DIR=docs/spec
 AC_RE='\bAC-[0-9]+-[0-9]+'
 
 # 최상위 불릿 "- AC-494-01: ..." 만 정의로 친다. 본문 참조·인용까지 정의로 치면 중복이 쏟아진다.
-ac_pairs=$( (grep -rE '^- AC-[0-9]+-[0-9]+: ' "$SPEC_DIR" 2>/dev/null || true) \
-	| sed 's|^.*/\([^/:]*\)\.md:- \(AC-[0-9]*-[0-9]*\): .*|\1 \2|' | sort -u)
-ac_dups=$(printf '%s\n' "$ac_pairs" | awk 'NF { print $2 }' | sort | uniq -d)
+# 중복 판정은 정제(sort -u) 전의 원시 목록으로 한다. 같은 파일 안에서 순번을 안 올리고 복사한
+# 중복은 판정문을 버리고 나면 (스펙, ID) 쌍이 완전히 같아져 sort -u 뒤에는 흔적이 없다 —
+# 정제본으로 검사하면 파일 간 충돌만 잡히고 파일 내 복붙은 항목이 조용히 사라진다 (PR #253 리뷰).
+ac_pairs_raw=$( (grep -rE '^- AC-[0-9]+-[0-9]+: ' "$SPEC_DIR" 2>/dev/null || true) \
+	| sed 's|^.*/\([^/:]*\)\.md:- \(AC-[0-9]*-[0-9]*\): .*|\1 \2|')
+ac_dups=$(printf '%s\n' "$ac_pairs_raw" | awk 'NF { print $2 }' | sort | uniq -d)
+ac_pairs=$(printf '%s\n' "$ac_pairs_raw" | sort -u)
 
 ac_rows=""
 ac_gap=""
@@ -223,7 +227,7 @@ ac_gap_count=$(printf '%s' "$ac_gap" | grep -c '^-' || true)
 	echo
 	if [ -n "$ac_malformed" ]; then printf '%s\n' "$ac_malformed" | sed 's/^/- /'; else echo "(없음)"; fi
 	echo
-	echo "## 중복 정의된 AC ID (스펙 두 곳 이상에서 같은 번호)"
+	echo "## 중복 정의된 AC ID (같은 번호가 두 번 이상 정의됨 — 파일 내 복붙·파일 간 충돌 모두)"
 	echo
 	if [ -n "$ac_dups" ]; then printf '%s\n' "$ac_dups" | sed 's/^/- /'; else echo "(없음)"; fi
 } > "$OUT"
