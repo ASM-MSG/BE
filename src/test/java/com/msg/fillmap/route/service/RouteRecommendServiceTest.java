@@ -479,6 +479,133 @@ class RouteRecommendServiceTest {
 	}
 
 	@Nested
+	@DisplayName("무관 문장 (MSG-513 FR-ROUTE-19) — related=false 소비")
+	class Unrelated {
+
+		private static final String 무관_안내 =
+			"장소 방문 동선을 짜 드리는 기능이에요. 가고 싶은 지역이나 관심사를 문장에 담아 다시 요청해 보세요.";
+
+		private void parse는_무관판정을_준다(String region) {
+			String regionJson = region == null ? "null" : "\"" + region + "\"";
+			server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
+				"{\"region\": " + regionJson + ", \"period\": null, \"interests\": [], \"preferred_order\": [],"
+					+ " \"related\": false}",
+				MediaType.APPLICATION_JSON));
+		}
+
+		private void parse는_관련_해석을_준다(String regionJson, String interestsJson) {
+			server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
+				"{\"region\": " + regionJson + ", \"period\": null, \"interests\": " + interestsJson
+					+ ", \"preferred_order\": [], \"related\": true}",
+				MediaType.APPLICATION_JSON));
+		}
+
+		// 검증: FR-ROUTE-19, AC-513-01, AC-513-09, AC-513-10
+		@Test
+		@DisplayName("무관 문장이면 빈 목록과 전용 안내가 오고 후속 단계를 부르지 않는다 — AI 호출은 parse 1회뿐")
+		void 무관_문장이면_빈_목록과_전용_안내가_오고_후속_단계를_부르지_않는다() {
+			// 지역 표기가 섞인 무관 문장 — resolve 가 불렸다면 이 매칭으로 MOVE 신호가 실려 null 단언이 깨진다.
+			given(regionQueryService.matchMentionedRegions(any(), any())).willReturn(List.of(
+				new MentionedRegionMatch("부산광역시", 35.1985, 129.0538,
+					35.0512, 128.7602, 35.3891, 129.2723, false)));
+			parse는_무관판정을_준다("부산");	// explain 기대는 걸지 않는다 — 나갔다면 verify 가 실패한다
+
+			RouteRecommendResponseDto response =
+				service.recommend(USER_ID, 문장요청("부산 사투리로 코드 주석 써 줘"));
+
+			assertThat(response.points()).isEmpty();
+			assertThat(response.notice()).isEqualTo(무관_안내);
+			assertThat(response.mentionedArea()).isNull();	// 자동 이동 재요청 예외(MSG-487)도 안 열린다
+			then(collector).shouldHaveNoInteractions();	// 후보 수집 미도달
+			then(regionQueryService).shouldHaveNoInteractions();	// 언급 지역 판정 미도달
+			server.verify();	// AI 호출은 parse 1회뿐 — explain 이 나갔다면 여기서 실패한다
+		}
+
+		// 검증: FR-ROUTE-19, AC-513-02
+		@Test
+		void 무관_안내는_후보_없음_안내와_문구가_다르다() {
+			given(collector.collect(any(), any())).willReturn(List.of());
+			parse는_무관판정을_준다(null);	// 요청 1 — 무관
+			parse는_빈해석을_준다();	// 요청 2 — 관련이지만 후보 0건 (문장이 달라 캐시 미스)
+
+			RouteRecommendResponseDto 무관 = service.recommend(USER_ID, 문장요청("롤 정글 동선 짜 줘"));
+			clock.advance(Duration.ofSeconds(10));
+			RouteRecommendResponseDto 빈후보 = service.recommend(USER_ID, 문장요청("이 근처 축제 보고 싶어"));
+
+			assertThat(무관.notice()).isEqualTo(무관_안내);
+			assertThat(빈후보.notice()).isNotNull().isNotEqualTo(무관.notice());
+		}
+
+		// 검증: FR-ROUTE-19, AC-513-03
+		@Test
+		@DisplayName("related 가 true 면 빈 해석이어도 기존 추천이 나온다 — 지역만·관심사만·전 필드 빈 해석 세 경계")
+		void related가_true면_빈_해석이어도_기존_추천이_나온다() {
+			given(collector.collect(any(), any())).willReturn(List.of(장소후보("카페", 35.15, 129.08)));
+			parse는_관련_해석을_준다("\"부산\"", "[]");	// 지역만 적은 문장
+			explain은_이유를_준다("r1");
+			parse는_관련_해석을_준다("null", "[\"맛집\"]");	// 관심사만 적은 문장
+			explain은_이유를_준다("r1");
+			parse는_관련_해석을_준다("null", "[]");	// 정보 없는 여행 문장 — 빈 해석 (FR-ROUTE-06 유지)
+			explain은_이유를_준다("r1");
+
+			for (String 문장 : List.of("부산", "맛집", "이 근처 아무거나")) {
+				RouteRecommendResponseDto response = service.recommend(USER_ID, 문장요청(문장));
+				assertThat(response.points()).hasSize(1);	// 기존 뷰포트 기준 추천 경로 도달
+				assertThat(response.notice()).isNotEqualTo(무관_안내);
+				clock.advance(Duration.ofSeconds(10));
+			}
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-19, AC-513-06
+		@Test
+		void 무관_응답도_요청_제한_창을_소모한다() {
+			parse는_무관판정을_준다(null);
+			service.recommend(USER_ID, 문장요청("롤 정글 동선 짜 줘"));
+			clock.advance(Duration.ofSeconds(5));	// 10초 창 안
+
+			assertThatThrownBy(() -> service.recommend(USER_ID, 문장요청("롤 정글 동선 짜 줘")))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", RouteErrorCode.ROUTE_RATE_LIMITED);
+		}
+
+		// 검증: FR-ROUTE-19, AC-513-07
+		@Test
+		void 캐시_창_안_재요청은_같은_무관_안내를_재현한다() {
+			parse는_무관판정을_준다(null);	// parse 기대는 한 번뿐 — 둘째 요청이 parse 를 사면 verify 가 실패한다
+
+			RouteRecommendResponseDto first = service.recommend(USER_ID, 문장요청("롤 정글 동선 짜 줘"));
+			clock.advance(Duration.ofSeconds(10));	// 요청 제한 창은 넘고 캐시 TTL(10분) 안이다
+			RouteRecommendResponseDto second = service.recommend(USER_ID, 문장요청("롤 정글 동선 짜 줘"));
+
+			assertThat(second).isEqualTo(first);
+			assertThat(second.notice()).isEqualTo(무관_안내);
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-19, AC-513-08
+		@Test
+		void 무관_판정_지표가_unrelated로_남는다() {
+			Logger logger = (Logger) LoggerFactory.getLogger(RouteRecommendServiceImpl.class);
+			ListAppender<ILoggingEvent> appender = new ListAppender<>();
+			appender.start();
+			logger.addAppender(appender);
+			try {
+				parse는_무관판정을_준다(null);
+
+				service.recommend(USER_ID, 문장요청("롤 정글 동선 짜 줘"));
+
+				String line = appender.list.stream().map(ILoggingEvent::getFormattedMessage)
+					.filter(message -> message.contains("outcome="))
+					.findFirst().orElseThrow();
+				assertThat(line).contains("outcome=unrelated").contains("points=0").contains("signal=none");
+			} finally {
+				logger.detachAppender(appender);
+			}
+		}
+	}
+
+	@Nested
 	@DisplayName("관심사 반영 (MSG-514 FR-4) — 실물 수집기·실물 사전 관통")
 	class InterestReflection {
 

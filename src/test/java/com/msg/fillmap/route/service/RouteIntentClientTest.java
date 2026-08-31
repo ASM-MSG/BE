@@ -138,6 +138,52 @@ class RouteIntentClientTest {
 			assertThat(intent.preferredOrder()).isEmpty();
 		}
 
+		// 검증: FR-ROUTE-19, AC-513-01
+		@Test
+		void related가_false인_해석을_그대로_파싱한다() {
+			RouteIntentClient client = client(server ->
+				server.expect(requestTo(BASE_URL + "/route/parse")).andRespond(json("""
+					{"region": null, "period": null, "interests": [], "preferred_order": [], "related": false}
+					""")));
+
+			ParsedIntent intent = client.parse("롤 정글 동선 짜 줘", 부산_뷰포트);
+
+			assertThat(intent.related()).isFalse();
+		}
+
+		// 검증: FR-ROUTE-19, AC-513-05
+		@Test
+		@DisplayName("related 가 없는 구버전 응답은 true 로 수용한다 — 서버 선배포 한시 규칙 (MSG-513 결정 2)")
+		void related가_없는_구버전_응답은_true로_수용한다() {
+			RouteIntentClient client = client(server ->
+				server.expect(requestTo(BASE_URL + "/route/parse")).andRespond(json("""
+					{"region": null, "period": null, "interests": [], "preferred_order": []}
+					""")));
+
+			ParsedIntent intent = client.parse("아무거나", 부산_뷰포트);
+
+			assertThat(intent.related()).isTrue();
+		}
+
+		// 검증: FR-ROUTE-19, AC-513-04
+		@Test
+		void related가_불리언이_아니면_14502다() {
+			parse가_거부된다("{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": [],"
+				+ " \"related\": \"false\"}");	// 문자열 "false"
+			parse가_거부된다("{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": [],"
+				+ " \"related\": 0}");	// 숫자
+			parse가_거부된다("{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": [],"
+				+ " \"related\": null}");	// 명시적 null — 부재(true 수용)와 다르다 (계약 "null 없음")
+		}
+
+		// 검증: FR-ROUTE-19, AC-513-04
+		@Test
+		@DisplayName("related 외 정의 밖 필드는 여전히 14502 다 — 허용 집합 확장이 과확장이 아니다")
+		void related_외_정의_밖_필드는_여전히_14502다() {
+			parse가_거부된다("{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": [],"
+				+ " \"related\": true, \"bogus\": 1}");	// 여섯 번째 필드
+		}
+
 		// 검증: NFR-SEC-08, FR-ROUTE-08
 		@Test
 		@DisplayName("형태를 벗어난 parse 응답은 채택하지 않는다 — BE 검증 목록의 각 규칙 위반이 전부 14502")

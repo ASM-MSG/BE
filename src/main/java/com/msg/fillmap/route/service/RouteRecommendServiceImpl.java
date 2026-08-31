@@ -83,6 +83,13 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	private static final String INSUFFICIENT_NOTICE =
 		"조건에 맞는 곳을 %d곳만 찾았어요. 문장을 바꾸거나 다른 지역에서 다시 짜 보세요.";
 
+	/**
+	 * 무관 문장 안내 (MSG-513 결정 3) — "찾았는데 없었다"(EMPTY_NOTICE)가 아니라 기능이 답하는 종류가 아님을
+	 * 말하는 전용 문구다. 지표의 무관 판정(outcome=unrelated)도 응답 notice 가 이 상수인지로 가른다 (결정 4).
+	 */
+	private static final String UNRELATED_NOTICE =
+		"장소 방문 동선을 짜 드리는 기능이에요. 가고 싶은 지역이나 관심사를 문장에 담아 다시 요청해 보세요.";
+
 	// ObjectProvider: RouteIntentClient 는 route.ai.enabled 일 때만 뜨는 빈이라 직접 주입하면 기동이 깨진다.
 	private final ObjectProvider<RouteIntentClient> intentClientProvider;
 	private final RouteCandidateCollector candidateCollector;
@@ -141,7 +148,7 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 			RouteRecommendResponseDto response = doRecommend(intentClient, request, spans, counts);
 			// 부여는 두 반환 경로(빈 후보 조기 반환·정상 assemble)가 합류한 응답 확보 시점 한 곳에서 (MSG-487).
 			grantMoveExemption(userId, claim, response);
-			logMetrics(response.points().size() >= NOTICE_THRESHOLD ? "ok" : "insufficient",
+			logMetrics(outcomeOf(response),
 				startMillis, spans, response.points().size(), signalOf(response), claim.exemptConsumed(), counts);
 			return response;
 		} catch (ApiException e) {
@@ -164,6 +171,14 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		ParsedIntent intent = cachedParse(intentClient, text, viewport);
 		spans[0] = clock.millis() - parseStart;
 		counts[0] = (int) intent.interests().stream().filter(interest -> !interest.isBlank()).count();
+
+		if (!intent.related()) {
+			// 무관 조기 반환 (MSG-513 결정 6) — 언급 지역 판정·후보 수집·순서·절단·explain 전부 생략한다.
+			// mentionedArea 는 null: 문장에 지역 표기가 섞여 있어도 지도를 옮기면 무관 안내와 화면 행동이
+			// 모순이고, MOVE 가 없으니 재요청 예외(MSG-487)도 안 열린다. 요청 제한 창은 진입 전 선점으로
+			// 이미 소모됐고 정상 응답이라 되돌리지 않는다 (FR-ROUTE-12).
+			return new RouteRecommendResponseDto(List.of(), UNRELATED_NOTICE, null);
+		}
 
 		ViewportBounds bounds = new ViewportBounds(
 			viewport.minLat(), viewport.minLng(), viewport.maxLat(), viewport.maxLng());
@@ -352,6 +367,17 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	private static String signalOf(RouteRecommendResponseDto response) {
 		MentionedAreaDto area = response.mentionedArea();
 		return area == null ? "none" : area.kind().toLowerCase(Locale.ROOT);
+	}
+
+	/**
+	 * 성공 응답의 outcome 3분지 (MSG-513 결정 4) — 무관은 notice 가 전용 문구인지로 가른다. 빈 목록 세 갈래
+	 * (무관·빈 후보·절단 소진) 중 이 문구를 쓰는 것은 무관뿐이라 겹치지 않는다.
+	 */
+	private static String outcomeOf(RouteRecommendResponseDto response) {
+		if (UNRELATED_NOTICE.equals(response.notice())) {
+			return "unrelated";
+		}
+		return response.points().size() >= NOTICE_THRESHOLD ? "ok" : "insufficient";
 	}
 
 	private static String outcomeOf(ApiException e) {

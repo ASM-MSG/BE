@@ -49,7 +49,7 @@ class RouteCandidateCollectorTest {
 
 	private static final LocalDateTime NOW = LocalDateTime.of(2026, 6, 1, 0, 0);
 	private static final ViewportBounds 뷰포트 = new ViewportBounds(35.05, 128.95, 35.25, 129.20);
-	private static final ParsedIntent 빈해석 = new ParsedIntent(null, null, List.of(), List.of());
+	private static final ParsedIntent 빈해석 = new ParsedIntent(null, null, List.of(), List.of(), true);
 
 	private final MissionQueryService missionQueryService = mock(MissionQueryService.class);
 	private final EventQueryService eventQueryService = mock(EventQueryService.class);
@@ -138,7 +138,7 @@ class RouteCandidateCollectorTest {
 			.willReturn(List.of(진행중_축제(1L, "빛축제", 35.15, 129.08)));
 		// 미충족 관심사가 유발하는 검색은 "{region} {관심사}" 기계 조립 검색어의 집계 없는 오버로드 1회다.
 		given(placeSearchService.searchPlaces("해운대 유령장소")).willReturn(List.of());
-		ParsedIntent 해석 = new ParsedIntent("해운대", null, List.of("유령장소"), List.of("유령카페"));
+		ParsedIntent 해석 = new ParsedIntent("해운대", null, List.of("유령장소"), List.of("유령카페"), true);
 
 		List<RouteCandidate> candidates = collector.collect(뷰포트, 해석);
 
@@ -169,7 +169,7 @@ class RouteCandidateCollectorTest {
 			.willReturn(List.of(진행중_축제(1L, "빛축제", 35.15, 129.08)));
 		given(placeSearchService.searchPlaces("해운대 맛집"))
 			.willThrow(new ApiException(SearchErrorCode.SEARCH_UPSTREAM_ERROR));
-		ParsedIntent 해석 = new ParsedIntent("해운대", null, List.of("맛집"), List.of());
+		ParsedIntent 해석 = new ParsedIntent("해운대", null, List.of("맛집"), List.of(), true);
 
 		List<RouteCandidate> candidates = collector.collect(뷰포트, 해석);
 
@@ -197,7 +197,7 @@ class RouteCandidateCollectorTest {
 			미션(2L, MissionType.EVENT, "여유 밖 축제", NOW.minusDays(3), NOW.plusDays(6), 박스(35.15, 129.08))));
 		ParsedIntent 해석 = new ParsedIntent(null,
 			new ParsedIntent.Period(NOW.toLocalDate().plusDays(9), NOW.toLocalDate().plusDays(11)),
-			List.of(), List.of());
+			List.of(), List.of(), true);
 
 		assertThat(collector.collect(뷰포트, 해석))
 			.extracting(RouteCandidate::name).containsExactly("여유 안 축제");
@@ -211,7 +211,7 @@ class RouteCandidateCollectorTest {
 			.willReturn(List.of(진행중_축제(1L, "먼 빛축제", 35.24, 129.19)));
 		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.POPUP)).willReturn(List.of(
 			미션(2L, MissionType.POPUP, "가까운 상점", NOW.minusDays(3), NOW.plusDays(3), 박스(35.15, 129.08))));
-		ParsedIntent 해석 = new ParsedIntent(null, null, List.of("축제"), List.of());
+		ParsedIntent 해석 = new ParsedIntent(null, null, List.of("축제"), List.of(), true);
 
 		assertThat(collector.collect(뷰포트, 해석))
 			.extracting(RouteCandidate::name).containsExactly("먼 빛축제", "가까운 상점");
@@ -226,7 +226,7 @@ class RouteCandidateCollectorTest {
 			new MissionResponseDto(1L, MissionType.EVENT.name(), "여름 문화 주간", null,
 				NOW.minusDays(3), NOW.plusDays(3), 박스(35.15, 129.08),
 				null, "송정해변 특설무대", null, null, null, null, null, null)));
-		ParsedIntent 해석 = new ParsedIntent(null, null, List.of("해변"), List.of());
+		ParsedIntent 해석 = new ParsedIntent(null, null, List.of("해변"), List.of(), true);
 
 		List<RouteCandidate> candidates = collector.collect(뷰포트, 해석);
 
@@ -243,7 +243,7 @@ class RouteCandidateCollectorTest {
 		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.EVENT))
 			.willReturn(List.of(진행중_축제(1L, "빛축제", 35.15, 129.08)));
 		given(placeSearchService.searchPlaces("해운대 맛집")).willReturn(List.of());
-		ParsedIntent 해석 = new ParsedIntent("해운대", null, List.of("맛집"), List.of());
+		ParsedIntent 해석 = new ParsedIntent("해운대", null, List.of("맛집"), List.of(), true);
 
 		List<RouteCandidate> candidates = collector.collect(뷰포트, 해석);
 
@@ -273,7 +273,7 @@ class RouteCandidateCollectorTest {
 			장소("안 맛집1", 35.15, 129.05),
 			장소("안 맛집2", 35.15, 129.06),
 			장소("안 맛집3", 35.15, 129.07)));
-		ParsedIntent 해석 = new ParsedIntent("해운대", null, List.of("맛집"), List.of());
+		ParsedIntent 해석 = new ParsedIntent("해운대", null, List.of("맛집"), List.of(), true);
 
 		assertThat(collector.collect(뷰포트, 해석))
 			.extracting(RouteCandidate::name)
@@ -291,7 +291,7 @@ class RouteCandidateCollectorTest {
 				NOW.plusDays(6).plusHours(20), 박스(35.15, 129.05))));
 		ParsedIntent 해석 = new ParsedIntent(null,
 			new ParsedIntent.Period(NOW.toLocalDate().plusDays(9), NOW.toLocalDate().plusDays(11)),
-			List.of(), List.of());
+			List.of(), List.of(), true);
 
 		assertThat(collector.collect(뷰포트, 해석))
 			.extracting(RouteCandidate::name).containsExactly("자정 직후 종료 축제");
@@ -303,7 +303,7 @@ class RouteCandidateCollectorTest {
 	void 빈_문자열_관심사는_장소_검색을_유발하지_않는다() {
 		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.EVENT))
 			.willReturn(List.of(진행중_축제(1L, "빛축제", 35.15, 129.08)));
-		ParsedIntent 해석 = new ParsedIntent("부산", null, List.of(" "), List.of());
+		ParsedIntent 해석 = new ParsedIntent("부산", null, List.of(" "), List.of(), true);
 
 		assertThat(collector.collect(뷰포트, 해석)).extracting(RouteCandidate::name).containsExactly("빛축제");
 		verifyNoInteractions(placeSearchService);
