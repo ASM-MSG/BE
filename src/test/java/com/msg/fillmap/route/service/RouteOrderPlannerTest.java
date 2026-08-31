@@ -24,7 +24,12 @@ class RouteOrderPlannerTest {
 
 	private RouteCandidate 후보(String name, double lat, double lng) {
 		return new RouteCandidate(name, Kind.PLACE, lat, lng, GridEncoder.encode(lat, lng),
-			null, null, null, null, null);
+			null, null, null, null, null, List.of());
+	}
+
+	private RouteCandidate 일치후보(String name, double lat, double lng) {
+		return new RouteCandidate(name, Kind.PLACE, lat, lng, GridEncoder.encode(lat, lng),
+			null, null, null, null, "맛집", List.of());
 	}
 
 	// 검증: FR-ROUTE-10
@@ -77,6 +82,47 @@ class RouteOrderPlannerTest {
 
 		// 힌트 일치(빛축제)가 거리와 무관하게 맨 앞, 불일치 힌트(유령카페)는 무시 — 지어낸 지점이 없다.
 		assertThat(ordered).containsExactly(축제, 해변);
+	}
+
+	// 검증: FR-ROUTE-18
+	@Test
+	@DisplayName("관심사 일치 지점이 미일치 지점보다 앞에 배열된다 — 비교 첫 키가 일치 여부다 (MSG-514)")
+	void 관심사_일치_지점이_미일치_지점보다_앞에_배열된다() {
+		// 미일치가 중심에 훨씬 가깝다 — 거리 첫 키(종전)면 미일치가 먼저라 여기서 깨진다.
+		RouteCandidate 먼_일치 = 일치후보("먼 일치", 중심_LAT + 0.04, 중심_LNG);
+		RouteCandidate 가까운_미일치 = 후보("가까운 미일치", 중심_LAT + 0.001, 중심_LNG);
+
+		List<RouteCandidate> ordered = RouteOrderPlanner.order(
+			List.of(가까운_미일치, 먼_일치), List.of(), null, 중심_LAT, 중심_LNG);
+
+		assertThat(ordered).containsExactly(먼_일치, 가까운_미일치);
+	}
+
+	// 검증: FR-ROUTE-18
+	@Test
+	@DisplayName("힌트 배치는 관심사 일치보다 우선한다 — 사용자가 순서 자체를 지목한 것이 더 강한 신호다")
+	void 힌트_배치는_관심사_일치보다_우선한다() {
+		RouteCandidate 일치 = 일치후보("맛집골목", 중심_LAT + 0.001, 중심_LNG);
+		RouteCandidate 힌트지점 = 후보("광안리 해변", 중심_LAT + 0.04, 중심_LNG);
+
+		List<RouteCandidate> ordered = RouteOrderPlanner.order(
+			List.of(일치, 힌트지점), List.of("해변"), null, 중심_LAT, 중심_LNG);
+
+		assertThat(ordered).containsExactly(힌트지점, 일치);
+	}
+
+	// 검증: FR-ROUTE-18
+	@Test
+	@DisplayName("일치 지점끼리는 최근접 순서를 유지한다 — 일치 그룹 안에서는 종전 규칙 그대로다")
+	void 일치_지점끼리는_최근접_순서를_유지한다() {
+		RouteCandidate 가까운_일치 = 일치후보("가까운 일치", 중심_LAT + 0.01, 중심_LNG);
+		RouteCandidate 먼_일치 = 일치후보("먼 일치", 중심_LAT + 0.03, 중심_LNG);
+		RouteCandidate 미일치 = 후보("미일치", 중심_LAT + 0.002, 중심_LNG);
+
+		List<RouteCandidate> ordered = RouteOrderPlanner.order(
+			List.of(먼_일치, 미일치, 가까운_일치), List.of(), null, 중심_LAT, 중심_LNG);
+
+		assertThat(ordered).containsExactly(가까운_일치, 먼_일치, 미일치);
 	}
 
 	// 검증: FR-ROUTE-11

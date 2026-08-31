@@ -58,6 +58,7 @@ class RouteCandidateCollectorTest {
 
 	private final RouteCandidateCollector collector = new RouteCandidateCollector(
 		missionQueryService, eventQueryService, placeSearchService, gridQueryService, new ObjectMapper(),
+		new InterestMatcher(new ObjectMapper()),
 		Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 
 	/* ---------- 픽스처 ---------- */
@@ -202,10 +203,10 @@ class RouteCandidateCollectorTest {
 			.extracting(RouteCandidate::name).containsExactly("여유 안 축제");
 	}
 
-	// 검증: FR-ROUTE-01
+	// 검증: FR-ROUTE-18, FR-ROUTE-01
 	@Test
-	@DisplayName("선별 1순위는 관심사 일치다 — 먼 일치 후보가 가까운 불일치 후보보다 앞선다")
-	void 관심사_일치_후보가_거리보다_우선한다() {
+	@DisplayName("선별 1순위는 관심사 일치다 — 먼 일치 후보가 가까운 불일치 후보보다 앞선다 (기존 유지 확인)")
+	void 관심사_일치_후보가_선별에서_거리보다_앞선다() {
 		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.EVENT))
 			.willReturn(List.of(진행중_축제(1L, "먼 빛축제", 35.24, 129.19)));
 		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.POPUP)).willReturn(List.of(
@@ -214,6 +215,42 @@ class RouteCandidateCollectorTest {
 
 		assertThat(collector.collect(뷰포트, 해석))
 			.extracting(RouteCandidate::name).containsExactly("먼 빛축제", "가까운 상점");
+	}
+
+	// 검증: FR-ROUTE-18
+	@Test
+	@DisplayName("장소명에만 있는 관심사도 일치한다 — 미션 판정 재료에 placeName 이 신설됐다 (MSG-514)")
+	void 장소명에만_있는_관심사도_일치한다() {
+		// 제목·유형 라벨·소개문 어디에도 "해변"이 없다 — 장소명이 재료에 들어가야만 일치가 성립한다.
+		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.EVENT)).willReturn(List.of(
+			new MissionResponseDto(1L, MissionType.EVENT.name(), "여름 문화 주간", null,
+				NOW.minusDays(3), NOW.plusDays(3), 박스(35.15, 129.08),
+				null, "송정해변 특설무대", null, null, null, null, null, null)));
+		ParsedIntent 해석 = new ParsedIntent(null, null, List.of("해변"), List.of());
+
+		List<RouteCandidate> candidates = collector.collect(뷰포트, 해석);
+
+		assertThat(candidates).hasSize(1);
+		assertThat(candidates.getFirst().matchedInterest()).isEqualTo("해변");
+		verifyNoInteractions(placeSearchService);	// 일치로 채워져 미충족 검색이 유발되지 않는다
+	}
+
+	// 검증: FR-ROUTE-18, FR-ROUTE-03
+	@Test
+	@DisplayName("판정이 넓어져도 서버가 확인하지 않은 장소는 후보가 되지 않는다 (FR-2, FR-ROUTE-03 유지 확인)")
+	void 판정이_넓어져도_서버가_확인하지_않은_장소는_후보가_되지_않는다() {
+		// 사전 경유 판정이 있어도 미충족 관심사의 경로는 종전 그대로다 — 검색 실조회가 빈 결과면 후보도 없다.
+		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.EVENT))
+			.willReturn(List.of(진행중_축제(1L, "빛축제", 35.15, 129.08)));
+		given(placeSearchService.searchPlaces("해운대 맛집")).willReturn(List.of());
+		ParsedIntent 해석 = new ParsedIntent("해운대", null, List.of("맛집"), List.of());
+
+		List<RouteCandidate> candidates = collector.collect(뷰포트, 해석);
+
+		// "맛집"은 음식 근거어가 없는 빛축제와 이어지지 않고(사전 규율), 해석 문자열이 후보를 만들지도 않는다.
+		assertThat(candidates).extracting(RouteCandidate::name).containsExactly("빛축제");
+		assertThat(candidates.getFirst().matchedInterest()).isNull();
+		then(placeSearchService).should().searchPlaces("해운대 맛집");
 	}
 
 	// 검증: FR-ROUTE-06

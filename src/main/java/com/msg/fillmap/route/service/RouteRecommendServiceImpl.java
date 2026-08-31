@@ -133,33 +133,36 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		}
 		long startMillis = clock.millis();
 		long[] spans = {-1L, -1L};	// [parse_ms, explain_ms] — 도달 전 실패는 -1 로 남는다
+		int[] counts = {0, 0};	// [interests, matched] (MSG-514 §도메인 로직 5) — 도달 전 실패는 0 으로 남는다
 		RateLimitClaim claim = null;	// 청구 자체가 거부(14429)되면 null 그대로다 — 지표 exempt=false
 		try {
 			claim = claimRateLimitWindow(userId, startMillis);
-			RouteRecommendResponseDto response = doRecommend(intentClient, request, spans);
+			RouteRecommendResponseDto response = doRecommend(intentClient, request, spans, counts);
 			// 부여는 두 반환 경로(빈 후보 조기 반환·정상 assemble)가 합류한 응답 확보 시점 한 곳에서 (MSG-487).
 			grantMoveExemption(userId, claim, response);
 			logMetrics(response.points().size() >= NOTICE_THRESHOLD ? "ok" : "insufficient",
-				startMillis, spans, response.points().size(), signalOf(response), claim.exemptConsumed());
+				startMillis, spans, response.points().size(), signalOf(response), claim.exemptConsumed(), counts);
 			return response;
 		} catch (ApiException e) {
-			logMetrics(outcomeOf(e), startMillis, spans, 0, "none", claim != null && claim.exemptConsumed());
+			logMetrics(outcomeOf(e), startMillis, spans, 0, "none", claim != null && claim.exemptConsumed(),
+				counts);
 			throw e;
 		} catch (RuntimeException e) {
 			// ApiException 밖 실패(NPE류)도 지표 없이 새면 실패율이 과소 계상된다 — 지표만 남기고 그대로 올린다.
-			logMetrics("error", startMillis, spans, 0, "none", claim != null && claim.exemptConsumed());
+			logMetrics("error", startMillis, spans, 0, "none", claim != null && claim.exemptConsumed(), counts);
 			throw e;
 		}
 	}
 
 	private RouteRecommendResponseDto doRecommend(RouteIntentClient intentClient, RouteRecommendRequestDto request,
-		long[] spans) {
+		long[] spans, int[] counts) {
 		ViewportDto viewport = request.viewport();
 		String text = request.text();	// DTO 컴팩트 생성자가 trim 정규화를 보장한다 — 캐시 키·AI 전송 동일 본문
 
 		long parseStart = clock.millis();
 		ParsedIntent intent = cachedParse(intentClient, text, viewport);
 		spans[0] = clock.millis() - parseStart;
+		counts[0] = (int) intent.interests().stream().filter(interest -> !interest.isBlank()).count();
 
 		ViewportBounds bounds = new ViewportBounds(
 			viewport.minLat(), viewport.minLng(), viewport.maxLat(), viewport.maxLng());
@@ -167,6 +170,7 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		// 재현한다. 결과는 아래 두 반환 경로(빈 후보 조기 반환·정상 assemble) 모두에 실린다 (§판정 위치).
 		MentionedAreaDto mentionedArea = mentionedAreaResolver.resolve(intent.region(), bounds);
 		List<RouteCandidate> candidates = candidateCollector.collect(bounds, intent);
+		counts[1] = (int) candidates.stream().filter(candidate -> candidate.matchedInterest() != null).count();
 		if (candidates.isEmpty()) {
 			// 빈 후보는 explain 을 부르지 않는다 (FR-ROUTE-07) — AI 계약이 points 0개를 422 로 거부하므로
 			// 태우면 성공이어야 할 응답이 14502 실패로 뒤집힌다 (§도메인 로직 도입부 분기).
@@ -257,22 +261,27 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	}
 
 	/**
-	 * facts 조립 순서(§도메인 로직 3): 출처(상시 1건 — 하한 1 보장) → 기간 → 관심사 일치. 직전 거리 항목은
-	 * MSG-483(FR-ROUTE-05 개정)이 뺐다 — 카드의 보행 실거리와 이유 문장 속 하버사인 직선거리가 나란히
-	 * 어긋나 보이는 상황을 없앤다. 순서 결정의 하버사인(RouteOrderPlanner.distanceMeters)은 불변이다.
+	 * facts 조립 순서(MSG-514 결정 3): 출처(상시 1건 — 하한 1 보장) → 관심사 일치 → 지점 고유(최대 2건) →
+	 * 기간. 요청마다 달라지는 재료를 앞에, 가장 일반적인 재료(기간)를 마지막에 둔다 — limit 절단은
+	 * 뒤에서부터라 조립 순서가 곧 생존 우선순위다. 직전 거리 항목은 MSG-483(FR-ROUTE-05 개정)이 뺐다 —
+	 * 카드의 보행 실거리와 이유 문장 속 하버사인 직선거리가 나란히 어긋나 보이는 상황을 없앤다.
+	 * 순서 결정의 하버사인(RouteOrderPlanner.distanceMeters)은 불변이다.
 	 */
 	private List<String> facts(RouteCandidate candidate) {
 		List<String> facts = new ArrayList<>();
 		facts.add(sourceFact(candidate.kind()));
+		if (candidate.matchedInterest() != null) {
+			facts.add(truncate("관심사 '" + candidate.matchedInterest() + "' 일치"));
+		}
+		for (String detail : candidate.detailFacts()) {
+			facts.add(truncate(detail));
+		}
 		if (candidate.periodStart() != null && candidate.periodEnd() != null) {
 			// 시더가 KST 자정을 전날 15:00 UTC 로 저장한다 — UTC 날짜 그대로면 8월 축제가 "07-31~"로 나간다.
 			facts.add(truncate(RouteCandidateCollector.kstDate(candidate.periodStart())
 				+ "~" + RouteCandidateCollector.kstDate(candidate.periodEnd()) + " 진행 중"));
 		}
-		if (candidate.matchedInterest() != null) {
-			facts.add(truncate("관심사 '" + candidate.matchedInterest() + "' 일치"));
-		}
-		// 조립 규칙상 최대 3건이라 자연 충족 — 상한 5는 규칙이 늘어나도 계약 위반(422)이 안 나게 하는 방어다.
+		// 조립 규칙상 최대 5건(1+1+2+1)이라 자연 충족 — limit 은 규칙이 늘어도 계약 위반(422)이 안 나게 하는 방어다.
 		return facts.stream().limit(MAX_FACTS_PER_POINT).toList();
 	}
 
@@ -318,11 +327,15 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 	 * 지표 로그 (비기능 운영) — 사용자 문장 원문과 AI 응답 원문은 남기지 않는다. 집계는 이 라인으로 한다.
 	 * signal 은 언급 지역 신호 발화 빈도의 실측 재료다 (MSG-468 §지표 로그) — 지역 이름 자체는 남기지 않는다.
 	 * exempt 는 자동 이동 재요청 예외 발동 빈도 — 비용 조항(한 실행에 요청 최대 두 번)의 실측 재료다 (MSG-487).
+	 * interests(해석의 비공백 관심사 수)·matched(선별 지점 중 일치 수)는 일치 비율 matched/points 의 재료다
+	 * (MSG-514 §도메인 로직 5) — 관심사 원문은 종전 정책대로 남기지 않아 비율 추이로만 관측한다.
 	 */
 	private void logMetrics(String outcome, long startMillis, long[] spans, int points, String signal,
-		boolean exempt) {
-		log.info("[route] outcome={} total_ms={} parse_ms={} explain_ms={} points={} signal={} exempt={}",
-			outcome, clock.millis() - startMillis, spans[0], spans[1], points, signal, exempt);
+		boolean exempt, int[] counts) {
+		log.info("[route] outcome={} total_ms={} parse_ms={} explain_ms={} points={} signal={} exempt={}"
+				+ " interests={} matched={}",
+			outcome, clock.millis() - startMillis, spans[0], spans[1], points, signal, exempt,
+			counts[0], counts[1]);
 	}
 
 	/** 신호 지표 값 — none·move·zoom_out (MSG-468 §지표 로그). */

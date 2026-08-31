@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -38,10 +40,24 @@ import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+
+import tools.jackson.databind.ObjectMapper;
+
+import com.msg.fillmap.event.service.EventQueryService;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.service.GridQueryService;
+import com.msg.fillmap.mission.dto.MissionResponseDto;
+import com.msg.fillmap.mission.dto.MissionShape;
+import com.msg.fillmap.mission.dto.MissionShape.BoxShape;
+import com.msg.fillmap.mission.dto.MissionShape.LatLng;
+import com.msg.fillmap.mission.dto.MissionShape.PathShape;
+import com.msg.fillmap.mission.entity.MissionType;
+import com.msg.fillmap.mission.service.MissionQueryService;
 import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.region.service.RegionQueryService.MentionedRegionMatch;
 import com.msg.fillmap.route.config.RouteAiProperties;
@@ -52,6 +68,7 @@ import com.msg.fillmap.route.dto.RouteRecommendResponseDto.MentionedAreaDto;
 import com.msg.fillmap.route.dto.RouteRecommendResponseDto.RoutePointDto;
 import com.msg.fillmap.route.exception.RouteErrorCode;
 import com.msg.fillmap.route.service.RouteCandidate.Kind;
+import com.msg.fillmap.search.service.PlaceSearchService;
 import com.msg.fillmap.zone.entity.Zone;
 import com.msg.fillmap.zone.service.ZoneNameQueryService;
 import com.msg.fillmap.zone.service.ZoneNameResolver;
@@ -81,24 +98,44 @@ class RouteRecommendServiceTest {
 	// 대조 실패라 기존 시나리오는 전부 무신호로 흐른다.
 	private final ZoneQueryService zoneQueryService = mock(ZoneQueryService.class);
 	private final RegionQueryService regionQueryService = mock(RegionQueryService.class);
+	// MSG-514 실물 수집 시나리오용 — 수집기 안 조회 계약 mock. 기본 스텁(빈 목록)이라 스텁한 유형만 후보가 된다.
+	private final MissionQueryService missionQueryService = mock(MissionQueryService.class);
+	private final EventQueryService eventQueryService = mock(EventQueryService.class);
+	private final PlaceSearchService placeSearchService = mock(PlaceSearchService.class);
 	private final SteppingClock clock = new SteppingClock();
 
 	private MockRestServiceServer server;
+	private RouteIntentClient intentClient;
 	private RouteRecommendService service;
 
 	@BeforeEach
 	void setUp() {
 		RestClient.Builder builder = RestClient.builder();
 		server = MockRestServiceServer.bindTo(builder).build();
-		RouteIntentClient intentClient = new RouteIntentClient(builder,
+		intentClient = new RouteIntentClient(builder,
 			new RouteAiProperties(true, BASE_URL, Duration.ofSeconds(10)));
 
+		given(zoneNameQueryService.resolver()).willReturn(new ZoneNameResolver(List.of()));
+		service = new RouteRecommendServiceImpl(intentClientProvider(), collector, zoneNameQueryService,
+			gridQueryService, new RouteMentionedAreaResolver(zoneQueryService, regionQueryService), clock);
+	}
+
+	private ObjectProvider<RouteIntentClient> intentClientProvider() {
 		@SuppressWarnings("unchecked")
 		ObjectProvider<RouteIntentClient> provider = mock(ObjectProvider.class);
 		given(provider.getIfAvailable()).willReturn(intentClient);
-		given(zoneNameQueryService.resolver()).willReturn(new ZoneNameResolver(List.of()));
-		service = new RouteRecommendServiceImpl(provider, collector, zoneNameQueryService, gridQueryService,
-			new RouteMentionedAreaResolver(zoneQueryService, regionQueryService), clock);
+		return provider;
+	}
+
+	/**
+	 * 실물 수집기(실물 InterestMatcher — 배포 사전 그대로)로 조립한 서비스 — 해석부터 판정·조립까지 관통하는
+	 * 시나리오(MSG-514)용. AI 스텁·시계는 공유하고, 수집기 안 조회 계약만 mock 이다.
+	 */
+	private RouteRecommendService 실수집_서비스() {
+		RouteCandidateCollector realCollector = new RouteCandidateCollector(missionQueryService, eventQueryService,
+			placeSearchService, gridQueryService, new ObjectMapper(), new InterestMatcher(new ObjectMapper()), clock);
+		return new RouteRecommendServiceImpl(intentClientProvider(), realCollector, zoneNameQueryService,
+			gridQueryService, new RouteMentionedAreaResolver(zoneQueryService, regionQueryService), clock);
 	}
 
 	/* ---------- 픽스처 ---------- */
@@ -107,9 +144,36 @@ class RouteRecommendServiceTest {
 		return new RouteRecommendRequestDto("부산역 내려서 해운대 축제 보고 싶어", 뷰포트, null);
 	}
 
+	private RouteRecommendRequestDto 문장요청(String text) {
+		return new RouteRecommendRequestDto(text, 뷰포트, null);
+	}
+
+	/** 주어진 점을 중심으로 한 작은 판정 사각형 (RouteCandidateCollectorTest 와 동일 픽스처). */
+	private BoxShape 박스(double lat, double lng) {
+		return new BoxShape(List.of(
+			new LatLng(lat - 0.0004, lng - 0.0004),
+			new LatLng(lat - 0.0004, lng + 0.0004),
+			new LatLng(lat + 0.0004, lng + 0.0004),
+			new LatLng(lat + 0.0004, lng - 0.0004),
+			new LatLng(lat - 0.0004, lng - 0.0004)));
+	}
+
+	/** 상시(무기간) 축제 미션 — SteppingClock 어느 시점에도 활성이라 시각 픽스처가 필요 없다. */
+	private MissionResponseDto 상시_축제미션(long id, String title, String description, double lat, double lng) {
+		return new MissionResponseDto(id, MissionType.EVENT.name(), title, null, null, null, 박스(lat, lng),
+			description, null, null, null, null, null, null, null);
+	}
+
+	private void parse는_관심사를_준다(String interest) {
+		server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
+			"{\"region\": null, \"period\": null, \"interests\": [\"" + interest
+				+ "\"], \"preferred_order\": []}",
+			MediaType.APPLICATION_JSON));
+	}
+
 	private RouteCandidate 장소후보(String name, double lat, double lng) {
 		return new RouteCandidate(name, Kind.PLACE, lat, lng, GridEncoder.encode(lat, lng),
-			null, null, null, null, null);
+			null, null, null, null, null, List.of());
 	}
 
 	private void parse는_빈해석을_준다() {
@@ -135,9 +199,9 @@ class RouteRecommendServiceTest {
 			// 중심(35.15, 129.075)에서 거리가 단조 증가하도록 배치 — 최근접 이웃 순서가 축제→행사→장소로 고정된다.
 			RouteCandidate 축제 = new RouteCandidate("해운대 빛축제", Kind.MISSION_FESTIVAL, 35.15, 129.08,
 				GridEncoder.encode(35.15, 129.08), 12L, null,
-				LocalDateTime.of(2026, 8, 1, 0, 0), LocalDateTime.of(2026, 8, 31, 0, 0), "축제");
+				LocalDateTime.of(2026, 8, 1, 0, 0), LocalDateTime.of(2026, 8, 31, 0, 0), "축제", List.of());
 			RouteCandidate 행사 = new RouteCandidate("불꽃축제", Kind.EVENT, 35.16, 129.09,
-				GridEncoder.encode(35.16, 129.09), null, 7L, null, null, null);
+				GridEncoder.encode(35.16, 129.09), null, 7L, null, null, null, List.of());
 			RouteCandidate 장소 = 장소후보("맛집", 35.17, 129.10);
 			given(collector.collect(any(), any())).willReturn(List.of(축제, 행사, 장소));
 			given(gridQueryService.resolveRegionNames(any())).willReturn(Map.of(축제.gridId(), "우동"));
@@ -208,7 +272,7 @@ class RouteRecommendServiceTest {
 			// KST 8월 1일 00:00 ~ 8월 31일 23:59 를 UTC 로 저장한 값 — UTC 날짜 그대로면 "2026-07-31~"이 된다.
 			given(collector.collect(any(), any())).willReturn(List.of(new RouteCandidate(
 				"빛축제", Kind.MISSION_FESTIVAL, 35.15, 129.08, GridEncoder.encode(35.15, 129.08), 12L, null,
-				LocalDateTime.of(2026, 7, 31, 15, 0), LocalDateTime.of(2026, 8, 31, 14, 59), null)));
+				LocalDateTime.of(2026, 7, 31, 15, 0), LocalDateTime.of(2026, 8, 31, 14, 59), null, List.of())));
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(jsonPath("$.points[0].facts[1]", is("2026-08-01~2026-08-31 진행 중")))
@@ -226,7 +290,7 @@ class RouteRecommendServiceTest {
 			String 제목 = "가".repeat(200);
 			given(collector.collect(any(), any())).willReturn(List.of(new RouteCandidate(
 				제목, Kind.MISSION_FESTIVAL, 35.15, 129.08, GridEncoder.encode(35.15, 129.08),
-				12L, null, null, null, null)));
+				12L, null, null, null, null, List.of())));
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(jsonPath("$.points[0].name", is(제목.substring(0, 100))))
@@ -410,6 +474,200 @@ class RouteRecommendServiceTest {
 
 			assertThat(second).isEqualTo(first);
 			server.verify();
+		}
+	}
+
+	@Nested
+	@DisplayName("관심사 반영 (MSG-514 FR-4) — 실물 수집기·실물 사전 관통")
+	class InterestReflection {
+
+		/** 서로 다른 후보 집합에 걸리는 세 미션 — 음식 근거어(국밥), 야경 근거어(불빛), 중립. 거리 단조 배치. */
+		private void 세_미션이_있다() {
+			given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.EVENT))).willReturn(List.of(
+				상시_축제미션(1L, "다리 위 주간", "광안대교 불빛 감상", 35.151, 129.076),
+				상시_축제미션(2L, "골목 투어 주간", "돼지국밥 골목 소개", 35.16, 129.085),
+				상시_축제미션(3L, "민속 마당", null, 35.17, 129.10)));
+		}
+
+		// 검증: FR-ROUTE-18
+		@Test
+		@DisplayName("같은 화면에서 관심사가 다른 두 문장은 다른 지점 열을 돌려준다 (FR-4 고정 테스트)")
+		void 같은_화면에서_관심사가_다른_두_문장은_다른_지점_열을_돌려준다() {
+			// 후보가 상한 8 안이라 구성은 같다 — 순서 축(관심사 일치 첫 키)이 없으면 두 응답이 동일해 깨진다.
+			세_미션이_있다();
+			RouteRecommendService 서비스 = 실수집_서비스();
+			parse는_관심사를_준다("맛집");
+			explain은_이유를_준다("r1", "r2", "r3");
+			parse는_관심사를_준다("야경");
+			explain은_이유를_준다("r1", "r2", "r3");
+
+			RouteRecommendResponseDto 맛집 = 서비스.recommend(USER_ID, 문장요청("부산 맛집 코스 짜 줘"));
+			clock.advance(Duration.ofSeconds(10));
+			RouteRecommendResponseDto 야경 = 서비스.recommend(USER_ID, 문장요청("부산 야경 코스 짜 줘"));
+
+			// "맛집"은 국밥 미션이, "야경"은 불빛 미션이 앞이다 — 원문 어디에도 없는 말이 사전 경유로 이어졌다.
+			assertThat(맛집.points().getFirst().missionId()).isEqualTo(2L);
+			assertThat(야경.points().getFirst().missionId()).isEqualTo(1L);
+			assertThat(맛집.points().stream().map(RoutePointDto::missionId).toList())
+				.isNotEqualTo(야경.points().stream().map(RoutePointDto::missionId).toList());
+		}
+
+		// 검증: FR-ROUTE-18, FR-ROUTE-06
+		@Test
+		@DisplayName("관심사가 없는 해석은 종전 거리순 결과를 유지한다 (FR-3 후단, FR-ROUTE-06 유지 확인)")
+		void 관심사가_없는_해석은_종전_거리순_결과를_유지한다() {
+			세_미션이_있다();
+			parse는_빈해석을_준다();
+			explain은_이유를_준다("r1", "r2", "r3");
+
+			RouteRecommendResponseDto response = 실수집_서비스().recommend(USER_ID, 문장요청("코스 짜 줘"));
+
+			// 뷰포트 중심(35.15, 129.075)에서 최근접 이웃 — 일치가 하나도 없으면 순수 거리순 그대로다.
+			assertThat(response.points()).extracting(RoutePointDto::missionId).containsExactly(1L, 2L, 3L);
+		}
+	}
+
+	@Nested
+	@DisplayName("사실 목록 (MSG-514 결정 3) — 출처, 관심사, 지점 고유 최대 2, 기간")
+	class DetailFacts {
+
+		// 검증: FR-ROUTE-05
+		@Test
+		@DisplayName("코스 지점의 사실 목록에 거리와 시간과 난이도가 실린다 — 스펙 합성 문장 + 소개문")
+		void 코스_지점의_사실_목록에_거리와_시간과_난이도가_실린다() {
+			PathShape path = new PathShape(
+				"{\"type\": \"LineString\", \"coordinates\": [[129.05, 35.16], [129.06, 35.17]]}", List.of());
+			given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.COURSE))).willReturn(List.of(
+				new MissionResponseDto(5L, MissionType.COURSE.name(), "남파랑길 3코스", null, null, null, path,
+					"부산 앞바다를 따라 걷는 길", null, null, null, null, 14000, 330, 2)));
+			parse는_빈해석을_준다();
+			server.expect(requestTo(EXPLAIN_URL))
+				.andExpect(content().json("""
+					{"points": [{"name": "남파랑길 3코스", "kind": "mission_course", "facts": [
+						"코스 미션 후보", "총 14km, 약 5시간 30분, 난이도 보통", "부산 앞바다를 따라 걷는 길"]}]}
+					""", JsonCompareMode.STRICT))
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+
+			실수집_서비스().recommend(USER_ID, 문장요청("바닷가 걷는 코스"));
+
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-05
+		@Test
+		@DisplayName("축제 지점의 사실 목록에 장소와 소개가 실린다 — 장소명·소개문이 기간보다 앞 칸이다")
+		void 축제_지점의_사실_목록에_장소와_소개가_실린다() {
+			// SteppingClock 기준(2026-06-01) 활성 기간 — naive UTC 를 KST 날짜로 바꿔 표기하는 기존 규칙 유지.
+			given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.EVENT))).willReturn(List.of(
+				new MissionResponseDto(7L, MissionType.EVENT.name(), "빛 조형물 주간", null,
+					LocalDateTime.of(2026, 5, 20, 0, 0), LocalDateTime.of(2026, 6, 10, 0, 0), 박스(35.15, 129.08),
+					"밤을 밝히는 조형물 소개", "해운대 해수욕장 특설무대", null, null, null, null, null, null)));
+			parse는_빈해석을_준다();
+			server.expect(requestTo(EXPLAIN_URL))
+				.andExpect(content().json("""
+					{"points": [{"name": "빛 조형물 주간", "kind": "mission_festival", "facts": [
+						"축제 미션 후보", "해운대 해수욕장 특설무대", "밤을 밝히는 조형물 소개",
+						"2026-05-20~2026-06-10 진행 중"]}]}
+					""", JsonCompareMode.STRICT))
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+
+			실수집_서비스().recommend(USER_ID, 문장요청("주말에 볼만한 것"));
+
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-05
+		@Test
+		@DisplayName("행사 지점의 사실 목록은 종전 구성을 유지한다 — 칩 DTO 에 재료가 없어 출처와 기간뿐이다")
+		void 행사_지점의_사실_목록은_종전_구성을_유지한다() {
+			given(collector.collect(any(), any())).willReturn(List.of(new RouteCandidate(
+				"불꽃 문화제", Kind.EVENT, 35.15, 129.08, GridEncoder.encode(35.15, 129.08), null, 7L,
+				LocalDateTime.of(2026, 5, 31, 15, 0), LocalDateTime.of(2026, 6, 10, 14, 59), null, List.of())));
+			parse는_빈해석을_준다();
+			server.expect(requestTo(EXPLAIN_URL))
+				.andExpect(content().json("""
+					{"points": [{"name": "불꽃 문화제", "kind": "event", "facts": [
+						"행사 위치", "2026-06-01~2026-06-10 진행 중"]}]}
+					""", JsonCompareMode.STRICT))
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+
+			service.recommend(USER_ID, 요청());
+
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-05
+		@Test
+		@DisplayName("사실 목록은 다섯 건과 100자를 넘지 않는다 — AI 계약 상한 (지점당 1~5건, 각 100자)")
+		void 사실_목록은_다섯_건과_100자를_넘지_않는다() {
+			// 출처 + 관심사 + 고유 2건 + 기간 = 정확히 5. 150자 소개문은 발송 직전 100자 절단을 거친다.
+			String 긴소개 = "가".repeat(150);
+			given(collector.collect(any(), any())).willReturn(List.of(new RouteCandidate(
+				"빛축제", Kind.MISSION_FESTIVAL, 35.15, 129.08, GridEncoder.encode(35.15, 129.08), 12L, null,
+				LocalDateTime.of(2026, 5, 31, 15, 0), LocalDateTime.of(2026, 6, 10, 14, 59), "맛집",
+				List.of("해운대 특설무대", 긴소개))));
+			parse는_빈해석을_준다();
+			server.expect(requestTo(EXPLAIN_URL))
+				.andExpect(jsonPath("$.points[0].facts.length()", is(5)))
+				.andExpect(jsonPath("$.points[0].facts[3]", is(긴소개.substring(0, 100))))
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+
+			service.recommend(USER_ID, 요청());
+
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-18, FR-ROUTE-05
+		@Test
+		@DisplayName("이유 요청에 관심사 일치 표기가 실린다 (FR-7) — 출처 바로 다음 칸이다 (결정 3)")
+		void 이유_요청에_관심사_일치_표기가_실린다() {
+			given(collector.collect(any(), any())).willReturn(List.of(new RouteCandidate(
+				"국밥 골목", Kind.PLACE, 35.15, 129.08, GridEncoder.encode(35.15, 129.08), null, null,
+				null, null, "맛집", List.of())));
+			parse는_빈해석을_준다();
+			server.expect(requestTo(EXPLAIN_URL))
+				.andExpect(jsonPath("$.points[0].facts[1]", is("관심사 '맛집' 일치")))
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+
+			service.recommend(USER_ID, 요청());
+
+			server.verify();
+		}
+	}
+
+	@Nested
+	@DisplayName("지표 로그 (MSG-514 §도메인 로직 5)")
+	class Metrics {
+
+		// 검증: FR-ROUTE-18
+		@Test
+		@DisplayName("지표 로그에 관심사 수와 일치 지점 수가 남는다 — 원문은 남기지 않고 수만 남는다")
+		void 지표_로그에_관심사_수와_일치_지점_수가_남는다() {
+			Logger logger = (Logger) LoggerFactory.getLogger(RouteRecommendServiceImpl.class);
+			ListAppender<ILoggingEvent> appender = new ListAppender<>();
+			appender.start();
+			logger.addAppender(appender);
+			try {
+				// 관심사 2건 중 비공백 1건, 선별 2지점 중 일치 1지점 — interests=1, matched=1 이 남아야 한다.
+				given(collector.collect(any(), any())).willReturn(List.of(
+					new RouteCandidate("국밥 골목", Kind.PLACE, 35.15, 129.08, GridEncoder.encode(35.15, 129.08),
+						null, null, null, null, "맛집", List.of()),
+					장소후보("서점", 35.16, 129.09)));
+				server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
+					"{\"region\": null, \"period\": null, \"interests\": [\"맛집\", \" \"], "
+						+ "\"preferred_order\": []}",
+					MediaType.APPLICATION_JSON));
+				explain은_이유를_준다("r1", "r2");
+
+				service.recommend(USER_ID, 요청());
+
+				String line = appender.list.stream().map(ILoggingEvent::getFormattedMessage)
+					.filter(message -> message.contains("outcome="))
+					.findFirst().orElseThrow();
+				assertThat(line).contains("interests=1").contains("matched=1");
+			} finally {
+				logger.detachAppender(appender);
+			}
 		}
 	}
 
