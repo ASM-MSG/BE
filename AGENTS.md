@@ -129,6 +129,12 @@ gitignore 대상이라 레포에 없으니 `src/main/resources/application-local
 
 ## 도구별 참고
 
-`.claude/skills/`의 워크플로우 스킬 중 `prd-writer`는 도구를 가리지 않지만,
-`spec-driven-dev`는 Claude Code의 서브에이전트 기능(Agent·SendMessage·작업 보드)에 의존하므로
-다른 도구에서는 그대로 쓸 수 없다. 그 경우 스킬 문서를 절차 설명서로 읽고 수동으로 따른다.
+`.claude/skills/`의 워크플로우 스킬 중 `prd-writer`와 `srs-writer`는 도구를 가리지 않지만,
+`spec-driven-dev`와 `spec-writer`는 Claude Code의 서브에이전트 기능(Agent·SendMessage·작업 보드)에
+의존하므로 다른 도구에서는 그대로 쓸 수 없다. 그 경우 스킬 문서를 절차 설명서로 읽고 수동으로
+따른다 — 역할 정의는 `.codex/agents/*.toml`에 있고, 위임하는 자리에서 같은 세션이 그 역할로
+이어서 작업한다. **구현과 검증은 그때도 분리한 패스로 돈다.** 자기가 쓴 코드를 자기가 통과시키지
+말고 `convention-reviewer.toml`의 체크리스트로 따로 훑는다.
+
+`.agents/skills`는 `.claude/skills`를 가리키는 심볼릭 링크다. 예전에는 별도 사본이었는데 하루 만에
+갈라져 두 도구가 다른 규칙을 읽었다 (MSG-525). 사본을 되살리지 말고 `.claude/skills/` 한 곳만 고친다.

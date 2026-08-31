@@ -3,7 +3,8 @@
 빌드 green 후 리더가 명시적으로 실행하는 추가 검증층. 실행 전 이 문서를 읽고 그대로 따른다.
 
 ```bash
-S=$(ls -d ~/.claude/plugins/cache/openai-codex/codex/*/scripts 2>/dev/null | sort -V | tail -1)
+S=$(ls -d ~/.codex/plugins/cache/openai-codex/codex/*/scripts \
+       ~/.claude/plugins/cache/openai-codex/codex/*/scripts 2>/dev/null | sort -V | tail -1)
 if [ -n "$S" ]; then
 	node "$S/codex-companion.mjs" review --wait --scope working-tree
 	# 비0 종료는 "생략"이 아니라 실패다 — 원인(로그인 만료·네트워크 등)을 사용자에게 보고하고

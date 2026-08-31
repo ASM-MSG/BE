@@ -91,6 +91,13 @@ jobs:
             exit 1
           fi
 
+      # .agents/skills 는 .claude/skills 를 가리키는 심볼릭 링크다. 사본으로 되돌아가면 Claude 와
+      # Codex 가 다시 다른 규칙을 읽는다 — 실제로 하루 만에 갈라졌다. (MSG-525)
+      - name: 스킬 정의 단일 정본 검사
+        run: |
+          [ "$(git ls-files -s .agents/skills | awk '{print $1}')" = "120000" ] \
+            || { echo "::error::.agents/skills 가 .claude/skills 심볼릭 링크가 아닙니다 — 사본을 만들지 말고 링크를 되돌리세요."; exit 1; }
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
