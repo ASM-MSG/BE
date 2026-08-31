@@ -5,7 +5,7 @@
 **병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(`git checkout --ours docs/rtm.md` 등)
 스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다.
 
-요약: FR 291건 중 테스트 연결 260건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
+요약: FR 292건 중 테스트 연결 261건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -211,7 +211,7 @@
 | FR-ROUTE-03 | 구현됨 | EventQueryServiceTest, PlaceSearchServiceTest, RouteCandidateCollectorTest, RouteOrderPlannerTest |
 | FR-ROUTE-04 | 구현됨 | RouteCandidateCollectorTest |
 | FR-ROUTE-05 | 구현됨 | RouteIntentClientTest, RouteRecommendServiceTest |
-| FR-ROUTE-06 | 구현됨 | RouteCandidateCollectorTest, RouteIntentClientTest |
+| FR-ROUTE-06 | 구현됨 | RouteCandidateCollectorTest, RouteIntentClientTest, RouteRecommendServiceTest |
 | FR-ROUTE-07 | 구현됨 | RouteCandidateCollectorTest, RouteRecommendServiceTest |
 | FR-ROUTE-08 | 구현됨 | RouteIntentClientTest, RouteRecommendServiceTest |
 | FR-ROUTE-09 | 구현됨 | RouteRecommendServiceTest |
@@ -223,6 +223,7 @@
 | FR-ROUTE-15 | 계획 | (없음) |
 | FR-ROUTE-16 | 진행 중 | RouteControllerTest, RouteWalkPathServiceTest, RouteWalkSegmentCacheTest, TmapWalkClientTest |
 | FR-ROUTE-17 | 진행 중 | RouteWalkDailyLimiterTest, RouteWalkPathServiceTest, TmapWalkClientTest |
+| FR-ROUTE-18 | 구현됨 | InterestMatcherTest, RouteCandidateCollectorTest, RouteOrderPlannerTest, RouteRecommendServiceTest |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
 | FR-NOTI-02 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest, NotificationRelayTest |
 | FR-NOTI-03 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest |
