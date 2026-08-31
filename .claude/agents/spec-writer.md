@@ -93,6 +93,12 @@ MSG-XX 티켓(사용자가 대화로 준 설명, 또는 Jira의 MSG 프로젝트
 {Given/When/Then 또는 한국어 테스트 메서드명 후보 목록}
 ```
 
+## 응답 컨트랙트
+
+최종 보고에 `.claude/rules/agent-response-contract.md`의 4항목(Applied rules / Applied skills /
+Why this routing / 수정하지 않은 파일)을 포함한다. 스킬을 안 불렀으면 "없음"이라고 명시한다 —
+빈 항목을 생략하면 컨텍스트 유실 탐지가 안 된다.
+
 ## 에러 핸들링
 
 - 티켓 설명이 상충되거나 기존 스펙과 충돌하면 추측해서 채우지 않고, 상충 지점을 `## 미해결 질문`

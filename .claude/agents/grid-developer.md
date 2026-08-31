@@ -46,6 +46,12 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 **출력**: entity/repository/service/controller/dto/exception + 대응 테스트. 완성 후
 convention-reviewer에게 리뷰를 요청한다(전체 완료를 기다리지 않고 모듈 단위로 점진적으로).
 
+## 응답 컨트랙트
+
+최종 보고에 `.claude/rules/agent-response-contract.md`의 4항목(Applied rules / Applied skills /
+Why this routing / 수정하지 않은 파일)을 포함한다. 스킬을 안 불렀으면 "없음"이라고 명시한다 —
+빈 항목을 생략하면 컨텍스트 유실 탐지가 안 된다.
+
 ## 에러 핸들링
 
 - `./gradlew test`가 실패하면 즉시 원인을 고친다. 스펙 자체가 잘못된 것으로 보이면 임의로

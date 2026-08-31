@@ -19,6 +19,7 @@ FillMap 백엔드에서 일하는 AI 코딩 도구를 위한 진입점이다. Cl
 | `.claude/rules/coding-principles.md` | 코딩 행동 원칙 |
 | `.claude/rules/project-conventions.md` | 네이버 Java 컨벤션, 커밋·브랜치 규칙, DTO 네이밍 |
 | `.claude/rules/response-pattern.md` | 공통 응답 포맷과 예외 처리. 새 API를 만들면 반드시 본다 |
+| `.claude/rules/agent-response-contract.md` | 에이전트 응답 컨트랙트. 작업 마무리 응답에 MUST 4항목 + 카나리 |
 | `.claude/rules/glossary.md` | 도메인 용어 정의. 격자·점령·방문·도감의 뜻이 코드와 UI에서 다르다 |
 | `.claude/docs/status.md` | **구현 현황. 문서 중 가장 먼저 본다** — 무엇이 실제로 있는지의 정본 |
 | `.claude/docs/architecture.md` | 서비스 아키텍처 |
