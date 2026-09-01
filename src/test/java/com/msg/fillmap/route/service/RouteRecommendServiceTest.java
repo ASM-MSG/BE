@@ -187,6 +187,14 @@ class RouteRecommendServiceTest {
 		server.expect(requestTo(EXPLAIN_URL)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
 	}
 
+	/** 신계약 explain 스텁 (MSG-539) — reasons 에 동선 전체의 종합 이유 summary 가 함께 실린 응답. */
+	private void explain은_요약과_이유를_준다(String summary, String... reasons) {
+		String body = "{\"reasons\": [" + String.join(", ",
+			List.of(reasons).stream().map(reason -> "\"" + reason + "\"").toList())
+			+ "], \"summary\": \"" + summary + "\"}";
+		server.expect(requestTo(EXPLAIN_URL)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+	}
+
 	/* ---------- 시나리오 ---------- */
 
 	@Nested
@@ -229,7 +237,7 @@ class RouteRecommendServiceTest {
 			server.verify();
 		}
 
-		// 검증: FR-ROUTE-05
+		// 검증: FR-ROUTE-05, FR-ROUTE-20, AC-539-07 (지점별 이유는 변경 전과 같다 — 기존 테스트 유지로 갈음)
 		@Test
 		void 지점마다_추천_이유가_실린다() {
 			given(collector.collect(any(), any()))
@@ -474,6 +482,110 @@ class RouteRecommendServiceTest {
 			RouteRecommendResponseDto second = service.recommend(USER_ID, 요청());
 
 			assertThat(second).isEqualTo(first);
+			server.verify();
+		}
+	}
+
+	@Nested
+	@DisplayName("종합 추천 이유 (MSG-539 FR-ROUTE-20) — 지점이 실리면 summary, 빈 목록이면 null")
+	class Summary {
+
+		// 검증: FR-ROUTE-20, AC-539-01
+		@Test
+		@DisplayName("정상 추천 응답에 종합 이유가 실린다 — explain 스텁의 summary 그대로, 지점별 reason 은 종전대로")
+		void 정상_추천_응답에_종합_이유가_실린다() {
+			given(collector.collect(any(), any())).willReturn(List.of(
+				장소후보("카페", 35.15, 129.08), 장소후보("서점", 35.16, 129.09), 장소후보("맛집", 35.17, 129.10)));
+			parse는_빈해석을_준다();
+			explain은_요약과_이유를_준다("화면 범위의 세 곳을 걷기 좋은 순서로 묶었어요.", "r1", "r2", "r3");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
+
+			assertThat(response.summary()).isEqualTo("화면 범위의 세 곳을 걷기 좋은 순서로 묶었어요.");
+			assertThat(response.points()).extracting(RoutePointDto::reason).containsExactly("r1", "r2", "r3");
+			assertThat(response.notice()).isNull();	// 정상 추천 — summary 가 문자열, notice 는 null
+		}
+
+		// 검증: FR-ROUTE-20, AC-539-01
+		@Test
+		@DisplayName("부족 안내 응답에도 지점이 있으면 종합 이유가 실린다 — 부족 notice 와 summary 공존")
+		void 부족_안내_응답에도_지점이_있으면_종합_이유가_실린다() {
+			given(collector.collect(any(), any()))
+				.willReturn(List.of(장소후보("카페", 35.15, 129.08), 장소후보("서점", 35.16, 129.09)));
+			parse는_빈해석을_준다();
+			explain은_요약과_이유를_준다("가까운 두 곳만 찾아 묶었어요.", "r1", "r2");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
+
+			assertThat(response.points()).hasSize(2);
+			assertThat(response.notice()).isNotNull();	// 부족 안내와 공존한다
+			assertThat(response.summary()).isEqualTo("가까운 두 곳만 찾아 묶었어요.");
+		}
+
+		// 검증: FR-ROUTE-20, AC-539-05
+		@Test
+		@DisplayName("빈 목록 세 갈래는 종합 이유가 null 이다 — 빈 후보·무관 문장·절단 소진 모두 explain 미호출")
+		void 빈_목록_세_갈래는_종합_이유가_null이다() {
+			// 기대는 전부 선등록한다 (MockRestServiceServer 는 첫 실요청 뒤 추가 불가). explain 기대는 세 갈래
+			// 모두 걸지 않는다 — 나갔다면 verify 가 실패한다. 수집은 갈래 1 빈 목록 → 갈래 3 절단 대상 순이고
+			// (무관 갈래는 수집 미도달), parse 는 갈래 순서대로 빈 해석 → 무관 → 빈 해석이다.
+			given(collector.collect(any(), any()))
+				.willReturn(List.of())
+				.willReturn(List.of(장소후보("카페", 37.65, 127.10)));
+			parse는_빈해석을_준다();
+			server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
+				"{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": [],"
+					+ " \"related\": false}",
+				MediaType.APPLICATION_JSON));
+			parse는_빈해석을_준다();
+
+			// 갈래 1 — 빈 후보 (FR-ROUTE-07)
+			RouteRecommendResponseDto 빈후보 = service.recommend(USER_ID, 문장요청("이 근처 축제 보고 싶어"));
+			// 갈래 2 — 무관 문장 (FR-ROUTE-19)
+			clock.advance(Duration.ofSeconds(10));
+			RouteRecommendResponseDto 무관 = service.recommend(USER_ID, 문장요청("롤 정글 동선 짜 줘"));
+			// 갈래 3 — 도보 절단 소진 (FR-ROUTE-13): origin→유일 후보가 직선 약 31km 라 첫 구간부터 동선이 빈다
+			clock.advance(Duration.ofSeconds(10));
+			RouteRecommendResponseDto 절단소진 = service.recommend(USER_ID, new RouteRecommendRequestDto(
+				"서울 축제 보고 싶어", new ViewportDto(37.45, 126.85, 37.65, 127.10), new OriginDto(37.45, 126.85)));
+
+			assertThat(빈후보.summary()).isNull();
+			assertThat(무관.summary()).isNull();
+			assertThat(절단소진.summary()).isNull();
+			assertThat(빈후보.notice()).isNotNull();	// notice 가 summary 의 자리를 맡는다
+			server.verify();
+		}
+
+		// 검증: FR-ROUTE-20, AC-539-06
+		@Test
+		@DisplayName("빈 해석이어도 지점이 실리면 종합 이유가 온다 — 뷰포트 기준 추천도 summary 경로가 같다")
+		void 빈_해석이어도_지점이_실리면_종합_이유가_온다() {
+			given(collector.collect(any(), any())).willReturn(List.of(장소후보("카페", 35.15, 129.08)));
+			parse는_빈해석을_준다();	// related=true, 전 필드 빈 해석 (FR-ROUTE-06)
+			explain은_요약과_이유를_준다("지금 보는 화면 범위에서 골랐어요.", "r1");
+
+			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
+
+			assertThat(response.points()).hasSize(1);
+			assertThat(response.summary()).isEqualTo("지금 보는 화면 범위에서 골랐어요.");
+		}
+
+		// 검증: FR-ROUTE-20, AC-539-09
+		@Test
+		@DisplayName("캐시 창 안 재요청에도 종합 이유가 새로 실린다 — parse 는 1회, explain 은 2회 (summary 비캐시)")
+		void 캐시_창_안_재요청에도_종합_이유가_새로_실린다() {
+			given(collector.collect(any(), any())).willReturn(List.of(장소후보("카페", 35.15, 129.08)));
+			parse는_빈해석을_준다();	// parse 기대는 한 번뿐 — 둘째 요청이 parse 를 사면 verify 가 실패한다
+			explain은_요약과_이유를_준다("첫 요약입니다.", "r1");
+			explain은_요약과_이유를_준다("둘째 요약입니다.", "r1");
+
+			RouteRecommendResponseDto first = service.recommend(USER_ID, 요청());
+			clock.advance(Duration.ofSeconds(10));	// 요청 제한 창은 넘고 캐시 TTL(10분) 안이다
+			RouteRecommendResponseDto second = service.recommend(USER_ID, 요청());
+
+			// 값이 다른 두 요약이 각자 실렸다 — explain 이 캐시 없이 요청마다 새로 나간 관측 지점이다 (결정 5).
+			assertThat(first.summary()).isEqualTo("첫 요약입니다.");
+			assertThat(second.summary()).isEqualTo("둘째 요약입니다.");
 			server.verify();
 		}
 	}

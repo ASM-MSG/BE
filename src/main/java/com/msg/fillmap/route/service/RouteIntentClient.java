@@ -49,6 +49,8 @@ public class RouteIntentClient {
 	private static final int MAX_PARSE_TEXT_LENGTH = 50;
 	private static final int MAX_PARSE_LIST_ITEMS = 10;
 	private static final int MAX_REASON_LENGTH = 120;
+	// summary 는 동선 전체 서술이라 지점별 한 줄(120자)의 두 배가 상한이다 (MSG-539 결정 2).
+	private static final int MAX_SUMMARY_LENGTH = 240;
 	// related 는 MSG-533 배포 확인(2026-09-01) 후 필수로 승격됐다 — 부재는 다른 네 키와 같은 형태 위반이다.
 	private static final Set<String> PARSE_FIELDS =
 		Set.of("region", "period", "interests", "preferred_order", "related");
@@ -87,9 +89,14 @@ public class RouteIntentClient {
 	/**
 	 * 추천 이유 문장화 (POST /route/explain). points 0개는 AI 가 422 로 거부하는 요청이라 호출자가 만들지
 	 * 않는다(빈 후보 분기는 서비스 몫). name·facts 의 100자 절단과 facts 하한 1 보장도 조립하는 호출자 몫이다.
+	 *
+	 * 한시(MSG-539 결정 3의 1단계): text 는 받아 두기만 하고 본문에 싣지 않는다 — 구계약 AI 의 요청 모델이
+	 * 정의 밖 필드를 거부(extra="forbid")해서 먼저 보내면 전면 422 다. AI 개정(MSG-540) 배포 확인 후 승격
+	 * 커밋이 text 동봉과 summary 부재의 14502 승격을 한 커밋으로 함께 바꾼다.
 	 */
-	public List<String> explain(List<ExplainPoint> points) {
-		return toReasons(exchange("/route/explain", Map.of("points", points)), points.size());
+	public ExplainResult explain(String text, List<ExplainPoint> points) {
+		JsonNode response = exchange("/route/explain", Map.of("points", points));
+		return new ExplainResult(toReasons(response, points.size()), toSummary(response));
 	}
 
 	private JsonNode exchange(String uri, Object body) {
@@ -227,6 +234,28 @@ public class RouteIntentClient {
 		return values;
 	}
 
+	/**
+	 * summary 형태 검증 (MSG-539 결정 2) — 있으면 개행 없는 1~240자 문자열만 채택한다. 부재와 명시 null 은
+	 * 둘 다 null 한시 수용이다(결정 3의 1단계 — 승격 커밋이 두 경우 모두 14502 로 바꿔야 한다. 부재만 승격하면
+	 * text 없는 요청에 "summary": null 을 싣는 신 AI 구현 앞에서 계약이 반쪽으로 열린다). 정의 밖 필드를
+	 * 거부하지 않는 explain 기존 동작은 그대로다(MSG-457 검증 목록) — 그 관용이 신구 계약 전환 구간을 성립시킨다.
+	 */
+	private String toSummary(JsonNode response) {
+		JsonNode summary = response.path("summary");
+		if (summary.isMissingNode() || summary.isNull()) {
+			return null;
+		}
+		if (!summary.isString()) {
+			throw contractViolation("summary 가 문자열 아님");
+		}
+		String value = summary.asString();
+		if (value.isBlank() || value.length() > MAX_SUMMARY_LENGTH
+			|| value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0) {
+			throw contractViolation("summary 규칙 위반 (빈 문자열·길이·개행)");
+		}
+		return value;
+	}
+
 	/** 형태 위반 단일 수렴(14502) — 위반 지점만 남기고 모델 산출 값 자체는 로그에 남기지 않는다 (지표 로그 규칙). */
 	private ApiException contractViolation(String what) {
 		log.warn("[route] AI 응답 형태 위반 — 14502 수렴: {}", what);
@@ -247,6 +276,10 @@ public class RouteIntentClient {
 
 	/** explain 요청의 지점 하나 — kind 는 응답 DTO 다섯 값의 소문자, facts 는 지점당 1~5개 하한 1 (계약). */
 	public record ExplainPoint(String name, String kind, List<String> facts) {
+	}
+
+	/** explain 응답 — reasons 는 points 와 같은 개수·순서, summary 는 동선 전체의 종합 이유다 (MSG-539). */
+	public record ExplainResult(List<String> reasons, String summary) {
 	}
 
 	/**

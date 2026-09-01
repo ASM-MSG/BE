@@ -29,6 +29,7 @@ import com.msg.fillmap.route.dto.RouteRecommendResponseDto.RoutePointDto;
 import com.msg.fillmap.route.exception.RouteErrorCode;
 import com.msg.fillmap.route.service.RouteCandidate.Kind;
 import com.msg.fillmap.route.service.RouteIntentClient.ExplainPoint;
+import com.msg.fillmap.route.service.RouteIntentClient.ExplainResult;
 import com.msg.fillmap.route.service.RouteIntentClient.ParsedIntent;
 import com.msg.fillmap.zone.service.ZoneCellName;
 import com.msg.fillmap.zone.service.ZoneNameQueryService;
@@ -177,7 +178,7 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 			// mentionedArea 는 null: 문장에 지역 표기가 섞여 있어도 지도를 옮기면 무관 안내와 화면 행동이
 			// 모순이고, MOVE 가 없으니 재요청 예외(MSG-487)도 안 열린다. 요청 제한 창은 진입 전 선점으로
 			// 이미 소모됐고 정상 응답이라 되돌리지 않는다 (FR-ROUTE-12).
-			return new RouteRecommendResponseDto(List.of(), UNRELATED_NOTICE, null);
+			return new RouteRecommendResponseDto(List.of(), UNRELATED_NOTICE, null, null);
 		}
 
 		ViewportBounds bounds = new ViewportBounds(
@@ -190,7 +191,7 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 			// 빈 후보는 explain 을 부르지 않는다 (FR-ROUTE-07) — AI 계약이 points 0개를 422 로 거부하므로
 			// 태우면 성공이어야 할 응답이 14502 실패로 뒤집힌다 (§도메인 로직 도입부 분기).
 			// 신호는 여기에도 싣는다 — 화면 안에 후보조차 없는 응답이야말로 이동 제안이 가장 필요한 지점이다.
-			return new RouteRecommendResponseDto(List.of(), EMPTY_NOTICE, mentionedArea);
+			return new RouteRecommendResponseDto(List.of(), EMPTY_NOTICE, mentionedArea, null);
 		}
 		List<RouteCandidate> ordered = RouteOrderPlanner.order(candidates, intent.preferredOrder(), request.origin(),
 			(viewport.minLat() + viewport.maxLat()) / 2, (viewport.minLng() + viewport.maxLng()) / 2);
@@ -200,14 +201,15 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 		if (ordered.isEmpty()) {
 			// 도보 예산 절단(MSG-515)으로 빈 동선 — explain 계약이 points 0개를 422 로 거부하므로 태우지 않고
 			// 빈 후보 조기 반환과 같은 형태로 합류한다 (§도메인 로직 도입부 분기와 같은 이유).
-			return new RouteRecommendResponseDto(List.of(), EMPTY_NOTICE, mentionedArea);
+			return new RouteRecommendResponseDto(List.of(), EMPTY_NOTICE, mentionedArea, null);
 		}
 
 		long explainStart = clock.millis();
-		List<String> reasons = intentClient.explain(explainPoints(ordered));
+		// text 는 승격 커밋(MSG-540 완료 조건)부터 본문에 실린다 — 지금은 시그니처만 미리 받는다 (MSG-539 결정 3).
+		ExplainResult explainResult = intentClient.explain(text, explainPoints(ordered));
 		spans[1] = clock.millis() - explainStart;
 
-		return assemble(ordered, reasons, mentionedArea);
+		return assemble(ordered, explainResult, mentionedArea);
 	}
 
 	/**
@@ -321,13 +323,15 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 
 	/**
 	 * 응답 조립 — 표시명 재료는 리졸버 요청당 1회 로드 후 지점마다 순수 계산, 행정동 이름은 일괄 1회 조회다
-	 * (둘 다 N+1 봉쇄 계약, §계약 변경). reasons 는 explain 검증을 통과한 값이라 points 와 개수·순서가 같다.
+	 * (둘 다 N+1 봉쇄 계약, §계약 변경). reasons 는 explain 검증을 통과한 값이라 points 와 개수·순서가 같고,
+	 * summary 는 검증 통과 값 그대로 마지막 성분에 싣는다 (MSG-539 — 한시 수용 기간엔 null 일 수 있다).
 	 */
-	private RouteRecommendResponseDto assemble(List<RouteCandidate> ordered, List<String> reasons,
+	private RouteRecommendResponseDto assemble(List<RouteCandidate> ordered, ExplainResult explainResult,
 		MentionedAreaDto mentionedArea) {
 		ZoneNameResolver resolver = zoneNameQueryService.resolver();
 		Map<String, String> regionNames = gridQueryService.resolveRegionNames(
 			ordered.stream().map(RouteCandidate::gridId).distinct().toList());
+		List<String> reasons = explainResult.reasons();
 		List<RoutePointDto> points = new ArrayList<>();
 		for (int i = 0; i < ordered.size(); i++) {
 			RouteCandidate candidate = ordered.get(i);
@@ -339,7 +343,8 @@ public class RouteRecommendServiceImpl implements RouteRecommendService {
 				candidate.missionId(), candidate.occurrenceId()));
 		}
 		return new RouteRecommendResponseDto(points, points.size() >= NOTICE_THRESHOLD ? null
-			: String.format(Locale.ROOT, INSUFFICIENT_NOTICE, points.size()), mentionedArea);
+			: String.format(Locale.ROOT, INSUFFICIENT_NOTICE, points.size()), mentionedArea,
+			explainResult.summary());
 	}
 
 	private static String truncate(String value) {
