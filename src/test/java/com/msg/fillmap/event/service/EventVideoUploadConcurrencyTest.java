@@ -223,7 +223,7 @@ class EventVideoUploadConcurrencyTest {
 			// 시더 측 이행: 같은 행을 잠그고 대표 격자를 옆 칸으로 옮긴다 (영역 안이라 지연 FK 통과).
 			EventLocation locked = locationRepository.findWithLockById(ids[1]).orElseThrow();
 			locked.update(locked.getOccurrence(), locked.getName(), locked.getType(), locked.getOperatingHours(),
-				locked.getDisplayOrder(), 격자(1));
+				locked.getDisplayOrder(), 격자(1), locked.getImageKey());
 			locationRepository.flush();
 			업로드.start();
 			return 내가_막고_있기를_기다린다(업로드_pid);

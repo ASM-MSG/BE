@@ -117,7 +117,7 @@ class OrgEventQueryServiceTest {
 	private EventLocation 위치(EventOccurrence occurrence, String name, int displayOrder) {
 		String gridId = 격자_시퀀스.getAndIncrement() + "_900000";
 		EventLocation location = new EventLocation(occurrence, 키("loc"));
-		location.update(occurrence, name, EventLocationType.POPUP, "11:00 ~ 20:00", displayOrder, gridId);
+		location.update(occurrence, name, EventLocationType.POPUP, "11:00 ~ 20:00", displayOrder, gridId, null);
 		locationRepository.save(location);
 		locationGridRepository.save(new EventLocationGrid(location.getId(), occurrence.getId(), gridId));
 		return location;

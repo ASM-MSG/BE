@@ -58,7 +58,7 @@ public class EventTestFixtures {
 	/** 첫 격자가 대표 격자다 — 대표 격자 결정 규칙(3단)은 시더 몫이고 여기서는 지정값을 그대로 쓴다. */
 	public EventLocation 위치(EventOccurrence occurrence, String name, String... gridIds) {
 		EventLocation location = new EventLocation(occurrence, 키("loc"));
-		location.update(occurrence, name, EventLocationType.POPUP, "11:00 ~ 20:00", 0, gridIds[0]);
+		location.update(occurrence, name, EventLocationType.POPUP, "11:00 ~ 20:00", 0, gridIds[0], null);
 		locationRepository.save(location);
 		for (String gridId : gridIds) {
 			locationGridRepository.save(new EventLocationGrid(location.getId(), occurrence.getId(), gridId));
