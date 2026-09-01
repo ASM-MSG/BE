@@ -45,6 +45,7 @@ import com.msg.fillmap.user.entity.AuthProvider;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.entity.UserRole;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.user.service.OrgAccountIssueService;
 
 /**
  * 비밀번호 상태·변경·재설정 4종 (MSG-497 FR-21·22, 실 DB·실 Redis). 검증 대상이 인가 경계·저장소
@@ -95,6 +96,10 @@ class PasswordControllerTest {
 
 	@MockitoBean
 	private MailSender mailSender;
+
+	/** 초기 비밀번호 재발송 — 관리자 API 를 거치지 않고 그 경로의 세션 무효화만 본다. */
+	@Autowired
+	private OrgAccountIssueService orgAccountIssueService;
 
 	private User organizer;
 	private String organizerEmail;
@@ -744,6 +749,24 @@ class PasswordControllerTest {
 					.content(initialBody(NEW_PASSWORD)))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.developCode").value(2403));
+		}
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("재발송 후 옛 토큰으로는 초기 설정이 거절된다 — 자격 회전이 무력화되지 않는다")
+		void 재발송_후_옛_토큰으로는_초기_설정이_거절된다() throws Exception {
+			초기_비밀번호_상태로_만든다();
+			String oldToken = bearer(organizer);
+
+			orgAccountIssueService.resendInitialPassword(organizer.getId());
+
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, oldToken)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody(NEW_PASSWORD)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2401));
+			assertThat(userRepository.findById(organizer.getId()).orElseThrow().isPasswordMustChange()).isTrue();
 		}
 
 		// 검증: FR-AUTH-15
