@@ -30,6 +30,7 @@ import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.route.config.RouteAiProperties;
 import com.msg.fillmap.route.exception.RouteErrorCode;
 import com.msg.fillmap.route.service.RouteIntentClient.ExplainPoint;
+import com.msg.fillmap.route.service.RouteIntentClient.ExplainResult;
 import com.msg.fillmap.route.service.RouteIntentClient.ParsedIntent;
 import com.msg.fillmap.route.service.RouteIntentClient.Viewport;
 
@@ -74,7 +75,7 @@ class RouteIntentClientTest {
 	private void explain이_거부된다(String body) {
 		RouteIntentClient client = client(server ->
 			server.expect(requestTo(BASE_URL + "/route/explain")).andRespond(json(body)));
-		assertThatThrownBy(() -> client.explain(지점_2개))
+		assertThatThrownBy(() -> client.explain("해운대 가자", 지점_2개))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", RouteErrorCode.ROUTE_AI_UNAVAILABLE);
 	}
@@ -220,7 +221,7 @@ class RouteIntentClientTest {
 						""", JsonCompareMode.STRICT))
 					.andRespond(json("{\"reasons\": [\"저녁 일정으로 맞습니다.\", \"도보로 이어집니다.\"]}")));
 
-			assertThat(client.explain(지점_2개))
+			assertThat(client.explain("해운대 가자", 지점_2개).reasons())
 				.containsExactly("저녁 일정으로 맞습니다.", "도보로 이어집니다.");
 		}
 
@@ -234,6 +235,79 @@ class RouteIntentClientTest {
 			explain이_거부된다("{\"reasons\": [\"" + "가".repeat(121) + "\", \"정상\"]}");   // 121자
 			explain이_거부된다("{\"reasons\": [1, \"정상\"]}");                              // 비문자열 항목
 			explain이_거부된다("{}");                                                        // reasons 누락
+		}
+
+		// 검증: FR-ROUTE-20, AC-539-01
+		@Test
+		@DisplayName("summary 가 실린 응답은 ExplainResult 두 성분이 값 그대로다")
+		void summary가_실린_explain_응답을_그대로_파싱한다() {
+			RouteIntentClient client = client(server ->
+				server.expect(requestTo(BASE_URL + "/route/explain")).andRespond(json(
+					"{\"reasons\": [\"r1\", \"r2\"], \"summary\": \"해운대 바다와 축제를 잇는 동선입니다.\"}")));
+
+			ExplainResult result = client.explain("해운대 가자", 지점_2개);
+
+			assertThat(result.reasons()).containsExactly("r1", "r2");
+			assertThat(result.summary()).isEqualTo("해운대 바다와 축제를 잇는 동선입니다.");
+		}
+
+		// 검증: FR-ROUTE-20, AC-539-04
+		@Test
+		@DisplayName("summary 가 없는 구계약 응답은 null 로 수용한다 — 승격 커밋이 부재 거부로 교체한다 (MSG-539 결정 3)")
+		void summary가_없는_구계약_응답은_null로_수용한다() {
+			RouteIntentClient client = client(server ->
+				server.expect(requestTo(BASE_URL + "/route/explain"))
+					.andRespond(json("{\"reasons\": [\"r1\", \"r2\"]}")));
+
+			ExplainResult result = client.explain("해운대 가자", 지점_2개);
+
+			assertThat(result.reasons()).containsExactly("r1", "r2");	// reasons 처리는 정상이다
+			assertThat(result.summary()).isNull();
+
+			// 명시 null 도 부재와 같은 수용이다 (stringOrNull 선례) — 승격 커밋이 두 경우를 함께 거부로 바꾼다.
+			RouteIntentClient 명시null = client(server ->
+				server.expect(requestTo(BASE_URL + "/route/explain"))
+					.andRespond(json("{\"reasons\": [\"r1\", \"r2\"], \"summary\": null}")));
+
+			assertThat(명시null.explain("해운대 가자", 지점_2개).summary()).isNull();
+		}
+
+		// 검증: FR-ROUTE-20, AC-539-03
+		@Test
+		@DisplayName("summary 형태 위반은 14502 다 — 비문자열·빈 문자열·241자·개행, 부분 채택 없음")
+		void summary_형태_위반은_14502다() {
+			explain이_거부된다("{\"reasons\": [\"r1\", \"r2\"], \"summary\": 123}");       // 비문자열(숫자)
+			explain이_거부된다("{\"reasons\": [\"r1\", \"r2\"], \"summary\": \"\"}");      // 빈 문자열
+			explain이_거부된다("{\"reasons\": [\"r1\", \"r2\"], \"summary\": \""
+				+ "가".repeat(241) + "\"}");                                              // 241자
+			explain이_거부된다("{\"reasons\": [\"r1\", \"r2\"], \"summary\": \"줄\\n바꿈\"}"); // 개행 포함
+		}
+
+		// 검증: FR-ROUTE-20, AC-539-08
+		@Test
+		@DisplayName("explain 요청 본문은 구계약과 글자 그대로 같다 — text 미동봉 (승격 커밋이 동봉 검증으로 교체)")
+		void explain_요청_본문은_구계약과_같다() {
+			// strict json 비교 — points 하나뿐인 본문과 정확히 일치해야 통과라, text 키가 실리면 실패한다.
+			RouteIntentClient client = client(server ->
+				server.expect(requestTo(BASE_URL + "/route/explain"))
+					.andExpect(method(HttpMethod.POST))
+					.andExpect(content().json("""
+						{"points": [
+							{"name": "해운대 빛축제", "kind": "mission_festival", "facts": ["8월 축제 미션 후보"]},
+							{"name": "광안리 해변", "kind": "place", "facts": ["장소 검색 결과"]}]}
+						""", JsonCompareMode.STRICT))
+					.andRespond(json("{\"reasons\": [\"r1\", \"r2\"]}")));
+
+			client.explain("해운대 가자", 지점_2개);
+		}
+
+		// 검증: FR-ROUTE-20, AC-539-07
+		@Test
+		@DisplayName("summary 가 있어도 reasons 검증은 그대로다 — 개수 불일치·121자 항목이 여전히 14502")
+		void summary가_있어도_reasons_검증은_그대로다() {
+			explain이_거부된다("{\"reasons\": [\"하나뿐\"], \"summary\": \"정상 요약\"}");   // 개수 불일치
+			explain이_거부된다("{\"reasons\": [\"" + "가".repeat(121) + "\", \"정상\"],"
+				+ " \"summary\": \"정상 요약\"}");                                       // 121자 항목
 		}
 	}
 
