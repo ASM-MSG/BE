@@ -181,10 +181,9 @@ class RouteRecommendServiceTest {
 		server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(빈_해석_응답, MediaType.APPLICATION_JSON));
 	}
 
+	/** 승격(MSG-540) 후 summary 는 필수라 기본 요약을 실어 위임한다 — 요약 값을 보는 테스트는 아래 헬퍼를 쓴다. */
 	private void explain은_이유를_준다(String... reasons) {
-		String body = "{\"reasons\": [" + String.join(", ",
-			List.of(reasons).stream().map(reason -> "\"" + reason + "\"").toList()) + "]}";
-		server.expect(requestTo(EXPLAIN_URL)).andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+		explain은_요약과_이유를_준다("동선 요약", reasons);
 	}
 
 	/** 신계약 explain 스텁 (MSG-539) — reasons 에 동선 전체의 종합 이유 summary 가 함께 실린 응답. */
@@ -263,11 +262,13 @@ class RouteRecommendServiceTest {
 			// 둘째 지점에 "이전 지점에서 X.Xkm" 가 실리면 여기서 깨진다 — 직전 거리 제거의 관측 지점.
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(content().json("""
-					{"points": [
+					{"text": "부산역 내려서 해운대 축제 보고 싶어",
+					 "points": [
 						{"name": "카페", "kind": "place", "facts": ["장소 검색 결과"]},
 						{"name": "서점", "kind": "place", "facts": ["장소 검색 결과"]}]}
 					""", JsonCompareMode.STRICT))
-				.andRespond(withSuccess("{\"reasons\": [\"r1\", \"r2\"]}", MediaType.APPLICATION_JSON));
+				.andRespond(withSuccess("{\"reasons\": [\"r1\", \"r2\"], \"summary\": \"동선 요약\"}",
+					MediaType.APPLICATION_JSON));
 
 			service.recommend(USER_ID, 요청());
 
@@ -285,7 +286,8 @@ class RouteRecommendServiceTest {
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(jsonPath("$.points[0].facts[1]", is("2026-08-01~2026-08-31 진행 중")))
-				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"], \"summary\": \"동선 요약\"}",
+					MediaType.APPLICATION_JSON));
 
 			service.recommend(USER_ID, 요청());
 
@@ -303,7 +305,8 @@ class RouteRecommendServiceTest {
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(jsonPath("$.points[0].name", is(제목.substring(0, 100))))
-				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"], \"summary\": \"동선 요약\"}",
+					MediaType.APPLICATION_JSON));
 
 			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
 
@@ -783,10 +786,11 @@ class RouteRecommendServiceTest {
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(content().json("""
-					{"points": [{"name": "남파랑길 3코스", "kind": "mission_course", "facts": [
+					{"text": "바닷가 걷는 코스",
+					 "points": [{"name": "남파랑길 3코스", "kind": "mission_course", "facts": [
 						"코스 미션 후보", "총 14km, 약 5시간 30분, 난이도 보통", "부산 앞바다를 따라 걷는 길"]}]}
 					""", JsonCompareMode.STRICT))
-				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"], \"summary\": \"동선 요약\"}", MediaType.APPLICATION_JSON));
 
 			실수집_서비스().recommend(USER_ID, 문장요청("바닷가 걷는 코스"));
 
@@ -805,11 +809,12 @@ class RouteRecommendServiceTest {
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(content().json("""
-					{"points": [{"name": "빛 조형물 주간", "kind": "mission_festival", "facts": [
+					{"text": "주말에 볼만한 것",
+					 "points": [{"name": "빛 조형물 주간", "kind": "mission_festival", "facts": [
 						"축제 미션 후보", "해운대 해수욕장 특설무대", "밤을 밝히는 조형물 소개",
 						"2026-05-20~2026-06-10 진행 중"]}]}
 					""", JsonCompareMode.STRICT))
-				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"], \"summary\": \"동선 요약\"}", MediaType.APPLICATION_JSON));
 
 			실수집_서비스().recommend(USER_ID, 문장요청("주말에 볼만한 것"));
 
@@ -826,10 +831,11 @@ class RouteRecommendServiceTest {
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(content().json("""
-					{"points": [{"name": "불꽃 문화제", "kind": "event", "facts": [
+					{"text": "부산역 내려서 해운대 축제 보고 싶어",
+					 "points": [{"name": "불꽃 문화제", "kind": "event", "facts": [
 						"행사 위치", "2026-06-01~2026-06-10 진행 중"]}]}
 					""", JsonCompareMode.STRICT))
-				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"], \"summary\": \"동선 요약\"}", MediaType.APPLICATION_JSON));
 
 			service.recommend(USER_ID, 요청());
 
@@ -850,7 +856,7 @@ class RouteRecommendServiceTest {
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(jsonPath("$.points[0].facts.length()", is(5)))
 				.andExpect(jsonPath("$.points[0].facts[3]", is(긴소개.substring(0, 100))))
-				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"], \"summary\": \"동선 요약\"}", MediaType.APPLICATION_JSON));
 
 			service.recommend(USER_ID, 요청());
 
@@ -867,7 +873,7 @@ class RouteRecommendServiceTest {
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(jsonPath("$.points[0].facts[1]", is("관심사 '맛집' 일치")))
-				.andRespond(withSuccess("{\"reasons\": [\"r1\"]}", MediaType.APPLICATION_JSON));
+				.andRespond(withSuccess("{\"reasons\": [\"r1\"], \"summary\": \"동선 요약\"}", MediaType.APPLICATION_JSON));
 
 			service.recommend(USER_ID, 요청());
 
@@ -931,7 +937,7 @@ class RouteRecommendServiceTest {
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(jsonPath("$.points.length()", is(2)))
-				.andRespond(withSuccess("{\"reasons\": [\"r1\", \"r2\"]}", MediaType.APPLICATION_JSON));
+				.andRespond(withSuccess("{\"reasons\": [\"r1\", \"r2\"], \"summary\": \"동선 요약\"}", MediaType.APPLICATION_JSON));
 
 			RouteRecommendResponseDto response = service.recommend(USER_ID, 요청());
 

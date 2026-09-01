@@ -215,11 +215,13 @@ class RouteIntentClientTest {
 			RouteIntentClient client = client(server ->
 				server.expect(requestTo(BASE_URL + "/route/explain"))
 					.andExpect(content().json("""
-						{"points": [
+						{"text": "해운대 가자",
+						 "points": [
 							{"name": "해운대 빛축제", "kind": "mission_festival", "facts": ["8월 축제 미션 후보"]},
 							{"name": "광안리 해변", "kind": "place", "facts": ["장소 검색 결과"]}]}
 						""", JsonCompareMode.STRICT))
-					.andRespond(json("{\"reasons\": [\"저녁 일정으로 맞습니다.\", \"도보로 이어집니다.\"]}")));
+					.andRespond(json("{\"reasons\": [\"저녁 일정으로 맞습니다.\", \"도보로 이어집니다.\"],"
+						+ " \"summary\": \"동선 요약\"}")));
 
 			assertThat(client.explain("해운대 가자", 지점_2개).reasons())
 				.containsExactly("저녁 일정으로 맞습니다.", "도보로 이어집니다.");
@@ -253,23 +255,10 @@ class RouteIntentClientTest {
 
 		// 검증: FR-ROUTE-20, AC-539-04
 		@Test
-		@DisplayName("summary 가 없는 구계약 응답은 null 로 수용한다 — 승격 커밋이 부재 거부로 교체한다 (MSG-539 결정 3)")
-		void summary가_없는_구계약_응답은_null로_수용한다() {
-			RouteIntentClient client = client(server ->
-				server.expect(requestTo(BASE_URL + "/route/explain"))
-					.andRespond(json("{\"reasons\": [\"r1\", \"r2\"]}")));
-
-			ExplainResult result = client.explain("해운대 가자", 지점_2개);
-
-			assertThat(result.reasons()).containsExactly("r1", "r2");	// reasons 처리는 정상이다
-			assertThat(result.summary()).isNull();
-
-			// 명시 null 도 부재와 같은 수용이다 (stringOrNull 선례) — 승격 커밋이 두 경우를 함께 거부로 바꾼다.
-			RouteIntentClient 명시null = client(server ->
-				server.expect(requestTo(BASE_URL + "/route/explain"))
-					.andRespond(json("{\"reasons\": [\"r1\", \"r2\"], \"summary\": null}")));
-
-			assertThat(명시null.explain("해운대 가자", 지점_2개).summary()).isNull();
+		@DisplayName("summary 가 없으면 14502 다 — 부재와 명시 null 둘 다 (MSG-540 승격)")
+		void summary가_없으면_14502다() {
+			explain이_거부된다("{\"reasons\": [\"r1\", \"r2\"]}");                        // 부재
+			explain이_거부된다("{\"reasons\": [\"r1\", \"r2\"], \"summary\": null}");   // 명시 null
 		}
 
 		// 검증: FR-ROUTE-20, AC-539-03
@@ -283,20 +272,21 @@ class RouteIntentClientTest {
 			explain이_거부된다("{\"reasons\": [\"r1\", \"r2\"], \"summary\": \"줄\\n바꿈\"}"); // 개행 포함
 		}
 
-		// 검증: FR-ROUTE-20, AC-539-08
+		// 검증: FR-ROUTE-20, AC-539-02
 		@Test
-		@DisplayName("explain 요청 본문은 구계약과 글자 그대로 같다 — text 미동봉 (승격 커밋이 동봉 검증으로 교체)")
-		void explain_요청_본문은_구계약과_같다() {
-			// strict json 비교 — points 하나뿐인 본문과 정확히 일치해야 통과라, text 키가 실리면 실패한다.
+		@DisplayName("explain 요청에 text 가 동봉된다 — 뷰포트·사용자 식별 필드는 없다 (MSG-540 승격)")
+		void explain_요청에_text가_동봉된다() {
+			// strict json 비교 — text 와 points 두 키뿐인 본문과 정확히 일치해야 통과라, 정의 밖 필드가 실리면 실패한다.
 			RouteIntentClient client = client(server ->
 				server.expect(requestTo(BASE_URL + "/route/explain"))
 					.andExpect(method(HttpMethod.POST))
 					.andExpect(content().json("""
-						{"points": [
+						{"text": "해운대 가자",
+						 "points": [
 							{"name": "해운대 빛축제", "kind": "mission_festival", "facts": ["8월 축제 미션 후보"]},
 							{"name": "광안리 해변", "kind": "place", "facts": ["장소 검색 결과"]}]}
 						""", JsonCompareMode.STRICT))
-					.andRespond(json("{\"reasons\": [\"r1\", \"r2\"]}")));
+					.andRespond(json("{\"reasons\": [\"r1\", \"r2\"], \"summary\": \"정상 요약\"}")));
 
 			client.explain("해운대 가자", 지점_2개);
 		}

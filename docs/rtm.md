@@ -227,7 +227,7 @@ AC 요약: 스펙 성공 기준 19건 중 테스트 연결 18건, 미커버 1건
 | FR-ROUTE-17 | 진행 중 | RouteWalkDailyLimiterTest, RouteWalkPathServiceTest, TmapWalkClientTest |
 | FR-ROUTE-18 | 구현됨 | InterestMatcherTest, RouteCandidateCollectorTest, RouteOrderPlannerTest, RouteRecommendServiceTest |
 | FR-ROUTE-19 | 구현됨 | RouteIntentClientTest, RouteRecommendServiceTest |
-| FR-ROUTE-20 | 진행 중 | RouteIntentClientTest, RouteRecommendServiceTest |
+| FR-ROUTE-20 | 구현됨 | RouteIntentClientTest, RouteRecommendServiceTest |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
 | FR-NOTI-02 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest, NotificationRelayTest |
 | FR-NOTI-03 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest |
@@ -382,18 +382,18 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 | AC-513-09 | MSG-513 | RouteRecommendServiceTest |
 | AC-513-10 | MSG-513 | RouteRecommendServiceTest |
 | AC-539-01 | MSG-539 | RouteIntentClientTest, RouteRecommendServiceTest |
-| AC-539-02 | MSG-539 | (없음) |
+| AC-539-02 | MSG-539 | RouteIntentClientTest |
 | AC-539-03 | MSG-539 | RouteIntentClientTest |
 | AC-539-04 | MSG-539 | RouteIntentClientTest |
 | AC-539-05 | MSG-539 | RouteRecommendServiceTest |
 | AC-539-06 | MSG-539 | RouteRecommendServiceTest |
 | AC-539-07 | MSG-539 | RouteIntentClientTest, RouteRecommendServiceTest |
-| AC-539-08 | MSG-539 | RouteIntentClientTest |
+| AC-539-08 | MSG-539 | (없음) |
 | AC-539-09 | MSG-539 | RouteRecommendServiceTest |
 
 ## 미커버 AC (보고만 — 실패 아님)
 
-- AC-539-02 (MSG-539)
+- AC-539-08 (MSG-539)
 
 ## 테스트에만 있고 스펙에 없는 AC (마커 오타 의심)
 

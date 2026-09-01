@@ -90,12 +90,11 @@ public class RouteIntentClient {
 	 * 추천 이유 문장화 (POST /route/explain). points 0개는 AI 가 422 로 거부하는 요청이라 호출자가 만들지
 	 * 않는다(빈 후보 분기는 서비스 몫). name·facts 의 100자 절단과 facts 하한 1 보장도 조립하는 호출자 몫이다.
 	 *
-	 * 한시(MSG-539 결정 3의 1단계): text 는 받아 두기만 하고 본문에 싣지 않는다 — 구계약 AI 의 요청 모델이
-	 * 정의 밖 필드를 거부(extra="forbid")해서 먼저 보내면 전면 422 다. AI 개정(MSG-540) 배포 확인 후 승격
-	 * 커밋이 text 동봉과 summary 부재의 14502 승격을 한 커밋으로 함께 바꾼다.
+	 * text(사용자 문장 원문, parse 와 같은 트림 본문)를 동봉한다 — 종합 이유(summary)의 재료다. 신계약은
+	 * "text 가 있으면 summary 필수"라 부재도 14502 다 (MSG-540 배포 확인 후 승격, 2026-09-01).
 	 */
 	public ExplainResult explain(String text, List<ExplainPoint> points) {
-		JsonNode response = exchange("/route/explain", Map.of("points", points));
+		JsonNode response = exchange("/route/explain", Map.of("text", text, "points", points));
 		return new ExplainResult(toReasons(response, points.size()), toSummary(response));
 	}
 
@@ -235,15 +234,14 @@ public class RouteIntentClient {
 	}
 
 	/**
-	 * summary 형태 검증 (MSG-539 결정 2) — 있으면 개행 없는 1~240자 문자열만 채택한다. 부재와 명시 null 은
-	 * 둘 다 null 한시 수용이다(결정 3의 1단계 — 승격 커밋이 두 경우 모두 14502 로 바꿔야 한다. 부재만 승격하면
-	 * text 없는 요청에 "summary": null 을 싣는 신 AI 구현 앞에서 계약이 반쪽으로 열린다). 정의 밖 필드를
-	 * 거부하지 않는 explain 기존 동작은 그대로다(MSG-457 검증 목록) — 그 관용이 신구 계약 전환 구간을 성립시킨다.
+	 * summary 형태 검증 (MSG-539 결정 2) — 개행 없는 1~240자 문자열만 채택한다. 부재와 명시 null 은 둘 다
+	 * 14502 다 (MSG-540 승격, 2026-09-01 — 신계약은 text 를 보낸 요청에 summary 가 필수다). 정의 밖 필드를
+	 * 거부하지 않는 explain 기존 동작은 그대로다(MSG-457 검증 목록).
 	 */
 	private String toSummary(JsonNode response) {
 		JsonNode summary = response.path("summary");
 		if (summary.isMissingNode() || summary.isNull()) {
-			return null;
+			throw contractViolation("summary 부재·null (신계약 필수)");
 		}
 		if (!summary.isString()) {
 			throw contractViolation("summary 가 문자열 아님");
