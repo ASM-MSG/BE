@@ -226,7 +226,7 @@ AC 요약: 스펙 성공 기준 10건 중 테스트 연결 10건, 미커버 0건
 | FR-ROUTE-16 | 진행 중 | RouteControllerTest, RouteWalkPathServiceTest, RouteWalkSegmentCacheTest, TmapWalkClientTest |
 | FR-ROUTE-17 | 진행 중 | RouteWalkDailyLimiterTest, RouteWalkPathServiceTest, TmapWalkClientTest |
 | FR-ROUTE-18 | 구현됨 | InterestMatcherTest, RouteCandidateCollectorTest, RouteOrderPlannerTest, RouteRecommendServiceTest |
-| FR-ROUTE-19 | 진행 중 | RouteIntentClientTest, RouteRecommendServiceTest |
+| FR-ROUTE-19 | 구현됨 | RouteIntentClientTest, RouteRecommendServiceTest |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
 | FR-NOTI-02 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest, NotificationRelayTest |
 | FR-NOTI-03 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest |

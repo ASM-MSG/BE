@@ -90,7 +90,7 @@ class RouteRecommendServiceTest {
 	private static final String EXPLAIN_URL = BASE_URL + "/route/explain";
 	private static final ViewportDto 뷰포트 = new ViewportDto(35.05, 128.95, 35.25, 129.20);
 	private static final String 빈_해석_응답 =
-		"{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": []}";
+		"{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": [], \"related\": true}";
 
 	private final RouteCandidateCollector collector = mock(RouteCandidateCollector.class);
 	private final ZoneNameQueryService zoneNameQueryService = mock(ZoneNameQueryService.class);
@@ -168,7 +168,7 @@ class RouteRecommendServiceTest {
 	private void parse는_관심사를_준다(String interest) {
 		server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
 			"{\"region\": null, \"period\": null, \"interests\": [\"" + interest
-				+ "\"], \"preferred_order\": []}",
+				+ "\"], \"preferred_order\": [], \"related\": true}",
 			MediaType.APPLICATION_JSON));
 	}
 
@@ -783,7 +783,7 @@ class RouteRecommendServiceTest {
 					장소후보("서점", 35.16, 129.09)));
 				server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
 					"{\"region\": null, \"period\": null, \"interests\": [\"맛집\", \" \"], "
-						+ "\"preferred_order\": []}",
+						+ "\"preferred_order\": [], \"related\": true}",
 					MediaType.APPLICATION_JSON));
 				explain은_이유를_준다("r1", "r2");
 
@@ -837,7 +837,7 @@ class RouteRecommendServiceTest {
 				new MentionedRegionMatch("부산광역시", 35.1985, 129.0538,
 					35.0512, 128.7602, 35.3891, 129.2723, false)));
 			server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
-				"{\"region\": \"부산\", \"period\": null, \"interests\": [], \"preferred_order\": []}",
+				"{\"region\": \"부산\", \"period\": null, \"interests\": [], \"preferred_order\": [], \"related\": true}",
 				MediaType.APPLICATION_JSON));	// explain 기대는 걸지 않는다 — 나갔다면 verify 가 실패한다
 
 			RouteRecommendResponseDto response = service.recommend(USER_ID, new RouteRecommendRequestDto(
@@ -915,7 +915,7 @@ class RouteRecommendServiceTest {
 
 		private void parse는_지역을_준다(String region) {
 			server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
-				"{\"region\": \"" + region + "\", \"period\": null, \"interests\": [], \"preferred_order\": []}",
+				"{\"region\": \"" + region + "\", \"period\": null, \"interests\": [], \"preferred_order\": [], \"related\": true}",
 				MediaType.APPLICATION_JSON));
 		}
 
@@ -1046,7 +1046,7 @@ class RouteRecommendServiceTest {
 
 		private void parse는_지역을_준다(String region) {
 			server.expect(requestTo(PARSE_URL)).andRespond(withSuccess(
-				"{\"region\": \"" + region + "\", \"period\": null, \"interests\": [], \"preferred_order\": []}",
+				"{\"region\": \"" + region + "\", \"period\": null, \"interests\": [], \"preferred_order\": [], \"related\": true}",
 				MediaType.APPLICATION_JSON));
 		}
 
