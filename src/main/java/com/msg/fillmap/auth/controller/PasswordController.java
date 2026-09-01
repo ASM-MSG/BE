@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.auth.dto.PasswordChangeRequestDto;
+import com.msg.fillmap.auth.dto.PasswordInitialRequestDto;
 import com.msg.fillmap.auth.dto.PasswordResetConfirmRequestDto;
 import com.msg.fillmap.auth.dto.PasswordResetRequestDto;
 import com.msg.fillmap.auth.dto.PasswordStatusResponseDto;
@@ -55,6 +56,23 @@ public class PasswordController {
 		@Valid @RequestBody PasswordChangeRequestDto request
 	) {
 		passwordService.changePassword(principal.userId(), request);
+		return new SuccessResponse<>(null);
+	}
+
+	@Operation(
+		summary = "초기 비밀번호 설정",
+		description = "관리자가 발급한 초기 비밀번호로 처음 로그인한 계정이 현재 비밀번호 입력 없이 새 비밀번호만으로 "
+			+ "설정을 마친다. 성공하면 강제 변경 상태가 풀려 콘솔이 열리고, 남아 있던 재설정 링크는 폐기된다. "
+			+ "로그인 중인 세션은 그대로 유지된다.\n\n"
+			+ "이미 설정을 마친 계정은 2446 으로 거절되니 비밀번호 변경(/change) 화면으로 안내하면 된다. "
+			+ "소셜 로그인 계정은 2445 로 거절된다."
+	)
+	@PostMapping("/initial")
+	public SuccessResponse<Void> setInitialPassword(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
+		@Valid @RequestBody PasswordInitialRequestDto request
+	) {
+		passwordService.setInitialPassword(principal.userId(), request);
 		return new SuccessResponse<>(null);
 	}
 
