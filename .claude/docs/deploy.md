@@ -181,18 +181,32 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
      "Effect": "Allow",
      "Principal": "*",
      "Action": "s3:GetObject",
-     "Resource": "arn:aws:s3:::{버킷명}/event-locations/*"
+     "Resource": [
+       "arn:aws:s3:::{버킷명}/event-locations/seed/*",
+       "arn:aws:s3:::{버킷명}/event-locations/org-submission/*"
+     ]
    }
    ```
+
+   **`event-locations/*` 한 줄로 줄이지 않는다.** Statement 하나로 4번과 5번을 함께 닫는 편의는
+   Resource 배열로 그대로 얻으면서, 앞으로 이 접두사 아래에 생길 프리픽스가 자동으로 공개되는 것은
+   막는다. 나중에 비공개 자료를 `event-locations/` 아래에 두는 순간 와일드카드가 그것까지 열어버린다.
 
    **올릴 객체 13장**은 레포 밖 로컬 산출물이다(`event-images/`, jpg 는 gitignore). 파일이 없으면
    `event-images/CREDITS.json`(이 파일만 커밋된다)의 `sourcePage` 를 열어 다시 받으면 된다 — 부산
    장소 일곱 장은 부산관광아카이브 공공누리 제1유형, 나머지 여섯 장은 위키미디어 공용이고, 항목마다
-   원본 페이지 URL·라이선스·저작자가 적혀 있다. 정책 적용 뒤 올린다:
+   원본 페이지 URL·라이선스·저작자가 적혀 있다.
+
+   정책을 적용한 뒤, 업로드는 **`CREDITS.json` 에 적힌 열세 개만** 올린다. 폴더를 통째로 재귀 복사하면 그 폴더에
+   섞여 들어온 파일까지 공개 버킷에 올라간다 — `event-images/` 는 gitignore 대상이라 리뷰를 거치지
+   않는 자리다.
 
    ```bash
-   AWS_PROFILE=soma aws s3 cp event-images/ s3://fillmap-video-dev/event-locations/seed/ \
-     --recursive --exclude '*' --include '*.jpg'
+   cd "$(git rev-parse --show-toplevel)"
+   python3 -c "import json;[print(i['file'].split('/')[-1]) for i in json.load(open('event-images/CREDITS.json'))['items']]" \
+   | while read -r f; do
+       AWS_PROFILE=soma aws s3 cp "event-images/$f" "s3://fillmap-video-dev/event-locations/seed/$f"
+     done
    ```
 
    프로파일을 안 주면 아래 경고대로 남의 계정이 잡혀 `AccessDenied` 로 떨어진다.
@@ -204,6 +218,12 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    curl -s -o /dev/null -w '%{http_code}\n' \
      "https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/event-locations/seed/busan-fireworks-2026.jpg"
    ```
+
+   ⚠️ **저작자 표시 의무가 미해결이다.** 열세 장 중 열한 장이 출처표시를 요구하는데(공공누리
+   제1유형 일곱·CC BY 셋·CC BY-SA 하나) 화면에 표기할 자리가 없다. `CREDITS.json` 은 우리 쪽 추적 기록이지
+   공개 표시가 아니라 의무를 대신하지 못한다. 그래서 **이 절차는 dev 까지다** — prod 적용과 대외
+   노출(발표·데모 포함) 전에 표기 자리를 만들거나 표시 의무가 없는 사진으로 갈아타야 한다.
+   결정 상태는 `docs/spec/MSG-538.md` 미해결 질문 1번에 있다.
 
    **순서가 어긋나도 이번 건은 피해가 작다.** 3번(미션)은 완성 URL 을 DB 에 저장해서 403 인 채로
    적재하면 전량을 다시 손봐야 했지만, 이벤트 이미지는 키만 저장하고 주소는 조회 시점에 조립하므로
