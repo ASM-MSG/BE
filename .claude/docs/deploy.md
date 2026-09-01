@@ -163,6 +163,25 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    dev·prod 모두 미적용(2026-08-30 기준) — MSG-500 배포 전에 dev부터 적용하고 3번과 같은
    curl 검증을 거친다.
 
+5. **`event-locations/seed/*` 공개 읽기 버킷 정책** (MSG-538) — 시드로 들어오는 이벤트 회차
+   대표 이미지와 행사 위치 커버가 이 프리픽스에 올라가고, 회차 상세·위치 목록 응답이 조회 시점에
+   공개 URL로 조립해 내보낸다. 4번과 프리픽스만 다른 형제라 **Resource를
+   `event-locations/*` 하나로 잡으면 4번과 5번이 한 Statement로 함께 닫힌다** — 회차와 위치가
+   프리픽스를 나누지 않고 같은 `event-locations/seed/`를 쓰는 이유도 정책을 쪼개지 않기 위해서다.
+   dev·prod 모두 미적용(2026-09-01 실측 — 두 프리픽스 모두 403) — 시더를 돌리기 전에 적용하고
+   3번과 같은 curl 검증을 거친다. 403인 채로 적재하면 회차 4건·위치 9곳에 열리지 않는 주소가
+   그대로 들어간다.
+
+   객체 13장은 레포 밖 로컬 산출물이다(`event-images/`, jpg 는 gitignore. 출처와 라이선스는
+   같은 폴더의 `CREDITS.json` 이 추적하고 이 파일만 커밋한다). 정책 적용 뒤 올린다:
+
+   ```bash
+   AWS_PROFILE=soma aws s3 cp event-images/ s3://fillmap-video-dev/event-locations/seed/ \
+     --recursive --exclude '*' --include '*.jpg'
+   ```
+
+   프로파일을 안 주면 아래 경고대로 남의 계정이 잡혀 `AccessDenied` 로 떨어진다.
+
 ### ⚠️ AWS 프로파일 — 로컬에 계정이 둘이고 기본값이 남의 계정이다
 
 `~/.aws/credentials`에 프로파일이 둘 있는데 **기본값(`default`)이 FillMap 계정이 아니다.**
