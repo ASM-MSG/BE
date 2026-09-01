@@ -203,22 +203,34 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
 
    ```bash
    cd "$(git rev-parse --show-toplevel)"
-   python3 -c "import json;[print(i['file'].split('/')[-1]) for i in json.load(open('event-images/CREDITS.json'))['items']]" \
-   | while read -r f; do
-       AWS_PROFILE=soma aws s3 cp "event-images/$f" "s3://fillmap-video-dev/event-locations/seed/$f"
-     done
+   python3 -c "import json;[print(i['file'].split('/')[-1]) for i in json.load(open('event-images/CREDITS.json'))['items']]" > /tmp/msg538-keys.txt
+   while read -r f; do
+     AWS_PROFILE=soma aws s3 cp "event-images/$f" "s3://fillmap-video-dev/event-locations/seed/$f" || {
+       echo "업로드 실패: $f"; exit 1;
+     }
+   done < /tmp/msg538-keys.txt
    ```
 
+   목록을 파일로 받아 `while` 을 파이프 밖에서 도는 이유는 두 가지다. 파이프의 서브셸에서는
+   `exit` 가 루프만 끝내고 스크립트는 계속 가고, 실패한 `cp` 를 그냥 지나치면 열세 개 중 몇 개가
+   빠진 채로 "끝났다"고 보인다.
    프로파일을 안 주면 아래 경고대로 남의 계정이 잡혀 `AccessDenied` 로 떨어진다.
 
-   **검증** — 아래가 200이어야 끝난 것이다. 403이면 정책이 저장되지 않았거나 Block Public Access
-   두 항목(1번 전제)이 아직 켜져 있는 것이다.
+   **검증** — 한 장만 찍어 보면 나머지 열두 개가 빠졌는지 알 수 없다. 목록 전부를 돈다.
+   `OK 13 / FAIL 0` 이어야 끝난 것이다.
 
    ```bash
-   curl -s -o /dev/null -w '%{http_code}\n' \
-     "https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/event-locations/seed/busan-fireworks-2026.jpg"
+   ok=0; fail=0
+   while read -r f; do
+     code=$(curl -s -o /dev/null -w '%{http_code}' \
+       "https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/event-locations/seed/$f")
+     [ "$code" = "200" ] && ok=$((ok+1)) || { fail=$((fail+1)); echo "$code $f"; }
+   done < /tmp/msg538-keys.txt
+   echo "OK $ok / FAIL $fail"
    ```
 
+   403 이면 정책이 저장되지 않았거나 Block Public Access 두 항목(1번 전제)이 아직 켜져 있는
+   것이고, 404 면 그 객체만 업로드에서 빠진 것이다 — 둘은 원인이 다르니 코드로 갈라 본다.
    ⚠️ **저작자 표시 의무가 미해결이다.** 열세 장 중 열한 장이 출처표시를 요구하는데(공공누리
    제1유형 일곱·CC BY 셋·CC BY-SA 하나) 화면에 표기할 자리가 없다. `CREDITS.json` 은 우리 쪽 추적 기록이지
    공개 표시가 아니라 의무를 대신하지 못한다. 그래서 **이 절차는 dev 까지다** — prod 적용과 대외
