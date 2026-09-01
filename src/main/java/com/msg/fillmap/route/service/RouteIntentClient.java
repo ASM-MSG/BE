@@ -112,7 +112,7 @@ public class RouteIntentClient {
 		}
 	}
 
-	/** parse 응답 형태 검증 — 정의 밖 필드와 필수 필드(네 키) 누락을 모두 거부한다 (계약과 1:1, NFR-SEC-08). */
+	/** parse 응답 형태 검증 — 정의 밖 필드와 필수 필드(다섯 키) 누락을 모두 거부한다 (계약과 1:1, NFR-SEC-08). */
 	private ParsedIntent toParsedIntent(JsonNode response) {
 		if (response == null || !response.isObject()) {
 			throw contractViolation("parse 응답이 JSON 객체가 아님");

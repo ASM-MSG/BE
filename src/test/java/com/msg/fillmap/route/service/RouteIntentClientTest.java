@@ -174,7 +174,7 @@ class RouteIntentClientTest {
 			parse가_거부된다("{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": [],"
 				+ " \"related\": 0}");	// 숫자
 			parse가_거부된다("{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": [],"
-				+ " \"related\": null}");	// 명시적 null — 부재(true 수용)와 다르다 (계약 "null 없음")
+				+ " \"related\": null}");	// 명시적 null — 부재(필수 키 누락)와 검증 경로만 다르고 둘 다 14502 다 (계약 "null 없음")
 		}
 
 		// 검증: FR-ROUTE-19, AC-513-04
