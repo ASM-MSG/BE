@@ -172,8 +172,23 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    3번과 같은 curl 검증을 거친다. 403인 채로 적재하면 회차 4건·위치 9곳에 열리지 않는 주소가
    그대로 들어간다.
 
-   객체 13장은 레포 밖 로컬 산출물이다(`event-images/`, jpg 는 gitignore. 출처와 라이선스는
-   같은 폴더의 `CREDITS.json` 이 추적하고 이 파일만 커밋한다). 정책 적용 뒤 올린다:
+   **넣을 Statement** (4번과 합친 형태 — 콘솔의 버킷 정책 편집기에서 기존 `Statement` 배열에
+   이 객체 하나를 추가한다. `{버킷명}`은 dev `fillmap-video-dev`, prod는 해당 환경 버킷):
+
+   ```json
+   {
+     "Sid": "PublicReadEventLocationImages",
+     "Effect": "Allow",
+     "Principal": "*",
+     "Action": "s3:GetObject",
+     "Resource": "arn:aws:s3:::{버킷명}/event-locations/*"
+   }
+   ```
+
+   **올릴 객체 13장**은 레포 밖 로컬 산출물이다(`event-images/`, jpg 는 gitignore). 파일이 없으면
+   `event-images/CREDITS.json`(이 파일만 커밋된다)의 `sourcePage` 를 열어 다시 받으면 된다 — 부산
+   장소 일곱 장은 부산관광아카이브 공공누리 제1유형, 나머지 여섯 장은 위키미디어 공용이고, 항목마다
+   원본 페이지 URL·라이선스·저작자가 적혀 있다. 정책 적용 뒤 올린다:
 
    ```bash
    AWS_PROFILE=soma aws s3 cp event-images/ s3://fillmap-video-dev/event-locations/seed/ \
@@ -181,6 +196,19 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    ```
 
    프로파일을 안 주면 아래 경고대로 남의 계정이 잡혀 `AccessDenied` 로 떨어진다.
+
+   **검증** — 아래가 200이어야 끝난 것이다. 403이면 정책이 저장되지 않았거나 Block Public Access
+   두 항목(1번 전제)이 아직 켜져 있는 것이다.
+
+   ```bash
+   curl -s -o /dev/null -w '%{http_code}\n' \
+     "https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/event-locations/seed/busan-fireworks-2026.jpg"
+   ```
+
+   **순서가 어긋나도 이번 건은 피해가 작다.** 3번(미션)은 완성 URL 을 DB 에 저장해서 403 인 채로
+   적재하면 전량을 다시 손봐야 했지만, 이벤트 이미지는 키만 저장하고 주소는 조회 시점에 조립하므로
+   정책을 나중에 열어도 기존 행이 그대로 살아난다. 그래도 정책을 먼저 여는 것을 권한다 — 화면에
+   깨진 이미지가 뜨는 구간이 없다.
 
 ### ⚠️ AWS 프로파일 — 로컬에 계정이 둘이고 기본값이 남의 계정이다
 
