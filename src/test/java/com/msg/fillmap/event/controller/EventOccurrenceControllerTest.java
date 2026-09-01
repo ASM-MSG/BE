@@ -68,7 +68,8 @@ class EventOccurrenceControllerTest {
 
 	private EventOccurrenceDetailResponseDto detail() {
 		return new EventOccurrenceDetailResponseDto(OCCURRENCE_ID, 3L, "부산불꽃축제", STARTS_AT,
-			STARTS_AT.plusDays(1), STARTS_AT.plusDays(31), "LIVE", false, List.of());
+			STARTS_AT.plusDays(1), STARTS_AT.plusDays(31), "LIVE", false, List.of(),
+			"https://bucket.s3.ap-northeast-2.amazonaws.com/event-locations/seed/cover.jpg");
 	}
 
 	@Nested

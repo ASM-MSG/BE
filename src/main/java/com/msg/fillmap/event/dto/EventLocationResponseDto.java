@@ -66,7 +66,8 @@ public record EventLocationResponseDto(
 	@Schema(description = "참여 방식 서술 — 참여형 승인분만 값이 있다", nullable = true)
 	String participationMethod,
 
-	@Schema(description = "커버 이미지 공개 URL — 참여형 승인분만 값이 있다", nullable = true)
+	@Schema(description = "커버 이미지 공개 URL — 참여형 승인분과 시드 위치에 값이 있다. 없으면 null 이고 "
+		+ "나머지 필드는 그대로다", nullable = true)
 	String imageUrl
 ) {
 }

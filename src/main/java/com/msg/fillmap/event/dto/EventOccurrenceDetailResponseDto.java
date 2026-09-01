@@ -16,7 +16,7 @@ import com.msg.fillmap.event.entity.EventStatus;
  */
 @Schema(description = "행사 회차 상세 — 이벤트 헤더",
 	requiredProperties = {"occurrenceId", "seriesId", "title", "startsAt", "endsAt", "uploadClosesAt",
-		"status", "notificationOn", "previousOccurrences"})
+		"status", "notificationOn", "previousOccurrences", "imageUrl"})
 public record EventOccurrenceDetailResponseDto(
 	@Schema(description = "행사 회차 id", example = "12")
 	Long occurrenceId,
@@ -46,12 +46,17 @@ public record EventOccurrenceDetailResponseDto(
 	Boolean notificationOn,
 
 	@Schema(description = "같은 시리즈의 지난 회차 — 최신순. 없으면 빈 배열")
-	List<PreviousOccurrenceDto> previousOccurrences
+	List<PreviousOccurrenceDto> previousOccurrences,
+
+	@Schema(description = "대표 이미지 공개 URL — 이미지가 없는 회차는 null 이고 나머지 필드는 그대로다",
+		nullable = true)
+	String imageUrl
 ) {
 
+	/** 이미지는 키만 저장하고 공개 주소는 여기서 조립한다 (MSG-538 D2, 행사 위치와 같은 계약). */
 	public static EventOccurrenceDetailResponseDto of(
 		EventOccurrence occurrence, EventStatus status, boolean notificationOn,
-		List<PreviousOccurrenceDto> previousOccurrences) {
+		List<PreviousOccurrenceDto> previousOccurrences, String imageUrl) {
 		return new EventOccurrenceDetailResponseDto(
 			occurrence.getId(),
 			occurrence.getSeries().getId(),
@@ -61,7 +66,8 @@ public record EventOccurrenceDetailResponseDto(
 			occurrence.uploadClosesAt(),
 			status.name(),
 			notificationOn,
-			previousOccurrences);
+			previousOccurrences,
+			imageUrl);
 	}
 
 	/**

@@ -175,7 +175,7 @@ class EventQueryServiceTest {
 
 	private EventLocation 위치(EventOccurrence occurrence, String name, int displayOrder, String... gridIds) {
 		EventLocation location = new EventLocation(occurrence, 키("loc"));
-		location.update(occurrence, name, EventLocationType.POPUP, "11:00 ~ 20:00", displayOrder, gridIds[0]);
+		location.update(occurrence, name, EventLocationType.POPUP, "11:00 ~ 20:00", displayOrder, gridIds[0], null);
 		locationRepository.save(location);
 		for (String gridId : gridIds) {
 			locationGridRepository.save(new EventLocationGrid(location.getId(), occurrence.getId(), gridId));
@@ -449,6 +449,32 @@ class EventQueryServiceTest {
 			assertThat(detail.seriesId()).isEqualTo(series.getId());
 		}
 
+		// 검증: FR-EVENT-02, AC-538-01
+		@Test
+		@DisplayName("상세 응답의 대표 이미지 주소가 저장된 키로 조립된다")
+		void 상세_응답의_대표_이미지_주소가_저장된_키로_조립된다() {
+			EventOccurrence 진행중 = 회차(시리즈(), "이미지 있는 회차", "부산", NOW.minusDays(1), NOW.plusDays(1));
+			진행중.updateImageKey("event-locations/seed/cover.jpg");
+			occurrenceRepository.save(진행중);
+
+			assertThat(service().getOccurrenceDetail(진행중.getId(), null).imageUrl())
+				.isEqualTo("https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/"
+					+ "event-locations/seed/cover.jpg");
+		}
+
+		// 검증: FR-EVENT-02, AC-538-02
+		@Test
+		@DisplayName("이미지 키가 없는 회차는 imageUrl 이 null 이고 나머지 필드는 그대로다")
+		void 이미지_키가_없는_회차는_imageUrl_이_null_이다() {
+			EventOccurrence 진행중 = 회차(시리즈(), "이미지 없는 회차", "부산", NOW.minusDays(1), NOW.plusDays(1));
+
+			EventOccurrenceDetailResponseDto detail = service().getOccurrenceDetail(진행중.getId(), null);
+
+			assertThat(detail.imageUrl()).isNull();
+			assertThat(detail.title()).isEqualTo("이미지 없는 회차");
+			assertThat(detail.status()).isEqualTo("LIVE");
+		}
+
 		@Test
 		@DisplayName("이전 회차의 시작일이 같으면 회차 id 내림차순 타이브레이커로 결정적이다")
 		void 이전_회차는_시작일_동률에서_id_내림차순이다() {
@@ -633,6 +659,21 @@ class EventQueryServiceTest {
 			assertThat(locations.get(1).zoneCell()).isNull();
 			// 서해 먼바다라 행정동이 없다 — 진짜 무귀속만 null 이라는 계약의 확인이다.
 			assertThat(locations.get(0).regionName()).isNull();
+		}
+
+		// 검증: FR-EVENT-02, AC-538-03
+		@Test
+		@DisplayName("시드로 적재한 위치도 목록 응답에 imageUrl 이 담긴다 (참여형 승인분 전용이 아니다)")
+		void 시드로_적재한_위치도_목록_응답에_imageUrl_이_담긴다() {
+			EventOccurrence 진행중 = 회차(시리즈(), "커버 있는 행사", "부산", NOW.minusDays(1), NOW.plusDays(1));
+			EventLocation 커버위치 = 위치(진행중, "커버 위치", 1, 격자(0, 0));
+			커버위치.update(진행중, 커버위치.getName(), 커버위치.getType(), 커버위치.getOperatingHours(),
+				커버위치.getDisplayOrder(), 커버위치.getRepresentativeGridId(), "event-locations/seed/cover.jpg");
+			locationRepository.save(커버위치);
+
+			assertThat(service().getLocations(진행중.getId()).get(0).imageUrl())
+				.isEqualTo("https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/"
+					+ "event-locations/seed/cover.jpg");
 		}
 
 		@Test
