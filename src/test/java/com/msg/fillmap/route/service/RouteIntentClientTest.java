@@ -96,7 +96,7 @@ class RouteIntentClientTest {
 						 "viewport": {"min_lat": 35.05, "min_lng": 128.95, "max_lat": 35.25, "max_lng": 129.20}}
 						""", JsonCompareMode.STRICT))
 					.andRespond(json(
-						"{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": []}")));
+						"{\"region\": null, \"period\": null, \"interests\": [], \"preferred_order\": [], \"related\": true}")));
 
 			client.parse("해운대 가자", 부산_뷰포트);
 		}
@@ -109,7 +109,7 @@ class RouteIntentClientTest {
 					{"region": "해운대",
 					 "period": {"start": "2026-08-29", "end": "2026-08-30"},
 					 "interests": ["축제", "밥"],
-					 "preferred_order": ["부산역", "해운대"]}
+					 "preferred_order": ["부산역", "해운대"], "related": true}
 					""")));
 
 			ParsedIntent intent = client.parse("부산역 내려서 해운대에서 밥 먹고 축제도 보고 싶어", 부산_뷰포트);
@@ -127,7 +127,7 @@ class RouteIntentClientTest {
 			RouteIntentClient client = client(server ->
 				server.expect(requestTo(BASE_URL + "/route/parse"))
 					.andRespond(json("""
-						{"region": null, "period": null, "interests": [], "preferred_order": []}
+						{"region": null, "period": null, "interests": [], "preferred_order": [], "related": true}
 						""")));
 
 			ParsedIntent intent = client.parse("아무거나", 부산_뷰포트);
@@ -153,16 +153,17 @@ class RouteIntentClientTest {
 
 		// 검증: FR-ROUTE-19, AC-513-05
 		@Test
-		@DisplayName("related 가 없는 구버전 응답은 true 로 수용한다 — 서버 선배포 한시 규칙 (MSG-513 결정 2)")
-		void related가_없는_구버전_응답은_true로_수용한다() {
+		@DisplayName("related 가 없으면 14502 다 — MSG-533 배포 확인 후 필수 승격 (MSG-513 결정 2의 3단계)")
+		void related가_없으면_14502다() {
 			RouteIntentClient client = client(server ->
 				server.expect(requestTo(BASE_URL + "/route/parse")).andRespond(json("""
 					{"region": null, "period": null, "interests": [], "preferred_order": []}
 					""")));
 
-			ParsedIntent intent = client.parse("아무거나", 부산_뷰포트);
-
-			assertThat(intent.related()).isTrue();
+			assertThatThrownBy(() -> client.parse("아무거나", 부산_뷰포트))
+				.isInstanceOf(ApiException.class)
+				.extracting(e -> ((ApiException) e).getErrorCode())
+				.isEqualTo(RouteErrorCode.ROUTE_AI_UNAVAILABLE);
 		}
 
 		// 검증: FR-ROUTE-19, AC-513-04

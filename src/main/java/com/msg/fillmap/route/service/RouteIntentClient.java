@@ -49,11 +49,8 @@ public class RouteIntentClient {
 	private static final int MAX_PARSE_TEXT_LENGTH = 50;
 	private static final int MAX_PARSE_LIST_ITEMS = 10;
 	private static final int MAX_REASON_LENGTH = 120;
-	private static final Set<String> PARSE_REQUIRED_FIELDS = Set.of("region", "period", "interests", "preferred_order");
-	// related(MSG-513)는 허용하되 필수가 아니다 — "필수 키 누락도 형태 위반"(MSG-457 검증 원칙)의 한시 예외.
-	// 서버 선배포 구간(MSG-513 결정 2의 1단계)에서 구버전 AI 의 4필드 응답을 살리기 위한 것으로, 부재는 구버전
-	// 동작을 글자 그대로 재현하는 true 로 채운다. FillMap-AI 개정(MSG-533) 배포 확인 후 필수로 승격한다(3단계).
-	private static final Set<String> PARSE_ALLOWED_FIELDS =
+	// related 는 MSG-533 배포 확인(2026-09-01) 후 필수로 승격됐다 — 부재는 다른 네 키와 같은 형태 위반이다.
+	private static final Set<String> PARSE_FIELDS =
 		Set.of("region", "period", "interests", "preferred_order", "related");
 	private static final Set<String> PERIOD_FIELDS = Set.of("start", "end");
 
@@ -121,12 +118,12 @@ public class RouteIntentClient {
 			throw contractViolation("parse 응답이 JSON 객체가 아님");
 		}
 		for (Map.Entry<String, JsonNode> property : response.properties()) {
-			if (!PARSE_ALLOWED_FIELDS.contains(property.getKey())) {
+			if (!PARSE_FIELDS.contains(property.getKey())) {
 				throw contractViolation("parse 응답에 정의 밖 필드");
 			}
 		}
 		// 계약은 "네 필드는 항상 온다"다 — 누락도 형태 위반이라 채택하지 않는다 (NFR-SEC-08, Codex 교차 리뷰).
-		for (String field : PARSE_REQUIRED_FIELDS) {
+		for (String field : PARSE_FIELDS) {
 			if (!response.has(field)) {
 				throw contractViolation("parse 응답 필수 필드 누락");
 			}
@@ -139,11 +136,8 @@ public class RouteIntentClient {
 			toRelated(response.path("related")));
 	}
 
-	/** related — boolean 만 수용(null·문자열·숫자 위반). 부재는 true (PARSE_ALLOWED_FIELDS 주석의 한시 규칙). */
+	/** related — boolean 만 수용(null·문자열·숫자 위반). 부재는 필수 키 검사가 먼저 잡는다(MSG-533 승격). */
 	private boolean toRelated(JsonNode node) {
-		if (node.isMissingNode()) {
-			return true;
-		}
 		if (!node.isBoolean()) {
 			throw contractViolation("related 가 boolean 아님");
 		}
