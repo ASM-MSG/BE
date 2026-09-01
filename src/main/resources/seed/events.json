@@ -10,6 +10,7 @@
 				"startsAt": "2026-10-06T10:00:00+09:00",
 				"endsAt": "2026-10-15T22:00:00+09:00",
 				"exposure": { "minGridY": 16780, "maxGridY": 16890, "minGridX": 11380, "maxGridX": 11530 },
+				"imageKey": "event-locations/seed/biff-busan-2026.jpg",
 				"locations": [
 					{
 						"locationKey": "biff-2026-cinema-center",
@@ -20,7 +21,8 @@
 						"areaRects": [
 							{ "minGridY": 16872, "maxGridY": 16876, "minGridX": 11476, "maxGridX": 11480 }
 						],
-						"representativeGridId": null
+						"representativeGridId": null,
+						"imageKey": "event-locations/seed/biff-2026-cinema-center.jpg"
 					},
 					{
 						"locationKey": "biff-2026-haeundae-event-zone",
@@ -31,7 +33,8 @@
 						"areaRects": [
 							{ "minGridY": 16859, "maxGridY": 16861, "minGridX": 11509, "maxGridX": 11515 }
 						],
-						"representativeGridId": null
+						"representativeGridId": null,
+						"imageKey": "event-locations/seed/biff-2026-haeundae-event-zone.jpg"
 					},
 					{
 						"locationKey": "biff-2026-nampo-biff-square",
@@ -42,7 +45,8 @@
 						"areaRects": [
 							{ "minGridY": 16791, "maxGridY": 16793, "minGridX": 11392, "maxGridX": 11394 }
 						],
-						"representativeGridId": null
+						"representativeGridId": null,
+						"imageKey": "event-locations/seed/biff-2026-nampo-biff-square.jpg"
 					}
 				]
 			}
@@ -59,6 +63,7 @@
 				"startsAt": "2026-11-07T18:00:00+09:00",
 				"endsAt": "2026-11-07T22:00:00+09:00",
 				"exposure": { "minGridY": 16820, "maxGridY": 16870, "minGridX": 11460, "maxGridX": 11515 },
+				"imageKey": "event-locations/seed/busan-fireworks-2026.jpg",
 				"locations": [
 					{
 						"locationKey": "busan-fireworks-2026-gwangalli",
@@ -69,7 +74,8 @@
 						"areaRects": [
 							{ "minGridY": 16853, "maxGridY": 16855, "minGridX": 11468, "maxGridX": 11480 }
 						],
-						"representativeGridId": null
+						"representativeGridId": null,
+						"imageKey": "event-locations/seed/busan-fireworks-2026-gwangalli.jpg"
 					},
 					{
 						"locationKey": "busan-fireworks-2026-igidae",
@@ -80,7 +86,8 @@
 						"areaRects": [
 							{ "minGridY": 16829, "maxGridY": 16831, "minGridX": 11477, "maxGridX": 11479 }
 						],
-						"representativeGridId": null
+						"representativeGridId": null,
+						"imageKey": "event-locations/seed/busan-fireworks-2026-igidae.jpg"
 					},
 					{
 						"locationKey": "busan-fireworks-2026-dongbaekseom",
@@ -91,7 +98,8 @@
 						"areaRects": [
 							{ "minGridY": 16853, "maxGridY": 16855, "minGridX": 11503, "maxGridX": 11505 }
 						],
-						"representativeGridId": null
+						"representativeGridId": null,
+						"imageKey": "event-locations/seed/busan-fireworks-2026-dongbaekseom.jpg"
 					}
 				]
 			}
@@ -108,6 +116,7 @@
 				"startsAt": "2026-09-05T14:00:00+09:00",
 				"endsAt": "2026-09-05T21:30:00+09:00",
 				"exposure": { "minGridY": 19460, "maxGridY": 19495, "minGridX": 9480, "maxGridX": 9515 },
+				"imageKey": "event-locations/seed/seoul-fireworks-2026.jpg",
 				"locations": [
 					{
 						"locationKey": "seoul-fireworks-2026-yeouido",
@@ -118,7 +127,8 @@
 						"areaRects": [
 							{ "minGridY": 19477, "maxGridY": 19479, "minGridX": 9494, "maxGridX": 9502 }
 						],
-						"representativeGridId": null
+						"representativeGridId": null,
+						"imageKey": "event-locations/seed/seoul-fireworks-2026-yeouido.jpg"
 					}
 				]
 			}
@@ -135,6 +145,7 @@
 				"startsAt": "2026-09-19T18:00:00+09:00",
 				"endsAt": "2026-09-20T22:00:00+09:00",
 				"exposure": { "minGridY": 16854, "maxGridY": 16894, "minGridX": 11461, "maxGridX": 11501 },
+				"imageKey": "event-locations/seed/lol-national-team-busan-2026.jpg",
 				"locations": [
 					{
 						"locationKey": "lol-national-team-2026-roof-theater",
@@ -145,7 +156,8 @@
 						"areaRects": [
 							{ "minGridY": 16873, "maxGridY": 16875, "minGridX": 11481, "maxGridX": 11481 }
 						],
-						"representativeGridId": null
+						"representativeGridId": null,
+						"imageKey": "event-locations/seed/lol-national-team-2026-roof-theater.jpg"
 					},
 					{
 						"locationKey": "lol-national-team-2026-dureraum-plaza",
@@ -156,7 +168,8 @@
 						"areaRects": [
 							{ "minGridY": 16873, "maxGridY": 16875, "minGridX": 11480, "maxGridX": 11480 }
 						],
-						"representativeGridId": null
+						"representativeGridId": null,
+						"imageKey": "event-locations/seed/lol-national-team-2026-dureraum-plaza.jpg"
 					}
 				]
 			}

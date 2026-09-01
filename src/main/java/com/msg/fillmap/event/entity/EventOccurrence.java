@@ -71,6 +71,10 @@ public class EventOccurrence {
 	@Column(name = "max_grid_x", nullable = false)
 	private Integer maxGridX;
 
+	/** 공개 프리픽스 사본 키 (MSG-538). 공개 주소 조립은 조회 시점이라 여기엔 키만 저장한다. */
+	@Column(name = "image_key", length = 255)
+	private String imageKey;
+
 	/**
 	 * 일정 개정 번호 (MSG-442) — 시각(starts_at·ends_at)이 실제로 바뀐 재시드마다 +1 하는 단조 증가값이다.
 	 * 일정 변경 알림의 dedupe 키 재료이고, 시각값을 키로 쓰면 일정 왕복(A→B→A→B)에서 두 번째 "B로 변경"이
@@ -106,6 +110,21 @@ public class EventOccurrence {
 		this.maxGridY = maxGridY;
 		this.minGridX = minGridX;
 		this.maxGridX = maxGridX;
+	}
+
+	/**
+	 * 대표 이미지 갱신 (MSG-538). 일정 갱신과 메서드를 나눈 이유는 둘이 서로 다른 경로에서 오기 때문이다.
+	 * 이미지는 시더만 쓰고, 승인 반영(노출 영역 확장)은 {@link #update} 만 쓴다. 한 메서드로 합치면 승인
+	 * 경로가 자기 이미지 키를 자기에게 다시 넘기는 인자를 들고 다녀야 하고, 그 자리를 null 로 잘못 채우면
+	 * 승인 때마다 대표 이미지가 지워진다.
+	 * <p>
+	 * 일정 개정 번호({@link #scheduleRevision})는 건드리지 않는다 (D3). 포스터만 갈아 끼운 재시드가
+	 * 알림을 켠 사용자 전원에게 "행사 일정이 변경됐어요" 를 보내면 안 되기 때문이다.
+	 * <p>
+	 * 시드 파일이 정본이라 항목이 사라지면 null 이 들어와 저장값도 비워진다 (D7).
+	 */
+	public void updateImageKey(String imageKey) {
+		this.imageKey = imageKey;
 	}
 
 	/**

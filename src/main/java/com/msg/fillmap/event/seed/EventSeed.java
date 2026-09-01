@@ -14,11 +14,11 @@ import java.util.List;
 public record EventSeed(String seriesKey, String seriesName, List<Occurrence> occurrences) {
 
 	public record Occurrence(String occurrenceKey, String title, String cityName, String startsAt, String endsAt,
-		Rect exposure, List<Location> locations) {
+		Rect exposure, String imageKey, List<Location> locations) {
 	}
 
 	public record Location(String locationKey, String name, String type, String operatingHours, Integer displayOrder,
-		List<Rect> areaRects, String representativeGridId) {
+		List<Rect> areaRects, String representativeGridId, String imageKey) {
 	}
 
 	/** 격자 인덱스 정수 사각형 (양끝 포함). 회차의 노출 영역과 위치의 영역 사각형이 같은 형태를 쓴다. */

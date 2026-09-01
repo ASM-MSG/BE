@@ -163,6 +163,113 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    dev·prod 모두 미적용(2026-08-30 기준) — MSG-500 배포 전에 dev부터 적용하고 3번과 같은
    curl 검증을 거친다.
 
+5. **`event-locations/seed/*` 공개 읽기 버킷 정책** (MSG-538) — 시드로 들어오는 이벤트 회차
+   대표 이미지와 행사 위치 커버가 이 프리픽스에 올라가고, 회차 상세·위치 목록 응답이 조회 시점에
+   공개 URL로 조립해 내보낸다. 4번과 프리픽스만 다른 형제라 **Resource를
+   `event-locations/*` 하나로 잡으면 4번과 5번이 한 Statement로 함께 닫힌다** — 회차와 위치가
+   프리픽스를 나누지 않고 같은 `event-locations/seed/`를 쓰는 이유도 정책을 쪼개지 않기 위해서다.
+   **dev 적용 완료 (2026-09-01 — 객체 13개 전부 200 확인). prod 미적용.** 이 Statement 가
+   `org-submission/*` 를 함께 열므로 **4번의 dev 몫도 이때 닫혔다**.
+
+   ⛔ **prod 는 이 코드가 실린 백엔드를 처음 기동하기 전에 이 절차를 마친다** (배포뿐 아니라 재기동도 같다 — 시더는 `ApplicationRunner` 라 뜰 때마다 돈다). `application-prod.yml` 이 행사 시딩을
+   (`fillmap.event.seed.enabled: true`) 켜 두고 있어 **기동하는 순간 시더가 이미지 키를 적재하고,
+   그때부터 회차 상세·위치 목록 응답이 열리지 않는 주소를 담아 내보낸다**(화면에는 깨진 이미지로
+   보인다). 정책과 객체를 먼저 올려 두면 첫 기동부터 정상이다. 순서가 뒤집혀도 **데이터를 다시
+   손볼 필요는 없다** — 저장값이 완성 주소가 아니라 키라서, 나중에 정책·객체를 채우면 기존 행이
+   그대로 살아난다(미션 이미지가 완성 URL 을 저장해 전량 재작업이 필요했던 3번과 다른 점이다).
+   여기에 더해 아래 저작자 표시 경고를 prod 전에 반드시 닫는다.
+
+   ⚠️ **폴더는 버킷 최상위에서 만든다.** 2026-09-01 dev 작업에서 `missions/` 안에 들어간 채로
+   폴더를 만들어 13개가 `missions/event-locations/seed/` 로 올라갔다. 하필 `missions/*` 가 공개라
+   그 경로는 200이 나오고 정작 필요한 경로는 403이었다. **익명 요청은 없는 객체에도 403을 주므로
+   (ListBucket 권한이 없어 존재를 숨긴다) 403만으로는 "키가 틀렸다"와 "정책이 안 먹었다"를 구분할
+   수 없다** — 콘솔에서 객체 URL 을 직접 읽어 경로를 대조하는 것이 유일하게 확실한 방법이다.
+
+   **넣을 Statement** (4번과 합친 형태 — 콘솔의 버킷 정책 편집기에서 기존 `Statement` 배열에
+   이 객체 하나를 추가한다. `{버킷명}`은 dev `fillmap-video-dev`, prod는 해당 환경 버킷):
+
+   ```json
+   {
+     "Sid": "PublicReadEventLocationImages",
+     "Effect": "Allow",
+     "Principal": "*",
+     "Action": "s3:GetObject",
+     "Resource": [
+       "arn:aws:s3:::{버킷명}/event-locations/seed/*",
+       "arn:aws:s3:::{버킷명}/event-locations/org-submission/*"
+     ]
+   }
+   ```
+
+   **`event-locations/*` 한 줄로 줄이지 않는다.** Statement 하나로 4번과 5번을 함께 닫는 편의는
+   Resource 배열로 그대로 얻으면서, 앞으로 이 접두사 아래에 생길 프리픽스가 자동으로 공개되는 것은
+   막는다. 나중에 비공개 자료를 `event-locations/` 아래에 두는 순간 와일드카드가 그것까지 열어버린다.
+
+   **올릴 객체 13장**은 레포 밖 로컬 산출물이다(`event-images/`, jpg 는 gitignore). 파일이 없으면
+   `event-images/CREDITS.json`(이 파일만 커밋된다)의 `sourcePage` 를 열어 다시 받으면 된다 — 부산
+   장소 일곱 장은 부산관광아카이브 공공누리 제1유형, 나머지 여섯 장은 위키미디어 공용이고, 항목마다
+   원본 페이지 URL·라이선스·저작자가 적혀 있다.
+
+   정책을 적용한 뒤, 업로드는 **`CREDITS.json` 에 적힌 열세 개만** 올린다. 폴더를 통째로 재귀 복사하면 그 폴더에
+   섞여 들어온 파일까지 공개 버킷에 올라간다 — `event-images/` 는 gitignore 대상이라 리뷰를 거치지
+   않는 자리다.
+
+   ```bash
+   cd "$(git rev-parse --show-toplevel)"
+   python3 -c "import json;[print(i['file'].split('/')[-1]) for i in json.load(open('event-images/CREDITS.json'))['items']]" > /tmp/msg538-keys.txt \
+     || { echo "목록 생성 실패 — CREDITS.json 을 확인한다"; exit 1; }
+   [ "$(wc -l < /tmp/msg538-keys.txt)" -eq 13 ] || { echo "목록이 13개가 아니다"; exit 1; }
+   while read -r f; do
+     AWS_PROFILE=soma aws s3 cp "event-images/$f" "s3://fillmap-video-dev/event-locations/seed/$f" || {
+       echo "업로드 실패: $f"; exit 1;
+     }
+   done < /tmp/msg538-keys.txt
+   ```
+
+   목록 생성이 실패하면 리다이렉션이 파일을 비워 놓으므로, 건수를 세지 않으면 뒤의 두 루프가
+   아무 일도 안 하고 `OK 0 / FAIL 0` 으로 조용히 끝난다 — 그래서 13 을 확인하고 들어간다.
+   목록을 파일로 받아 `while` 을 파이프 밖에서 도는 이유는 두 가지다. 파이프의 서브셸에서는
+   `exit` 가 루프만 끝내고 스크립트는 계속 가고, 실패한 `cp` 를 그냥 지나치면 열세 개 중 몇 개가
+   빠진 채로 "끝났다"고 보인다.
+   프로파일을 안 주면 아래 경고대로 남의 계정이 잡혀 `AccessDenied` 로 떨어진다.
+
+   **검증** — 한 장만 찍어 보면 나머지 열두 개가 빠졌는지 알 수 없다. 목록 전부를 돈다.
+   `OK 13 / FAIL 0` 이어야 끝난 것이다.
+
+   ```bash
+   ok=0; fail=0
+   while read -r f; do
+     code=$(curl -s -o /dev/null -w '%{http_code}' \
+       "https://fillmap-video-dev.s3.ap-northeast-2.amazonaws.com/event-locations/seed/$f")
+     [ "$code" = "200" ] && ok=$((ok+1)) || { fail=$((fail+1)); echo "$code $f"; }
+   done < /tmp/msg538-keys.txt
+   echo "OK $ok / FAIL $fail"
+   [ "$fail" -eq 0 ] || exit 1
+   ```
+
+   **403 은 원인을 하나로 말해 주지 않는다.** 위 경고대로 익명 요청은 없는 키에도 403 을 주므로,
+   403 은 ⓐ 그 키에 객체가 없다(경로 오타·업로드 누락) ⓑ 정책이 저장되지 않았다 ⓒ Block Public
+   Access 두 항목(1번 전제)이 켜져 있다 ⓓ 객체가 SSE-KMS 로 올라갔다 넷 중 무엇이든 될 수 있다.
+   **HTTP 코드로 가르려 하지 말고 아래 순서로 좁힌다.**
+
+   1. 일부만 403 이면 **프리픽스 정책은 정상이다**(나머지가 200 이므로). 그 파일들의 키를 콘솔에서
+      대조하고, **키가 맞는데도 403 이면 그 객체의 암호화 유형을 본다** — 정책은 프리픽스 단위지만
+      SSE-KMS 는 객체 단위라 같은 폴더에서도 한둘만 막힐 수 있다.
+   2. 열세 개 전부 403 이면 콘솔에서 객체 하나의 **객체 URL** 을 읽어 기대 경로와 글자 단위로
+      비교한다. 다르면 경로 문제이고, 같으면 정책·BPA·암호화를 본다.
+   3. 자격증명이 있으면 `AWS_PROFILE=soma aws s3 ls s3://fillmap-video-dev/event-locations/seed/`
+      한 번이 1·2 를 대신한다 — 객체 존재를 직접 보는 것이 가장 빠르다.
+   ⚠️ **저작자 표시 의무가 미해결이다.** 열세 장 중 열한 장이 출처표시를 요구하는데(공공누리
+   제1유형 일곱·CC BY 셋·CC BY-SA 하나) 화면에 표기할 자리가 없다. `CREDITS.json` 은 우리 쪽 추적 기록이지
+   공개 표시가 아니라 의무를 대신하지 못한다. 그래서 **이 절차는 dev 까지다** — prod 적용과 대외
+   노출(발표·데모 포함) 전에 표기 자리를 만들거나 표시 의무가 없는 사진으로 갈아타야 한다.
+   결정 상태는 `docs/spec/MSG-538.md` 미해결 질문 1번에 있다.
+
+   **순서가 어긋나도 이번 건은 피해가 작다.** 3번(미션)은 완성 URL 을 DB 에 저장해서 403 인 채로
+   적재하면 전량을 다시 손봐야 했지만, 이벤트 이미지는 키만 저장하고 주소는 조회 시점에 조립하므로
+   정책을 나중에 열어도 기존 행이 그대로 살아난다. 그래도 정책을 먼저 여는 것을 권한다 — 화면에
+   깨진 이미지가 뜨는 구간이 없다.
+
 ### ⚠️ AWS 프로파일 — 로컬에 계정이 둘이고 기본값이 남의 계정이다
 
 `~/.aws/credentials`에 프로파일이 둘 있는데 **기본값(`default`)이 FillMap 계정이 아니다.**

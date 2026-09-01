@@ -63,3 +63,6 @@ __pycache__/
 .claude/logs/
 .omc/notepad.md
 .omc/project-memory.json
+
+### MSG-538 시드 이미지 — 업로드용 로컬 산출물 (객체는 S3, 출처·라이선스는 CREDITS.json)
+event-images/*.jpg

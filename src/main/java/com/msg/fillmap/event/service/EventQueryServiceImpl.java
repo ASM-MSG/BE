@@ -178,7 +178,8 @@ public class EventQueryServiceImpl implements EventQueryService {
 		// 구독 행이 남아 있어도 false 다. now 를 넘겨 status 와 같은 시각으로 판정한다 — 두 서비스가 각자
 		// Clock 을 읽으면 경계 근처에서 "진행 중인데 구독이 꺼져 보이는" 응답이 나온다.
 		boolean notificationOn = eventNotificationService.isSubscribed(userId, occurrenceId, now);
-		return EventOccurrenceDetailResponseDto.of(occurrence, occurrence.statusAt(now), notificationOn, previous);
+		return EventOccurrenceDetailResponseDto.of(occurrence, occurrence.statusAt(now), notificationOn, previous,
+			awsProperties.publicUrl(occurrence.getImageKey()));
 	}
 
 	@Override

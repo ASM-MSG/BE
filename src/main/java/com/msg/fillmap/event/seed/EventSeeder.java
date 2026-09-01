@@ -10,8 +10,10 @@ import java.time.format.DateTimeParseException;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,6 +64,17 @@ public class EventSeeder implements ApplicationRunner {
 
 	/** 위치당 고유 셀 상한 (5km × 5km 상당) — zones 의 남북 26행 캡과 같은 성격의 입력 상한. */
 	static final int MAX_CELLS_PER_LOCATION = 2500;
+
+	/**
+	 * 시드 대표 이미지 키의 유일한 프리픽스 (MSG-538). 회차와 위치가 같은 프리픽스를 쓰는 이유는 공개 읽기
+	 * 버킷 정책이 프리픽스 단위라, 나누면 환경마다 Statement 를 둘씩 관리해야 하기 때문이다.
+	 */
+	static final String SEED_IMAGE_PREFIX = "event-locations/seed/";
+
+	/** 객체 이름 문법 — URL 구분자·공백을 배제해 조립된 공개 주소가 다른 경로로 새지 않게 한다. */
+	private static final Pattern IMAGE_OBJECT_NAME = Pattern.compile("[A-Za-z0-9._-]+");
+
+	private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp");
 
 	/** 일정 변경 알림 문구 (MSG-442 발송 표 확정값). */
 	private static final String SCHEDULE_CHANGED_BODY = "행사 일정이 변경됐어요. 새 일정을 확인해 보세요";
@@ -185,6 +198,9 @@ public class EventSeeder implements ApplicationRunner {
 		occurrence.update(series, seed.title(), seed.cityName(),
 			toUtc(seed.startsAt(), seed.occurrenceKey()), toUtc(seed.endsAt(), seed.occurrenceKey()),
 			area.minGridY(), area.maxGridY(), area.minGridX(), area.maxGridX());
+		// 대표 이미지는 시드 파일이 정본이라 항목을 지우면 저장값도 null 로 돌아간다 (MSG-538 D7).
+		// 노출 영역과 달리 합집합을 쓰지 않는 이유는 회차 이미지를 승인이 채우는 경로가 아직 없어서다.
+		occurrence.updateImageKey(validatedImageKey(seed.imageKey(), seed.occurrenceKey()));
 		EventOccurrence saved = occurrenceRepository.save(occurrence);
 		if (saved.getScheduleRevision() > revisionBefore) {
 			notifyScheduleChanged(saved);
@@ -220,6 +236,42 @@ public class EventSeeder implements ApplicationRunner {
 		}
 	}
 
+	/**
+	 * 대표 이미지 키 검증 (MSG-538) — 결측은 허용하고 형식 위반은 기동을 실패시킨다. 저장 시점에 막지 않으면
+	 * {@link com.msg.fillmap.global.config.AwsProperties#publicUrl} 이 조회 때마다 깨진 주소를 조립해 내보내고,
+	 * 그 값이 이미 DB 에 퍼진 뒤라 전량을 다시 손봐야 한다 (미션 이미지 403 선례, MSG-384).
+	 * <p>
+	 * 셋을 함께 본다: 프리픽스만 보면 확장자가 아무거나 통과하고, 프리픽스 뒤 슬래시를 막지 않으면
+	 * {@code event-locations/seed/../org-submission/other.jpg} 가 클라이언트 정규화 시점에 남의 객체를 가리킨다.
+	 * <p>
+	 * 규칙은 미션 시더의 {@code SeedText#imageKey} (MSG-394 D2)와 같다. 그쪽을 직접 부르지 않는 것은
+	 * 그 메서드가 {@code mission.seed} 패키지 전용이고 {@code JsonNode} 를 받아, 공유하려면 미션 시더 넷의
+	 * 호출부를 함께 건드려야 하기 때문이다 — 이 티켓 범위 밖의 변경이다.
+	 */
+	private String validatedImageKey(String imageKey, String seedKey) {
+		if (imageKey == null) {
+			return null;
+		}
+		if (!imageKey.startsWith(SEED_IMAGE_PREFIX)) {
+			throw new IllegalStateException(
+				"imageKey 가 " + SEED_IMAGE_PREFIX + " 아래가 아닙니다 (" + seedKey + "): " + imageKey);
+		}
+		String objectName = imageKey.substring(SEED_IMAGE_PREFIX.length());
+		if (!IMAGE_OBJECT_NAME.matcher(objectName).matches()) {
+			throw new IllegalStateException(
+				"imageKey 의 프리픽스 뒤가 단일 객체 이름이 아닙니다 (" + seedKey + "): " + imageKey);
+		}
+		// extensionAt == 0 은 이름이 비어 확장자만 남은 키(".jpg") — 확장자 부재(-1)와 같이 거부한다.
+		// Locale.ROOT: 터키어 로케일에서 "JPG".toLowerCase() 가 점 없는 ı 로 바뀌어 허용목록을 빗나간다.
+		int extensionAt = objectName.lastIndexOf('.');
+		if (extensionAt <= 0
+			|| !ALLOWED_IMAGE_EXTENSIONS.contains(objectName.substring(extensionAt + 1).toLowerCase(Locale.ROOT))) {
+			throw new IllegalStateException(
+				"imageKey 가 허용된 래스터 확장자를 가진 이름이 아닙니다 (" + seedKey + "): " + imageKey);
+		}
+		return imageKey;
+	}
+
 	private void upsertLocation(EventOccurrence occurrence, EventSeed.Location seed) {
 		Set<AreaCell> cells = expand(seed);
 		String representativeGridId = RepresentativeGridResolver.resolve(cells, seed.representativeGridId());
@@ -230,7 +282,8 @@ public class EventSeeder implements ApplicationRunner {
 
 		EventLocation location = existing.orElseGet(() -> new EventLocation(occurrence, seed.locationKey()));
 		location.update(occurrence, seed.name(), EventLocationType.valueOf(seed.type()), seed.operatingHours(),
-			seed.displayOrder() == null ? 0 : seed.displayOrder(), representativeGridId);
+			seed.displayOrder() == null ? 0 : seed.displayOrder(), representativeGridId,
+			validatedImageKey(seed.imageKey(), seed.locationKey()));
 		locationRepository.save(location);
 
 		syncGrids(location, occurrence, cells);

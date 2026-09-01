@@ -127,12 +127,13 @@ public class EventLocation {
 
 	/** 재시드 갱신 — 대표 격자는 매 실행 3단 규칙으로 재계산된 값이 들어온다. */
 	public void update(EventOccurrence occurrence, String name, EventLocationType type, String operatingHours,
-		int displayOrder, String representativeGridId) {
+		int displayOrder, String representativeGridId, String imageKey) {
 		this.occurrence = occurrence;
 		this.name = name;
 		this.type = type;
 		this.operatingHours = operatingHours;
 		this.displayOrder = displayOrder;
 		this.representativeGridId = representativeGridId;
+		this.imageKey = imageKey;
 	}
 }

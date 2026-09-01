@@ -50,7 +50,7 @@ class EventPublicAccessHttpTest {
 		given(eventQueryService.getOccurrencesInViewport(any())).willReturn(List.of());
 		given(eventQueryService.getOccurrenceDetail(anyLong(), isNull())).willReturn(
 			new EventOccurrenceDetailResponseDto(OCCURRENCE_ID, 3L, "부산불꽃축제", STARTS_AT,
-				STARTS_AT.plusDays(1), STARTS_AT.plusDays(31), "LIVE", false, List.of()));
+				STARTS_AT.plusDays(1), STARTS_AT.plusDays(31), "LIVE", false, List.of(), null));
 		given(eventQueryService.getLocations(anyLong())).willReturn(List.of());
 		given(eventQueryService.getLocationsByGrid(anyString())).willReturn(List.of());
 

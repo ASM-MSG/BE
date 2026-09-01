@@ -133,11 +133,22 @@ class EventSeederTest {
 
 	private EventSeed.Occurrence 회차(String key, String startsAt, String endsAt, EventSeed.Location... locations) {
 		return new EventSeed.Occurrence(key, key + " 행사", "부산", startsAt, endsAt,
-			new EventSeed.Rect(Y - 100, Y + 100, X - 100, X + 100), List.of(locations));
+			new EventSeed.Rect(Y - 100, Y + 100, X - 100, X + 100), null, List.of(locations));
+	}
+
+	/** 회차 대표 이미지 키를 지정하는 변형 (MSG-538). */
+	private EventSeed.Occurrence 회차_이미지(String key, String imageKey, EventSeed.Location... locations) {
+		return new EventSeed.Occurrence(key, key + " 행사", "부산", 시작_KST, 종료_KST,
+			new EventSeed.Rect(Y - 100, Y + 100, X - 100, X + 100), imageKey, List.of(locations));
+	}
+
+	/** 위치 대표 이미지 키를 지정하는 변형 (MSG-538). */
+	private EventSeed.Location 위치_이미지(String key, String imageKey, EventSeed.Rect... rects) {
+		return new EventSeed.Location(key, key + " 장소", "ETC", null, 1, List.of(rects), null, imageKey);
 	}
 
 	private EventSeed.Location 위치(String key, EventSeed.Rect... rects) {
-		return new EventSeed.Location(key, key + " 장소", "ETC", null, 1, List.of(rects), null);
+		return new EventSeed.Location(key, key + " 장소", "ETC", null, 1, List.of(rects), null, null);
 	}
 
 	private EventSeed.Rect 사각형(int minY, int maxY, int minX, int maxX) {
@@ -480,7 +491,7 @@ class EventSeederTest {
 		@DisplayName("빈 영역 시드는 기동이 실패한다")
 		void 빈_영역_시드는_기동이_실패한다() {
 			EventSeed.Location 빈영역 = new EventSeed.Location(
-				"msg438-empty-loc", "빈 영역", "ETC", null, 1, List.of(), null);
+				"msg438-empty-loc", "빈 영역", "ETC", null, 1, List.of(), null, null);
 
 			assertThatThrownBy(() -> seeder().seed(json(시리즈("msg438-empty", 회차("msg438-empty-2026", 빈영역)))))
 				.isInstanceOf(IllegalStateException.class)
@@ -662,16 +673,16 @@ class EventSeederTest {
 		 * 같은 단지의 biff-2026-cinema-center 기준 좌표(129.1240)와 약 300m 어긋나는데, 그쪽은 첫 시드 작도
 		 * 시점의 값이라 이번 티켓에서 손대지 않았다 (MSG-455 티켓에 별건으로 남김).
 		 */
-		private static final Map<String, double[]> 기준_위경도 = Map.of(
-			"biff-2026-cinema-center", new double[] {35.1717, 129.1240},
-			"biff-2026-haeundae-event-zone", new double[] {35.1587, 129.1604},
-			"biff-2026-nampo-biff-square", new double[] {35.0987, 129.0287},
-			"busan-fireworks-2026-gwangalli", new double[] {35.1532, 129.1187},
-			"busan-fireworks-2026-igidae", new double[] {35.1318, 129.1233},
-			"busan-fireworks-2026-dongbaekseom", new double[] {35.1529, 129.1520},
-			"seoul-fireworks-2026-yeouido", new double[] {37.5284, 126.9327},
-			"lol-national-team-2026-roof-theater", new double[] {35.1712, 129.1272},
-			"lol-national-team-2026-dureraum-plaza", new double[] {35.1712, 129.1262});
+		private static final Map<String, double[]> 기준_위경도 = Map.ofEntries(
+			Map.entry("biff-2026-cinema-center", new double[] {35.1717, 129.1240}),
+			Map.entry("biff-2026-haeundae-event-zone", new double[] {35.1587, 129.1604}),
+			Map.entry("biff-2026-nampo-biff-square", new double[] {35.0987, 129.0287}),
+			Map.entry("busan-fireworks-2026-gwangalli", new double[] {35.1532, 129.1187}),
+			Map.entry("busan-fireworks-2026-igidae", new double[] {35.1318, 129.1233}),
+			Map.entry("busan-fireworks-2026-dongbaekseom", new double[] {35.1529, 129.1520}),
+			Map.entry("seoul-fireworks-2026-yeouido", new double[] {37.5284, 126.9327}),
+			Map.entry("lol-national-team-2026-roof-theater", new double[] {35.1712, 129.1272}),
+			Map.entry("lol-national-team-2026-dureraum-plaza", new double[] {35.1712, 129.1262}));
 
 		// 검증: FR-EVENT-08
 		@Test
@@ -685,6 +696,128 @@ class EventSeederTest {
 				.as(locationKey)
 				.isEqualTo(GridEncoder.encode(latLon[0], latLon[1])));
 			assertThatCode(EventSeederTest.this::지연제약검증).doesNotThrowAnyException();
+		}
+	}
+
+	@Nested
+	@DisplayName("대표 이미지 (MSG-538)")
+	class Images {
+
+		// 검증: FR-EVENT-02, AC-538-01
+		@Test
+		@DisplayName("회차 대표 이미지 키가 시드 파일 값으로 저장된다")
+		void 회차_이미지_키가_시드_파일_값으로_저장된다() {
+			seeder().seed(json(시리즈("msg538-cover", 회차_이미지("msg538-cover-2026", "event-locations/seed/a.jpg",
+				위치("msg538-cover-loc", 사각형(Y, Y + 2, X, X + 2))))));
+
+			assertThat(회차조회("msg538-cover-2026").getImageKey()).isEqualTo("event-locations/seed/a.jpg");
+		}
+
+		// 검증: FR-EVENT-02, AC-538-02
+		@Test
+		@DisplayName("이미지 항목이 없는 회차는 이미지 키가 null 로 저장된다")
+		void 이미지_항목이_없는_회차는_이미지_키가_null_로_저장된다() {
+			seeder().seed(json(시리즈("msg538-none", 회차("msg538-none-2026",
+				위치("msg538-none-loc", 사각형(Y, Y + 2, X, X + 2))))));
+
+			assertThat(회차조회("msg538-none-2026").getImageKey()).isNull();
+		}
+
+		// 검증: FR-EVENT-02, AC-538-05
+		@Test
+		@DisplayName("시드에서 이미지 항목을 지우면 저장된 키가 null 로 돌아간다 (시드 파일이 정본)")
+		void 시드에서_이미지_항목을_지우면_저장된_키가_null_로_돌아간다() {
+			seeder().seed(json(시리즈("msg538-drop", 회차_이미지("msg538-drop-2026", "event-locations/seed/b.jpg",
+				위치("msg538-drop-loc", 사각형(Y, Y + 2, X, X + 2))))));
+			assertThat(회차조회("msg538-drop-2026").getImageKey()).isNotNull();
+
+			seeder().seed(json(시리즈("msg538-drop", 회차("msg538-drop-2026",
+				위치("msg538-drop-loc", 사각형(Y, Y + 2, X, X + 2))))));
+
+			assertThat(회차조회("msg538-drop-2026").getImageKey()).isNull();
+		}
+
+		// 검증: FR-EVENT-02, AC-538-04, AC-538-06
+		@Test
+		@DisplayName("이미지 키만 바뀐 재시드는 일정 개정 번호를 올리지 않는다 (일정 변경 알림도 나가지 않는다)")
+		void 이미지_키만_바뀐_재시드는_일정_개정_번호를_올리지_않는다() {
+			seeder().seed(json(시리즈("msg538-rev", 회차_이미지("msg538-rev-2026", "event-locations/seed/c1.jpg",
+				위치("msg538-rev-loc", 사각형(Y, Y + 2, X, X + 2))))));
+			int 첫_개정 = 회차조회("msg538-rev-2026").getScheduleRevision();
+
+			seeder().seed(json(시리즈("msg538-rev", 회차_이미지("msg538-rev-2026", "event-locations/seed/c2.jpg",
+				위치("msg538-rev-loc", 사각형(Y, Y + 2, X, X + 2))))));
+
+			// 개정 번호가 발송 여부를 결정하므로(notifyScheduleChanged 는 번호가 오른 회차에만 돈다),
+			// 번호 불변이 곧 "포스터만 갈아 끼운 재시드는 알림을 만들지 않는다"이다.
+			assertThat(회차조회("msg538-rev-2026").getScheduleRevision()).isEqualTo(첫_개정);
+			assertThat(회차조회("msg538-rev-2026").getImageKey()).isEqualTo("event-locations/seed/c2.jpg");
+		}
+
+		// 검증: FR-EVENT-02, AC-538-03
+		@Test
+		@DisplayName("위치 대표 이미지 키가 시드 파일 값으로 저장된다")
+		void 위치_이미지_키가_시드_파일_값으로_저장된다() {
+			seeder().seed(json(시리즈("msg538-loc", 회차("msg538-loc-2026",
+				위치_이미지("msg538-loc-a", "event-locations/seed/a.jpg", 사각형(Y, Y + 2, X, X + 2))))));
+
+			assertThat(위치조회("msg538-loc-a").getImageKey()).isEqualTo("event-locations/seed/a.jpg");
+		}
+
+		// 검증: FR-EVENT-02, AC-538-08
+		@Test
+		@DisplayName("형식이 어긋난 이미지 키는 기동이 실패한다 (깨진 공개 주소가 DB 에 퍼지기 전에 막는다)")
+		void 형식이_어긋난_이미지_키는_기동이_실패한다() {
+			EventSeed.Rect 영역 = 사각형(Y, Y + 2, X, X + 2);
+
+			// 프리픽스 이탈 — 공개 정책이 열려 있지 않은 경로라 조립된 주소가 403 이 된다.
+			assertThatThrownBy(() -> seeder().seed(json(시리즈("msg538-bad1",
+				회차_이미지("msg538-bad1-2026", "missions/festival/x.jpg", 위치("msg538-bad1-loc", 영역))))))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("event-locations/seed/");
+
+			// 경로 탈출 — 클라이언트가 주소를 정규화하는 순간 남의 프리픽스 객체를 가리킨다.
+			assertThatThrownBy(() -> seeder().seed(json(시리즈("msg538-bad2", 회차_이미지("msg538-bad2-2026",
+				"event-locations/seed/../org-submission/x.jpg", 위치("msg538-bad2-loc", 영역))))))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("단일 객체 이름");
+
+			// 래스터가 아닌 확장자.
+			assertThatThrownBy(() -> seeder().seed(json(시리즈("msg538-bad3",
+				회차_이미지("msg538-bad3-2026", "event-locations/seed/x.svg", 위치("msg538-bad3-loc", 영역))))))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("확장자");
+
+			// 위치 키도 같은 규칙을 탄다 — 회차만 막으면 아홉 곳이 무검증으로 남는다.
+			assertThatThrownBy(() -> seeder().seed(json(시리즈("msg538-bad4", 회차("msg538-bad4-2026",
+				위치_이미지("msg538-bad4-loc", "event-locations/org-submission/x.jpg", 영역))))))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("event-locations/seed/");
+		}
+
+		@Test
+		@DisplayName("승인으로 들어온 위치는 재시드가 건드리지 않는다 (시더는 시드 자연키만 순회한다)")
+		void 승인으로_들어온_위치의_이미지_키는_재시드가_덮지_않는다() {
+			seeder().seed(json(시리즈("msg538-sub", 회차("msg538-sub-2026",
+				위치("msg538-sub-loc", 사각형(Y, Y + 2, X, X + 2))))));
+			EventOccurrence occurrence = 회차조회("msg538-sub-2026");
+
+			// 승인 산출물을 흉내 낸 위치 — 자연키가 sub- 로 시작한다.
+			EventLocation 승인위치 = EventLocation.forSubmission(occurrence,
+				EventLocation.SUBMISSION_KEY_PREFIX + "msg538-1", "승인 위치", EventLocationType.ETC, 9,
+				(Y + 20) + "_" + X, "주최", "소개", null, null, "참여 방식", "event-locations/org-submission/x.jpg");
+			locationRepository.save(승인위치);
+			locationGridRepository.save(new EventLocationGrid(승인위치.getId(), occurrence.getId(), (Y + 20) + "_" + X));
+			em.flush();
+
+			seeder().seed(json(시리즈("msg538-sub", 회차("msg538-sub-2026",
+				위치("msg538-sub-loc", 사각형(Y, Y + 2, X, X + 2))))));
+			em.flush();
+			em.clear();
+
+			assertThat(위치조회(EventLocation.SUBMISSION_KEY_PREFIX + "msg538-1").getImageKey())
+				.as("승인 위치의 커버는 재시드 후에도 남는다")
+				.isEqualTo("event-locations/org-submission/x.jpg");
 		}
 	}
 }

@@ -172,9 +172,9 @@ class EventSeederScheduleChangeTest {
 
 	private Resource 시드(String startsAt, String endsAt) {
 		EventSeed.Location location = new EventSeed.Location(시리즈키 + "-loc", "합성 장소", "ETC", null, 1,
-			List.of(new EventSeed.Rect(Y, Y, X, X)), null);
+			List.of(new EventSeed.Rect(Y, Y, X, X)), null, null);
 		EventSeed.Occurrence occurrence = new EventSeed.Occurrence(회차키, "합성 회차", "부산", startsAt, endsAt,
-			new EventSeed.Rect(Y - 10, Y + 10, X - 10, X + 10), List.of(location));
+			new EventSeed.Rect(Y - 10, Y + 10, X - 10, X + 10), null, List.of(location));
 		return new ByteArrayResource(objectMapper.writeValueAsBytes(
 			new EventSeed[] {new EventSeed(시리즈키, "합성 시리즈", List.of(occurrence))}));
 	}

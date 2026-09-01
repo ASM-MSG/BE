@@ -7,7 +7,7 @@
 
 요약: FR 295건 중 테스트 연결 264건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
 
-AC 요약: 스펙 성공 기준 19건 중 테스트 연결 18건, 미커버 1건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
+AC 요약: 스펙 성공 기준 27건 중 테스트 연결 25건, 미커버 2건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -190,7 +190,7 @@ AC 요약: 스펙 성공 기준 19건 중 테스트 연결 18건, 미커버 1건
 | FR-MISSION-25 | 진행 중 | MissionGridLookupServiceTest, MissionPublicAccessHttpTest |
 | FR-MISSION-26 | 구현됨 | MissionVideoControllerTest, MissionVideoUploadServiceTest |
 | FR-EVENT-01 | 구현됨 | EventQueryServiceTest |
-| FR-EVENT-02 | 구현됨 | EventQueryServiceTest |
+| FR-EVENT-02 | 진행 중 | EventQueryServiceTest, EventSeederTest |
 | FR-EVENT-03 | 폐기됨 | (없음) |
 | FR-EVENT-04 | 폐기됨 | (없음) |
 | FR-EVENT-05 | 폐기됨 | (없음) |
@@ -381,6 +381,14 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 | AC-513-08 | MSG-513 | RouteRecommendServiceTest |
 | AC-513-09 | MSG-513 | RouteRecommendServiceTest |
 | AC-513-10 | MSG-513 | RouteRecommendServiceTest |
+| AC-538-01 | MSG-538 | EventQueryServiceTest, EventSeederTest |
+| AC-538-02 | MSG-538 | EventQueryServiceTest, EventSeederTest |
+| AC-538-03 | MSG-538 | EventQueryServiceTest, EventSeederTest |
+| AC-538-04 | MSG-538 | EventSeederTest |
+| AC-538-05 | MSG-538 | EventSeederTest |
+| AC-538-06 | MSG-538 | EventSeederTest |
+| AC-538-07 | MSG-538 | (없음) |
+| AC-538-08 | MSG-538 | EventSeederTest |
 | AC-539-01 | MSG-539 | RouteIntentClientTest, RouteRecommendServiceTest |
 | AC-539-02 | MSG-539 | RouteIntentClientTest |
 | AC-539-03 | MSG-539 | RouteIntentClientTest |
@@ -393,6 +401,7 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 
 ## 미커버 AC (보고만 — 실패 아님)
 
+- AC-538-07 (MSG-538)
 - AC-539-08 (MSG-539)
 
 ## 테스트에만 있고 스펙에 없는 AC (마커 오타 의심)
