@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import com.msg.fillmap.auth.dto.PasswordChangeRequestDto;
+import com.msg.fillmap.auth.dto.PasswordInitialRequestDto;
 import com.msg.fillmap.auth.dto.PasswordResetConfirmRequestDto;
 import com.msg.fillmap.auth.dto.PasswordResetRequestDto;
 import com.msg.fillmap.auth.dto.PasswordStatusResponseDto;
@@ -105,6 +106,40 @@ public class PasswordService {
 			// (fail-closed, 재시도 가능). 재설정 경로도 같은 원칙이다 — 토큰 소비가 저장보다 먼저이고,
 			// 저장이 실패하면 조건부 복원으로 되돌린다.
 			// 반대 경합(폐기는 됐는데 커밋 실패)은 비밀번호가 유지되고 링크만 죽어 재요청 한 번이면 된다.
+			passwordResetTokenStore.revoke(userId);
+		});
+	}
+
+	/**
+	 * 첫 로그인 초기 비밀번호 설정 (MSG-537 FR-AUTH-17). 잠금·후처리 계약은 {@link #changePassword} 그대로이고,
+	 * 현재 비밀번호 대조 한 단계만 강제 변경 플래그 확인으로 바뀐다 — 초기 비밀번호로 이미 로그인에 성공한
+	 * 사용자만 도달하는 경로라 재입력이 방어선을 더하지 않기 때문이다.
+	 *
+	 * <p>재설정({@link #resetPassword})과 달리 세션·토큰을 무효화하지 않는다. 자발적 설정이라 복구
+	 * 시나리오가 아니고, 게이트 직후 재로그인을 강제하면 흐름이 끊긴다.
+	 */
+	public void setInitialPassword(Long userId, PasswordInitialRequestDto request) {
+		transactionTemplate.executeWithoutResult(status -> {
+			// 변경·재설정·재발송(MSG-499)과 같은 잠금 조회다 — 잠그지 않으면 이 트랜잭션의 낡은 스냅숏이
+			// 최신 커밋을 되덮는다(lost update).
+			User user = userRepository.findWithLockById(userId)
+				.orElseThrow(() -> new ApiException(UserErrorCode.USER_NOT_FOUND));
+			if (user.getProvider() != AuthProvider.LOCAL || user.getPasswordHash() == null) {
+				// 소셜 계정 검사가 플래그 검사보다 먼저다 — 소셜 계정은 플래그가 항상 꺼져 있어 순서를 바꾸면
+				// "이미 설정을 마친 계정"으로 새고, 화면이 재변경 화면으로 잘못 안내한다.
+				throw new ApiException(AuthErrorCode.PASSWORD_NOT_SET);
+			}
+			if (!user.isPasswordMustChange()) {
+				// 잠금 뒤 검사라 동시 요청 두 건이 와도 두 번째는 첫 번째 커밋이 푼 플래그를 보고 여기로 수렴한다.
+				throw new ApiException(AuthErrorCode.INITIAL_PASSWORD_ALREADY_SET);
+			}
+			if (passwordEncoder.matches(request.newPassword(), user.getPasswordHash())) {
+				// 발급자가 아는 초기 비밀번호를 그대로 두면 강제 변경의 목적이 무산된다.
+				throw new ApiException(AuthErrorCode.NEW_PASSWORD_SAME_AS_CURRENT);
+			}
+			user.changePassword(passwordEncoder.encode(request.newPassword()));
+			// 커밋 전 폐기 — 커밋 뒤로 미루면 Redis 장애가 "비밀번호는 바뀌었는데 옛 링크가 산다"를 만든다.
+			// 여기서 던지면 롤백돼 비밀번호도 링크도 그대로다(fail-closed, 재시도 가능).
 			passwordResetTokenStore.revoke(userId);
 		});
 	}

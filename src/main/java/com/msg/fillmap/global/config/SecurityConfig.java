@@ -174,9 +174,10 @@ public class SecurityConfig {
 				// 필터 skip 목록(PUBLIC_AUTH_PATHS)에는 넣지 않는다 — 토큰이 없으면 필터가 그냥 통과시키므로
 				// 접수에 문제가 없고, 무효 토큰을 동봉한 비정상 요청까지 검증을 건너뛸 이유가 없다(MSG-443 교훈).
 				.requestMatchers(HttpMethod.POST, "/api/org-account-requests").permitAll()
-				// 비밀번호 상태·변경(MSG-497) — 역할 무관 로그인 필수. 아래 catch-all 이 역할 제한이라
-				// authenticated 명시가 없으면 ORG(정작 주 사용자)가 403 이 된다.
-				.requestMatchers("/api/auth/password/status", "/api/auth/password/change").authenticated()
+				// 비밀번호 상태·변경·초기 설정(MSG-497·537) — 역할 무관 로그인 필수. 아래 catch-all 이 역할
+				// 제한이라 authenticated 명시가 없으면 ORG(정작 주 사용자)가 403 이 된다.
+				.requestMatchers("/api/auth/password/status", "/api/auth/password/change",
+					"/api/auth/password/initial").authenticated()
 				// 관리자 API(MSG-195) — 이 프로젝트 유일한 role 인가 지점. JWT role 클레임이 심는
 				// ROLE_ADMIN 권한을 여기서 처음 소비한다. 관리자 API 가 URL 프리픽스 하나로 다 묶여
 				// 메서드 보안(@EnableMethodSecurity) 없이 matcher 한 줄이면 충분하다.
