@@ -171,7 +171,7 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    **dev 적용 완료 (2026-09-01 — 객체 13개 전부 200 확인). prod 미적용.** 이 Statement 가
    `org-submission/*` 를 함께 열므로 **4번의 dev 몫도 이때 닫혔다**.
 
-   ⛔ **prod 는 앱 배포보다 이 절차가 먼저다.** `application-prod.yml` 이 행사 시딩을
+   ⛔ **prod 는 이 코드가 실린 백엔드를 처음 기동하기 전에 이 절차를 마친다** (배포뿐 아니라 재기동도 같다 — 시더는 `ApplicationRunner` 라 뜰 때마다 돈다). `application-prod.yml` 이 행사 시딩을
    (`fillmap.event.seed.enabled: true`) 켜 두고 있어 **기동하는 순간 시더가 이미지 키를 적재하고,
    그때부터 회차 상세·위치 목록 응답이 열리지 않는 주소를 담아 내보낸다**(화면에는 깨진 이미지로
    보인다). 정책과 객체를 먼저 올려 두면 첫 기동부터 정상이다. 순서가 뒤집혀도 **데이터를 다시
