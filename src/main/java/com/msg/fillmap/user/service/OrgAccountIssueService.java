@@ -2,6 +2,7 @@ package com.msg.fillmap.user.service;
 
 import java.security.SecureRandom;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -18,6 +19,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import com.msg.fillmap.auth.jwt.InvalidatedTokenStore;
+import com.msg.fillmap.auth.jwt.JwtProperties;
+import com.msg.fillmap.auth.service.RefreshTokenService;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.mail.MailSender;
 import com.msg.fillmap.user.dto.AdminOrgAccountListResponseDto;
@@ -90,13 +94,19 @@ public class OrgAccountIssueService {
 	private final PasswordEncoder passwordEncoder;
 	private final MailSender mailSender;
 	private final TransactionTemplate transactionTemplate;
+	private final InvalidatedTokenStore invalidatedTokenStore;
+	private final RefreshTokenService refreshTokenService;
+	private final JwtProperties jwtProperties;
 	private final Clock clock;
 
 	/** 프로덕션 생성자 — clock 을 UTC 로 고정해 Lombok 전체 생성자에 위임한다 (OrgAccountService 선례). */
 	@Autowired
 	public OrgAccountIssueService(UserRepository userRepository, PasswordEncoder passwordEncoder,
-		MailSender mailSender, TransactionTemplate transactionTemplate) {
-		this(userRepository, passwordEncoder, mailSender, transactionTemplate, Clock.systemUTC());
+		MailSender mailSender, TransactionTemplate transactionTemplate,
+		InvalidatedTokenStore invalidatedTokenStore, RefreshTokenService refreshTokenService,
+		JwtProperties jwtProperties) {
+		this(userRepository, passwordEncoder, mailSender, transactionTemplate, invalidatedTokenStore,
+			refreshTokenService, jwtProperties, Clock.systemUTC());
 	}
 
 	/**
@@ -132,9 +142,36 @@ public class OrgAccountIssueService {
 				|| !user.isPasswordMustChange()) {
 				throw new ApiException(UserErrorCode.INITIAL_PASSWORD_RESEND_NOT_ALLOWED);
 			}
-			return replaceInitialPassword(user);
+			IssuedInitialPassword replaced = replaceInitialPassword(user);
+			// 옛 초기 비밀번호로 만든 세션·액세스 토큰을 여기서 끊는다 (MSG-537). 재발송은 자격 회전인데
+			// 플래그는 유지되므로, 끊지 않으면 옛 세션이 초기 비밀번호 설정(POST /api/auth/password/initial)을
+			// 그대로 호출해 회전을 무력화한다 — 그 경로는 현재 비밀번호를 묻지 않아 대조가 막아 주지 않는다.
+			// 커밋 전에 찍는 것도 재설정과 같은 이유다: 커밋 뒤면 Redis 장애가 "비밀번호는 바뀌었는데 옛
+			// 토큰이 전부 살아 있는" 상태를 만든다. 여기서 던지면 롤백돼 교체 자체가 없던 일이 된다.
+			// 시각을 clock 이 아니라 Instant.now() 로 잡는 것은 판정 상대가 JWT 의 iat(실 벽시계)이라서다
+			// (PasswordService.resetPassword 와 같은 축).
+			invalidatedTokenStore.invalidateUser(userId, Instant.now(), jwtProperties.refreshTokenTtl());
+			return replaced;
 		});
+		invalidateSessionsAfterCommit(userId);
 		return new OrgAccountResendResponseDto(sendInitialPassword(issued));
+	}
+
+	/**
+	 * 커밋 후 두 번째 무효화 기록과 세션 전량 삭제 — 둘 다 best-effort 다
+	 * ({@link com.msg.fillmap.auth.service.PasswordService#resetPassword} 와 같은 계약).
+	 * 두 번째 기록이 있는 이유는 첫 기록과 커밋 사이에 옛 비밀번호로 로그인이 끼면 그 토큰의 iat 가 첫
+	 * 기록보다 뒤여서 살아남기 때문이다. 여기서 던지면 비밀번호는 이미 교체된 뒤라 재시도가 불가능한
+	 * 거짓 실패가 되므로 로그만 남긴다 — 첫 기록이 커밋 이전 발급분 전부를 계속 막는다.
+	 */
+	private void invalidateSessionsAfterCommit(Long userId) {
+		try {
+			invalidatedTokenStore.invalidateUser(userId, Instant.now(), jwtProperties.refreshTokenTtl());
+			refreshTokenService.deleteAll(userId);
+		} catch (RuntimeException e) {
+			log.warn("[org-account] 재발송 후 세션 정리 실패 — 무효화 기록이 옛 토큰을 계속 막는다. userId={}",
+				userId, e);
+		}
 	}
 
 	/**

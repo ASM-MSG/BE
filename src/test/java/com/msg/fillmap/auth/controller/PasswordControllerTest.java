@@ -45,6 +45,7 @@ import com.msg.fillmap.user.entity.AuthProvider;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.entity.UserRole;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.user.service.OrgAccountIssueService;
 
 /**
  * 비밀번호 상태·변경·재설정 4종 (MSG-497 FR-21·22, 실 DB·실 Redis). 검증 대상이 인가 경계·저장소
@@ -60,6 +61,8 @@ class PasswordControllerTest {
 
 	private static final String STATUS_URL = "/api/auth/password/status";
 	private static final String CHANGE_URL = "/api/auth/password/change";
+	private static final String INITIAL_URL = "/api/auth/password/initial";
+	private static final String ORG_PROFILE_URL = "/api/org/profile";
 	private static final String RESET_REQUEST_URL = "/api/auth/password/reset-request";
 	private static final String RESET_URL = "/api/auth/password/reset";
 	private static final String INITIAL_PASSWORD = "Initial1234";
@@ -93,6 +96,10 @@ class PasswordControllerTest {
 
 	@MockitoBean
 	private MailSender mailSender;
+
+	/** 초기 비밀번호 재발송 — 관리자 API 를 거치지 않고 그 경로의 세션 무효화만 본다. */
+	@Autowired
+	private OrgAccountIssueService orgAccountIssueService;
 
 	private User organizer;
 	private String organizerEmail;
@@ -130,6 +137,17 @@ class PasswordControllerTest {
 	private String changeBody(String current, String next) {
 		return """
 			{"currentPassword": "%s", "newPassword": "%s"}""".formatted(current, next);
+	}
+
+	private String initialBody(String password) {
+		return """
+			{"newPassword": "%s"}""".formatted(password);
+	}
+
+	/** 관리자 발급 직후 상태 — 강제 변경 플래그가 켜진 초기 비밀번호 계정이다. */
+	private void 초기_비밀번호_상태로_만든다() {
+		ReflectionTestUtils.setField(organizer, "passwordMustChange", true);
+		userRepository.flush();
 	}
 
 	private String emailBody(String email) {
@@ -559,6 +577,208 @@ class PasswordControllerTest {
 				.andExpect(status().isInternalServerError());
 
 			assertThat(redisTemplate.hasKey("pwreset:user:" + organizer.getId())).isTrue();
+		}
+	}
+
+	@Nested
+	@DisplayName("초기 비밀번호 설정 (MSG-537)")
+	class InitialPassword {
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("강제 변경 상태의 행사 운영자가 새 비밀번호만으로 설정에 성공한다")
+		void 강제_변경_상태의_행사_운영자가_새_비밀번호만으로_설정에_성공한다() throws Exception {
+			초기_비밀번호_상태로_만든다();
+
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody(NEW_PASSWORD)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.developCode").value(200));
+
+			mockMvc.perform(post("/api/auth/login")
+					.header("X-Client-Type", "app")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"email": "%s", "password": "%s"}""".formatted(organizerEmail, NEW_PASSWORD)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.accessToken").isNotEmpty());
+			mockMvc.perform(post("/api/auth/login")
+					.header("X-Client-Type", "app")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"email": "%s", "password": "%s"}""".formatted(organizerEmail, INITIAL_PASSWORD)))
+				.andExpect(status().isUnauthorized());
+		}
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("설정에 성공하면 강제 변경 상태가 풀려 콘솔 접근이 열린다")
+		void 설정에_성공하면_강제_변경_상태가_풀려_콘솔_접근이_열린다() throws Exception {
+			초기_비밀번호_상태로_만든다();
+
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody(NEW_PASSWORD)))
+				.andExpect(status().isOk());
+
+			assertThat(userRepository.findById(organizer.getId()).orElseThrow().isPasswordMustChange()).isFalse();
+			mockMvc.perform(get(ORG_PROFILE_URL).header(HttpHeaders.AUTHORIZATION, bearer(organizer)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.developCode").value(200));
+		}
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("설정에 성공해도 현재 로그인 세션은 유지된다 — 자발적 설정이라 복구 시나리오가 아니다")
+		void 설정에_성공해도_현재_로그인_세션은_유지된다() throws Exception {
+			초기_비밀번호_상태로_만든다();
+			String existingToken = bearer(organizer);
+
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, existingToken)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody(NEW_PASSWORD)))
+				.andExpect(status().isOk());
+
+			mockMvc.perform(get(STATUS_URL).header(HttpHeaders.AUTHORIZATION, existingToken))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.mustChange").value(false));
+		}
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("설정에 성공하면 남아 있던 재설정 링크가 폐기된다")
+		void 설정에_성공하면_남아_있던_재설정_링크가_폐기된다() throws Exception {
+			초기_비밀번호_상태로_만든다();
+			mockMvc.perform(post(RESET_REQUEST_URL)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(emailBody(organizerEmail)));
+			String token = capturedResetToken();
+
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody(NEW_PASSWORD)))
+				.andExpect(status().isOk());
+
+			mockMvc.perform(post(RESET_URL)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(resetBody(token, "Another9999")))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.developCode").value(2443));
+		}
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("설정을 마친 계정의 재요청은 2446 으로 거절된다 — 화면이 재변경으로 안내한다")
+		void 설정을_마친_계정의_재요청은_전용_코드로_거절된다() throws Exception {
+			초기_비밀번호_상태로_만든다();
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody(NEW_PASSWORD)))
+				.andExpect(status().isOk());
+
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody("Another9999")))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.developCode").value(2446));
+		}
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("새 비밀번호가 초기 비밀번호와 같으면 2444 로 거절된다")
+		void 새_비밀번호가_초기_비밀번호와_같으면_거절된다() throws Exception {
+			초기_비밀번호_상태로_만든다();
+
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody(INITIAL_PASSWORD)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.developCode").value(2444));
+		}
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("비밀번호가 없는 소셜 계정의 요청은 2445 다 — 플래그 검사보다 먼저라 2446 으로 새지 않는다")
+		void 비밀번호가_없는_소셜_계정의_요청은_거절된다() throws Exception {
+			User social = saveSocialUser("social-" + UUID.randomUUID() + "@fillmap.dev");
+
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, bearer(social))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody(NEW_PASSWORD)))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.developCode").value(2445));
+		}
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("정책에 어긋나는 새 비밀번호는 검증에서 거절된다")
+		void 정책에_어긋나는_새_비밀번호는_검증에서_거절된다() throws Exception {
+			초기_비밀번호_상태로_만든다();
+
+			for (String invalid : new String[] {"Ab12345", "onlyletters", "12345678"}) {
+				mockMvc.perform(post(INITIAL_URL)
+						.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(initialBody(invalid)))
+					.andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.developCode").value(400));
+			}
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, bearer(organizer))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("{}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.developCode").value(400));
+		}
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("비로그인 요청은 401 이다 — status·change 와 같은 authenticated 줄")
+		void 비로그인_요청은_거부된다() throws Exception {
+			mockMvc.perform(post(INITIAL_URL)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody(NEW_PASSWORD)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2403));
+		}
+
+		// 검증: FR-AUTH-17
+		@Test
+		@DisplayName("재발송 후 옛 토큰으로는 초기 설정이 거절된다 — 자격 회전이 무력화되지 않는다")
+		void 재발송_후_옛_토큰으로는_초기_설정이_거절된다() throws Exception {
+			초기_비밀번호_상태로_만든다();
+			String oldToken = bearer(organizer);
+
+			orgAccountIssueService.resendInitialPassword(organizer.getId());
+
+			mockMvc.perform(post(INITIAL_URL)
+					.header(HttpHeaders.AUTHORIZATION, oldToken)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(initialBody(NEW_PASSWORD)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2401));
+			assertThat(userRepository.findById(organizer.getId()).orElseThrow().isPasswordMustChange()).isTrue();
+		}
+
+		// 검증: FR-AUTH-15
+		@Test
+		@DisplayName("게이트 차단 메시지가 설정 문구로 나온다 — 시안 1-3a 안내와 정렬")
+		void 게이트_차단_메시지가_설정_문구로_나온다() throws Exception {
+			초기_비밀번호_상태로_만든다();
+
+			mockMvc.perform(get(ORG_PROFILE_URL).header(HttpHeaders.AUTHORIZATION, bearer(organizer)))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.developCode").value(2441))
+				.andExpect(jsonPath("$.message").value("초기 비밀번호를 설정해야 이용할 수 있습니다"));
 		}
 	}
 

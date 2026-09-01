@@ -5,7 +5,7 @@
 **병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(`git checkout --ours docs/rtm.md` 등)
 스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다.
 
-요약: FR 294건 중 테스트 연결 263건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
+요약: FR 295건 중 테스트 연결 264건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
 
 AC 요약: 스펙 성공 기준 19건 중 테스트 연결 18건, 미커버 1건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
@@ -289,6 +289,7 @@ AC 요약: 스펙 성공 기준 19건 중 테스트 연결 18건, 미커버 1건
 | FR-AUTH-14 | 구현됨 | EventSubmissionAuthorizationTest, JwtTokenProviderTest, OidcLoginServiceTest, OrgAccountControllerTest, OrgAuthorizationTest, PasswordControllerTest, UserProfileIntegrationTest, UserRoleOrgPersistenceTest |
 | FR-AUTH-15 | 구현됨 | AdminOrgAccountControllerTest, EventSubmissionAuthorizationTest, OrgAccountControllerTest, OrgAccountSecurityPersistenceTest, PasswordControllerTest |
 | FR-AUTH-16 | 구현됨 | InitialPasswordResendConcurrencyTest, JwtTokenProviderTest, MailSenderConfigurationTest, PasswordControllerTest, PasswordResetInvalidationFailureTest, RedisPasswordResetTokenStoreTest, RefreshTokenServiceTest |
+| FR-AUTH-17 | 구현됨 | PasswordControllerTest |
 | FR-USER-01 | 구현됨 | UserProfileControllerTest, UserProfileIntegrationTest |
 | FR-USER-02 | 구현됨 | UserProfileControllerTest, UserProfileIntegrationTest |
 | FR-USER-03 | 구현됨 | UserEmaillessPersistenceTest |
