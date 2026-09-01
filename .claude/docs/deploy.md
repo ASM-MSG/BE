@@ -203,7 +203,9 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
 
    ```bash
    cd "$(git rev-parse --show-toplevel)"
-   python3 -c "import json;[print(i['file'].split('/')[-1]) for i in json.load(open('event-images/CREDITS.json'))['items']]" > /tmp/msg538-keys.txt
+   python3 -c "import json;[print(i['file'].split('/')[-1]) for i in json.load(open('event-images/CREDITS.json'))['items']]" > /tmp/msg538-keys.txt \
+     || { echo "목록 생성 실패 — CREDITS.json 을 확인한다"; exit 1; }
+   [ "$(wc -l < /tmp/msg538-keys.txt)" -eq 13 ] || { echo "목록이 13개가 아니다"; exit 1; }
    while read -r f; do
      AWS_PROFILE=soma aws s3 cp "event-images/$f" "s3://fillmap-video-dev/event-locations/seed/$f" || {
        echo "업로드 실패: $f"; exit 1;
@@ -211,6 +213,8 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    done < /tmp/msg538-keys.txt
    ```
 
+   목록 생성이 실패하면 리다이렉션이 파일을 비워 놓으므로, 건수를 세지 않으면 뒤의 두 루프가
+   아무 일도 안 하고 `OK 0 / FAIL 0` 으로 조용히 끝난다 — 그래서 13 을 확인하고 들어간다.
    목록을 파일로 받아 `while` 을 파이프 밖에서 도는 이유는 두 가지다. 파이프의 서브셸에서는
    `exit` 가 루프만 끝내고 스크립트는 계속 가고, 실패한 `cp` 를 그냥 지나치면 열세 개 중 몇 개가
    빠진 채로 "끝났다"고 보인다.
@@ -227,6 +231,7 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
      [ "$code" = "200" ] && ok=$((ok+1)) || { fail=$((fail+1)); echo "$code $f"; }
    done < /tmp/msg538-keys.txt
    echo "OK $ok / FAIL $fail"
+   [ "$fail" -eq 0 ] || exit 1
    ```
 
    403 이면 정책이 저장되지 않았거나 Block Public Access 두 항목(1번 전제)이 아직 켜져 있는
