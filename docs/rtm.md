@@ -190,7 +190,7 @@ AC 요약: 스펙 성공 기준 27건 중 테스트 연결 25건, 미커버 2건
 | FR-MISSION-25 | 진행 중 | MissionGridLookupServiceTest, MissionPublicAccessHttpTest |
 | FR-MISSION-26 | 구현됨 | MissionVideoControllerTest, MissionVideoUploadServiceTest |
 | FR-EVENT-01 | 구현됨 | EventQueryServiceTest |
-| FR-EVENT-02 | 진행 중 | EventQueryServiceTest, EventSeederTest |
+| FR-EVENT-02 | 구현됨 | EventQueryServiceTest, EventSeederTest |
 | FR-EVENT-03 | 폐기됨 | (없음) |
 | FR-EVENT-04 | 폐기됨 | (없음) |
 | FR-EVENT-05 | 폐기됨 | (없음) |
