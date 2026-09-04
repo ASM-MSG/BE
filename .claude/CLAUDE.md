@@ -26,6 +26,7 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
 - `@.claude/docs/deploy.md` — 프로파일 · 환경변수 · 배포 설정
 - `@.claude/docs/architecture.md` — 서비스 아키텍처(SysA v2 정본) · 9개 서비스 · Worker·Cache 계층
 - `@.claude/docs/ia.md` — 화면 구조(IA) · User Journey · 구현 갭
+- `api-docs/README.md` — 팀 전용 API 문서 사이트(docs.fillmap.kr, MSG-568) 소스와 로컬 빌드. 인프라·접근 계정은 deploy.md "API 문서 사이트" 절
 - **피그마 디자인 정본** — fileKey `CpqOlgayviFOG0WXTBUfpp`, 최신 정본 2개 (2026-08-14 성민 확인)
   - 웹 `14599:3501` "필맵 웹 디자인 ver 13_통합 버전" (1440×900)
   - 앱 `14176:6312` "필맵 앱 디자인 MVP ver 5" (390×844)

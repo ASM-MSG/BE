@@ -1,0 +1,58 @@
+# FillMap API 문서 사이트 (MSG-568). 빌드: api-docs/README.md 참고.
+site_name: FillMap API 문서
+site_url: https://docs.fillmap.kr/
+repo_url: https://github.com/ASM-MSG/BE
+edit_uri: edit/develop/api-docs/docs/
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: ko
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: 다크 모드
+    - scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: 라이트 모드
+
+plugins:
+  - search:
+      lang:
+        - ko
+        - en
+
+markdown_extensions:
+  - admonition
+  - tables
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - 시작하기: index.md
+  - 인증: auth.md
+  - 에러 코드: error-codes.md
+  - 격자와 표시명 계약: grid.md
+  - 영상 업로드 흐름: video-upload.md
+  - API 레퍼런스: reference.md

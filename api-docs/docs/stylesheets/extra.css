@@ -1,0 +1,14 @@
+/* API 레퍼런스(Scalar) 페이지는 MkDocs 본문 폭 제한을 풀어 전체 폭으로 그린다 */
+.md-content__inner:has(#scalar-app) {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+.md-content__inner:has(#scalar-app) > .md-content__button,
+.md-content__inner:has(#scalar-app) > h1 {
+  display: none;
+}
+.md-main__inner:has(#scalar-app) {
+  max-width: none;
+  margin-top: 0;
+}

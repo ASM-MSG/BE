@@ -356,6 +356,29 @@ docker exec fillmap-postgres-dev psql -U dev -d fillmap -t -A -c \
 3. 머지 **직후** 위 dev 복구 절차를 실행한다 — 자동화돼 있지 않으므로 **사람이 해야 한다**
 4. prod가 이미 떠 있다면 하지 말 것
 
+## API 문서 사이트 docs.fillmap.kr (MSG-568)
+
+팀 전용 API 문서. 소스는 레포 `api-docs/`(MkDocs Material + Scalar), 레퍼런스는 dev 앱의 `/v3/api-docs`
+스냅샷이라 dev 배포와 함께 갱신된다. 빌드·로컬 미리보기는 `api-docs/README.md`.
+
+| 구성 요소 | 값 |
+|---|---|
+| 도메인 | `docs.fillmap.kr` (Route 53 A/AAAA alias → CloudFront) |
+| CloudFront 배포 | `EEC1CHNPO5W2W` (`d31jbypf0snfe2.cloudfront.net`), PriceClass_200, 403/404 → `/404.html` |
+| 인증서 | ACM us-east-1 `8131fa6b-a170-448c-bea5-84d4ad7b76fd` (docs.fillmap.kr 단일, DNS 검증) |
+| 원본 | S3 `fillmap-docs` (ap-northeast-2, 퍼블릭 차단, OAC `E2Z4ECJNLFERAL`, 버킷 정책은 이 배포 ARN만 허용) |
+| 접근 제한 | CloudFront Function `fillmap-docs-basic-auth` (viewer-request). basic auth 검사 + `/auth/` → `/auth/index.html` 리라이트를 한 함수가 한다. 팀 공용 계정 1개, 값은 `~/fillmap-aws-backup-personal/soma-secrets.env`의 `DOCS_BASIC_AUTH_*` |
+| 배포 | `cd-dev.yml`의 `docs` 잡 (`needs: deploy-dev`). OIDC 역할 `fillmap-docs-deploy`(신뢰 `repo:ASM-MSG/BE:*`, 권한은 `fillmap-docs` 버킷과 이 배포의 invalidation뿐). 스펙 수집용 GitHub secret `DOCS_BASIC_AUTH`(`user:pass`) |
+| dev 잠금 | dev nginx가 `/swagger-ui/`, `/v3/api-docs`에 같은 계정으로 `auth_basic`. htpasswd는 `/etc/nginx/.htpasswd-docs` |
+| CORS | 레퍼런스의 Try it이 브라우저에서 api.fillmap.kr을 직접 부르므로 dev `CORS_ALLOWED_ORIGINS`에 `https://docs.fillmap.kr` 포함 |
+
+계정을 바꾸려면 세 곳을 같이 바꾼다: CloudFront Function 코드의 base64 값(`update-function` → `publish-function`),
+dev nginx htpasswd, GitHub secret `DOCS_BASIC_AUTH`. 하나만 바꾸면 사이트는 열리는데 스펙 스냅샷이 실패하거나
+그 반대가 된다.
+
+수동 배포가 필요하면 로컬에서 `AWS_PROFILE=soma`로 `api-docs/README.md`의 빌드 후
+`aws s3 sync api-docs/site s3://fillmap-docs --delete` 와 `aws cloudfront create-invalidation --distribution-id EEC1CHNPO5W2W --paths "/*"`.
+
 ## 참고
 
 - 패키지 구조·오너십·로컬 DB 상세: `.claude/docs/infrastructure.md`
