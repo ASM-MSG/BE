@@ -1,0 +1,4 @@
+# 빌드 산출물과 빌드 때 생성되는 파일 — 정본은 dev 서버 스펙과 *ErrorCode enum
+site/
+docs/openapi.json
+docs/error-codes.md
