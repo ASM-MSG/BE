@@ -40,13 +40,22 @@ public class SesMailSender implements MailSender {
 
 	@Override
 	public void send(String to, String subject, String text) {
+		send(to, subject, text, null);
+	}
+
+	@Override
+	public void send(String to, String subject, String text, String html) {
+		Body.Builder body = Body.builder().text(content(text));
+		if (html != null) {
+			body.html(content(html));
+		}
 		sesClient.sendEmail(SendEmailRequest.builder()
 			.fromEmailAddress(from)
 			.destination(Destination.builder().toAddresses(to).build())
 			.content(EmailContent.builder()
 				.simple(Message.builder()
 					.subject(content(subject))
-					.body(Body.builder().text(content(text)).build())
+					.body(body.build())
 					.build())
 				.build())
 			.build());

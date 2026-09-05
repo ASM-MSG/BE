@@ -10,4 +10,10 @@ package com.msg.fillmap.global.mail;
 public interface MailSender {
 
 	void send(String to, String subject, String text);
+
+	/**
+	 * HTML 본문을 함께 싣는 발송 (MSG-575). {@code text} 는 HTML 을 못 그리는 클라이언트용 대체본이라 두 본문이
+	 * 같은 내용이어야 한다. 서식은 {@link FillMapMailTemplate} 이 만든다.
+	 */
+	void send(String to, String subject, String text, String html);
 }
