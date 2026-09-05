@@ -83,7 +83,7 @@ public class OrgAccountRequest {
 		this.processedAt = processedAt;
 	}
 
-	/** 반려 전이 — 사유는 관리자의 수기 통보 재료다(메일 발송 없음, FR-6). */
+	/** 반려 전이 — 사유는 커밋 뒤 요청자에게 가는 반려 안내 메일에 실린다 (MSG-575, FR-AUTH-18). */
 	public void reject(String reason, LocalDateTime processedAt) {
 		this.status = OrgAccountRequestStatus.REJECTED;
 		this.rejectReason = reason;

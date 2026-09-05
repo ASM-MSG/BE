@@ -28,6 +28,7 @@ import com.msg.fillmap.user.dto.OrgAccountCreateRequestDto;
 import com.msg.fillmap.user.dto.OrgAccountIssueResponseDto;
 import com.msg.fillmap.user.dto.OrgAccountRequestApproveRequestDto;
 import com.msg.fillmap.user.dto.OrgAccountRequestRejectRequestDto;
+import com.msg.fillmap.user.dto.OrgAccountRequestRejectResponseDto;
 import com.msg.fillmap.user.dto.OrgAccountResendResponseDto;
 import com.msg.fillmap.user.service.AdminEmailChangeRequestService;
 import com.msg.fillmap.user.service.OrgAccountIssueService;
@@ -106,17 +107,17 @@ public class AdminOrgAccountController {
 
 	@Operation(
 		summary = "계정 발급 요청 반려",
-		description = "요청을 반려하고 사유를 저장한다. 사유는 필수이며 <b>메일은 발송되지 않는다</b> — 반려 통보는 "
-			+ "당분간 수기이고 저장된 사유가 그 재료다.\n\n"
+		description = "요청을 반려하고 사유를 저장한 뒤, 요청자의 공식 이메일로 <b>반려 사유를 담은 안내 메일을 발송</b>한다 "
+			+ "(필맵 서식 HTML + 평문 대체본). 사유는 필수다. 발송 실패는 반려를 뒤집지 않고 <code>emailSent:false</code> 로만 "
+			+ "드러나며, 그때는 저장된 사유로 수기 통보한다(재발송 API 없음).\n\n"
 			+ "없는 요청은 404(1421), 이미 처리된 요청은 409(1422), 검토 이후 요청 내용이 바뀌었으면 409(1426) 다."
 	)
 	@PostMapping("/org-account-requests/{requestId}/reject")
-	public SuccessResponse<Void> reject(
+	public SuccessResponse<OrgAccountRequestRejectResponseDto> reject(
 		@Parameter(description = "반려할 요청 id", example = "7") @PathVariable Long requestId,
 		@Valid @RequestBody OrgAccountRequestRejectRequestDto request
 	) {
-		orgAccountRequestService.reject(requestId, request);
-		return new SuccessResponse<>(null);
+		return SuccessResponse.of(orgAccountRequestService.reject(requestId, request));
 	}
 
 	@Operation(
