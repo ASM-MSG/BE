@@ -2,6 +2,7 @@ package com.msg.fillmap.event.service;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -165,13 +166,17 @@ public class EventVideoServiceImpl implements EventVideoService {
 		boolean hasNext = rows.size() > pageSize;
 		List<EventLocationVideoRow> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
 		// 반응 수는 이 페이지의 영상 id 집합으로 도는 group by 두 번이다 — 항목마다 세면 N+1 이다.
-		EventVideoReactionCounts reactions = interactionService.countReactions(
-			pageRows.stream().map(EventLocationVideoRow::videoId).toList());
-		List<EventLocationVideoResponseDto> videos = pageRows.stream()
-			.map(row -> new EventLocationVideoResponseDto(row.videoId(),
+		List<Long> videoIds = new ArrayList<>(pageRows.size());
+		for (EventLocationVideoRow row : pageRows) {
+			videoIds.add(row.videoId());
+		}
+		EventVideoReactionCounts reactions = interactionService.countReactions(videoIds);
+		List<EventLocationVideoResponseDto> videos = new ArrayList<>(pageRows.size());
+		for (EventLocationVideoRow row : pageRows) {
+			videos.add(new EventLocationVideoResponseDto(row.videoId(),
 				thumbnailUrlPresigner.presign(row.thumbnailKey()), row.durationSec(), row.createdAt(),
-				reactions.helpfulCount(row.videoId()), reactions.commentCount(row.videoId())))
-			.toList();
+				reactions.helpfulCount(row.videoId()), reactions.commentCount(row.videoId())));
+		}
 		String nextCursor = null;
 		if (hasNext) {
 			EventLocationVideoRow last = pageRows.get(pageRows.size() - 1);

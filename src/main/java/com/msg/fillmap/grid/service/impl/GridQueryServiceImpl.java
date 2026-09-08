@@ -2,6 +2,7 @@ package com.msg.fillmap.grid.service.impl;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -129,12 +130,12 @@ public class GridQueryServiceImpl implements GridQueryService {
 	@Override
 	public Map<String, String> resolveRegionNames(Collection<String> gridIds) {
 		Map<String, String> names = new LinkedHashMap<>();
-		gridIds.stream().distinct().forEach(gridId -> {
+		for (String gridId : new LinkedHashSet<>(gridIds)) {
 			String regionName = resolveRegionName(gridId);
 			if (regionName != null) {
 				names.put(gridId, regionName);
 			}
-		});
+		}
 		return names;
 	}
 
