@@ -1,0 +1,105 @@
+MSG-583 event start notification performance, 2026-09-08 KST
+Baseline artifact commit: 70829e28 (production same as 3fde2f19)
+Improvement: feature/MSG-583-event-notification-performance working tree
+Apple M5 / 32GiB / JDK21.0.2 / test heap2GiB / Hikari2 / PostgreSQL16.4 shared_buffers128MB / JaCoCo
+Database: fillmap_tx_bench_20260908; regions3558; scheduled tasks cancelled
+Pure timing excludes fixtures, assertions, SQL logging, EXPLAIN and CONTROLLED contention.
+
+PURE TIMING (one successful Gradle test method covering every listed size)
+FANOUT_ENV database=fillmap_tx_bench_20260908 jvm=21.0.2 max_heap_bytes=2147483648 processors=10
+FANOUT_SAMPLE size=1000 mode=WARMUP_FRESH repetition=0 tick_ms=61.461 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=54.615 second_tx_envelope_ms=6.567 pool_usage_available=true pool_returns=2 pool_usage_total_ms=60.000 pool_usage_mean_ms=30.000 notifications=1000
+FANOUT_SAMPLE size=1000 mode=FRESH repetition=1 tick_ms=22.406 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=20.234 second_tx_envelope_ms=2.155 pool_usage_available=true pool_returns=2 pool_usage_total_ms=22.000 pool_usage_mean_ms=11.000 notifications=1000
+FANOUT_SAMPLE size=1000 mode=FRESH repetition=2 tick_ms=22.082 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=19.885 second_tx_envelope_ms=2.181 pool_usage_available=true pool_returns=2 pool_usage_total_ms=22.000 pool_usage_mean_ms=11.000 notifications=1000
+FANOUT_SAMPLE size=1000 mode=FRESH repetition=3 tick_ms=21.295 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=18.921 second_tx_envelope_ms=2.359 pool_usage_available=true pool_returns=2 pool_usage_total_ms=21.000 pool_usage_mean_ms=10.500 notifications=1000
+FANOUT_SAMPLE size=1000 mode=DEDUPE repetition=1 tick_ms=9.856 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=8.025 second_tx_envelope_ms=1.817 pool_usage_available=true pool_returns=2 pool_usage_total_ms=10.000 pool_usage_mean_ms=5.000 notifications=1000
+FANOUT_SAMPLE size=10000 mode=WARMUP_FRESH repetition=0 tick_ms=158.870 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=153.787 second_tx_envelope_ms=5.042 pool_usage_available=true pool_returns=2 pool_usage_total_ms=159.000 pool_usage_mean_ms=79.500 notifications=10000
+FANOUT_SAMPLE size=10000 mode=FRESH repetition=1 tick_ms=157.491 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=153.198 second_tx_envelope_ms=4.242 pool_usage_available=true pool_returns=2 pool_usage_total_ms=157.000 pool_usage_mean_ms=78.500 notifications=10000
+FANOUT_SAMPLE size=10000 mode=FRESH repetition=2 tick_ms=159.047 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=154.335 second_tx_envelope_ms=4.669 pool_usage_available=true pool_returns=2 pool_usage_total_ms=158.000 pool_usage_mean_ms=79.000 notifications=10000
+FANOUT_SAMPLE size=10000 mode=FRESH repetition=3 tick_ms=157.728 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=153.227 second_tx_envelope_ms=4.455 pool_usage_available=true pool_returns=2 pool_usage_total_ms=157.000 pool_usage_mean_ms=78.500 notifications=10000
+FANOUT_SAMPLE size=10000 mode=DEDUPE repetition=1 tick_ms=51.184 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=47.979 second_tx_envelope_ms=3.171 pool_usage_available=true pool_returns=2 pool_usage_total_ms=51.000 pool_usage_mean_ms=25.500 notifications=10000
+FANOUT_SAMPLE size=50000 mode=LARGE_SINGLE repetition=1 tick_ms=704.659 hibernate_prepares=5 tx_count=2 first_tx_envelope_ms=699.620 second_tx_envelope_ms=4.991 pool_usage_available=true pool_returns=2 pool_usage_total_ms=705.000 pool_usage_mean_ms=352.500 notifications=50000
+BUILD SUCCESSFUL in 17s
+
+CONTROLLED CONTENTION (separate successful test; synchronization and local timeout SQL included)
+FANOUT_LOCK_SAMPLE mode=CONTROLLED size=50000 holder_pid=56021 waiter_pid=56031 blocked_confirmed=true lock_acquire_statement_ms=718.321 fanout_tx_envelope_ms=788.674 notifications=50000
+BUILD SUCCESSFUL in 15s
+
+SQL LOG PROOF (1000 subscribers; PID56091; source event-perf-db.log lines320-379)
+First TX: lock + candidate SELECT + one INSERT SELECT = 3 business executes.
+Second TX: lock + expired subscription DELETE = 2 business executes.
+Driver pg_catalog queries and BEGIN/COMMIT excluded; parse/bind not counted again.
+2026-09-08 15:15:38.401 KST [56091] LOG:  duration: 0.107 ms  execute <unnamed>: SELECT pg_advisory_xact_lock(hashtextextended('event_seed', 0))
+
+2026-09-08 15:15:38.410 KST [56091] LOG:  duration: 0.037 ms  execute <unnamed>: select eo1_0.id,eo1_0.city_name,eo1_0.ends_at,eo1_0.image_key,eo1_0.max_grid_x,eo1_0.max_grid_y,eo1_0.min_grid_x,eo1_0.min_grid_y,eo1_0.occurrence_key,eo1_0.schedule_revision,eo1_0.event_series_id,eo1_0.starts_at,eo1_0.title,eo1_0.visible_from from event_occurrences eo1_0 where eo1_0.starts_at<=$1 and eo1_0.ends_at>$2 and eo1_0.starts_at>$3
+
+2026-09-08 15:15:38.445 KST [56091] LOG:  duration: 16.794 ms  execute <unnamed>: INSERT INTO notifications (user_id, category, event_key, title, body, created_at)
+	SELECT s.user_id, 'EVENT', $1, $2, $3,
+	       statement_timestamp() AT TIME ZONE 'UTC'
+	FROM event_notification_subscriptions s
+	WHERE s.event_occurrence_id = $4
+	  AND s.created_at <= $5
+	ON CONFLICT (user_id, event_key) DO NOTHING
+
+2026-09-08 15:15:38.448 KST [56091] LOG:  duration: 0.007 ms  execute <unnamed>: SELECT pg_advisory_xact_lock(hashtextextended('event_seed', 0))
+
+2026-09-08 15:15:38.453 KST [56091] LOG:  duration: 0.233 ms  execute <unnamed>: delete from event_notification_subscriptions ens1_0 where ens1_0.event_occurrence_id in (select eo1_0.id from event_occurrences eo1_0 where eo1_0.ends_at<=$1)
+
+EXPLAIN ANALYZE, BUFFERS (separate transaction, 50000 rows, ROLLBACK)
+BEGIN
+DO
+INSERT 0 1
+INSERT 0 1
+INSERT 0 50000
+INSERT 0 50000
+ANALYZE
+ANALYZE
+ANALYZE
+                                                                   QUERY PLAN                                                                    
+-------------------------------------------------------------------------------------------------------------------------------------------------
+ Insert on notifications  (cost=0.00..1444.00 rows=0 width=0) (actual time=387.455..387.456 rows=0 loops=1)
+   Conflict Resolution: NOTHING
+   Conflict Arbiter Indexes: uq_notifications_user_event
+   Tuples Inserted: 50000
+   Conflicting Tuples: 0
+   Buffers: shared hit=656315 dirtied=1250 written=1251
+   ->  Seq Scan on event_notification_subscriptions s  (cost=0.00..1444.00 rows=50000 width=1112) (actual time=0.055..21.043 rows=50000 loops=1)
+         Filter: ((created_at <= '2026-10-06 01:00:00'::timestamp without time zone) AND (event_occurrence_id = 341))
+         Buffers: shared hit=50330
+ Planning:
+   Buffers: shared hit=35
+ Planning Time: 0.685 ms
+ Trigger for constraint notifications_user_id_fkey: time=296.677 calls=50000
+ Execution Time: 686.502 ms
+(14 rows)
+
+ROLLBACK
+
+FULL BUILD
+{
+  "tests": 3054,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 6,
+  "suites": 516
+}
+BUILD SUCCESSFUL in 2m 11s
+
+VALIDATION HISTORY
+Baseline scheduler tests9 passed; new SQL regression RED on 6 per-user INSERTs.
+Two initial GREEN attempts failed compilation on existing functional-interface lambdas; mock replacements fixed both callers.
+Targeted regression: tests42 passed. A final fixture timestamp adjustment is included in the subsequent full build.
+First benchmark launch rejected 2 leftover full-suite MSG-440 event fixtures; scoped locations/events/series removed, rerun successful.
+Independent spec/code review passed; benchmark prefix check and production connection timeouts corrected and re-reviewed.
+Codex companion review failed both before and after implementation: gpt-6-astra requires a newer version of Codex. No successful companion review.
+RTM AC-583-01 through AC-583-05 linked. Existing malformed NFR tokens and 2 unrelated uncovered ACs unchanged.
+
+CLEANUP BEFORE DROPPING THE DEDICATED DATABASE
+event_occurrences|0
+event_series|0
+subscriptions|0
+notifications|0
+users|0
+-1
+Dedicated database dropped successfully. Redis DB15 was initially empty; 44 full-test keys (blacklist/pwreset/refresh) removed; remaining0.
+EncodingWorkerContextTest retains its preexisting hardcoded original fillmap URL; original encoding job count was0 before and after full build.
+Benchmark writes and SQL logging targeted only the dedicated database; no dev/production access.

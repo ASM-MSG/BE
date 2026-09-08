@@ -2,6 +2,10 @@ package com.msg.fillmap.event.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -11,7 +15,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import jakarta.persistence.EntityManagerFactory;
 
@@ -27,12 +36,15 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 
+import com.zaxxer.hikari.HikariDataSource;
+
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
 import com.msg.fillmap.event.repository.EventNotificationSubscriptionRepository;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventSeriesRepository;
+import com.msg.fillmap.notification.entity.NotificationCategory;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 
 /**
@@ -100,7 +112,7 @@ class EventFanoutBenchmark {
 					notificationCommandService, observed, true, CLOCK);
 				String eventKey = "EVENT_START:" + tag + ":" + START.toEpochSecond(ZoneOffset.UTC);
 				if (size >= 50_000) {
-					// 5만 명은 로컬에서 수분이 걸리므로 단발 측정만 합니다. 반복값이 아닙니다.
+					// 기존 5만 명 단발 기준값과 비교하도록 반복 횟수를 유지합니다.
 					measure(scheduler, observed, stats, occurrenceId, eventKey, size, "LARGE_SINGLE", 1);
 					continue;
 				}
@@ -110,7 +122,7 @@ class EventFanoutBenchmark {
 					assertThat(notificationCount(eventKey)).isZero();
 					measure(scheduler, observed, stats, occurrenceId, eventKey, size, "FRESH", repetition);
 				}
-				// 이미 기록된 구독자도 production loop를 다시 통과하는 비용을 따로 1회 기록합니다.
+				// 이미 기록된 구독자의 중복 확인 비용을 따로 1회 기록합니다.
 				measure(scheduler, observed, stats, occurrenceId, eventKey, size, "DEDUPE", 1);
 			} finally {
 				// 자기 자연키만 정리합니다. TRUNCATE나 다른 벤치 데이터 삭제는 없습니다.
@@ -123,6 +135,129 @@ class EventFanoutBenchmark {
 		}
 	}
 
+
+	/** 별도 경쟁 시나리오: 차단 확인까지 기록을 보류하므로 순수 성능 샘플과 합산하지 않습니다. */
+	@Test
+	void benchmarkEventWriteLockContentionDuringFiftyThousandFanout() throws Exception {
+		schedules.getScheduledTasks().forEach(task -> task.cancel(false));
+		assertThat(jdbc.queryForObject("SELECT current_database()", String.class)).startsWith("fillmap_tx_bench_");
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM event_occurrences", Long.class)).isZero();
+		String tag = "txlock-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+		String emailPattern = tag + "-%@example.invalid";
+		String eventKey = "EVENT_START:" + tag + ":" + START.toEpochSecond(ZoneOffset.UTC);
+		HikariDataSource source = jdbc.getDataSource().unwrap(HikariDataSource.class);
+		ExecutorService workers = Executors.newFixedThreadPool(2);
+		CountDownLatch allowInsert = new CountDownLatch(1);
+		try (Connection observer = DriverManager.getConnection(
+				source.getJdbcUrl(), source.getUsername(), source.getPassword());
+			Connection competitor = DriverManager.getConnection(
+				source.getJdbcUrl(), source.getUsername(), source.getPassword())) {
+			createFixture(tag, emailPattern, 50_000);
+			try (Statement settings = observer.createStatement()) {
+				settings.execute("SET statement_timeout = '5s'");
+			}
+			int waiterPid;
+			try (Statement identity = competitor.createStatement();
+				ResultSet row = identity.executeQuery("SELECT pg_backend_pid()")) {
+				row.next();
+				waiterPid = row.getInt(1);
+			}
+			competitor.setAutoCommit(false);
+			try (Statement settings = competitor.createStatement()) {
+				settings.execute("SET LOCAL lock_timeout = '30s'");
+				settings.execute("SET LOCAL statement_timeout = '35s'");
+			}
+			CountDownLatch firstRecord = new CountDownLatch(1);
+			NotificationCommandService observedCommand = new NotificationCommandService() {
+				@Override
+				public void record(Long userId, NotificationCategory category, String key, String title, String body) {
+					notificationCommandService.record(userId, category, key, title, body);
+				}
+
+				@Override
+				public void recordEventStart(long occurrenceId, LocalDateTime startsAt,
+					String key, String title, String body) {
+					firstRecord.countDown();
+					try {
+						assertThat(allowInsert.await(15, TimeUnit.SECONDS)).isTrue();
+					} catch (InterruptedException error) {
+						Thread.currentThread().interrupt();
+						throw new IllegalStateException(error);
+					}
+					notificationCommandService.recordEventStart(occurrenceId, startsAt, key, title, body);
+				}
+			};
+			ObservedTransactionManager observedTx = new ObservedTransactionManager(txManager, jdbc);
+			EventNotificationScheduler scheduler = new EventNotificationScheduler(
+				occurrenceRepository, subscriptionRepository, seriesRepository,
+				observedCommand, observedTx, true, CLOCK);
+			Future<?> fanout = workers.submit(scheduler::tick);
+			assertThat(firstRecord.await(30, TimeUnit.SECONDS))
+				.as("첫 production record 진입을 기다립니다").isTrue();
+
+			int holderPid;
+			// bigint advisory 키의 두 32-bit 절반을 pg_locks와 정확히 대응합니다.
+			try (Statement query = observer.createStatement(); ResultSet row = query.executeQuery("""
+				SELECT pid FROM pg_locks
+				WHERE locktype = 'advisory' AND granted AND objsubid = 1
+				  AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+				  AND classid = ((hashtextextended('event_seed', 0) >> 32) & 4294967295)::oid
+				  AND objid = (hashtextextended('event_seed', 0) & 4294967295)::oid
+				""")) {
+				assertThat(row.next()).as("발송 TX가 실제 행사 잠금을 보유해야 합니다").isTrue();
+				holderPid = row.getInt(1);
+				assertThat(row.next()).as("잠금 보유자는 하나여야 합니다").isFalse();
+			}
+			Future<Double> waiting = workers.submit(() -> {
+				try (Statement lock = competitor.createStatement()) {
+					long start = System.nanoTime();
+					lock.execute("SELECT pg_advisory_xact_lock(hashtextextended('event_seed', 0))");
+					double waitMs = (System.nanoTime() - start) / 1_000_000.0;
+					competitor.commit();
+					return waitMs;
+				} catch (Exception error) {
+					competitor.rollback();
+					throw error;
+				}
+			});
+			boolean blocked = false;
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+			while (!waiting.isDone() && System.nanoTime() < deadline) {
+				try (Statement query = observer.createStatement(); ResultSet row = query.executeQuery(
+					"SELECT " + holderPid + " = ANY(pg_blocking_pids(" + waiterPid + "))")) {
+					row.next();
+					blocked = row.getBoolean(1);
+				}
+				if (blocked) {
+					break;
+				}
+				// 조건부 짧은 재조회 간격입니다. 고정 시간 sleep으로 경합을 추정하지 않습니다.
+				LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(5));
+			}
+			allowInsert.countDown();
+			double waitMs = waiting.get(40, TimeUnit.SECONDS);
+			fanout.get(40, TimeUnit.SECONDS);
+			assertThat(blocked).as("pg_blocking_pids에서 실제 fanout TX에 의한 대기를 확인합니다").isTrue();
+			assertThat(notificationCount(eventKey)).isEqualTo(50_000);
+			assertThat(observedTx.samples).hasSize(2);
+			assertThat(observedTx.samples.stream().allMatch(TxSample::committed)).isTrue();
+			System.out.printf(Locale.ROOT,
+				"FANOUT_LOCK_SAMPLE mode=CONTROLLED size=50000 holder_pid=%d waiter_pid=%d blocked_confirmed=%s "
+					+ "lock_acquire_statement_ms=%.3f fanout_tx_envelope_ms=%.3f notifications=50000%n",
+				holderPid, waiterPid, blocked, waitMs, observedTx.samples.get(0).elapsedMs());
+		} finally {
+			// JDBC 대기는 위 timeout으로 제한됩니다. 자기 워커가 끝난 뒤에만 fixture를 삭제합니다.
+			allowInsert.countDown();
+			workers.shutdownNow();
+			boolean stopped = workers.awaitTermination(40, TimeUnit.SECONDS);
+			if (stopped) {
+				jdbc.update("DELETE FROM users WHERE email LIKE ?", emailPattern);
+				jdbc.update("DELETE FROM event_occurrences WHERE occurrence_key = ?", tag);
+				jdbc.update("DELETE FROM event_series WHERE series_key = ?", tag);
+			}
+			assertThat(stopped).as("워커가 남으면 fixture를 삭제하지 않고 실행을 실패시킵니다").isTrue();
+		}
+	}
 
 	private long createFixture(String tag, String emailPattern, int size) {
 		Long seriesId = jdbc.queryForObject(
@@ -214,11 +349,17 @@ class EventFanoutBenchmark {
 	/** 앱 측 TX 개시 요청부터 commit/rollback 반환까지이며 DB BEGIN 시각을 뜻하지 않습니다. */
 	private static final class ObservedTransactionManager implements PlatformTransactionManager {
 		private final PlatformTransactionManager delegate;
+		private final JdbcTemplate timeoutJdbc;
 		private final Map<TransactionStatus, Long> starts = new IdentityHashMap<>();
 		private final List<TxSample> samples = new ArrayList<>();
 
 		private ObservedTransactionManager(PlatformTransactionManager delegate) {
+			this(delegate, null);
+		}
+
+		private ObservedTransactionManager(PlatformTransactionManager delegate, JdbcTemplate timeoutJdbc) {
 			this.delegate = delegate;
+			this.timeoutJdbc = timeoutJdbc;
 		}
 
 		@Override
@@ -227,6 +368,17 @@ class EventFanoutBenchmark {
 			TransactionStatus status = delegate.getTransaction(definition);
 			assertThat(status.isNewTransaction()).as("테스트 외곽 TX가 없어야 합니다").isTrue();
 			starts.put(status, start);
+			if (timeoutJdbc != null) {
+				// CONTROLLED 시나리오만 제한한다. 순수 성능 샘플에는 추가 SQL이 없다.
+				try {
+					timeoutJdbc.execute("SET LOCAL statement_timeout = '30s'");
+					timeoutJdbc.execute("SET LOCAL lock_timeout = '10s'");
+				} catch (RuntimeException error) {
+					delegate.rollback(status);
+					starts.remove(status);
+					throw error;
+				}
+			}
 			return status;
 		}
 
