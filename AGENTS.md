@@ -130,7 +130,8 @@ gitignore 대상이라 레포에 없으니 `src/main/resources/application-local
 
 ## 도구별 참고
 
-`.claude/skills/`의 워크플로우 스킬 중 `prd-writer`와 `srs-writer`는 도구를 가리지 않지만,
+`.claude/skills/`의 워크플로우 스킬 중 `prd-writer`와 `srs-writer`는 도구를 가리지 않고,
+`backend-audit`도 서브에이전트 없이 네 묶음을 같은 세션이 순서대로 돌면 된다(스크립트는 bash·docker뿐).
 `spec-driven-dev`와 `spec-writer`는 Claude Code의 서브에이전트 기능(Agent·SendMessage·작업 보드)에
 의존하므로 다른 도구에서는 그대로 쓸 수 없다. 그 경우 스킬 문서를 절차 설명서로 읽고 수동으로
 따른다 — 역할 정의는 `.codex/agents/*.toml`에 있고, 위임하는 자리에서 같은 세션이 그 역할로
