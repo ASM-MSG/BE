@@ -1,15 +1,25 @@
 package com.msg.fillmap.event.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import jakarta.persistence.EntityManager;
 
+import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,6 +35,9 @@ import com.msg.fillmap.event.entity.EventSeries;
 import com.msg.fillmap.event.repository.EventNotificationSubscriptionRepository;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventSeriesRepository;
+import com.msg.fillmap.notification.entity.Notification;
+import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationStatus;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -36,7 +49,8 @@ import com.msg.fillmap.user.repository.UserRepository;
  * 격리(공유 로컬 DB): 합성 자연키(msg442s-*)로 커밋해 쓰고 {@code @AfterEach} 에서 지운다. 사용자 삭제가
  * notifications·구독 행을 CASCADE 로 걷어가고, 회차·시리즈는 순서대로 지운다.
  */
-@SpringBootTest
+@SpringBootTest(properties = "spring.jpa.properties.hibernate.session_factory.statement_inspector="
+	+ "com.msg.fillmap.event.service.EventNotificationSchedulerTest$SqlInspector")
 @DisplayName("EventNotificationScheduler 시작 알림·종료 해제 (실 PostgreSQL)")
 class EventNotificationSchedulerTest {
 
@@ -68,6 +82,19 @@ class EventNotificationSchedulerTest {
 	private long userId;
 	private long seriesId;
 	private long occurrenceId;
+	private final List<Long> extraUserIds = new ArrayList<>();
+
+	public static class SqlInspector implements StatementInspector {
+		private static final ThreadLocal<List<String>> SQL = new ThreadLocal<>();
+
+		@Override
+		public String inspect(String sql) {
+			if (SQL.get() != null) {
+				SQL.get().add(sql.toLowerCase(Locale.ROOT));
+			}
+			return sql;
+		}
+	}
 
 	@BeforeEach
 	void setUp() {
@@ -85,7 +112,12 @@ class EventNotificationSchedulerTest {
 
 	@AfterEach
 	void tearDown() {
+		SqlInspector.SQL.remove();
 		tx.executeWithoutResult(status -> {
+			for (long extraUserId : extraUserIds) {
+				em.createNativeQuery("DELETE FROM users WHERE id = :id")
+					.setParameter("id", extraUserId).executeUpdate();
+			}
 			em.createNativeQuery("DELETE FROM users WHERE id = :id").setParameter("id", userId).executeUpdate();
 			em.createNativeQuery("DELETE FROM event_occurrences WHERE event_series_id = :id")
 				.setParameter("id", seriesId).executeUpdate();
@@ -125,6 +157,10 @@ class EventNotificationSchedulerTest {
 
 	/** 구독 행을 만들면서 created_at 을 원하는 시각으로 고정한다 — 발송 대상 판정 재료라 값이 검증에 든다. */
 	private void 구독(LocalDateTime createdAt) {
+		구독(userId, occurrenceId, createdAt);
+	}
+
+	private void 구독(long userId, long occurrenceId, LocalDateTime createdAt) {
 		tx.executeWithoutResult(status -> {
 			subscriptionRepository.insertSubscription(userId, occurrenceId);
 			em.createNativeQuery("""
@@ -151,9 +187,174 @@ class EventNotificationSchedulerTest {
 			.setParameter("userId", userId).getResultList());
 	}
 
+	private long 새사용자() {
+		long id = tx.execute(status -> userRepository.save(User.createLocalUser(
+			"msg583-" + UUID.randomUUID() + "@example.com", "hash", "테스터")).getId());
+		extraUserIds.add(id);
+		return id;
+	}
+
+	private long 새회차(LocalDateTime startsAt, LocalDateTime endsAt) {
+		return tx.execute(status -> {
+			EventSeries series = seriesRepository.findById(seriesId).orElseThrow();
+			EventOccurrence occurrence = new EventOccurrence(series, "msg583-occ-" + 짧은키());
+			occurrence.update(series, "추가 회차", "부산", startsAt, endsAt, 90000, 90001, 90500, 90501);
+			return occurrenceRepository.save(occurrence).getId();
+		});
+	}
+
+	private List<Notification> 알림(long id) {
+		return tx.execute(status -> em.createQuery(
+			"SELECT n FROM Notification n WHERE n.userId = :id ORDER BY n.id", Notification.class)
+			.setParameter("id", id).getResultList());
+	}
+
 	@Nested
 	@DisplayName("시작 알림")
 	class StartNotification {
+
+		// 검증: AC-583-01, FR-EVENT-06
+		@Test
+		void 시작_정각은_포함하고_구독_시각을_마이크로초로_구분한다() {
+			구독(시작.minusNanos(1_000));
+			long onTime = 새사용자();
+			long after = 새사용자();
+			구독(onTime, occurrenceId, 시작);
+			구독(after, occurrenceId, 시작.plusNanos(1_000));
+			long other = 새회차(시작, 종료);
+			구독(after, other, 시작);
+			새회차(시작, 종료); // 구독자 0명도 정상 처리
+
+			스케줄러(true, 시작.minusNanos(1_000)).tick();
+			assertThat(알림수()).isZero();
+			스케줄러(true, 시작).tick();
+
+			assertThat(알림(userId)).singleElement().satisfies(n -> {
+				assertThat(n.getCategory()).isEqualTo(NotificationCategory.EVENT);
+				assertThat(n.getEventKey()).isEqualTo(
+					"EVENT_START:" + 회차키() + ":" + 시작.toEpochSecond(ZoneOffset.UTC));
+				assertThat(n.getTitle()).isEqualTo("합성 회차");
+				assertThat(n.getBody()).isEqualTo("행사가 시작됐어요. 현장 영상을 올려보세요");
+				assertThat(n.getStatus()).isEqualTo(NotificationStatus.PENDING);
+				assertThat(n.getRetryCount()).isZero();
+			});
+			assertThat(알림(onTime)).hasSize(1);
+			assertThat(알림(after)).singleElement().satisfies(n -> assertThat(n.getTitle()).isEqualTo("추가 회차"));
+		}
+
+		// 검증: AC-583-01, FR-EVENT-06
+		@Test
+		void 종료_정각은_발송_창_안이어도_제외한다() {
+			long shortEvent = 새회차(시작.minusHours(1), 시작);
+			구독(userId, shortEvent, 시작.minusDays(1));
+
+			스케줄러(true, 시작).tick();
+
+			assertThat(알림수()).isZero();
+		}
+
+		// 검증: AC-583-02, FR-EVENT-06
+		@Test
+		void 일부_기존_알림의_내용과_상태와_기록시각을_덮지_않는다() {
+			구독(시작.minusDays(1));
+			long other = 새사용자();
+			구독(other, occurrenceId, 시작);
+			String key = "EVENT_START:" + 회차키() + ":" + 시작.toEpochSecond(ZoneOffset.UTC);
+			notificationCommandService.record(userId, NotificationCategory.EVENT, key, "기존 제목", "기존 본문");
+			tx.executeWithoutResult(status -> em.createNativeQuery(
+				"UPDATE notifications SET status = 'SENT', created_at = :at WHERE user_id = :id")
+				.setParameter("at", 시작.minusDays(2)).setParameter("id", userId).executeUpdate());
+
+			스케줄러(true, 시작).tick();
+			스케줄러(true, 시작.plusHours(1)).tick();
+
+			assertThat(알림(userId)).singleElement().satisfies(n -> {
+				assertThat(n.getTitle()).isEqualTo("기존 제목");
+				assertThat(n.getBody()).isEqualTo("기존 본문");
+				assertThat(n.getStatus()).isEqualTo(NotificationStatus.SENT);
+				assertThat(n.getCreatedAt()).isEqualTo(시작.minusDays(2));
+			});
+			assertThat(알림(other)).hasSize(1);
+		}
+
+		// 검증: AC-583-03, FR-EVENT-06
+		@Test
+		void 두번째_회차_DB_실패는_전체_롤백하고_정리와_다음틱_복구는_유지한다() {
+			구독(시작.minusDays(1));
+			long other = 새회차(시작, 종료);
+			구독(userId, other, 시작);
+			long ended = 종료된_회차의_구독();
+			AtomicInteger calls = new AtomicInteger();
+			NotificationCommandService failing = mock(NotificationCommandService.class);
+			doAnswer(invocation -> {
+				if (calls.incrementAndGet() == 2) {
+					// NOT NULL 위반으로 실제 DB 오류와 트랜잭션 오염을 재현한다.
+					notificationCommandService.recordEventStart(invocation.getArgument(0), invocation.getArgument(1),
+						invocation.getArgument(2), null, invocation.getArgument(4));
+				} else {
+					notificationCommandService.recordEventStart(invocation.getArgument(0), invocation.getArgument(1),
+						invocation.getArgument(2), invocation.getArgument(3), invocation.getArgument(4));
+				}
+				return null;
+			}).when(failing).recordEventStart(anyLong(), any(), anyString(), anyString(), anyString());
+
+			스케줄러(true, 시작, failing).tick();
+
+			assertThat(calls.get()).isEqualTo(2);
+			assertThat(알림수()).isZero();
+			assertThat(subscriptionRepository.findAllByIdEventOccurrenceId(ended)).isEmpty();
+			스케줄러(true, 시작.plusMinutes(5)).tick();
+			assertThat(알림수()).isEqualTo(2);
+		}
+
+		// 검증: AC-583-04, FR-EVENT-06
+		@Test
+		void 먼저_커밋된_취소와_탈퇴는_제외하고_기록후_탈퇴는_연쇄삭제한다() {
+			구독(시작.minusDays(1));
+			long cancelled = 새사용자();
+			long withdrawn = 새사용자();
+			구독(cancelled, occurrenceId, 시작);
+			구독(withdrawn, occurrenceId, 시작);
+			tx.executeWithoutResult(status -> {
+				em.createNativeQuery("DELETE FROM event_notification_subscriptions WHERE user_id = :id")
+					.setParameter("id", cancelled).executeUpdate();
+				em.createNativeQuery("DELETE FROM users WHERE id = :id")
+					.setParameter("id", withdrawn).executeUpdate();
+			});
+
+			스케줄러(true, 시작).tick();
+
+			assertThat(알림수()).isEqualTo(1);
+			assertThat(알림(cancelled)).isEmpty();
+			assertThat(알림(withdrawn)).isEmpty();
+			tx.executeWithoutResult(status -> em.createNativeQuery("DELETE FROM users WHERE id = :id")
+				.setParameter("id", userId).executeUpdate());
+			assertThat(알림수()).isZero();
+			assertThat(subscriptionRepository.findAllByIdEventOccurrenceId(occurrenceId)).isEmpty();
+		}
+
+		// 검증: AC-583-05, FR-EVENT-06
+		@Test
+		void 구독자가_늘어도_회차당_INSERT_SELECT_한_번으로_기록한다() {
+			구독(시작.minusDays(1));
+			for (int i = 0; i < 5; i++) {
+				구독(새사용자(), occurrenceId, 시작.minusDays(1));
+			}
+			SqlInspector.SQL.set(new ArrayList<>());
+
+			스케줄러(true, 시작).tick();
+
+			List<String> sql = List.copyOf(SqlInspector.SQL.get());
+			SqlInspector.SQL.remove();
+			assertThat(sql.stream().filter(q -> q.contains("insert into notifications"))).singleElement()
+				.satisfies(q -> assertThat(q).contains("select", "event_notification_subscriptions"));
+			assertThat(sql.stream().filter(q -> q.stripLeading().startsWith("select")
+				&& q.contains("event_notification_subscriptions"))).isEmpty();
+			assertThat(알림수()).isEqualTo(1);
+			for (long id : extraUserIds) {
+				assertThat(알림(id)).hasSize(1);
+			}
+		}
 
 		// 검증: FR-EVENT-06
 		@Test
@@ -191,7 +392,7 @@ class EventNotificationSchedulerTest {
 			assertThat(알림수()).isZero();
 		}
 
-		// 검증: FR-EVENT-06
+		// 검증: AC-583-01, FR-EVENT-06
 		@Test
 		@DisplayName("발송 창 24시간이 지난 회차는 스캔되지 않는다 — 매 틱 전 구독자 재훑기 방지")
 		void 발송_창_24시간이_지난_회차는_스캔되지_않는다() {
@@ -202,7 +403,7 @@ class EventNotificationSchedulerTest {
 			assertThat(알림수()).isZero();
 		}
 
-		// 검증: FR-EVENT-06
+		// 검증: AC-583-02, FR-EVENT-06
 		@Test
 		@DisplayName("일정 변경 후 새 시작 시각에 시작 알림이 다시 나간다 — 키가 일정 버전 단위다")
 		void 일정_변경_후_새_시작_시각에_시작_알림이_다시_나간다() {
@@ -265,9 +466,9 @@ class EventNotificationSchedulerTest {
 		void 발송_단계가_예외를_내도_종료_구독_해제는_돈다() {
 			구독(시작.minusDays(1));            // 발송 후보(진행 중 회차)의 구독자 — record 가 호출된다
 			long endedId = 종료된_회차의_구독();   // 정리 단계의 일감
-			NotificationCommandService 던지는_스텁 = (u, c, k, t, b) -> {
-				throw new IllegalStateException("발송 기록 실패 주입");
-			};
+			NotificationCommandService 던지는_스텁 = mock(NotificationCommandService.class);
+			doThrow(new IllegalStateException("발송 기록 실패 주입")).when(던지는_스텁)
+				.recordEventStart(anyLong(), any(), anyString(), anyString(), anyString());
 
 			// 발송 창 안이라 후보가 잡히고, 스텁이 트랜잭션을 통째로 터뜨린다
 			스케줄러(true, 시작.plusMinutes(1), 던지는_스텁).tick();

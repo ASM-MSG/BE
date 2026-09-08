@@ -1,5 +1,7 @@
 package com.msg.fillmap.notification.service;
 
+import java.time.LocalDateTime;
+
 import com.msg.fillmap.notification.entity.NotificationCategory;
 
 /**
@@ -13,4 +15,7 @@ public interface NotificationCommandService {
 	 * 같은 커밋이어야 FR-3(원자성)이 성립한다. 같은 (userId, eventKey) 재기록은 무시된다 (FR-6).
 	 */
 	void record(Long userId, NotificationCategory category, String eventKey, String title, String body);
+
+	/** 회차 시작 정각까지의 현재 구독자에게 멱등 기록한다. 호출자의 발송 트랜잭션에 참여한다. */
+	void recordEventStart(long occurrenceId, LocalDateTime startsAt, String eventKey, String title, String body);
 }

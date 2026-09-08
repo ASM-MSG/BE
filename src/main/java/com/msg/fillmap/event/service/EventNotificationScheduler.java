@@ -14,12 +14,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import lombok.extern.slf4j.Slf4j;
 
-import com.msg.fillmap.event.entity.EventNotificationSubscription;
 import com.msg.fillmap.event.entity.EventOccurrence;
 import com.msg.fillmap.event.repository.EventNotificationSubscriptionRepository;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventSeriesRepository;
-import com.msg.fillmap.notification.entity.NotificationCategory;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 
 /**
@@ -118,7 +116,7 @@ public class EventNotificationScheduler {
 	 * <b>후보 조회부터 기록까지가 락을 선취한 트랜잭션 하나다.</b> 정리 단계와 같은 이유이고 방향만 반대다:
 	 * 락 없이 읽으면 그 스냅숏이 도는 사이 재시드가 시작을 미뤄도 옛 startsAt 으로 "행사가 시작됐어요"가
 	 * 나가, 아직 시작하지 않은 행사의 알림이 된다. 락 획득 후 조회라 재시드 커밋분이 보이고, 연기된 회차는
-	 * 후보 술어에서 자연히 빠진다. 락 보유 시간은 구독자 수 규모의 INSERT 뿐이라 수용 가능하다.
+	 * 후보 술어에서 자연히 빠진다. 기록은 회차마다 INSERT SELECT 한 문장으로 처리한다.
 	 * <p>
 	 * 한 트랜잭션이 됐으므로 실패 격리 단위도 사용자에서 틱 전체로 굵어졌다. 잃는 것은 없다 — 기록은
 	 * {@code ON CONFLICT DO NOTHING} 이라 정상 경로의 중복은 애초에 예외가 아니고, 남는 실패는 트랜잭션을
@@ -138,18 +136,12 @@ public class EventNotificationScheduler {
 		}
 	}
 
-	/** 시작 시각 이전에 구독한 사용자에게만 기록한다. 구독자 조회는 회차 단위라 회차 수만큼만 돈다. */
+	/** 시작 정각까지 구독한 사용자의 알림을 회차별 한 문장으로 기록한다 (MSG-583). */
 	private void recordStart(EventOccurrence occurrence) {
 		String eventKey = "EVENT_START:%s:%d".formatted(
 			occurrence.getOccurrenceKey(), occurrence.getStartsAt().toEpochSecond(ZoneOffset.UTC));
-		for (EventNotificationSubscription subscription :
-			subscriptionRepository.findAllByIdEventOccurrenceId(occurrence.getId())) {
-			if (subscription.getCreatedAt().isAfter(occurrence.getStartsAt())) {
-				continue;
-			}
-			notificationCommandService.record(subscription.getId().getUserId(), NotificationCategory.EVENT,
-				eventKey, occurrence.getTitle(), START_BODY);
-		}
+		notificationCommandService.recordEventStart(occurrence.getId(), occurrence.getStartsAt(),
+			eventKey, occurrence.getTitle(), START_BODY);
 	}
 
 	/**

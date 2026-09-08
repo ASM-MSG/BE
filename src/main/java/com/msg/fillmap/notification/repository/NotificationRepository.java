@@ -93,6 +93,25 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 		@Param("body") String body
 	);
 
+	/** 회차별 시작 알림 기록 (MSG-583). 구독자 엔티티 조회 없이 기존 outbox 기본값과 멱등 키를 유지한다. */
+	@Modifying
+	@Query(value = """
+		INSERT INTO notifications (user_id, category, event_key, title, body, created_at)
+		SELECT s.user_id, 'EVENT', :eventKey, :title, :body,
+		       statement_timestamp() AT TIME ZONE 'UTC'
+		FROM event_notification_subscriptions s
+		WHERE s.event_occurrence_id = :occurrenceId
+		  AND s.created_at <= :startsAt
+		ON CONFLICT (user_id, event_key) DO NOTHING
+		""", nativeQuery = true)
+	int insertEventStart(
+		@Param("occurrenceId") long occurrenceId,
+		@Param("startsAt") LocalDateTime startsAt,
+		@Param("eventKey") String eventKey,
+		@Param("title") String title,
+		@Param("body") String body
+	);
+
 	/** 릴레이 폴링 배치 (D13) — PENDING 을 오래된 순으로 batch 개. idx_notifications_pending(partial) 사용. */
 	@Query(value = """
 		SELECT * FROM notifications WHERE status = 'PENDING' ORDER BY id LIMIT :limit
