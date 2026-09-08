@@ -117,6 +117,9 @@ Web → Android → iOS 순서로 확장 예정. 백엔드는 Spring Boot + Post
   트리거: "MSG-XX 스펙 만들어줘", "스펙 문서 정리해줘"
 - **spec-driven-dev** — 스펙 기반 TDD 개발 (grid-developer/auth-developer/convention-reviewer 팀 조율)
   트리거: "MSG-XX 개발 시작", "스펙대로 개발해줘", "MSG-XX 이어서/다시 개발"
+- **backend-audit** — 백엔드 전수 감사 (실제 SQL·실행 계획·트랜잭션 범위·OSIV·시간대·호출 구조·
+  명명·인터페이스 분리 렌즈 8개, 산출물은 `docs/audit/` 검토 보고서 하나, 코드는 안 고침)
+  트리거: "멘토 지적 레포 전체에서 찾아줘", "백엔드 감사", "트랜잭션 범위 확인", "실제 SQL 인덱스 확인"
 
 **스킬 description을 고치는 PR은 자동 호출 회귀 확인을 돌린다** — 고친 스킬의 문장 세트로
 호출/미호출을 hook 로그로 판정하고 결과를 PR 본문에 남긴다. 절차·문장 세트 정본:
