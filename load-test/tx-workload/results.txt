@@ -1,0 +1,185 @@
+TX workload measurement 2026-09-08 KST
+Code baseline 3fde2f19 (production code unchanged)
+Apple M5 / 32 GiB host RAM / PostgreSQL 16.4 shared_buffers=128MB / JDK21.0.2 test heap2GiB Hikari max2 / JaCoCo enabled
+
+MISSION PRIMARY (regions3558; schedules cancelled; no DB statement logging; sql means Hibernate prepares)
+BENCH mission,seed-insert,n=100,ms=7556.706,sql=16402,poolUsageMs=7557.000,poolCount=1
+BENCH mission,seed-idempotent-0,n=100,ms=69.326,sql=3,poolUsageMs=69.000,poolCount=1
+BENCH mission,query-cold-0,n=100,ms=234.346,sql=102,poolUsageMs=225.000,poolCount=1
+BENCH mission,query-warm-0,n=100,ms=0.425,sql=0,poolUsageMs=1.000,poolCount=1
+BENCH mission,seed-idempotent-1,n=100,ms=43.307,sql=3,poolUsageMs=43.000,poolCount=1
+BENCH mission,query-cold-1,n=100,ms=172.103,sql=102,poolUsageMs=171.000,poolCount=1
+BENCH mission,query-warm-1,n=100,ms=0.295,sql=0,poolUsageMs=0.000,poolCount=1
+BENCH mission,seed-idempotent-2,n=100,ms=33.517,sql=3,poolUsageMs=33.000,poolCount=1
+BENCH mission,query-cold-2,n=100,ms=141.371,sql=102,poolUsageMs=141.000,poolCount=1
+BENCH mission,query-warm-2,n=100,ms=0.295,sql=0,poolUsageMs=0.000,poolCount=1
+BENCH mission,seed-insert,n=1000,ms=54328.002,sql=164002,poolUsageMs=54328.000,poolCount=1
+BENCH mission,seed-idempotent-0,n=1000,ms=132.316,sql=3,poolUsageMs=132.000,poolCount=1
+BENCH mission,query-cold-0,n=1000,ms=791.012,sql=1002,poolUsageMs=790.000,poolCount=1
+BENCH mission,query-warm-0,n=1000,ms=0.285,sql=0,poolUsageMs=0.000,poolCount=1
+BENCH mission,seed-idempotent-1,n=1000,ms=148.606,sql=3,poolUsageMs=149.000,poolCount=1
+BENCH mission,query-cold-1,n=1000,ms=792.080,sql=1002,poolUsageMs=791.000,poolCount=1
+BENCH mission,query-warm-1,n=1000,ms=0.558,sql=0,poolUsageMs=0.000,poolCount=1
+BENCH mission,seed-idempotent-2,n=1000,ms=146.044,sql=3,poolUsageMs=145.000,poolCount=1
+BENCH mission,query-cold-2,n=1000,ms=826.769,sql=1002,poolUsageMs=823.000,poolCount=1
+BENCH mission,query-warm-2,n=1000,ms=0.515,sql=0,poolUsageMs=1.000,poolCount=1
+BENCH mission,seed-insert,n=3000,ms=152144.402,sql=492002,poolUsageMs=152144.000,poolCount=1
+BENCH mission,seed-idempotent-0,n=3000,ms=385.682,sql=3,poolUsageMs=385.000,poolCount=1
+BENCH mission,query-cold-0,n=3000,ms=2500.899,sql=3002,poolUsageMs=2492.000,poolCount=1
+BENCH mission,query-warm-0,n=3000,ms=0.545,sql=0,poolUsageMs=1.000,poolCount=1
+BENCH mission,seed-idempotent-1,n=3000,ms=445.355,sql=3,poolUsageMs=445.000,poolCount=1
+BENCH mission,query-cold-1,n=3000,ms=2436.516,sql=3002,poolUsageMs=2402.000,poolCount=1
+BENCH mission,query-warm-1,n=3000,ms=0.915,sql=0,poolUsageMs=0.000,poolCount=1
+BENCH mission,seed-idempotent-2,n=3000,ms=436.427,sql=3,poolUsageMs=436.000,poolCount=1
+BENCH mission,query-cold-2,n=3000,ms=2552.391,sql=3002,poolUsageMs=2542.000,poolCount=1
+BENCH mission,query-warm-2,n=3000,ms=0.826,sql=0,poolUsageMs=1.000,poolCount=1
+
+FANOUT PRIMARY (50k first sample validated; later repetitions intentionally stopped with SIGTERM143, not a passing full test suite)
+FANOUT_ENV database=fillmap_tx_bench_20260908 jvm=21.0.2 max_heap_bytes=2147483648 processors=10
+FANOUT_SAMPLE size=1000 mode=WARMUP_FRESH repetition=0 tick_ms=693.284 hibernate_prepares=1005 tx_count=2 first_tx_envelope_ms=683.614 second_tx_envelope_ms=9.349 pool_usage_available=true pool_returns=2 pool_usage_total_ms=693.000 pool_usage_mean_ms=346.500 notifications=1000
+FANOUT_SAMPLE size=1000 mode=FRESH repetition=1 tick_ms=485.607 hibernate_prepares=1005 tx_count=2 first_tx_envelope_ms=483.096 second_tx_envelope_ms=2.485 pool_usage_available=true pool_returns=2 pool_usage_total_ms=485.000 pool_usage_mean_ms=242.500 notifications=1000
+FANOUT_SAMPLE size=1000 mode=FRESH repetition=2 tick_ms=385.445 hibernate_prepares=1005 tx_count=2 first_tx_envelope_ms=383.726 second_tx_envelope_ms=1.702 pool_usage_available=true pool_returns=2 pool_usage_total_ms=384.000 pool_usage_mean_ms=192.000 notifications=1000
+FANOUT_SAMPLE size=1000 mode=FRESH repetition=3 tick_ms=502.771 hibernate_prepares=1005 tx_count=2 first_tx_envelope_ms=499.999 second_tx_envelope_ms=2.755 pool_usage_available=true pool_returns=2 pool_usage_total_ms=503.000 pool_usage_mean_ms=251.500 notifications=1000
+FANOUT_SAMPLE size=1000 mode=DEDUPE repetition=1 tick_ms=590.011 hibernate_prepares=1005 tx_count=2 first_tx_envelope_ms=586.048 second_tx_envelope_ms=3.929 pool_usage_available=true pool_returns=2 pool_usage_total_ms=590.000 pool_usage_mean_ms=295.000 notifications=1000
+FANOUT_SAMPLE size=10000 mode=WARMUP_FRESH repetition=0 tick_ms=16074.598 hibernate_prepares=10005 tx_count=2 first_tx_envelope_ms=16070.973 second_tx_envelope_ms=3.598 pool_usage_available=true pool_returns=2 pool_usage_total_ms=16073.000 pool_usage_mean_ms=8036.500 notifications=10000
+FANOUT_SAMPLE size=10000 mode=FRESH repetition=1 tick_ms=17261.651 hibernate_prepares=10005 tx_count=2 first_tx_envelope_ms=17258.683 second_tx_envelope_ms=2.948 pool_usage_available=true pool_returns=2 pool_usage_total_ms=17260.000 pool_usage_mean_ms=8630.000 notifications=10000
+FANOUT_SAMPLE size=10000 mode=FRESH repetition=2 tick_ms=16997.282 hibernate_prepares=10005 tx_count=2 first_tx_envelope_ms=16993.707 second_tx_envelope_ms=3.541 pool_usage_available=true pool_returns=2 pool_usage_total_ms=16996.000 pool_usage_mean_ms=8498.000 notifications=10000
+FANOUT_SAMPLE size=10000 mode=FRESH repetition=3 tick_ms=17974.412 hibernate_prepares=10005 tx_count=2 first_tx_envelope_ms=17972.138 second_tx_envelope_ms=2.249 pool_usage_available=true pool_returns=2 pool_usage_total_ms=17973.000 pool_usage_mean_ms=8986.500 notifications=10000
+FANOUT_SAMPLE size=10000 mode=DEDUPE repetition=1 tick_ms=16086.384 hibernate_prepares=10005 tx_count=2 first_tx_envelope_ms=16083.035 second_tx_envelope_ms=3.334 pool_usage_available=true pool_returns=2 pool_usage_total_ms=16086.000 pool_usage_mean_ms=8043.000 notifications=10000
+FANOUT_SAMPLE size=50000 mode=WARMUP_FRESH repetition=0 tick_ms=400387.237 hibernate_prepares=50005 tx_count=2 first_tx_envelope_ms=400379.134 second_tx_envelope_ms=8.067 pool_usage_available=true pool_returns=2 pool_usage_total_ms=400376.000 pool_usage_mean_ms=200188.000 notifications=50000
+
+ACTUAL LOCK BLOCKING
+37455|tx-bench-lock-waiter|Lock|advisory|{37215}|00:00:01.209083
+Timing is on.
+BEGIN
+Time: 2.203 ms
+SET
+Time: 0.537 ms
+SET
+Time: 0.122 ms
+SET
+Time: 0.049 ms
+ pg_backend_pid 
+----------------
+          37455
+(1 row)
+
+Time: 8.799 ms
+ pg_advisory_xact_lock 
+-----------------------
+ 
+(1 row)
+
+Time: 334367.175 ms (05:34.367)
+COMMIT
+Time: 0.653 ms
+
+30s JFR: Test worker execution samples1912; samples with flush frame1465 (76.6%; NOT wall-time share).
+"Test worker" #1 [6659] prio=5 os_prio=31 cpu=60155.88ms elapsed=101.15s tid=0x0000000117008800 nid=6659 runnable  [0x000000016facd000]
+   java.lang.Thread.State: RUNNABLE
+	at org.hibernate.event.internal.AbstractFlushingEventListener.cascadeOnFlush(AbstractFlushingEventListener.java:173)
+	at org.hibernate.event.internal.AbstractFlushingEventListener.prepareEntityFlushes(AbstractFlushingEventListener.java:129)
+	at org.hibernate.event.internal.AbstractFlushingEventListener.preFlush(AbstractFlushingEventListener.java:83)
+	at org.hibernate.event.internal.AbstractFlushingEventListener.flushEverythingToExecutions(AbstractFlushingEventListener.java:62)
+	at org.hibernate.event.internal.DefaultFlushEventListener.onFlush(DefaultFlushEventListener.java:39)
+	at org.hibernate.internal.SessionImpl$$Lambda/0x0000007002363c80.accept(Unknown Source)
+	at org.hibernate.event.service.internal.EventListenerGroupImpl.fireEventOnEachListener(EventListenerGroupImpl.java:138)
+	at org.hibernate.internal.SessionImpl.fireFlush(SessionImpl.java:1458)
+	at org.hibernate.internal.SessionImpl.flush(SessionImpl.java:1446)
+	at org.hibernate.query.sql.internal.NativeQueryImpl.prepareForExecution(NativeQueryImpl.java:726)
+	at org.hibernate.query.spi.AbstractSelectionQuery.beforeQuery(AbstractSelectionQuery.java:180)
+	at org.hibernate.query.spi.AbstractSelectionQuery.beforeQueryHandlingFetchProfiles(AbstractSelectionQuery.java:169)
+	at org.hibernate.query.spi.AbstractQuery.executeUpdate(AbstractQuery.java:639)
+	at org.springframework.data.jpa.repository.query.JpaQueryExecution$ModifyingExecution.doExecute(JpaQueryExecution.java:382)
+	at org.springframework.data.jpa.repository.query.JpaQueryExecution.execute(JpaQueryExecution.java:100)
+	at org.springframework.data.jpa.repository.query.AbstractJpaQuery.doExecute(AbstractJpaQuery.java:166)
+	at org.springframework.data.jpa.repository.query.AbstractJpaQuery.execute(AbstractJpaQuery.java:156)
+	at org.springframework.data.repository.core.support.RepositoryMethodInvoker$RepositoryQueryMethodInvoker$$Lambda/0x0000007002369308.invoke(Unknown Source)
+	at org.springframework.data.repository.core.support.RepositoryMethodInvoker.doInvoke(RepositoryMethodInvoker.java:169)
+	at org.springframework.data.repository.core.support.RepositoryMethodInvoker.invoke(RepositoryMethodInvoker.java:158)
+
+DB EXECUTE PROOF (small final validation; timing excluded due SQL logging)
+[
+  {
+    "pid": "38112",
+    "start": 320,
+    "end": 10365,
+    "outcome": "COMMIT",
+    "business_executes": 1003,
+    "counts": {
+      "other": 3,
+      "notification_insert": 1000
+    }
+  },
+  {
+    "pid": "38112",
+    "start": 10408,
+    "end": 20423,
+    "outcome": "COMMIT",
+    "business_executes": 1003,
+    "counts": {
+      "other": 3,
+      "notification_insert": 1000
+    }
+  },
+  {
+    "pid": "38112",
+    "start": 20466,
+    "end": 30481,
+    "outcome": "COMMIT",
+    "business_executes": 1003,
+    "counts": {
+      "other": 3,
+      "notification_insert": 1000
+    }
+  },
+  {
+    "pid": "38112",
+    "start": 30522,
+    "end": 40536,
+    "outcome": "COMMIT",
+    "business_executes": 1003,
+    "counts": {
+      "other": 3,
+      "notification_insert": 1000
+    }
+  },
+  {
+    "pid": "38112",
+    "start": 40567,
+    "end": 50581,
+    "outcome": "COMMIT",
+    "business_executes": 1003,
+    "counts": {
+      "other": 3,
+      "notification_insert": 1000
+    }
+  },
+  {
+    "pid": "38128",
+    "start": 50876,
+    "end": 57508,
+    "outcome": "COMMIT",
+    "business_executes": 1642,
+    "counts": {
+      "other": 2,
+      "mission_insert": 10,
+      "grid_select": 810,
+      "grid_insert": 810,
+      "mission_update": 10
+    }
+  }
+]
+
+FINAL ARTIFACT CHECK: BENCH_SIZES=10 BENCH_FANOUT_SIZES=1000; both test classes tests1 failures0 errors0. BUILD SUCCESSFUL in19s.
+Preliminary mission run had statistics disabled and background polling; it is not used in primary tables.
+
+CLEANUP (before dropping separate benchmark database):
+users|0
+missions|0
+mission_grids|0
+notifications|0
+event_occurrences|0
+event_series|0
+subscriptions|0
+Separate DB dropped. Original fillmap accessed read-only; before/after pg_stat_user_tables n_live_tup values unchanged. DB statement logging restored -1.
