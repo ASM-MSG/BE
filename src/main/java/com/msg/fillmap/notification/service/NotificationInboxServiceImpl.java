@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 
+import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.notification.dto.NotificationPageResponseDto;
 import com.msg.fillmap.notification.dto.NotificationPageResponseDto.NotificationItemResponseDto;
@@ -29,9 +30,6 @@ import com.msg.fillmap.notification.repository.NotificationRepository;
 @RequiredArgsConstructor
 public class NotificationInboxServiceImpl implements NotificationInboxService {
 
-	// size 클램프 계약 (D-3, VideoServiceImpl 선례) — 미지정·0 이하는 기본값, 상한 초과만 자른다.
-	private static final int PAGE_DEFAULT_SIZE = 20;
-	private static final int PAGE_MAX_SIZE = 50;
 	// 노출 창 (FR-10) — KST 달력일이 아니라 순수 720시간 롤링 윈도우다 (D-4).
 	private static final int INBOX_WINDOW_DAYS = 30;
 
@@ -50,7 +48,7 @@ public class NotificationInboxServiceImpl implements NotificationInboxService {
 	@Override
 	@Transactional(readOnly = true)
 	public NotificationPageResponseDto getInbox(long userId, Long cursor, int size) {
-		int pageSize = size < 1 ? PAGE_DEFAULT_SIZE : Math.min(size, PAGE_MAX_SIZE);
+		int pageSize = PageSizes.clampCursor(size);
 		// 첫 페이지는 커서 상한을 열어 둔다 — 쿼리 메서드를 하나로 유지하려는 치환이다 (D-3).
 		long from = cursor != null ? cursor : Long.MAX_VALUE;
 		// lookahead 1건으로 hasNext 를 판정하고 초과분은 버린다.

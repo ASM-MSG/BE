@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -345,7 +346,10 @@ public class EventQueryServiceImpl implements EventQueryService {
 	 * 재판정으로 이름이 나오고(resolveRegionNames 계약), 진짜 무귀속이면 키가 없어 null 이 된다.
 	 */
 	private Map<String, DisplayName> displayNames(List<EventLocation> locations) {
-		List<String> gridIds = locations.stream().map(EventLocation::getRepresentativeGridId).distinct().toList();
+		Set<String> gridIds = new LinkedHashSet<>();
+		for (EventLocation location : locations) {
+			gridIds.add(location.getRepresentativeGridId());
+		}
 		ZoneNameResolver resolver = zoneNameQueryService.resolver();
 		Map<String, String> regionNames = gridQueryService.resolveRegionNames(gridIds);
 		Map<String, DisplayName> names = new LinkedHashMap<>();

@@ -2,6 +2,7 @@ package com.msg.fillmap.event.service;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +29,7 @@ import com.msg.fillmap.event.repository.EventLocationVideoRow;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.event.support.EventVideoCursor;
+import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
@@ -50,10 +52,6 @@ import com.msg.fillmap.zone.service.ZoneNameQueryService;
  */
 @Service
 public class EventVideoServiceImpl implements EventVideoService {
-
-	/** 피드 페이지 크기 — 격자·미션 영상 목록과 같은 규격이다. 범위 밖은 에러가 아니라 클램프(MSG-237 §D5). */
-	private static final int PAGE_DEFAULT_SIZE = 20;
-	private static final int PAGE_MAX_SIZE = 50;
 
 	private final EventOccurrenceRepository occurrenceRepository;
 	private final EventLocationRepository locationRepository;
@@ -124,14 +122,8 @@ public class EventVideoServiceImpl implements EventVideoService {
 	public EventVideoUploadResponseDto upload(long userId, long occurrenceId, long locationId,
 		EventVideoUploadRequestDto request) {
 		LocalDateTime now = LocalDateTime.now(clock);
-		EventOccurrence occurrence = occurrenceRepository.findById(occurrenceId)
-			.filter(found -> isVisible(found, now))
-			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_NOT_FOUND));
-		EventLocation location = locationRepository.findWithLockById(locationId)
-			.filter(found -> found.getOccurrence().getId().equals(occurrenceId))
-			// 중지된 위치에는 올릴 수 없다 (MSG-500 D-3) — 없는 위치와 같은 404 로 수렴한다.
-			.filter(found -> found.getHiddenAt() == null)
-			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_LOCATION_NOT_FOUND));
+		EventOccurrence occurrence = visibleOccurrence(occurrenceId, now);
+		EventLocation location = openLocationOf(occurrenceId, locationRepository.findWithLockById(locationId));
 		// 잠금 획득 후 회차 재독 — 위 조회는 잠금이 없어, 잠금 대기 사이 부팅 리시드(롤링 배포 중 새
 		// 인스턴스의 멱등 UPSERT)가 일정을 바꾸면 영속성 컨텍스트에 캐시된 startsAt·endsAt 이 낡은 값으로
 		// 남는다. 재조회는 1차 캐시가 같은 인스턴스를 돌려주므로 refresh 여야 한다(Codex 2R).
@@ -166,27 +158,25 @@ public class EventVideoServiceImpl implements EventVideoService {
 	public EventLocationVideoPageResponseDto getLocationVideos(long occurrenceId, long locationId, String cursor,
 		int size) {
 		LocalDateTime now = LocalDateTime.now(clock);
-		occurrenceRepository.findById(occurrenceId)
-			.filter(found -> isVisible(found, now))
-			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_NOT_FOUND));
-		locationRepository.findById(locationId)
-			.filter(found -> found.getOccurrence().getId().equals(occurrenceId))
-			// 중지된 위치의 영상 목록도 없는 위치와 같은 404 다 (MSG-500 D-3).
-			.filter(found -> found.getHiddenAt() == null)
-			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_LOCATION_NOT_FOUND));
+		visibleOccurrence(occurrenceId, now);
+		openLocationOf(occurrenceId, locationRepository.findById(locationId));
 
-		int pageSize = size < 1 ? PAGE_DEFAULT_SIZE : Math.min(size, PAGE_MAX_SIZE);
+		int pageSize = PageSizes.clampCursor(size);
 		List<EventLocationVideoRow> rows = queryPage(locationId, cursor, pageSize + 1);
 		boolean hasNext = rows.size() > pageSize;
 		List<EventLocationVideoRow> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
 		// 반응 수는 이 페이지의 영상 id 집합으로 도는 group by 두 번이다 — 항목마다 세면 N+1 이다.
-		EventVideoReactionCounts reactions = interactionService.countReactions(
-			pageRows.stream().map(EventLocationVideoRow::videoId).toList());
-		List<EventLocationVideoResponseDto> videos = pageRows.stream()
-			.map(row -> new EventLocationVideoResponseDto(row.videoId(),
+		List<Long> videoIds = new ArrayList<>(pageRows.size());
+		for (EventLocationVideoRow row : pageRows) {
+			videoIds.add(row.videoId());
+		}
+		EventVideoReactionCounts reactions = interactionService.countReactions(videoIds);
+		List<EventLocationVideoResponseDto> videos = new ArrayList<>(pageRows.size());
+		for (EventLocationVideoRow row : pageRows) {
+			videos.add(new EventLocationVideoResponseDto(row.videoId(),
 				thumbnailUrlPresigner.presign(row.thumbnailKey()), row.durationSec(), row.createdAt(),
-				reactions.helpfulCount(row.videoId()), reactions.commentCount(row.videoId())))
-			.toList();
+				reactions.helpfulCount(row.videoId()), reactions.commentCount(row.videoId())));
+		}
 		String nextCursor = null;
 		if (hasNext) {
 			EventLocationVideoRow last = pageRows.get(pageRows.size() - 1);
@@ -317,6 +307,24 @@ public class EventVideoServiceImpl implements EventVideoService {
 		}
 		return new EventVideoUploadResponseDto(video.getId(), video.getGridId(),
 			video.getProcessingStatus().name(), false, List.of());
+	}
+
+	/** 노출 중인 회차 — 없거나 노출 전이면 같은 404 다. */
+	private EventOccurrence visibleOccurrence(long occurrenceId, LocalDateTime now) {
+		return occurrenceRepository.findById(occurrenceId)
+			.filter(found -> isVisible(found, now))
+			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_NOT_FOUND));
+	}
+
+	/**
+	 * 회차 소속이고 중지되지 않은 위치 — 업로드·목록이 같은 술어를 쓴다. 다른 회차의 위치와 중지된 위치는 없는
+	 * 위치와 같은 404 로 수렴한다 (MSG-500 D-3). 잠금 여부는 호출부가 넘기는 조회가 정한다.
+	 */
+	private EventLocation openLocationOf(long occurrenceId, Optional<EventLocation> loaded) {
+		return loaded
+			.filter(found -> found.getOccurrence().getId().equals(occurrenceId))
+			.filter(found -> found.getHiddenAt() == null)
+			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_LOCATION_NOT_FOUND));
 	}
 
 	/**

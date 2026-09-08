@@ -21,6 +21,8 @@ public final class FillMapMailTemplate {
 	// ponytail: 브랜드 색 정본(디자인 토큰) 미확인 — 확정되면 이 상수 하나만 바꾼다
 	static final String BRAND_COLOR = "#1F7A5C";
 	static final String CONTACT = "contact@fillmap.kr";
+	/** 메일 본문 링크가 가리키는 서비스 주소 — 계정 발급·반려 안내가 같은 값을 쓴다 (MSG-584 에서 한곳으로). */
+	public static final String SERVICE_URL = "https://fillmap.kr";
 
 	private static final Pattern PLACEHOLDER = Pattern.compile("\\{(\\w+)}");
 
