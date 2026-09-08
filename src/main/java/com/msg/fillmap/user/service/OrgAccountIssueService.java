@@ -22,7 +22,9 @@ import lombok.extern.slf4j.Slf4j;
 import com.msg.fillmap.auth.jwt.InvalidatedTokenStore;
 import com.msg.fillmap.auth.jwt.JwtProperties;
 import com.msg.fillmap.auth.service.RefreshTokenService;
+import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.global.mail.FillMapMailTemplate;
 import com.msg.fillmap.global.mail.MailSender;
 import com.msg.fillmap.user.dto.AdminOrgAccountListResponseDto;
 import com.msg.fillmap.user.dto.OrgAccountCreateRequestDto;
@@ -72,7 +74,6 @@ public class OrgAccountIssueService {
 	private static final ZoneId MAIL_ZONE = ZoneId.of("Asia/Seoul");
 	private static final DateTimeFormatter MAIL_TIME_FORMAT =
 		DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
-	private static final String LOGIN_URL = "https://fillmap.kr";
 	private static final String MAIL_SUBJECT = "[필맵] 행사 운영자 계정 발급 안내";
 	private static final String MAIL_BODY_FORMAT = """
 		행사 운영자 계정이 발급되었습니다.
@@ -86,9 +87,6 @@ public class OrgAccountIssueService {
 		행사 등재 콘솔을 이용할 수 없습니다.
 
 		여러 통을 받으셨다면 발급 시각이 가장 늦은 메일의 비밀번호가 유효합니다.""";
-
-	private static final int MIN_PAGE_SIZE = 1;
-	private static final int MAX_PAGE_SIZE = 100;
 
 	private final UserRepository userRepository;
 	private final PasswordEncoder passwordEncoder;
@@ -180,12 +178,7 @@ public class OrgAccountIssueService {
 	 */
 	@Transactional(readOnly = true)
 	public AdminOrgAccountListResponseDto getAccounts(int page, int size, String email) {
-		// PageRequest.of 에 그냥 넘기면 IllegalArgumentException 이 catch-all 핸들러에서 500 이 된다
-		// (AdminReportServiceImpl 선례).
-		if (page < 0 || size < MIN_PAGE_SIZE || size > MAX_PAGE_SIZE
-			|| (long) page * size > Integer.MAX_VALUE) {
-			throw new ApiException(UserErrorCode.INVALID_PAGE_RANGE);
-		}
+		PageSizes.requireAdminRange(page, size, UserErrorCode.INVALID_PAGE_RANGE);
 		PageRequest pageRequest = PageRequest.of(page, size);
 		return AdminOrgAccountListResponseDto.from(email == null || email.isBlank()
 			? userRepository.findAllByRoleAndProviderOrderByCreatedAtDesc(UserRole.ORG, AuthProvider.LOCAL,
@@ -241,7 +234,7 @@ public class OrgAccountIssueService {
 			.format(MAIL_TIME_FORMAT);
 		try {
 			mailSender.send(issued.email(), MAIL_SUBJECT,
-				MAIL_BODY_FORMAT.formatted(LOGIN_URL, issued.email(), issued.plainPassword(), issuedAtLabel));
+				MAIL_BODY_FORMAT.formatted(FillMapMailTemplate.SERVICE_URL, issued.email(), issued.plainPassword(), issuedAtLabel));
 			return true;
 		} catch (RuntimeException e) {
 			// 예외를 로거에 넘기지 않고 타입만 남긴다. 발송 유틸에 넘긴 본문에 평문이 들어 있어서, 구현이나

@@ -26,6 +26,7 @@ import com.msg.fillmap.event.repository.EventVideoHelpfulRepository;
 import com.msg.fillmap.event.repository.EventVideoReactionCount;
 import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.event.support.EventVideoCommentCursor;
+import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.exception.UserErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
@@ -41,10 +42,6 @@ import com.msg.fillmap.video.repository.VideoRepository;
  */
 @Service
 public class EventVideoInteractionServiceImpl implements EventVideoInteractionService {
-
-	/** 댓글 페이지 크기 — 피드·격자 영상 목록과 같은 규격이다. 범위 밖은 에러가 아니라 클램프. */
-	private static final int PAGE_DEFAULT_SIZE = 20;
-	private static final int PAGE_MAX_SIZE = 50;
 
 	private final EventVideoRepository eventVideoRepository;
 	private final EventVideoCommentRepository commentRepository;
@@ -132,7 +129,7 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 	public EventVideoCommentPageResponseDto getComments(long videoId, String cursor, int size) {
 		// 조회 경로다 — 노출 판정만 하고 잠금 가드는 부르지 않는다 (FR-14).
 		open(videoId, LocalDateTime.now(clock));
-		return commentPage(videoId, cursor, size < 1 ? PAGE_DEFAULT_SIZE : Math.min(size, PAGE_MAX_SIZE));
+		return commentPage(videoId, cursor, PageSizes.clampCursor(size));
 	}
 
 	@Override
@@ -145,7 +142,7 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 			helpfulRepository.countById_VideoId(videoId),
 			helpfulByMe,
 			commentRepository.countByVideo_VideoId(videoId),
-			commentPage(videoId, null, PAGE_DEFAULT_SIZE));
+			commentPage(videoId, null, PageSizes.CURSOR_DEFAULT));
 	}
 
 	@Override

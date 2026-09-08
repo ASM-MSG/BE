@@ -39,6 +39,7 @@ import com.msg.fillmap.event.submission.entity.EventSubmissionStatus;
 import com.msg.fillmap.event.submission.entity.EventSubmissionStatusHistory;
 import com.msg.fillmap.event.submission.repository.EventSubmissionRepository;
 import com.msg.fillmap.event.submission.repository.EventSubmissionStatusHistoryRepository;
+import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.geo.AreaCell;
 import com.msg.fillmap.mission.entity.MissionType;
@@ -61,9 +62,6 @@ import com.msg.fillmap.user.repository.UserRepository;
  */
 @Service
 public class AdminEventSubmissionService {
-
-	private static final int MIN_PAGE_SIZE = 1;
-	private static final int MAX_PAGE_SIZE = 100;
 
 	/** event_locations.name 컬럼 길이 — 순번 접미사를 붙여도 넘지 않게 제목을 먼저 자르는 기준이다 (D-8). */
 	private static final int MAX_LOCATION_NAME_LENGTH = 100;
@@ -119,12 +117,7 @@ public class AdminEventSubmissionService {
 	@Transactional(readOnly = true)
 	public AdminEventSubmissionListResponseDto getSubmissions(String status, int page, int size) {
 		EventSubmissionStatus filter = parseStatus(status);
-		// PageRequest.of 에 그냥 넘기면 IllegalArgumentException 이 catch-all 핸들러에서 500 이 된다.
-		// 오프셋(page*size)이 int 를 넘는 극단 양수도 같다 (MSG-499 관리자 큐 선례, 대역만 event 다).
-		if (page < 0 || size < MIN_PAGE_SIZE || size > MAX_PAGE_SIZE
-			|| (long) page * size > Integer.MAX_VALUE) {
-			throw new ApiException(EventErrorCode.INVALID_PAGE_RANGE);
-		}
+		PageSizes.requireAdminRange(page, size, EventErrorCode.INVALID_PAGE_RANGE);
 		return AdminEventSubmissionListResponseDto.of(
 			submissionRepository.findAdminPageByStatus(filter, PageRequest.of(page, size)),
 			submissionRepository.countByStatus(EventSubmissionStatus.IN_REVIEW),

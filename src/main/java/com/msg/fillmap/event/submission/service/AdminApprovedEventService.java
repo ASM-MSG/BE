@@ -28,6 +28,7 @@ import com.msg.fillmap.event.submission.entity.EventSubmission;
 import com.msg.fillmap.event.submission.entity.EventSubmissionStatus;
 import com.msg.fillmap.event.submission.entity.EventSubmissionType;
 import com.msg.fillmap.event.submission.repository.EventSubmissionRepository;
+import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.mail.MailSender;
 import com.msg.fillmap.mission.service.MissionRegistrationService;
@@ -47,9 +48,6 @@ import com.msg.fillmap.user.repository.UserRepository;
 @Slf4j
 @Service
 public class AdminApprovedEventService {
-
-	private static final int MIN_PAGE_SIZE = 1;
-	private static final int MAX_PAGE_SIZE = 100;
 
 	/** 탭 판정의 "오늘"은 관리자가 보는 날짜라 KST 다 (승인 번호 연도 라벨과 같은 성격). */
 	private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -108,10 +106,7 @@ public class AdminApprovedEventService {
 	@Transactional(readOnly = true)
 	public AdminApprovedEventListResponseDto getEvents(String status, int page, int size) {
 		String tab = parseTab(status);
-		if (page < 0 || size < MIN_PAGE_SIZE || size > MAX_PAGE_SIZE
-			|| (long) page * size > Integer.MAX_VALUE) {
-			throw new ApiException(EventErrorCode.INVALID_PAGE_RANGE);
-		}
+		PageSizes.requireAdminRange(page, size, EventErrorCode.INVALID_PAGE_RANGE);
 		LocalDate today = LocalDate.now(clock.withZone(KST));
 		return AdminApprovedEventListResponseDto.of(
 			submissionRepository.findApprovedPageByTab(tab, today, PageRequest.of(page, size)),

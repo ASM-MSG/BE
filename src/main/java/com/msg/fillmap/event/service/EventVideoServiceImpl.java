@@ -28,6 +28,7 @@ import com.msg.fillmap.event.repository.EventLocationVideoRow;
 import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.event.support.EventVideoCursor;
+import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
@@ -50,10 +51,6 @@ import com.msg.fillmap.zone.service.ZoneNameQueryService;
  */
 @Service
 public class EventVideoServiceImpl implements EventVideoService {
-
-	/** 피드 페이지 크기 — 격자·미션 영상 목록과 같은 규격이다. 범위 밖은 에러가 아니라 클램프(MSG-237 §D5). */
-	private static final int PAGE_DEFAULT_SIZE = 20;
-	private static final int PAGE_MAX_SIZE = 50;
 
 	private final EventOccurrenceRepository occurrenceRepository;
 	private final EventLocationRepository locationRepository;
@@ -175,7 +172,7 @@ public class EventVideoServiceImpl implements EventVideoService {
 			.filter(found -> found.getHiddenAt() == null)
 			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_LOCATION_NOT_FOUND));
 
-		int pageSize = size < 1 ? PAGE_DEFAULT_SIZE : Math.min(size, PAGE_MAX_SIZE);
+		int pageSize = PageSizes.clampCursor(size);
 		List<EventLocationVideoRow> rows = queryPage(locationId, cursor, pageSize + 1);
 		boolean hasNext = rows.size() > pageSize;
 		List<EventLocationVideoRow> pageRows = hasNext ? rows.subList(0, pageSize) : rows;

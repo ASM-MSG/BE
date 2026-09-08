@@ -13,6 +13,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.mail.FillMapMailTemplate;
 import com.msg.fillmap.global.mail.MailSender;
@@ -40,10 +41,6 @@ import com.msg.fillmap.user.repository.OrgAccountRequestRepository;
 @RequiredArgsConstructor
 public class OrgAccountRequestService {
 
-	private static final int MIN_PAGE_SIZE = 1;
-	private static final int MAX_PAGE_SIZE = 100;
-
-	private static final String SERVICE_URL = "https://fillmap.kr";
 	private static final String REJECT_MAIL_SUBJECT = "[필맵] 행사 운영자 계정 발급 요청 반려 안내";
 	private static final String REJECT_MAIL_TITLE = "계정 발급 요청이 반려되었습니다";
 	private static final String REJECT_MAIL_BODY_FORMAT = """
@@ -95,12 +92,7 @@ public class OrgAccountRequestService {
 	@Transactional(readOnly = true)
 	public AdminOrgAccountRequestListResponseDto getRequests(String status, int page, int size) {
 		OrgAccountRequestStatus filter = parseStatus(status);
-		// PageRequest.of 에 그냥 넘기면 IllegalArgumentException 이 catch-all 핸들러에서 500 이 된다.
-		// 오프셋(page*size)이 int 를 넘는 극단 양수도 같다 (AdminReportServiceImpl 선례).
-		if (page < 0 || size < MIN_PAGE_SIZE || size > MAX_PAGE_SIZE
-			|| (long) page * size > Integer.MAX_VALUE) {
-			throw new ApiException(UserErrorCode.INVALID_PAGE_RANGE);
-		}
+		PageSizes.requireAdminRange(page, size, UserErrorCode.INVALID_PAGE_RANGE);
 		return AdminOrgAccountRequestListResponseDto.of(
 			orgAccountRequestRepository.findAllByStatusOrderByUpdatedAtDesc(filter, PageRequest.of(page, size)),
 			orgAccountRequestRepository.countByStatus(OrgAccountRequestStatus.PENDING),
@@ -156,9 +148,9 @@ public class OrgAccountRequestService {
 		String body = REJECT_MAIL_BODY_FORMAT.formatted(rejected.orgName(), rejected.contactName(),
 			rejected.eventName());
 		String text = REJECT_MAIL_TEXT_FORMAT.formatted(body, REJECT_MAIL_NOTE_LABEL, rejected.reason(),
-			REJECT_MAIL_CLOSING, SERVICE_URL);
+			REJECT_MAIL_CLOSING, FillMapMailTemplate.SERVICE_URL);
 		String html = FillMapMailTemplate.html(REJECT_MAIL_TITLE, body, REJECT_MAIL_NOTE_LABEL, rejected.reason(),
-			REJECT_MAIL_CLOSING, REJECT_MAIL_LINK_LABEL, SERVICE_URL);
+			REJECT_MAIL_CLOSING, REJECT_MAIL_LINK_LABEL, FillMapMailTemplate.SERVICE_URL);
 		try {
 			mailSender.send(rejected.email(), REJECT_MAIL_SUBJECT, text, html);
 			return true;

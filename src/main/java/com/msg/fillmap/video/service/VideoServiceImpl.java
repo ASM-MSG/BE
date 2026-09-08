@@ -46,6 +46,7 @@ import com.msg.fillmap.badge.dto.EarnedBadgeResponseDto;
 import com.msg.fillmap.badge.service.BadgeAwardService;
 import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.friend.service.FriendshipQueryService;
+import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.global.geo.KoreaCoordinates;
@@ -125,10 +126,6 @@ public class VideoServiceImpl implements VideoService {
 
 	// 시간대 차트 구간 수 (MSG-372) — 하루 24시간 고정, 빈 구간도 응답에 실린다.
 	private static final int HOURS_PER_DAY = 24;
-
-	// 전역 목록 페이지 크기 (MSG-237 §D5). 범위 밖은 에러가 아니라 클램프한다 — MSG-156 LEAST clamp 선례.
-	private static final int GLOBAL_PAGE_DEFAULT_SIZE = 20;
-	private static final int GLOBAL_PAGE_MAX_SIZE = 50;
 
 	private final VideoRepository videoRepository;
 	private final VideoEncodingJobRepository videoEncodingJobRepository;
@@ -548,7 +545,7 @@ public class VideoServiceImpl implements VideoService {
 	@Override
 	@Transactional(readOnly = true)
 	public GridVideoPageResponseDto getGridGlobalVideos(String gridId, String cursor, int size) {
-		int pageSize = size < 1 ? GLOBAL_PAGE_DEFAULT_SIZE : Math.min(size, GLOBAL_PAGE_MAX_SIZE);
+		int pageSize = PageSizes.clampCursor(size);
 		List<Video> rows = queryGlobalPage(gridId, cursor, pageSize + 1);
 		boolean hasNext = rows.size() > pageSize;
 		List<Video> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
@@ -585,7 +582,7 @@ public class VideoServiceImpl implements VideoService {
 		if (videoRepository.isMissionHidden(missionId)) {
 			throw new ApiException(MissionErrorCode.MISSION_NOT_FOUND);
 		}
-		int pageSize = size < 1 ? GLOBAL_PAGE_DEFAULT_SIZE : Math.min(size, GLOBAL_PAGE_MAX_SIZE);
+		int pageSize = PageSizes.clampCursor(size);
 		List<Video> rows = queryMissionPage(missionId, cursor, pageSize + 1);
 		boolean hasNext = rows.size() > pageSize;
 		List<Video> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
