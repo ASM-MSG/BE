@@ -16,11 +16,13 @@ PG=$("$HERE/pg-container.sh") || exit 2
 out=/tmp/backend-audit; mkdir -p "$out"
 psql() { docker exec -i "$PG" psql -U user -d fillmap -Atq -c "$1"; }
 
+# 원복은 trap에 건다 — 명령이 SIGINT로 죽거나 스크립트가 중간에 끊겨도 로깅이 켜진 채 남지 않는다.
+reset_logging() { psql "ALTER SYSTEM RESET log_min_duration_statement" >/dev/null; psql "SELECT pg_reload_conf()" >/dev/null; }
+trap reset_logging EXIT
 for st in "ALTER SYSTEM SET log_min_duration_statement=0" "SELECT pg_reload_conf()"; do psql "$st" >/dev/null; done
 marker="backend-audit:$label:$(date +%s)"
 psql "SELECT '$marker';" >/dev/null
 "$@"; rc=$?
-for st in "ALTER SYSTEM RESET log_min_duration_statement" "SELECT pg_reload_conf()"; do psql "$st" >/dev/null; done
 
 docker logs "$PG" --since 30m 2>&1 | sed -n "/$marker/,\$p" > "$out/$label.log"
 echo "## 실행 SQL — $label (명령 종료코드 $rc, 원본: $out/$label.log)"

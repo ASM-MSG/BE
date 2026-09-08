@@ -66,8 +66,8 @@ JPQL만으로 되는 것·프로젝션 필요한 것). 전환 후보의 대표 2
 
 **차단·함정**: `default_batch_fetch_size: 100`이 켜져 있어 컬렉션 지연 로딩은 IN 절로 접힌다 —
 `×n`이 아니라 IN 크기로 보인다. 테스트는 hikari 풀 2라 커넥션 대기가 소요에 섞일 수 있다.
-`log_min_duration_statement=0`은 스크립트가 켰다가 끄지만, 중간에 죽으면 남는다 —
-`show log_min_duration_statement`가 -1인지 끝에 확인한다.
+`log_min_duration_statement=0`은 스크립트가 켰다가 `trap`으로 끈다(명령이 죽어도 원복).
+docker가 통째로 죽는 경우만 남으니 그때는 `show log_min_duration_statement`가 -1인지 확인한다.
 
 ---
 
