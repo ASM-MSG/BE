@@ -3,9 +3,10 @@
 # $1 파라미터는 실제 값으로 바꿔 넣어야 한다 (로그의 DETAIL: parameters 줄에 값이 있다).
 # 사용: explain.sh "SELECT ... WHERE grid_id = '19443_9582'"   또는   explain.sh < query.sql
 set -euo pipefail
+HERE=$(cd "$(dirname "$0")" && pwd)
 cd "$(git rev-parse --show-toplevel)"
-# 워크트리에서 돌려도 같은 컨테이너를 잡도록 compose 프로젝트가 아니라 컨테이너 이름으로 찾는다.
-PG=$(docker ps --filter name=fillmap-postgres --format '{{.Names}}' | head -1); [ -n "$PG" ] || { echo "fillmap-postgres 컨테이너가 없다 — docker compose up -d postgres" >&2; exit 2; }
+# 워크트리에서 돌려도 같은 컨테이너를 잡도록 compose 프로젝트 이름이 아니라 라벨로 찾는다 (pg-container.sh).
+PG=$("$HERE/pg-container.sh") || exit 2
 sql=${1:-$(cat)}
 docker exec -i "$PG" psql -U user -d fillmap -c "EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) $sql"
 echo

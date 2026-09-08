@@ -40,7 +40,9 @@ description: FillMap 백엔드 전수 감사 — 실제 실행 SQL·실행 계�
 - 작업 브랜치에서 돈다 (develop 직접 수정 금지, 보고서도 파일이다). 커밋은 사용자 몫.
 - 스크립트는 `scripts/`에 있고 실행 전 읽지 않아도 된다. 세 개다:
   `inventory.sh`(정적 기준선 카운트), `capture-sql.sh <라벨> -- <명령>`(DB 로그로 실제 실행문·
-  횟수·소요 캡처), `explain.sh "<SQL>"`(EXPLAIN ANALYZE).
+  횟수·소요 캡처), `explain.sh "<SQL>"`(EXPLAIN ANALYZE). 뒤의 둘은 `pg-container.sh`로 로컬
+  컨테이너를 compose 라벨로 고른다 — 서버 스택(`fillmap-postgres-dev/-prod`)이 같은 호스트에
+  보여도 잡히지 않고, 후보가 하나가 아니면 실행을 거부한다.
 
 ## 워크플로우
 

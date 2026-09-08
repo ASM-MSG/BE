@@ -9,9 +9,10 @@
 # 출력: 실행문 목록(중복 접기 + 실행 횟수 + 최대 소요ms) → stdout, 원본 로그 → /tmp/backend-audit/<라벨>.log
 set -uo pipefail
 label=${1:?라벨}; shift; [ "${1:-}" = "--" ] && shift
+HERE=$(cd "$(dirname "$0")" && pwd)
 cd "$(git rev-parse --show-toplevel)"
-# 워크트리에서 돌려도 같은 컨테이너를 잡도록 compose 프로젝트가 아니라 컨테이너 이름으로 찾는다.
-PG=$(docker ps --filter name=fillmap-postgres --format '{{.Names}}' | head -1); [ -n "$PG" ] || { echo "fillmap-postgres 컨테이너가 없다 — docker compose up -d postgres" >&2; exit 2; }
+# 워크트리에서 돌려도 같은 컨테이너를 잡도록 compose 프로젝트 이름이 아니라 라벨로 찾는다 (pg-container.sh).
+PG=$("$HERE/pg-container.sh") || exit 2
 out=/tmp/backend-audit; mkdir -p "$out"
 psql() { docker exec -i "$PG" psql -U user -d fillmap -Atq -c "$1"; }
 
@@ -21,7 +22,7 @@ psql "SELECT '$marker';" >/dev/null
 "$@"; rc=$?
 for st in "ALTER SYSTEM RESET log_min_duration_statement" "SELECT pg_reload_conf()"; do psql "$st" >/dev/null; done
 
-docker logs "$PG" --since 30m 2>/dev/null | sed -n "/$marker/,\$p" > "$out/$label.log"
+docker logs "$PG" --since 30m 2>&1 | sed -n "/$marker/,\$p" > "$out/$label.log"
 echo "## 실행 SQL — $label (명령 종료코드 $rc, 원본: $out/$label.log)"
 # 'statement:' 와 'duration: X ms  execute <name>: SQL' 두 형식을 SQL 본문 기준으로 합친다.
 grep -oE '(statement|execute [^:]+): .*' "$out/$label.log" \
