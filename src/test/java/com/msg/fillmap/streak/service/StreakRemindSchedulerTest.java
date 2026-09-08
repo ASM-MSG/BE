@@ -1,6 +1,11 @@
 package com.msg.fillmap.streak.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -125,15 +130,19 @@ class StreakRemindSchedulerTest {
 	void 한_사용자의_기록_실패가_다른_사용자의_리마인드를_막지_않는다() {
 		seedStreak(userId, 5, TODAY_KST.minusDays(1));
 		seedStreak(otherUserId, 3, TODAY_KST.minusDays(1));
-		// 순회 순서 무관하게 결정적이도록 "첫 호출"에 실패를 주입한다 — record 는 단일 추상 메서드라 람다 위임.
+		// 순회 순서 무관하게 결정적이도록 "첫 호출"에 실패를 주입한다.
 		AtomicBoolean firstCall = new AtomicBoolean(true);
+		NotificationCommandService failing = mock(NotificationCommandService.class);
+		doAnswer(invocation -> {
+			if (firstCall.getAndSet(false)) {
+				throw new IllegalStateException("주입한 기록 실패");
+			}
+			notificationCommandService.record(invocation.getArgument(0), invocation.getArgument(1),
+				invocation.getArgument(2), invocation.getArgument(3), invocation.getArgument(4));
+			return null;
+		}).when(failing).record(anyLong(), any(), anyString(), anyString(), anyString());
 		StreakRemindScheduler failingScheduler = new StreakRemindScheduler(streakRepository,
-			(user, category, eventKey, title, body) -> {
-				if (firstCall.getAndSet(false)) {
-					throw new IllegalStateException("주입한 기록 실패");
-				}
-				notificationCommandService.record(user, category, eventKey, title, body);
-			}, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
+			failing, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
 
 		failingScheduler.remind();
 

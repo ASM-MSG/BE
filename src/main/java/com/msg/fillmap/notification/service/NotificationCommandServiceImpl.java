@@ -1,5 +1,7 @@
 package com.msg.fillmap.notification.service;
 
+import java.time.LocalDateTime;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,5 +25,11 @@ public class NotificationCommandServiceImpl implements NotificationCommandServic
 	@Transactional
 	public void record(Long userId, NotificationCategory category, String eventKey, String title, String body) {
 		notificationRepository.insert(userId, category.name(), eventKey, title, body);
+	}
+
+	@Override
+	@Transactional
+	public void recordEventStart(long occurrenceId, LocalDateTime startsAt, String eventKey, String title, String body) {
+		notificationRepository.insertEventStart(occurrenceId, startsAt, eventKey, title, body);
 	}
 }

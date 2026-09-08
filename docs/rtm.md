@@ -7,7 +7,7 @@
 
 요약: FR 296건 중 테스트 연결 265건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
 
-AC 요약: 스펙 성공 기준 34건 중 테스트 연결 32건, 미커버 2건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
+AC 요약: 스펙 성공 기준 39건 중 테스트 연결 37건, 미커버 2건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -406,6 +406,11 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 | AC-575-05 | MSG-575 | AdminOrgAccountRequestControllerTest |
 | AC-575-06 | MSG-575 | AdminOrgAccountRequestControllerTest |
 | AC-575-07 | MSG-575 | FillMapMailTemplateTest |
+| AC-583-01 | MSG-583 | EventNotificationSchedulerTest |
+| AC-583-02 | MSG-583 | EventNotificationSchedulerTest |
+| AC-583-03 | MSG-583 | EventNotificationSchedulerTest |
+| AC-583-04 | MSG-583 | EventNotificationSchedulerTest |
+| AC-583-05 | MSG-583 | EventNotificationSchedulerTest |
 
 ## 미커버 AC (보고만 — 실패 아님)
 

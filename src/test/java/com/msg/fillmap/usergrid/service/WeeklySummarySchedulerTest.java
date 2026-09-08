@@ -1,6 +1,11 @@
 package com.msg.fillmap.usergrid.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -195,15 +200,20 @@ class WeeklySummarySchedulerTest {
 		video(userId, WEEK_START_KST.plusDays(1), "ACTIVE");
 		occupy(otherUserId, WEEK_START_KST.plusDays(1));
 		video(otherUserId, WEEK_START_KST.plusDays(1), "ACTIVE");
-		// 순회 순서 무관하게 결정적이도록 "내 두 유저 중 첫 호출"에 실패를 주입한다 — record 는 단일 추상 메서드.
+		// 순회 순서 무관하게 결정적이도록 "내 두 유저 중 첫 호출"에 실패를 주입한다.
 		AtomicBoolean firstCall = new AtomicBoolean(true);
+		NotificationCommandService failing = mock(NotificationCommandService.class);
+		doAnswer(invocation -> {
+			long user = invocation.getArgument(0);
+			if ((user == userId || user == otherUserId) && firstCall.getAndSet(false)) {
+				throw new IllegalStateException("주입한 기록 실패");
+			}
+			notificationCommandService.record(invocation.getArgument(0), invocation.getArgument(1),
+				invocation.getArgument(2), invocation.getArgument(3), invocation.getArgument(4));
+			return null;
+		}).when(failing).record(anyLong(), any(), anyString(), anyString(), anyString());
 		WeeklySummaryScheduler failingScheduler = new WeeklySummaryScheduler(userGridRepository,
-			(user, category, eventKey, title, body) -> {
-				if ((user == userId || user == otherUserId) && firstCall.getAndSet(false)) {
-					throw new IllegalStateException("주입한 기록 실패");
-				}
-				notificationCommandService.record(user, category, eventKey, title, body);
-			}, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
+			failing, Clock.fixed(FIXED_INSTANT, ZoneOffset.UTC));
 
 		failingScheduler.summarize();
 
