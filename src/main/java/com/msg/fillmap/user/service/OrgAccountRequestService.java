@@ -11,14 +11,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.global.mail.FillMapMailTemplate;
+import com.msg.fillmap.global.mail.MailSender;
 import com.msg.fillmap.user.dto.AdminOrgAccountRequestDetailResponseDto;
 import com.msg.fillmap.user.dto.AdminOrgAccountRequestListResponseDto;
 import com.msg.fillmap.user.dto.OrgAccountIssueResponseDto;
 import com.msg.fillmap.user.dto.OrgAccountRequestApproveRequestDto;
 import com.msg.fillmap.user.dto.OrgAccountRequestCreateRequestDto;
 import com.msg.fillmap.user.dto.OrgAccountRequestRejectRequestDto;
+import com.msg.fillmap.user.dto.OrgAccountRequestRejectResponseDto;
 import com.msg.fillmap.user.entity.OrgAccountRequest;
 import com.msg.fillmap.user.entity.OrgAccountRequestStatus;
 import com.msg.fillmap.user.exception.UserErrorCode;
@@ -31,6 +35,7 @@ import com.msg.fillmap.user.repository.OrgAccountRequestRepository;
  * 통과한 값을 그대로 저장하고, 발급 여부는 승인 경로에서만 갈린다. 관리자 API 의 role 검사는
  * SecurityConfig 의 {@code /api/admin/**} matcher 가 하고 여기서 다시 판정하지 않는다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrgAccountRequestService {
@@ -38,16 +43,36 @@ public class OrgAccountRequestService {
 	private static final int MIN_PAGE_SIZE = 1;
 	private static final int MAX_PAGE_SIZE = 100;
 
+	private static final String SERVICE_URL = "https://fillmap.kr";
+	private static final String REJECT_MAIL_SUBJECT = "[필맵] 행사 운영자 계정 발급 요청 반려 안내";
+	private static final String REJECT_MAIL_TITLE = "계정 발급 요청이 반려되었습니다";
+	private static final String REJECT_MAIL_BODY_FORMAT = """
+		%s %s님, 안녕하세요.
+		필맵에 신청하신 행사 운영자 계정 발급 요청(예정 행사: %s)을 검토한 결과, 아래 사유로 반려되었습니다.""";
+	private static final String REJECT_MAIL_NOTE_LABEL = "반려 사유";
+	private static final String REJECT_MAIL_CLOSING = "사유를 보완하시면 같은 신청 폼에서 다시 요청하실 수 있습니다.";
+	private static final String REJECT_MAIL_LINK_LABEL = "필맵에서 다시 신청하기";
+	private static final String REJECT_MAIL_TEXT_FORMAT = """
+		%s
+
+		%s: %s
+
+		%s
+		%s
+
+		이 메일은 필맵(FillMap)이 보냈습니다. 문의가 있으시면 이 메일에 회신해 주세요.""";
+
 	private final OrgAccountRequestRepository orgAccountRequestRepository;
 	private final OrgAccountIssueService orgAccountIssueService;
+	private final MailSender mailSender;
 	private final TransactionTemplate transactionTemplate;
 	private final Clock clock;
 
 	/** 프로덕션 생성자 — clock 을 UTC 로 고정해 Lombok 전체 생성자에 위임한다 (OrgAccountService 선례). */
 	@Autowired
 	public OrgAccountRequestService(OrgAccountRequestRepository orgAccountRequestRepository,
-		OrgAccountIssueService orgAccountIssueService, TransactionTemplate transactionTemplate) {
-		this(orgAccountRequestRepository, orgAccountIssueService, transactionTemplate, Clock.systemUTC());
+		OrgAccountIssueService orgAccountIssueService, MailSender mailSender, TransactionTemplate transactionTemplate) {
+		this(orgAccountRequestRepository, orgAccountIssueService, mailSender, transactionTemplate, Clock.systemUTC());
 	}
 
 	/**
@@ -111,13 +136,41 @@ public class OrgAccountRequestService {
 	}
 
 	/**
-	 * 반려 (API 5). <b>메일을 보내지 않는다</b> — 반려 통보는 당분간 수기이고 저장된 사유가 그 재료다.
-	 * 검토 시점 대조를 승인과 똑같이 하는 이유는, 검토한 신청과 다른 내용을 그 사유로 반려하는 어긋남을
-	 * 막기 위해서다.
+	 * 반려 (API 5) — 상태 전이와 반려 안내 메일 발송 (MSG-575). 승인과 같은 경계다: 잠금·검토 시점 대조·전이는
+	 * 트랜잭션 안, <b>발송은 커밋 뒤</b>. 발송 실패는 반려를 뒤집지 않고 응답의 emailSent 로만 드러나며,
+	 * 그때는 저장된 사유가 수기 통보의 재료다 (재발송 API 없음). 검토 시점 대조를 승인과 똑같이 하는
+	 * 이유는, 검토한 신청과 다른 내용을 그 사유로 반려하는 어긋남을 막기 위해서다.
 	 */
-	@Transactional
-	public void reject(Long requestId, OrgAccountRequestRejectRequestDto request) {
-		lockPending(requestId, request.updatedAt()).reject(request.reason(), LocalDateTime.now(clock));
+	public OrgAccountRequestRejectResponseDto reject(Long requestId, OrgAccountRequestRejectRequestDto request) {
+		RejectedRequest rejected = transactionTemplate.execute(status -> {
+			OrgAccountRequest target = lockPending(requestId, request.updatedAt());
+			target.reject(request.reason(), LocalDateTime.now(clock));
+			return new RejectedRequest(target.getEmail(), target.getOrgName(), target.getContactName(),
+				target.getEventName(), request.reason());
+		});
+		return new OrgAccountRequestRejectResponseDto(sendRejection(rejected));
+	}
+
+	/** 반려 안내 메일 — 필맵 서식 HTML 과 같은 내용의 평문 대체본을 함께 싣는다. */
+	private boolean sendRejection(RejectedRequest rejected) {
+		String body = REJECT_MAIL_BODY_FORMAT.formatted(rejected.orgName(), rejected.contactName(),
+			rejected.eventName());
+		String text = REJECT_MAIL_TEXT_FORMAT.formatted(body, REJECT_MAIL_NOTE_LABEL, rejected.reason(),
+			REJECT_MAIL_CLOSING, SERVICE_URL);
+		String html = FillMapMailTemplate.html(REJECT_MAIL_TITLE, body, REJECT_MAIL_NOTE_LABEL, rejected.reason(),
+			REJECT_MAIL_CLOSING, REJECT_MAIL_LINK_LABEL, SERVICE_URL);
+		try {
+			mailSender.send(rejected.email(), REJECT_MAIL_SUBJECT, text, html);
+			return true;
+		} catch (RuntimeException e) {
+			// 반려 사유는 비밀이 아니라 예외를 그대로 남긴다 (초기 비밀번호 발송의 타입만 남기는 규칙과 다르다).
+			log.error("[org-account] 반려 안내 메일 발송 실패 — 반려는 유지된다: to={}", rejected.email(), e);
+			return false;
+		}
+	}
+
+	/** 커밋 뒤 발송에 필요한 값. 트랜잭션 밖에서 엔티티를 다시 읽지 않으려고 안에서 뽑아 둔다. */
+	private record RejectedRequest(String email, String orgName, String contactName, String eventName, String reason) {
 	}
 
 	/**

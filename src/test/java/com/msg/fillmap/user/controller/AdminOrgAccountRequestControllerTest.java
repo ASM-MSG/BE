@@ -2,8 +2,10 @@ package com.msg.fillmap.user.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.BDDMockito.willAnswer;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -113,6 +115,11 @@ class AdminOrgAccountRequestControllerTest {
 			발송_시점_트랜잭션_활성 = TransactionSynchronizationManager.isActualTransactionActive();
 			return null;
 		}).given(mailSender).send(any(), any(), any());
+		// 반려 안내 메일(MSG-575)은 HTML 동봉 오버로드로 나간다 — 같은 트랜잭션 증거를 남긴다.
+		willAnswer(invocation -> {
+			발송_시점_트랜잭션_활성 = TransactionSynchronizationManager.isActualTransactionActive();
+			return null;
+		}).given(mailSender).send(any(), any(), any(), any());
 
 		User admin = saveUser(uniqueEmail(), UserRole.ADMIN);
 		adminToken = "Bearer " + tokenProvider.issueAccessToken(admin.getId(), admin.getRole());
@@ -521,10 +528,19 @@ class AdminOrgAccountRequestControllerTest {
 				{"reason": "%s", "updatedAt": "%s"}""".formatted(reason, updatedAt);
 		}
 
-		// 검증: FR-AUTH-13
+		private static final String REJECT_MAIL_SUBJECT = "[필맵] 행사 운영자 계정 발급 요청 반려 안내";
+
+		private String[] 반려_메일_본문을_잡는다(String email) {
+			ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+			ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);
+			then(mailSender).should().send(eq(email), eq(REJECT_MAIL_SUBJECT), text.capture(), html.capture());
+			return new String[] {text.getValue(), html.getValue()};
+		}
+
+		// 검증: FR-AUTH-18, AC-575-01, AC-575-02, AC-575-04
 		@Test
-		@DisplayName("반려하면 사유가 저장되고 메일은 발송되지 않는다")
-		void 반려하면_사유가_저장되고_메일은_발송되지_않는다() throws Exception {
+		@DisplayName("반려하면 사유가 저장되고 커밋 뒤 요청자에게 반려 사유를 담은 필맵 서식 메일이 발송된다")
+		void 반려하면_요청자에게_반려_안내_메일이_발송된다() throws Exception {
 			String email = uniqueEmail();
 			OrgAccountRequest request = 접수한다(email, now());
 
@@ -533,13 +549,85 @@ class AdminOrgAccountRequestControllerTest {
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(rejectBody("기관 확인 서류 누락", 검토_기준_시각(request.getId()))))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.developCode").value(200));
+				.andExpect(jsonPath("$.developCode").value(200))
+				.andExpect(jsonPath("$.data.emailSent").value(true));
 
 			OrgAccountRequest rejected = 이메일로_찾는다(email).getFirst();
 			assertThat(rejected.getStatus()).isEqualTo(OrgAccountRequestStatus.REJECTED);
 			assertThat(rejected.getRejectReason()).isEqualTo("기관 확인 서류 누락");
 			assertThat(rejected.getProcessedAt()).isNotNull();
-			then(mailSender).should(never()).send(any(), any(), any());
+
+			String[] bodies = 반려_메일_본문을_잡는다(email);
+			for (String body : bodies) {
+				assertThat(body).contains("부산진구청", "김담당", "서면 겨울 축제", "기관 확인 서류 누락",
+					"다시 요청하실 수 있습니다", "https://fillmap.kr");
+			}
+			assertThat(bodies[1]).contains("FillMap");
+			발송은_커밋_뒤였다();
+		}
+
+		// 검증: FR-AUTH-18, AC-575-03
+		@Test
+		@DisplayName("반려 사유의 태그 문자는 HTML 본문에서 이스케이프되고 줄바꿈은 br 이 된다")
+		void 반려_사유의_태그_문자는_HTML_본문에서_이스케이프된다() throws Exception {
+			String email = uniqueEmail();
+			OrgAccountRequest request = 접수한다(email, now());
+
+			mockMvc.perform(post(QUEUE_URL + "/" + request.getId() + "/reject")
+					.header(HttpHeaders.AUTHORIZATION, adminToken)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(rejectBody("서류 누락 <script>alert(1)</script>\\n보완 요망", 검토_기준_시각(request.getId()))))
+				.andExpect(status().isOk());
+
+			String[] bodies = 반려_메일_본문을_잡는다(email);
+			// 평문은 원문 그대로, HTML 은 마크업으로 해석되지 않게 — 사유가 깨지거나 링크가 주입되는 것을 막는다.
+			assertThat(bodies[0]).contains("서류 누락 <script>alert(1)</script>\n보완 요망");
+			assertThat(bodies[1])
+				.contains("서류 누락 &lt;script&gt;alert(1)&lt;/script&gt;<br>보완 요망")
+				.doesNotContain("<script>");
+		}
+
+		// 검증: FR-AUTH-18, AC-575-05
+		@Test
+		@DisplayName("발송이 실패해도 반려는 유지되고 응답의 emailSent 만 false 다")
+		void 메일_발송이_실패해도_반려는_유지되고_발송_실패가_응답에_실린다() throws Exception {
+			String email = uniqueEmail();
+			OrgAccountRequest request = 접수한다(email, now());
+			willThrow(new IllegalStateException("SES unavailable")).given(mailSender).send(any(), any(), any(), any());
+
+			mockMvc.perform(post(QUEUE_URL + "/" + request.getId() + "/reject")
+					.header(HttpHeaders.AUTHORIZATION, adminToken)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(rejectBody("기관 확인 서류 누락", 검토_기준_시각(request.getId()))))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.emailSent").value(false));
+
+			OrgAccountRequest rejected = 이메일로_찾는다(email).getFirst();
+			assertThat(rejected.getStatus()).isEqualTo(OrgAccountRequestStatus.REJECTED);
+			assertThat(rejected.getRejectReason()).isEqualTo("기관 확인 서류 누락");
+			assertThat(rejected.getProcessedAt()).isNotNull();
+			assertThat(logs.list)
+				.extracting(ILoggingEvent::getFormattedMessage)
+				.anyMatch(message -> message.contains("반려 안내 메일 발송 실패"));
+		}
+
+		// 검증: FR-AUTH-18, AC-575-06
+		@Test
+		@DisplayName("이미 처리된 요청의 반려는 1422 이고 메일이 없다")
+		void 이미_처리된_요청의_반려는_1422이고_메일이_없다() throws Exception {
+			String email = uniqueEmail();
+			OrgAccountRequest request = 접수한다(email, now());
+			String reviewedAt = 검토_기준_시각(request.getId());
+			반려_상태로_만든다(request.getId(), "이미 처리");
+
+			mockMvc.perform(post(QUEUE_URL + "/" + request.getId() + "/reject")
+					.header(HttpHeaders.AUTHORIZATION, adminToken)
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(rejectBody("기관 확인 서류 누락", reviewedAt)))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.developCode").value(1422));
+
+			then(mailSender).should(never()).send(any(), any(), any(), any());
 		}
 
 		// 검증: FR-AUTH-13
@@ -560,9 +648,9 @@ class AdminOrgAccountRequestControllerTest {
 			}
 		}
 
-		// 검증: FR-AUTH-13
+		// 검증: FR-AUTH-13, FR-AUTH-18, AC-575-06
 		@Test
-		@DisplayName("상세 조회 후 익명 재접수가 일어나면 반려도 1426 이다")
+		@DisplayName("상세 조회 후 익명 재접수가 일어나면 반려도 1426 이고 메일은 나가지 않는다")
 		void 상세_조회_후_익명_재접수가_일어나면_반려도_1426이다() throws Exception {
 			String email = uniqueEmail();
 			LocalDateTime first = now();
@@ -578,6 +666,7 @@ class AdminOrgAccountRequestControllerTest {
 				.andExpect(jsonPath("$.developCode").value(1426));
 
 			assertThat(이메일로_찾는다(email).getFirst().getStatus()).isEqualTo(OrgAccountRequestStatus.PENDING);
+			then(mailSender).should(never()).send(any(), any(), any(), any());
 		}
 	}
 }

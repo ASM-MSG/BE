@@ -25,4 +25,10 @@ public class LoggingMailSender implements MailSender {
 	public void send(String to, String subject, String text) {
 		log.info("[mail] 실발송 없이 로그로 대체합니다 — to={}, subject={}\n{}", to, subject, text);
 	}
+
+	/** HTML 은 길이만 남긴다. 평문 대체본이 같은 내용이라 검증에는 그것으로 충분하고, 마크업은 로그를 읽기 어렵게만 한다. */
+	@Override
+	public void send(String to, String subject, String text, String html) {
+		log.info("[mail] 실발송 없이 로그로 대체합니다 — to={}, subject={}, html={}자\n{}", to, subject, html.length(), text);
+	}
 }
