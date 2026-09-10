@@ -8,7 +8,7 @@
 # 잘린 응답으로 보고 실패시킨다 — 빈 레퍼런스가 조용히 배포되지 않게.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-URL="${1:-https://api.fillmap.kr/v3/api-docs}"
+URL="${1:-https://api-dev.fillmap.kr/v3/api-docs}"
 OUT=docs/openapi.json
 auth=()
 [ -n "${DOCS_BASIC_AUTH:-}" ] && auth=(-u "$DOCS_BASIC_AUTH")
