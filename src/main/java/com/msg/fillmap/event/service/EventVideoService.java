@@ -26,12 +26,16 @@ public interface EventVideoService {
 	 * 위치별 영상 피드 (API 2). 최신 업로드순이며 cursor 는 직전 응답의 nextCursor(opaque) 다 — null 이면
 	 * 첫 페이지, 무효거나 다른 위치에서 발급된 것이면 13402 다. size 는 [1, 50] 밖이면 클램프한다
 	 * (0 이하·미지정은 기본 20). 아카이브를 포함한 모든 상태에서 조회되고, 영상이 없으면 빈 페이지다.
+	 * viewerId 는 비로그인이면 null 이다(MSG-569) — 로그인 요청자와 어느 방향이든 차단 관계인 작성자의 영상은
+	 * 쿼리 안에서 빠지고, null 이면 차단 행이 있어도 결과가 같다.
 	 */
-	EventLocationVideoPageResponseDto getLocationVideos(long occurrenceId, long locationId, String cursor, int size);
+	EventLocationVideoPageResponseDto getLocationVideos(Long viewerId, long occurrenceId, long locationId,
+		String cursor, int size);
 
 	/**
 	 * 행사 영상 상세 (API 3). userId 는 로그인 사용자, 비로그인이면 null 이다 — 소유자 판정(조회수 증가
-	 * 제외) 재료로만 쓴다. 행사 영상이 아니거나 노출 술어 밖이면 소유자 본인에게도 13406 이다.
+	 * 제외)과 차단 판정(MSG-569, 어느 방향이든 차단 관계면 같은 13406) 재료로 쓴다. 행사 영상이 아니거나 노출
+	 * 술어 밖이면 소유자 본인에게도 13406 이다.
 	 */
 	EventVideoDetailResponseDto getVideoDetail(long videoId, Long userId);
 }

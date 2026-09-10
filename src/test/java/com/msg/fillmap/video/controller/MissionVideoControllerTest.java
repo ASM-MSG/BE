@@ -71,12 +71,13 @@ class MissionVideoControllerTest {
 
 	// 검증: FR-MISSION-17
 	@Test
-	@DisplayName("응답 항목은 격자 전역 목록과 같은 여섯 필드다")
-	void 응답_항목은_격자_전역_목록과_같은_여섯_필드다() throws Exception {
-		given(videoService.getMissionVideos(eq(MISSION_ID), isNull(), eq(20))).willReturn(
+	// 검증: FR-MOD-18, AC-569-12
+	@DisplayName("응답 항목은 격자 전역 목록과 같은 일곱 필드다")
+	void 응답_항목은_격자_전역_목록과_같은_일곱_필드다() throws Exception {
+		given(videoService.getMissionVideos(eq(USER_ID), eq(MISSION_ID), isNull(), eq(20))).willReturn(
 			new GridVideoPageResponseDto(List.of(
 				new GridGlobalVideoResponseDto(1042L, "https://bucket.s3/thumb.jpg?X-Amz-Signature=abc",
-					(short) 27, 1200L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), "busan.vlog")),
+					(short) 27, 1200L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), "busan.vlog", 501L)),
 				true, "MTI6MTc4NDQ1NTgwMDAwMDAwMDoxMDM5"));
 
 		mockMvc.perform(get(URL, MISSION_ID)
@@ -90,7 +91,7 @@ class MissionVideoControllerTest {
 			.andExpect(jsonPath("$.data.videos[0].viewCount").value(1200))
 			.andExpect(jsonPath("$.data.videos[0].recordedAt").value("2026-07-20T18:03:11Z"))
 			.andExpect(jsonPath("$.data.videos[0].nickname").value("busan.vlog"))
-			.andExpect(jsonPath("$.data.videos[0].userId").doesNotExist())            // 작성자 id 비노출
+			.andExpect(jsonPath("$.data.videos[0].userId").value(501))                // 차단 대상 식별자 (MSG-569)
 			.andExpect(jsonPath("$.data.videos[0].processingStatus").doesNotExist())   // 목록은 항상 READY
 			.andExpect(jsonPath("$.data.hasNext").value(true))
 			.andExpect(jsonPath("$.data.nextCursor").value("MTI6MTc4NDQ1NTgwMDAwMDAwMDoxMDM5"));
@@ -100,7 +101,7 @@ class MissionVideoControllerTest {
 	@DisplayName("조건에 맞는 영상이 없으면 빈 페이지 200 이다")
 	void 조건에_맞는_영상이_없으면_빈_페이지_200이다() throws Exception {
 		// 존재하지 않는 미션 ID 도 같은 응답이다 — 서비스가 빈 페이지를 돌려주고 컨트롤러는 그대로 싣는다.
-		given(videoService.getMissionVideos(eq(MISSION_ID), isNull(), eq(20)))
+		given(videoService.getMissionVideos(eq(USER_ID), eq(MISSION_ID), isNull(), eq(20)))
 			.willReturn(new GridVideoPageResponseDto(List.of(), false, null));
 
 		mockMvc.perform(get(URL, MISSION_ID)

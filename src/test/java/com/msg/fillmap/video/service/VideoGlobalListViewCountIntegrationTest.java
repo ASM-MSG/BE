@@ -101,7 +101,7 @@ class VideoGlobalListViewCountIntegrationTest {
 	private List<Long> listIds() {
 		em.flush();
 		em.clear();
-		return videoService.getGridGlobalVideos(gridId, null, 20).videos().stream()
+		return videoService.getGridGlobalVideos(null, gridId, null, 20).videos().stream()
 			.map(GridGlobalVideoResponseDto::videoId)
 			.toList();
 	}

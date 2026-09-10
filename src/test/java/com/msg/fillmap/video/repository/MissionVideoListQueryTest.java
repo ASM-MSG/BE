@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
 
@@ -19,6 +20,7 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridFixtures;
 import com.msg.fillmap.user.entity.User;
+import com.msg.fillmap.user.repository.UserBlockRepository;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
 
@@ -47,6 +49,9 @@ class MissionVideoListQueryTest {
 
 	@Autowired
 	private UserRepository userRepository;
+
+	@Autowired
+	private UserBlockRepository userBlockRepository;
 
 	@Autowired
 	private EntityManager em;
@@ -120,13 +125,13 @@ class MissionVideoListQueryTest {
 	private List<Long> list(long missionId, int limit) {
 		em.flush();
 		em.clear();
-		return videoRepository.findMissionVideos(missionId, limit).stream().map(Video::getId).toList();
+		return videoRepository.findMissionVideos(missionId, null, limit).stream().map(Video::getId).toList();
 	}
 
 	private List<Long> listAfter(long missionId, LocalDateTime recordedAt, long id, int limit) {
 		em.flush();
 		em.clear();
-		return videoRepository.findMissionVideosAfter(missionId, recordedAt, id, limit)
+		return videoRepository.findMissionVideosAfter(missionId, null, recordedAt, id, limit)
 			.stream().map(Video::getId).toList();
 	}
 
@@ -403,8 +408,103 @@ class MissionVideoListQueryTest {
 
 		em.flush();
 		em.clear();
-		List<Long> globalIds = videoRepository.findGlobalVideos(gridId, 100).stream().map(Video::getId).toList();
+		List<Long> globalIds = videoRepository.findGlobalVideos(gridId, null, 100).stream().map(Video::getId).toList();
 
 		assertThat(list(mission, 100)).containsExactlyInAnyOrderElementsOf(globalIds);
+	}
+
+	/** 지정한 작성자의 후보 영상 — 차단 절(MSG-569) 검증용. */
+	private long publicReadyBy(long ownerId, String gridId, LocalDateTime recordedAt) {
+		em.createNativeQuery("""
+				INSERT INTO videos (user_id, grid_id, geom, duration_sec, recorded_at,
+					status, visibility, processing_status)
+				VALUES (
+					:userId, :gridId,
+					ST_SetSRID(ST_MakePoint(126.92, 37.56), 4326)::geography,
+					10, :recordedAt, 'ACTIVE', 'PUBLIC', 'READY'
+				)
+				""")
+			.setParameter("userId", ownerId)
+			.setParameter("gridId", gridId)
+			.setParameter("recordedAt", recordedAt)
+			.executeUpdate();
+		return ((Number) em.createNativeQuery("SELECT lastval()").getSingleResult()).longValue();
+	}
+
+	private long seedUser(String nickname) {
+		return userRepository.save(
+			User.createLocalUser("mission-video-" + UUID.randomUUID() + "@example.com", "hash", nickname)).getId();
+	}
+
+	private void block(long blockerId, long blockedId) {
+		userBlockRepository.insertIgnore(blockerId, blockedId, at(1, 0));
+	}
+
+	private List<Long> listAs(Long viewerId, long missionId, int limit) {
+		em.flush();
+		em.clear();
+		return videoRepository.findMissionVideos(missionId, viewerId, limit).stream().map(Video::getId).toList();
+	}
+
+	// 검증: FR-MOD-17, AC-569-06
+	@Test
+	@DisplayName("차단 관계(어느 방향이든)인 작성자의 영상은 미션 목록에서 빠진다")
+	void 차단_관계인_작성자의_영상은_미션_목록에서_빠진다() {
+		long mission = insertMission(at(1, 0), at(31, 23));
+		String gridId = seedGrid(0);
+		insertMissionGrid(mission, gridId);
+		long viewer = seedUser("보는이");
+		long blocked = seedUser("차단됨");
+		long blocker = seedUser("차단자");
+		long mine = publicReady(gridId, at(10, 9));
+		publicReadyBy(blocked, gridId, at(11, 9));
+		publicReadyBy(blocker, gridId, at(12, 9));
+		block(viewer, blocked);
+		block(blocker, viewer);
+
+		assertThat(listAs(viewer, mission, 20)).containsExactly(mine);
+	}
+
+	// 검증: FR-MOD-17, AC-569-06
+	@Test
+	@DisplayName("차단된 영상은 페이지 크기를 소비하지 않고 커서 이후 페이지에도 절이 걸린다")
+	void 차단된_영상은_페이지_크기를_소비하지_않고_커서_이후에도_걸린다() {
+		long mission = insertMission(at(1, 0), at(31, 23));
+		String gridId = seedGrid(0);
+		insertMissionGrid(mission, gridId);
+		long viewer = seedUser("보는이");
+		long blocked = seedUser("차단됨");
+		int size = 2;
+		// 차단 작성자 영상 size+1 건이 정렬상 앞(최신)에 있어도 다른 영상 size 건이 그대로 채워진다.
+		for (int i = 0; i <= size; i++) {
+			publicReadyBy(blocked, gridId, at(20, i));
+		}
+		long a = publicReady(gridId, at(15, 12));
+		long b = publicReady(gridId, at(14, 12));
+		long c = publicReady(gridId, at(13, 12));
+		publicReadyBy(blocked, gridId, at(13, 11));
+		block(viewer, blocked);
+
+		assertThat(listAs(viewer, mission, size)).containsExactly(a, b);
+		em.flush();
+		em.clear();
+		assertThat(videoRepository.findMissionVideosAfter(mission, viewer, at(14, 12), b, 20)
+			.stream().map(Video::getId).toList()).containsExactly(c);
+	}
+
+	// 검증: FR-MOD-17, AC-569-07
+	@Test
+	@DisplayName("viewer 가 null 이면 차단 행이 있어도 미션 목록 결과가 같다")
+	void viewer가_null이면_차단_행이_있어도_미션_목록_결과가_같다() {
+		long mission = insertMission(at(1, 0), at(31, 23));
+		String gridId = seedGrid(0);
+		insertMissionGrid(mission, gridId);
+		long viewer = seedUser("보는이");
+		long blocked = seedUser("차단됨");
+		long mine = publicReady(gridId, at(10, 9));
+		long theirs = publicReadyBy(blocked, gridId, at(11, 9));
+		block(viewer, blocked);
+
+		assertThat(listAs(null, mission, 20)).containsExactly(theirs, mine);
 	}
 }

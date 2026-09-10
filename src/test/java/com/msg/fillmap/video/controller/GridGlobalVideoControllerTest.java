@@ -53,12 +53,12 @@ class GridGlobalVideoControllerTest {
 	}
 
 	private void givenPage() {
-		given(videoService.getGridGlobalVideos(eq(GRID_ID), isNull(), eq(20))).willReturn(
+		given(videoService.getGridGlobalVideos(eq(USER_ID), eq(GRID_ID), isNull(), eq(20))).willReturn(
 			new GridVideoPageResponseDto(List.of(
 				new GridGlobalVideoResponseDto(1042L, "https://bucket.s3/thumb.jpg?X-Amz-Signature=abc",
-					(short) 12, 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), "busan.vlog"),
+					(short) 12, 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), "busan.vlog", 501L),
 				new GridGlobalVideoResponseDto(1039L, "https://bucket.s3/thumb2.jpg?X-Amz-Signature=def",
-					(short) 8, 5L, LocalDateTime.of(2026, 7, 19, 21, 10, 0), "seoul.walk")),
+					(short) 8, 5L, LocalDateTime.of(2026, 7, 19, 21, 10, 0), "seoul.walk", 502L)),
 				true, "NToxNzg0NDU1ODAwMDAwMDAwOjEwMzk"));
 	}
 
@@ -84,9 +84,10 @@ class GridGlobalVideoControllerTest {
 			.andExpect(jsonPath("$.data.nextCursor").value("NToxNzg0NDU1ODAwMDAwMDAwOjEwMzk"));
 	}
 
+	// 검증: FR-MOD-18, AC-569-12
 	@Test
-	@DisplayName("목록 항목의 작성자 축은 닉네임뿐이고 processingStatus·title 은 없다 (§D3 계약 배제)")
-	void 목록_항목의_작성자_축은_닉네임뿐이다() throws Exception {
+	@DisplayName("목록 항목의 작성자 축은 닉네임과 userId 이고 processingStatus·title 은 없다 (§D3 계약 배제)")
+	void 목록_항목의_작성자_축은_닉네임과_userId다() throws Exception {
 		givenPage();
 
 		mockMvc.perform(get(URL, GRID_ID)
@@ -95,14 +96,27 @@ class GridGlobalVideoControllerTest {
 			.andExpect(jsonPath("$.data.videos[0].videoId").value(1042))   // 항목 실존 확인 — 공허 통과 방지
 			.andExpect(jsonPath("$.data.videos[0].processingStatus").doesNotExist())   // 전역 목록은 항상 READY
 			.andExpect(jsonPath("$.data.videos[0].nickname").value("busan.vlog"))      // 2026-08-04 확정(MSG-371)
-			.andExpect(jsonPath("$.data.videos[0].userId").doesNotExist())             // 작성자 id 는 여전히 비노출
+			.andExpect(jsonPath("$.data.videos[0].userId").value(501))                 // 차단 대상 식별자 (MSG-569)
+			.andExpect(jsonPath("$.data.videos[1].userId").value(502))
 			.andExpect(jsonPath("$.data.videos[0].title").doesNotExist());             // MSG-240 후속 additive
+	}
+
+	// 검증: FR-MOD-17, AC-569-07
+	@Test
+	@DisplayName("비로그인 조회는 viewerId 로 null 을 넘긴다")
+	void 비로그인_조회는_viewerId로_null을_넘긴다() throws Exception {
+		given(videoService.getGridGlobalVideos(isNull(), eq(GRID_ID), isNull(), eq(20)))
+			.willReturn(new GridVideoPageResponseDto(List.of(), false, null));
+
+		mockMvc.perform(get(URL, GRID_ID))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.videos").isEmpty());
 	}
 
 	@Test
 	@DisplayName("영상이 없으면 200 과 빈 배열·hasNext false 다")
 	void 영상이_없으면_200과_빈_배열_hasNext_false다() throws Exception {
-		given(videoService.getGridGlobalVideos(eq(GRID_ID), isNull(), eq(20)))
+		given(videoService.getGridGlobalVideos(eq(USER_ID), eq(GRID_ID), isNull(), eq(20)))
 			.willReturn(new GridVideoPageResponseDto(List.of(), false, null));
 
 		mockMvc.perform(get(URL, GRID_ID)

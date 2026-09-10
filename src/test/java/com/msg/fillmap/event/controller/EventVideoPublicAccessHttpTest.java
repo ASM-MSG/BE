@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -34,6 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.event.dto.EventLocationVideoPageResponseDto;
+import com.msg.fillmap.event.dto.EventLocationVideoResponseDto;
 import com.msg.fillmap.event.dto.EventVideoCommentPageResponseDto;
 import com.msg.fillmap.event.dto.EventVideoDetailResponseDto;
 import com.msg.fillmap.event.dto.EventVideoUploadRequestDto;
@@ -97,7 +99,7 @@ class EventVideoPublicAccessHttpTest {
 		return new EventVideoDetailResponseDto(VIDEO_ID, OCCURRENCE_ID, "LIVE", LOCATION_ID, "영화의전당",
 			"19422_9582", null, null, "부산광역시 부산진구 부전2동", "https://example.test/playback", (short) 10,
 			LocalDateTime.of(2026, 10, 6, 12, 0), LocalDateTime.of(2026, 10, 6, 12, 30), "필맵러", false,
-			3L, false, 2L, 댓글페이지());
+			3L, false, 2L, 댓글페이지(), 501L);
 	}
 
 	private EventVideoCommentPageResponseDto 댓글페이지() {
@@ -107,12 +109,49 @@ class EventVideoPublicAccessHttpTest {
 	@Test
 	@DisplayName("무인증 피드와 상세는 200으로 성공한다")
 	void 무인증_피드와_상세는_200으로_성공한다() throws Exception {
-		given(eventVideoService.getLocationVideos(anyLong(), anyLong(), any(), anyInt()))
+		given(eventVideoService.getLocationVideos(isNull(), anyLong(), anyLong(), any(), anyInt()))
 			.willReturn(new EventLocationVideoPageResponseDto(List.of(), false, null));
 		given(eventVideoService.getVideoDetail(anyLong(), any())).willReturn(상세());
 
 		mockMvc.perform(get(FEED_PATH, OCCURRENCE_ID, LOCATION_ID)).andExpect(status().isOk());
 		mockMvc.perform(get(DETAIL_PATH, VIDEO_ID)).andExpect(status().isOk());
+	}
+
+	// 검증: FR-MOD-18, AC-569-12
+	@Test
+	@DisplayName("피드 항목과 상세에 uploaderId 가 실리고 uploaderNickname 은 그대로다")
+	void 피드_항목과_상세에_uploaderId가_실린다() throws Exception {
+		given(eventVideoService.getLocationVideos(isNull(), anyLong(), anyLong(), any(), anyInt()))
+			.willReturn(new EventLocationVideoPageResponseDto(List.of(new EventLocationVideoResponseDto(
+				VIDEO_ID, "https://example.test/thumb", (short) 10, LocalDateTime.of(2026, 10, 6, 12, 30), 3L, 2L,
+				UPLOADER_ID)), false, null));
+		given(eventVideoService.getVideoDetail(anyLong(), any())).willReturn(상세());
+
+		mockMvc.perform(get(FEED_PATH, OCCURRENCE_ID, LOCATION_ID))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.videos[0].uploaderId").value(UPLOADER_ID));
+		mockMvc.perform(get(DETAIL_PATH, VIDEO_ID))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.uploaderId").value(501))
+			.andExpect(jsonPath("$.data.uploaderNickname").value("필맵러"));
+	}
+
+	// 검증: FR-MOD-17, AC-569-07
+	@Test
+	@DisplayName("로그인 피드·댓글 목록은 토큰의 userId 를 viewer 로 넘기고 비로그인은 null 이다")
+	void 로그인_피드와_댓글_목록은_토큰의_userId를_viewer로_넘긴다() throws Exception {
+		given(eventVideoService.getLocationVideos(eq(UPLOADER_ID), eq(OCCURRENCE_ID), eq(LOCATION_ID), isNull(), eq(0)))
+			.willReturn(new EventLocationVideoPageResponseDto(List.of(), false, null));
+		given(eventVideoInteractionService.getComments(eq(UPLOADER_ID), eq(VIDEO_ID), isNull(), eq(0)))
+			.willReturn(댓글페이지());
+
+		mockMvc.perform(get(FEED_PATH, OCCURRENCE_ID, LOCATION_ID)
+				.header(HttpHeaders.AUTHORIZATION, bearer(UPLOADER_ID)))
+			.andExpect(status().isOk());
+		mockMvc.perform(get(COMMENTS_PATH, VIDEO_ID).header(HttpHeaders.AUTHORIZATION, bearer(UPLOADER_ID)))
+			.andExpect(status().isOk());
+		then(eventVideoService).should().getLocationVideos(UPLOADER_ID, OCCURRENCE_ID, LOCATION_ID, null, 0);
+		then(eventVideoInteractionService).should().getComments(UPLOADER_ID, VIDEO_ID, null, 0);
 	}
 
 	@Test
@@ -195,7 +234,7 @@ class EventVideoPublicAccessHttpTest {
 	@Test
 	@DisplayName("비로그인 댓글 목록 조회는 허용된다")
 	void 비로그인_댓글_목록_조회는_허용된다() throws Exception {
-		given(eventVideoInteractionService.getComments(anyLong(), any(), anyInt())).willReturn(댓글페이지());
+		given(eventVideoInteractionService.getComments(isNull(), anyLong(), any(), anyInt())).willReturn(댓글페이지());
 
 		// 기존 "/api/event-videos/*" 패턴은 세그먼트 하나만 매치해 이 하위 경로를 덮지 않는다.
 		mockMvc.perform(get(COMMENTS_PATH, VIDEO_ID)).andExpect(status().isOk());
@@ -221,7 +260,7 @@ class EventVideoPublicAccessHttpTest {
 	@Test
 	@DisplayName("무효 커서 파라미터는 인증 없이도 도메인 코드 13402로 응답한다")
 	void 무효_커서_파라미터는_인증_없이도_도메인_코드_13402로_응답한다() throws Exception {
-		given(eventVideoService.getLocationVideos(anyLong(), anyLong(), anyString(), anyInt()))
+		given(eventVideoService.getLocationVideos(isNull(), anyLong(), anyLong(), anyString(), anyInt()))
 			.willThrow(new ApiException(EventErrorCode.INVALID_CURSOR));
 
 		mockMvc.perform(get(FEED_PATH, OCCURRENCE_ID, LOCATION_ID).param("cursor", "broken"))

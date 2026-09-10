@@ -39,6 +39,8 @@ public enum UserErrorCode implements ErrorCodeIfs {
 	EMAIL_CHANGE_REQUEST_NOT_FOUND(1427, HttpStatus.NOT_FOUND, "존재하지 않는 아이디 변경 요청입니다"),
 	EMAIL_CHANGE_REQUEST_ALREADY_PROCESSED(1428, HttpStatus.CONFLICT, "이미 처리된 아이디 변경 요청입니다"),
 	EMAIL_CHANGE_REQUEST_MODIFIED(1429, HttpStatus.CONFLICT, "검토한 이후 요청 내용이 변경되었습니다"),
+	// 사용자 차단 (MSG-569 FR-1). 없는 사용자는 1404 를 그대로 쓴다(식별자가 영상 응답에 노출되므로 은닉 대상이 아니다).
+	SELF_BLOCK(1430, HttpStatus.BAD_REQUEST, "자기 자신은 차단할 수 없습니다"),
 	;
 
 	private final Integer errorCode;

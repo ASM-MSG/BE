@@ -49,7 +49,8 @@ public class MissionVideoController {
 		description = "그 미션의 대상 격자에서 미션 기간에 촬영된 공개(PUBLIC)·READY 영상을 촬영 시각(recordedAt) "
 			+ "최신순으로 페이지 조회한다 — 촬영 시각이 같으면 videoId 내림차순으로 갈린다. 기간이 없는 미션"
 			+ "(코스·지속형)은 기간 조건 없이 과거 영상까지 담고, 기간이 끝난 미션도 목록은 그대로 조회된다. "
-			+ "비공개·친구 공개·삭제·블라인드·인코딩 미완 영상은 본인 것이라도 제외되며, 응답은 누가 부르든 같다. "
+			+ "비공개·친구 공개·삭제·블라인드·인코딩 미완 영상은 본인 것이라도 제외된다. 로그인 요청이면 요청자와 "
+			+ "차단 관계(어느 방향이든)인 작성자의 영상도 빠지고, 그 밖에는 응답이 누가 부르든 같다. "
 			+ "첫 요청은 cursor 없이 부르고, hasNext 가 true 면 응답의 nextCursor 를 다음 요청 cursor 로 넘기면 "
 			+ "이어진다. 커서는 발급된 그 미션 전용이라 다른 미션 커서는 400(INVALID_CURSOR)이고, 형식이 깨진 "
 			+ "커서도 같다. size 는 1~50 밖이면 클램프된다. 조건에 맞는 영상이 없거나 존재하지 않는 missionId 는 "
@@ -57,12 +58,13 @@ public class MissionVideoController {
 	)
 	@GetMapping("/api/missions/{missionId}/videos")
 	public SuccessResponse<GridVideoPageResponseDto> getMissionVideos(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "미션 ID", example = "12") @PathVariable long missionId,
 		@Parameter(description = "직전 응답의 nextCursor (opaque). 생략하면 첫 페이지")
 		@RequestParam(required = false) String cursor,
 		@Parameter(description = "페이지 크기 (1~50, 기본 20)") @RequestParam(defaultValue = "20") int size
 	) {
-		return SuccessResponse.of(videoService.getMissionVideos(missionId, cursor, size));
+		return SuccessResponse.of(videoService.getMissionVideos(userIdOrNull(principal), missionId, cursor, size));
 	}
 
 	@Operation(
@@ -90,5 +92,10 @@ public class MissionVideoController {
 		@Valid @RequestBody MissionVideoUploadRequestDto request
 	) {
 		return SuccessResponse.of(missionVideoService.upload(principal.userId(), missionId, request));
+	}
+
+	/** 비로그인 요청의 principal 은 null 이다 (MSG-491, VideoController 와 같은 형태). */
+	private Long userIdOrNull(AuthPrincipal principal) {
+		return principal == null ? null : principal.userId();
 	}
 }

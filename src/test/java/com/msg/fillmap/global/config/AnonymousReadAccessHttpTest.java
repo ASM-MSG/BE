@@ -75,7 +75,7 @@ class AnonymousReadAccessHttpTest {
 			new ZoneResponseDto("seomyeon", "서면", "2623051000", 16850, 16866, 11414, 11424, 0)));
 		given(trendingKeywordQueryService.findTop10()).willReturn(List.of(
 			new TrendingKeywordResponseDto(1, "홍대 카페")));
-		given(videoService.getGridGlobalVideos(GRID_ID, null, 20))
+		given(videoService.getGridGlobalVideos(null, GRID_ID, null, 20))
 			.willReturn(new GridVideoPageResponseDto(List.of(), false, null));
 		given(videoService.getGridHourlyUploads(GRID_ID))
 			.willReturn(new GridHourlyUploadResponseDto(GRID_ID, List.of()));

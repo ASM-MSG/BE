@@ -1,6 +1,7 @@
 package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 
@@ -18,13 +19,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.user.entity.User;
+import com.msg.fillmap.user.repository.UserBlockRepository;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
+import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.support.GeoSupport;
 import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
@@ -51,6 +55,9 @@ class VideoPlaybackViewCountIntegrationTest {
 
 	@Autowired
 	private UserRepository userRepository;
+
+	@Autowired
+	private UserBlockRepository userBlockRepository;
 
 	@Autowired
 	private EntityManager em;
@@ -120,5 +127,51 @@ class VideoPlaybackViewCountIntegrationTest {
 
 		// A(6) > B(5) → 대표가 A 로 뒤집힌다. findGlobalCover 의 view_count DESC 가 증가를 본다.
 		assertThat(coverId()).isEqualTo(videoA);
+	}
+
+	// 검증: FR-MOD-17, AC-569-08
+	@Test
+	@DisplayName("차단 관계면 재생이 3404 이고 조회수가 늘지 않는다 — 방향 무관")
+	void 차단_관계면_재생이_3404이고_조회수가_늘지_않는다() {
+		Long video = publicReady(5L, at(9));
+		Long viewer = userRepository.save(
+			User.createLocalUser("playback-block-" + UUID.randomUUID() + "@example.com", "hash", "보는이")).getId();
+		userBlockRepository.insertIgnore(viewer, ownerId, at(0));
+
+		assertThatThrownBy(() -> videoService.getVideoPlayback(viewer, video))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
+		assertThat(viewCount(video)).isEqualTo(5L);
+
+		// 역방향(작성자가 나를 차단)도 같은 404 다.
+		userBlockRepository.deletePair(viewer, ownerId);
+		userBlockRepository.insertIgnore(ownerId, viewer, at(0));
+		assertThatThrownBy(() -> videoService.getVideoPlayback(viewer, video))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
+		assertThat(viewCount(video)).isEqualTo(5L);
+	}
+
+	// 검증: FR-MOD-17, AC-569-13
+	@Test
+	@DisplayName("역방향 차단이 없으면 해제 직후 재생이 다시 되고 조회수가 오른다")
+	void 역방향_차단이_없으면_해제_직후_재생이_다시_된다() {
+		Long video = publicReady(5L, at(9));
+		Long viewer = userRepository.save(
+			User.createLocalUser("playback-unblock-" + UUID.randomUUID() + "@example.com", "hash", "보는이")).getId();
+		userBlockRepository.insertIgnore(viewer, ownerId, at(0));
+		assertThat(viewCount(video)).isEqualTo(5L);   // flush·clear — native UPDATE 로 벌린 PUBLIC 을 엔티티가 보게 한다
+		assertThatThrownBy(() -> videoService.getVideoPlayback(viewer, video)).isInstanceOf(ApiException.class);
+
+		userBlockRepository.deletePair(viewer, ownerId);
+
+		assertThat(videoService.getVideoPlayback(viewer, video).playbackUrl()).isEqualTo("https://signed");
+		assertThat(viewCount(video)).isEqualTo(6L);
+	}
+
+	private long viewCount(Long videoId) {
+		em.flush();
+		em.clear();
+		return videoRepository.findById(videoId).orElseThrow().getViewCount();
 	}
 }

@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
@@ -44,6 +45,7 @@ import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.entity.Video;
@@ -85,7 +87,7 @@ class MissionVideoListServiceTest {
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
-			() -> new ZoneNameResolver(List.of()), mock(EventVideoRepository.class));
+			() -> new ZoneNameResolver(List.of()), mock(EventVideoRepository.class), mock(UserBlockQueryService.class));
 
 		// 기본값 = 요청한 작성자가 전부 살아 있다. 닉네임이 없으면 항목이 응답에서 빠지므로(MSG-371),
 		// 닉네임을 안 보는 테스트도 이 기본 스텁이 있어야 항목을 받는다. 탈퇴 경합 테스트가 덮어쓴다.
@@ -138,13 +140,13 @@ class MissionVideoListServiceTest {
 	private void givenCandidates(List<Video> candidates) {
 		List<Video> sorted = new ArrayList<>(candidates);
 		sorted.sort(Comparator.comparing(Video::getRecordedAt).thenComparing(Video::getId).reversed());
-		given(videoRepository.findMissionVideos(anyLong(), anyInt())).willAnswer(invocation ->
-			sorted.stream().limit((int) (Integer) invocation.getArgument(1)).toList());
-		given(videoRepository.findMissionVideosAfter(anyLong(), any(), anyLong(), anyInt()))
+		given(videoRepository.findMissionVideos(anyLong(), isNull(), anyInt())).willAnswer(invocation ->
+			sorted.stream().limit((int) (Integer) invocation.getArgument(2)).toList());
+		given(videoRepository.findMissionVideosAfter(anyLong(), isNull(), any(), anyLong(), anyInt()))
 			.willAnswer(invocation -> {
-				LocalDateTime boundaryRecordedAt = invocation.getArgument(1);
-				long boundaryId = invocation.getArgument(2);
-				int limit = invocation.getArgument(3);
+				LocalDateTime boundaryRecordedAt = invocation.getArgument(2);
+				long boundaryId = invocation.getArgument(3);
+				int limit = invocation.getArgument(4);
 				return sorted.stream()
 					.filter(video -> video.getRecordedAt().isBefore(boundaryRecordedAt)
 						|| (video.getRecordedAt().equals(boundaryRecordedAt) && video.getId() < boundaryId))
@@ -156,13 +158,13 @@ class MissionVideoListServiceTest {
 	@Test
 	@DisplayName("size 가 범위 밖이면 클램프된다 (0 은 20 으로, 100 은 50 으로)")
 	void size가_범위_밖이면_클램프된다() {
-		given(videoRepository.findMissionVideos(anyLong(), anyInt())).willReturn(List.of());
+		given(videoRepository.findMissionVideos(anyLong(), isNull(), anyInt())).willReturn(List.of());
 
-		videoService.getMissionVideos(MISSION_ID, null, 0);
-		videoService.getMissionVideos(MISSION_ID, null, 100);
+		videoService.getMissionVideos(null, MISSION_ID, null, 0);
+		videoService.getMissionVideos(null, MISSION_ID, null, 100);
 
-		then(videoRepository).should().findMissionVideos(MISSION_ID, 21);   // 기본 20 + lookahead 1
-		then(videoRepository).should().findMissionVideos(MISSION_ID, 51);   // 상한 50 + lookahead 1
+		then(videoRepository).should().findMissionVideos(MISSION_ID, null, 21);   // 기본 20 + lookahead 1
+		then(videoRepository).should().findMissionVideos(MISSION_ID, null, 51);   // 상한 50 + lookahead 1
 	}
 
 	@Test
@@ -170,7 +172,7 @@ class MissionVideoListServiceTest {
 	void 마지막_페이지는_hasNext가_false이고_nextCursor가_null이다() {
 		givenCandidates(List.of(readyVideo(2L, at(20)), readyVideo(1L, at(19))));
 
-		GridVideoPageResponseDto result = videoService.getMissionVideos(MISSION_ID, null, 20);
+		GridVideoPageResponseDto result = videoService.getMissionVideos(null, MISSION_ID, null, 20);
 
 		assertThat(result.videos()).extracting(GridGlobalVideoResponseDto::videoId).containsExactly(2L, 1L);
 		assertThat(result.hasNext()).isFalse();
@@ -192,7 +194,7 @@ class MissionVideoListServiceTest {
 		List<Long> traversed = new ArrayList<>();
 		String cursor = null;
 		while (true) {
-			GridVideoPageResponseDto page = videoService.getMissionVideos(MISSION_ID, cursor, 2);
+			GridVideoPageResponseDto page = videoService.getMissionVideos(null, MISSION_ID, cursor, 2);
 			page.videos().forEach(video -> traversed.add(video.videoId()));
 			if (!page.hasNext()) {
 				break;
@@ -210,7 +212,7 @@ class MissionVideoListServiceTest {
 		given(videoRepository.findAuthorNicknames(anyCollection()))
 			.willReturn(List.of(authorNickname(9L, "seoul.walk")));
 
-		GridVideoPageResponseDto result = videoService.getMissionVideos(MISSION_ID, null, 20);
+		GridVideoPageResponseDto result = videoService.getMissionVideos(null, MISSION_ID, null, 20);
 
 		assertThat(result.videos())
 			.extracting(GridGlobalVideoResponseDto::videoId, GridGlobalVideoResponseDto::nickname)
@@ -227,7 +229,7 @@ class MissionVideoListServiceTest {
 		given(videoRepository.findAuthorNicknames(anyCollection()))
 			.willReturn(List.of(authorNickname(9L, "seoul.walk")));
 
-		GridVideoPageResponseDto result = videoService.getMissionVideos(MISSION_ID, null, 2);
+		GridVideoPageResponseDto result = videoService.getMissionVideos(null, MISSION_ID, null, 2);
 
 		assertThat(result.videos()).extracting(GridGlobalVideoResponseDto::videoId).containsExactly(3L);
 		assertThat(result.hasNext()).isTrue();
@@ -243,7 +245,7 @@ class MissionVideoListServiceTest {
 			readyVideo(2L, 9L, at(21)),
 			readyVideo(1L, 99L, at(20))));   // lookahead 초과분 — 트림돼 배치에 들어가지 않는다
 
-		videoService.getMissionVideos(MISSION_ID, null, 2);
+		videoService.getMissionVideos(null, MISSION_ID, null, 2);
 
 		ArgumentCaptor<Collection<Long>> userIds = ArgumentCaptor.forClass(Collection.class);
 		then(videoRepository).should(times(1)).findAuthorNicknames(userIds.capture());
@@ -260,7 +262,7 @@ class MissionVideoListServiceTest {
 			base64Url("12:a:1039"));                            // 정수 아님
 
 		for (String bad : badCursors) {
-			assertThatThrownBy(() -> videoService.getMissionVideos(MISSION_ID, bad, 20))
+			assertThatThrownBy(() -> videoService.getMissionVideos(null, MISSION_ID, bad, 20))
 				.isInstanceOf(ApiException.class)
 				.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_CURSOR);
 		}
@@ -274,7 +276,7 @@ class MissionVideoListServiceTest {
 		// 다른 미션의 경계값이 이 미션의 keyset 에 오적용되면 결과가 조용히 잘린다 — 형식 위반과 같은 400.
 		String foreignCursor = MissionVideoCursor.encode(MISSION_ID + 1, at(20), 1039L);
 
-		assertThatThrownBy(() -> videoService.getMissionVideos(MISSION_ID, foreignCursor, 20))
+		assertThatThrownBy(() -> videoService.getMissionVideos(null, MISSION_ID, foreignCursor, 20))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_CURSOR);
 	}
@@ -286,11 +288,11 @@ class MissionVideoListServiceTest {
 		// 막지 않으면 쿼리 바인딩 단계에서 깨져 디코드 try-catch 밖의 공통 500 이 된다.
 		String outOfRange = base64Url(MISSION_ID + ":" + Long.MIN_VALUE + ":1039");
 
-		assertThatThrownBy(() -> videoService.getMissionVideos(MISSION_ID, outOfRange, 20))
+		assertThatThrownBy(() -> videoService.getMissionVideos(null, MISSION_ID, outOfRange, 20))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_CURSOR);
 		// DB 까지 흘러가지 않는다 — 커서 조회 자체가 시도되지 않는다(바인딩 실패 500 의 원천 차단).
-		then(videoRepository).should(never()).findMissionVideosAfter(anyLong(), any(), anyLong(), anyInt());
+		then(videoRepository).should(never()).findMissionVideosAfter(anyLong(), isNull(), any(), anyLong(), anyInt());
 	}
 
 	@Test
@@ -300,7 +302,7 @@ class MissionVideoListServiceTest {
 		givenCandidates(List.of(readyVideo(1L, at(19))));
 		String upperEdge = base64Url(MISSION_ID + ":" + Long.MAX_VALUE + ":1039");
 
-		assertThatCode(() -> videoService.getMissionVideos(MISSION_ID, upperEdge, 20)).doesNotThrowAnyException();
+		assertThatCode(() -> videoService.getMissionVideos(null, MISSION_ID, upperEdge, 20)).doesNotThrowAnyException();
 	}
 
 	@Test
@@ -314,11 +316,11 @@ class MissionVideoListServiceTest {
 			readyVideo(2L, ancient),
 			readyVideo(1L, ancient)));
 
-		GridVideoPageResponseDto firstPage = videoService.getMissionVideos(MISSION_ID, null, 2);
+		GridVideoPageResponseDto firstPage = videoService.getMissionVideos(null, MISSION_ID, null, 2);
 
 		assertThat(firstPage.hasNext()).isTrue();
 		assertThat(MissionVideoCursor.decode(firstPage.nextCursor()).recordedAt()).isEqualTo(ancient);
-		assertThatCode(() -> videoService.getMissionVideos(MISSION_ID, firstPage.nextCursor(), 2))
+		assertThatCode(() -> videoService.getMissionVideos(null, MISSION_ID, firstPage.nextCursor(), 2))
 			.doesNotThrowAnyException();
 	}
 
@@ -327,7 +329,7 @@ class MissionVideoListServiceTest {
 	void 각_항목의_썸네일은_presigned_GET_URL로_발급된다() {
 		givenCandidates(List.of(readyVideo(1042L, at(20))));
 
-		GridGlobalVideoResponseDto item = videoService.getMissionVideos(MISSION_ID, null, 20).videos().get(0);
+		GridGlobalVideoResponseDto item = videoService.getMissionVideos(null, MISSION_ID, null, 20).videos().get(0);
 
 		assertThat(item.videoId()).isEqualTo(1042L);
 		assertThat(item.recordedAt()).isEqualTo(at(20));
@@ -340,9 +342,9 @@ class MissionVideoListServiceTest {
 	@Test
 	@DisplayName("조건에 맞는 영상이 없으면 빈 페이지다 (예외 아님)")
 	void 조건에_맞는_영상이_없으면_빈_페이지다() {
-		given(videoRepository.findMissionVideos(anyLong(), anyInt())).willReturn(List.of());
+		given(videoRepository.findMissionVideos(anyLong(), isNull(), anyInt())).willReturn(List.of());
 
-		GridVideoPageResponseDto result = videoService.getMissionVideos(MISSION_ID, null, 20);
+		GridVideoPageResponseDto result = videoService.getMissionVideos(null, MISSION_ID, null, 20);
 
 		assertThat(result.videos()).isEmpty();
 		assertThat(result.hasNext()).isFalse();

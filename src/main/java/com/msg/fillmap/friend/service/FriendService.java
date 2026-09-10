@@ -80,4 +80,11 @@ public interface FriendService {
 
 	/** 친구 삭제 (FR-12·13). 방향 무관 ACCEPTED 행 DELETE — 대기 중 요청은 대상이 아니다(9424). */
 	void deleteFriend(Long userId, Long friendUserId);
+
+	/**
+	 * 두 사용자 사이의 관계 행 전부 삭제 (MSG-569 FR-5) — 차단이 부른다. 상태(ACCEPTED·PENDING)와 방향에
+	 * 무관하게 지우고 0행이어도 성공이다. 호출자의 트랜잭션에 합류해 차단 저장과 한 커밋이 된다(FR-MOD-16).
+	 * friendships 의 소유 도메인이 friend 라 user 패키지가 리포지토리를 직접 부르지 않고 여기를 거친다.
+	 */
+	void deleteRelationsBetween(Long a, Long b);
 }

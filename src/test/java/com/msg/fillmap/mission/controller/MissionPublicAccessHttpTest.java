@@ -78,7 +78,7 @@ class MissionPublicAccessHttpTest {
 		given(missionQueryService.getMissionAggregates(any(), any(), any())).willReturn(List.of());
 		// isNull() — 익명이면 컨트롤러가 userId 로 null 을 넘겨야 이 스텁이 잡힌다.
 		given(missionQueryService.getMissionDetail(anyLong(), isNull())).willReturn(anonymousDetail());
-		given(videoService.getMissionVideos(anyLong(), any(), anyInt()))
+		given(videoService.getMissionVideos(isNull(), anyLong(), any(), anyInt()))
 			.willReturn(new GridVideoPageResponseDto(List.of(), false, null));
 
 		// 파라미터가 빠지면 인가와 무관하게 400 이라 유효 파라미터를 싣는다 (§성공 기준 1).

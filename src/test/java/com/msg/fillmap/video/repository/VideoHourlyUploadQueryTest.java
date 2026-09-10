@@ -213,7 +213,7 @@ class VideoHourlyUploadQueryTest {
 
 		long hourlyTotal = counts(targetGridId).stream().mapToLong(HourlyUploadProjection::getCount).sum();
 
-		assertThat(hourlyTotal).isEqualTo(videoRepository.findGlobalVideos(targetGridId, 100).size());
+		assertThat(hourlyTotal).isEqualTo(videoRepository.findGlobalVideos(targetGridId, null, 100).size());
 		assertThat(hourlyTotal).isEqualTo(2L);
 	}
 }

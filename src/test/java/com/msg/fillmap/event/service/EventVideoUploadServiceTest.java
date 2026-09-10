@@ -50,6 +50,7 @@ import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.exception.VideoErrorCode;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.service.VideoEncodingService;
@@ -98,6 +99,9 @@ class EventVideoUploadServiceTest {
 
 	@Autowired
 	private UserRepository userRepository;
+
+	@Autowired
+	private UserBlockQueryService userBlockQueryService;
 
 	@Autowired
 	private VideoService videoService;
@@ -162,7 +166,8 @@ class EventVideoUploadServiceTest {
 
 	private EventVideoService service(LocalDateTime now) {
 		return new EventVideoServiceImpl(occurrenceRepository, locationRepository, eventVideoRepository,
-			videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em, interactionService,
+			videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em,
+			interactionService, userBlockQueryService,
 			Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 

@@ -16,7 +16,7 @@ import com.msg.fillmap.video.entity.Video;
 @Schema(description = "단건 영상 재생 조회 응답",
 	requiredProperties = {"videoId", "gridId", "durationSec", "processingStatus", "visibility", "status",
 		"viewCount", "recordedAt", "playbackUrl", "thumbnailUrl", "expiresInSec",
-		"zoneName", "zoneCell", "regionName", "highlights", "nickname"})
+		"zoneName", "zoneCell", "regionName", "highlights", "nickname", "userId"})
 public record VideoPlaybackResponseDto(
 	@Schema(description = "영상(방문 이벤트) ID", example = "1042")
 	Long videoId,
@@ -69,7 +69,11 @@ public record VideoPlaybackResponseDto(
 	List<List<Double>> highlights,
 
 	@Schema(description = "작성자 닉네임 원문. @ 등 화면 표기는 FE 가 붙인다", example = "busan.vlog")
-	String nickname
+	String nickname,
+
+	@Schema(description = "작성자 사용자 ID (videos.user_id). 차단(POST /api/users/{userId}/block)의 경로 값",
+		example = "42")
+	Long userId
 ) {
 
 	/**
@@ -101,6 +105,7 @@ public record VideoPlaybackResponseDto(
 			zoneCell,
 			regionName,
 			highlights,
-			nickname);
+			nickname,
+			video.getUserId());
 	}
 }

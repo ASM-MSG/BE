@@ -216,7 +216,7 @@ class EventVideoInteractionControllerTest {
 		@Test
 		@DisplayName("cursor·size 파라미터를 서비스에 그대로 넘긴다")
 		void 댓글_목록은_cursor와_size를_그대로_넘긴다() throws Exception {
-			given(eventVideoInteractionService.getComments(VIDEO_ID, "MTA0MjozMDIx", 5))
+			given(eventVideoInteractionService.getComments(null, VIDEO_ID, "MTA0MjozMDIx", 5))
 				.willReturn(new EventVideoCommentPageResponseDto(
 					List.of(comment("저도 어제 다녀왔어요")), true, "MTA0MjozMDMw"));
 
@@ -229,13 +229,13 @@ class EventVideoInteractionControllerTest {
 				.andExpect(jsonPath("$.data.hasNext").value(true))
 				.andExpect(jsonPath("$.data.nextCursor").value("MTA0MjozMDMw"));
 
-			then(eventVideoInteractionService).should().getComments(VIDEO_ID, "MTA0MjozMDIx", 5);
+			then(eventVideoInteractionService).should().getComments(null, VIDEO_ID, "MTA0MjozMDIx", 5);
 		}
 
 		@Test
 		@DisplayName("파라미터를 생략하면 cursor null·size 0으로 넘어간다 — 클램프는 서비스 몫")
 		void 파라미터를_생략하면_cursor_null과_size_0이_넘어간다() throws Exception {
-			given(eventVideoInteractionService.getComments(VIDEO_ID, null, 0))
+			given(eventVideoInteractionService.getComments(null, VIDEO_ID, null, 0))
 				.willReturn(new EventVideoCommentPageResponseDto(List.of(), false, null));
 
 			mockMvc.perform(get(COMMENTS_PATH, VIDEO_ID))
@@ -244,7 +244,7 @@ class EventVideoInteractionControllerTest {
 				.andExpect(jsonPath("$.data.hasNext").value(false))
 				.andExpect(jsonPath("$.data.nextCursor").value(org.hamcrest.Matchers.nullValue()));
 
-			then(eventVideoInteractionService).should().getComments(VIDEO_ID, null, 0);
+			then(eventVideoInteractionService).should().getComments(null, VIDEO_ID, null, 0);
 		}
 	}
 }

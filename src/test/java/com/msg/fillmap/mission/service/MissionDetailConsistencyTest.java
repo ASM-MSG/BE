@@ -185,7 +185,7 @@ class MissionDetailConsistencyTest {
 	private List<Video> allCandidates(long missionId) {
 		em.flush();
 		em.clear();
-		return videoRepository.findMissionVideos(missionId, ALL_CANDIDATES);
+		return videoRepository.findMissionVideos(missionId, null, ALL_CANDIDATES);
 	}
 
 	private LocalDateTime nowUtc() {

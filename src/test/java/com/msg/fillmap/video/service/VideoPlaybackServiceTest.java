@@ -2,6 +2,7 @@ package com.msg.fillmap.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -33,6 +34,7 @@ import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.dto.VideoPlaybackResponseDto;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
@@ -70,6 +72,7 @@ class VideoPlaybackServiceTest {
 	private VideoRepository videoRepository;
 	private ThumbnailUrlPresigner thumbnailUrlPresigner;
 	private FriendshipQueryService friendshipQueryService;
+	private UserBlockQueryService userBlockQueryService;
 	private VideoService videoService;
 
 	@BeforeEach
@@ -84,13 +87,14 @@ class VideoPlaybackServiceTest {
 		thumbnailUrlPresigner = new ThumbnailUrlPresigner(presigner, properties);
 
 		friendshipQueryService = mock(FriendshipQueryService.class);
+		userBlockQueryService = mock(UserBlockQueryService.class);
 		videoService = new VideoServiceImpl(
 			videoRepository, mock(com.msg.fillmap.video.repository.VideoEncodingJobRepository.class),
 			presigner, mock(S3Client.class), properties,
 			mock(RegionStatsCommandService.class), thumbnailUrlPresigner, mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), mock(MissionAwardService.class), mock(HotScoreCommandService.class),
 			friendshipQueryService, () -> new ZoneNameResolver(List.of(SEOMYEON)),
-			mock(EventVideoRepository.class));
+			mock(EventVideoRepository.class), userBlockQueryService);
 
 		// 기본값 = 작성자가 살아 있다. 닉네임이 빈손이면 404 로 수렴하므로(MSG-371), 닉네임을 안 보는
 		// 테스트도 이 기본 스텁이 있어야 응답까지 간다. 탈퇴 경합을 보는 테스트는 given 으로 덮어쓴다.
@@ -572,5 +576,73 @@ class VideoPlaybackServiceTest {
 
 		assertThat(response.regionName()).isNull();
 		assertThat(response.zoneName()).isEqualTo("서면");   // 구역은 산술이라 행정동 라벨과 무관하게 나온다
+	}
+
+	// 검증: FR-MOD-17, AC-569-08
+	@Test
+	@DisplayName("차단 관계의 영상 재생은 3404 이고 본문이 삭제 영상과 같다")
+	void 차단_관계의_영상_재생은_3404이고_본문이_삭제_영상과_같다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(userBlockQueryService.isBlockedEitherWay(OTHER_ID, OWNER_ID)).willReturn(true);
+
+		ApiException blocked = (ApiException) catchThrowable(
+			() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID));
+
+		givenVideo(video(VideoStatus.DELETED, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		ApiException deleted = (ApiException) catchThrowable(
+			() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID));
+
+		assertThat(blocked.getErrorCode()).isEqualTo(VideoErrorCode.VIDEO_NOT_FOUND);
+		assertThat(blocked.getErrorCode()).isEqualTo(deleted.getErrorCode());
+		assertThat(blocked.getMessage()).isEqualTo(deleted.getMessage());
+	}
+
+	// 검증: FR-MOD-17, AC-569-08
+	@Test
+	@DisplayName("차단 관계면 presign 과 조회수 증가가 일어나지 않는다")
+	void 차단_관계면_presign과_조회수_증가가_일어나지_않는다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(userBlockQueryService.isBlockedEitherWay(OTHER_ID, OWNER_ID)).willReturn(true);
+
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
+
+		verify(videoRepository, never()).incrementViewCount(anyLong());
+		verify(videoRepository, never()).findAuthorNickname(anyLong());
+	}
+
+	// 검증: FR-MOD-17, AC-569-08
+	@Test
+	@DisplayName("FRIENDS 영상도 차단이면 403 이 아니라 404 다")
+	void FRIENDS_영상도_차단이면_403이_아니라_404다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.FRIENDS, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+		given(userBlockQueryService.isBlockedEitherWay(OTHER_ID, OWNER_ID)).willReturn(true);
+
+		// 차단이 visibility 판정보다 앞이라 친구 판정은 아예 돌지 않는다 — 403 은 존재를 인정하는 응답이다.
+		assertThatThrownBy(() -> videoService.getVideoPlayback(OTHER_ID, VIDEO_ID))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
+		verifyNoInteractions(friendshipQueryService);
+	}
+
+	// 검증: FR-MOD-17, AC-569-07, AC-569-13
+	@Test
+	@DisplayName("소유자와 비로그인은 차단 판정을 부르지 않고, 차단이 없으면 재생된다")
+	void 소유자와_비로그인은_차단_판정을_부르지_않는다() {
+		givenVideo(video(VideoStatus.ACTIVE, Visibility.PUBLIC, ProcessingStatus.READY,
+			ENCODED_KEY, null, THUMB_KEY, 0L));
+
+		assertThat(videoService.getVideoPlayback(OWNER_ID, VIDEO_ID).playbackUrl()).isNotNull();
+		assertThat(videoService.getVideoPlayback(null, VIDEO_ID).playbackUrl()).isNotNull();
+		verifyNoInteractions(userBlockQueryService);
+
+		// 타인은 (viewer, 작성자) 한 번 — 캐시 없이 요청 시점 판정이라 해제 직후 재생이 바로 된다.
+		assertThat(videoService.getVideoPlayback(OTHER_ID, VIDEO_ID).playbackUrl()).isNotNull();
+		verify(userBlockQueryService).isBlockedEitherWay(OTHER_ID, OWNER_ID);
 	}
 }

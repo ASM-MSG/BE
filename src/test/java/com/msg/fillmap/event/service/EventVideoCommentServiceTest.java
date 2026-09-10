@@ -12,6 +12,7 @@ import java.util.UUID;
 import jakarta.persistence.EntityManager;
 import jakarta.validation.Validator;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -40,7 +41,9 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.user.entity.User;
+import com.msg.fillmap.user.repository.UserBlockRepository;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
@@ -91,6 +94,12 @@ class EventVideoCommentServiceTest {
 	private UserRepository userRepository;
 
 	@Autowired
+	private UserBlockQueryService userBlockQueryService;
+
+	@Autowired
+	private UserBlockRepository userBlockRepository;
+
+	@Autowired
 	private Validator validator;
 
 	@Autowired
@@ -113,7 +122,7 @@ class EventVideoCommentServiceTest {
 
 	private EventVideoInteractionService service() {
 		return new EventVideoInteractionServiceImpl(eventVideoRepository, commentRepository, helpfulRepository,
-			videoRepository, Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+			videoRepository, userBlockQueryService, Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 
 	private EventLocation 위치(long dy) {
@@ -163,7 +172,7 @@ class EventVideoCommentServiceTest {
 
 			assertThat(created.authorId()).isEqualTo(userId);
 			assertThat(created.content()).isEqualTo("좋은 영상이네요");
-			assertThat(댓글ids(service().getComments(video.getId(), null, 0)))
+			assertThat(댓글ids(service().getComments(null, video.getId(), null, 0)))
 				.containsExactly(created.commentId());
 		}
 
@@ -198,7 +207,7 @@ class EventVideoCommentServiceTest {
 				.isEqualTo(EventErrorCode.EVENT_COMMENT_FORBIDDEN);
 
 			service().deleteComment(userId, video.getId(), commentId);
-			assertThat(service().getComments(video.getId(), null, 0).comments()).isEmpty();
+			assertThat(service().getComments(null, video.getId(), null, 0).comments()).isEmpty();
 
 			// 멱등하게 만들지 않는다 — 없는 댓글 삭제 성공은 화면 상태 불일치를 감춘다.
 			assertThatThrownBy(() -> service().deleteComment(userId, video.getId(), commentId))
@@ -263,7 +272,7 @@ class EventVideoCommentServiceTest {
 
 			// 팩터리가 서비스의 now 를 µs 절단해 채운다 — null 이면 NOT NULL 위반으로 작성 자체가 실패한다.
 			assertThat(created.createdAt()).isEqualTo(NOW);
-			assertThat(service().getComments(video.getId(), null, 0).comments())
+			assertThat(service().getComments(null, video.getId(), null, 0).comments())
 				.singleElement()
 				.extracting(EventVideoCommentResponseDto::createdAt)
 				.isEqualTo(NOW);
@@ -283,8 +292,8 @@ class EventVideoCommentServiceTest {
 			long 둘째 = service().createComment(userId, video.getId(), "2").commentId();
 			long 셋째 = service().createComment(userId, video.getId(), "3").commentId();
 
-			EventVideoCommentPageResponseDto first = service().getComments(video.getId(), null, 2);
-			EventVideoCommentPageResponseDto second = service().getComments(video.getId(), first.nextCursor(), 2);
+			EventVideoCommentPageResponseDto first = service().getComments(null, video.getId(), null, 2);
+			EventVideoCommentPageResponseDto second = service().getComments(null, video.getId(), first.nextCursor(), 2);
 
 			// 새 댓글이 아래에 쌓이는 배열이다 (피드가 최신순인 것과 방향이 다른 의도된 차이).
 			assertThat(first.hasNext()).isTrue();
@@ -300,11 +309,11 @@ class EventVideoCommentServiceTest {
 			Video video = 노출영상(위치(7));
 			String 남의커서 = EventVideoCommentCursor.encode(video.getId() + 1000, 1L);
 
-			assertThatThrownBy(() -> service().getComments(video.getId(), 남의커서, 0))
+			assertThatThrownBy(() -> service().getComments(null, video.getId(), 남의커서, 0))
 				.isInstanceOf(ApiException.class)
 				.extracting(e -> ((ApiException) e).getErrorCode())
 				.isEqualTo(EventErrorCode.INVALID_CURSOR);
-			assertThatThrownBy(() -> service().getComments(video.getId(), "!!!not-a-cursor!!!", 0))
+			assertThatThrownBy(() -> service().getComments(null, video.getId(), "!!!not-a-cursor!!!", 0))
 				.isInstanceOf(ApiException.class)
 				.extracting(e -> ((ApiException) e).getErrorCode())
 				.isEqualTo(EventErrorCode.INVALID_CURSOR);
@@ -320,7 +329,7 @@ class EventVideoCommentServiceTest {
 			em.flush();
 			em.clear();
 
-			assertThat(service().getComments(video.getId(), null, 0).comments())
+			assertThat(service().getComments(null, video.getId(), null, 0).comments())
 				.singleElement()
 				.satisfies(comment -> {
 					assertThat(comment.authorId()).isEqualTo(남);
@@ -342,10 +351,93 @@ class EventVideoCommentServiceTest {
 			em.createNativeQuery("DELETE FROM users WHERE id = :id").setParameter("id", 남).executeUpdate();
 			em.clear();
 
-			assertThat(service().getComments(video.getId(), null, 0).comments())
+			assertThat(service().getComments(null, video.getId(), null, 0).comments())
 				.singleElement()
 				.extracting(EventVideoCommentResponseDto::authorId)
 				.isEqualTo(userId);
+		}
+	}
+
+	@Nested
+	@DisplayName("차단 (MSG-569)")
+	class 차단 {
+
+		private void 차단(Long blockerId, Long blockedId) {
+			userBlockRepository.insertIgnore(blockerId, blockedId, NOW);
+		}
+
+		// 검증: FR-MOD-17, AC-569-10
+		@Test
+		@DisplayName("차단 관계(어느 방향이든) 작성자의 댓글은 목록에서 빠지고 댓글 수는 줄지 않는다")
+		void 차단_관계_작성자의_댓글은_목록에서_빠진다() {
+			Video video = 노출영상(위치(40));
+			Long viewer = 사용자("보는이");
+			Long blocked = 사용자("차단됨");
+			Long blocker = 사용자("차단자");
+			long mine = service().createComment(userId, video.getId(), "작성자 댓글").commentId();
+			service().createComment(blocked, video.getId(), "차단된 사람 댓글");
+			service().createComment(blocker, video.getId(), "나를 차단한 사람 댓글");
+			차단(viewer, blocked);
+			차단(blocker, viewer);
+
+			assertThat(댓글ids(service().getComments(viewer, video.getId(), null, 0))).containsExactly(mine);
+			// 비로그인은 차단 행이 있어도 전부 보인다 — JPQL :viewerId IS NULL 단락 (AC-07).
+			assertThat(service().getComments(null, video.getId(), null, 0).comments()).hasSize(3);
+			// 상세에 품기는 첫 페이지도 같은 viewer 기준이고, 댓글 수는 차단 기준으로 줄이지 않는다 (D-7).
+			EventVideoDetailReactions reactions = service().getDetailReactions(video.getId(), viewer);
+			assertThat(댓글ids(reactions.comments())).containsExactly(mine);
+			assertThat(reactions.commentCount()).isEqualTo(3);
+		}
+
+		// 검증: FR-MOD-17, AC-569-10
+		@Test
+		@DisplayName("빠진 댓글은 페이지 크기를 소비하지 않는다")
+		void 빠진_댓글은_페이지_크기를_소비하지_않는다() {
+			Video video = 노출영상(위치(41));
+			Long viewer = 사용자("보는이");
+			Long blocked = 사용자("차단됨");
+			for (int i = 0; i < 3; i++) {
+				service().createComment(blocked, video.getId(), "차단 " + i);   // 정렬상 앞(오래된 순)에 3건
+			}
+			long a = service().createComment(userId, video.getId(), "a").commentId();
+			long b = service().createComment(userId, video.getId(), "b").commentId();
+			long c = service().createComment(userId, video.getId(), "c").commentId();
+			차단(viewer, blocked);
+
+			EventVideoCommentPageResponseDto first = service().getComments(viewer, video.getId(), null, 2);
+			EventVideoCommentPageResponseDto second = service().getComments(viewer, video.getId(),
+				first.nextCursor(), 2);
+
+			assertThat(댓글ids(first)).containsExactly(a, b);
+			assertThat(first.hasNext()).isTrue();
+			assertThat(댓글ids(second)).containsExactly(c);
+		}
+
+		// 검증: FR-MOD-17, AC-569-17
+		@Test
+		@DisplayName("차단 관계 영상의 댓글 목록·작성·수정·삭제·도움돼요는 전부 상세와 같은 13406 이다")
+		void 차단_관계_영상의_상호작용은_전부_13406이다() {
+			Video video = 노출영상(위치(42));
+			Long viewer = 사용자("보는이");
+			long commentId = service().createComment(viewer, video.getId(), "차단 전 댓글").commentId();
+			차단(userId, viewer);   // 작성자가 viewer 를 차단 — 역방향도 같은 판정이다
+
+			은닉됨(() -> service().getComments(viewer, video.getId(), null, 0));
+			은닉됨(() -> service().createComment(viewer, video.getId(), "댓글"));
+			은닉됨(() -> service().updateComment(viewer, video.getId(), commentId, "수정"));
+			은닉됨(() -> service().deleteComment(viewer, video.getId(), commentId));
+			은닉됨(() -> service().addHelpful(viewer, video.getId()));
+			은닉됨(() -> service().removeHelpful(viewer, video.getId()));
+			// 작성자 본인과 비로그인은 영상 단위 판정 대상이 아니라 목록이 열린다 — 본인 목록에서는 차단한 viewer 의
+			// 댓글만 빠지고(AC-10), 비로그인은 차단 절이 단락돼 전부 보인다.
+			assertThat(service().getComments(userId, video.getId(), null, 0).comments()).isEmpty();
+			assertThat(service().getComments(null, video.getId(), null, 0).comments()).hasSize(1);
+		}
+
+		private void 은닉됨(ThrowingCallable 호출) {
+			assertThatThrownBy(호출)
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", EventErrorCode.EVENT_VIDEO_NOT_FOUND);
 		}
 	}
 }
