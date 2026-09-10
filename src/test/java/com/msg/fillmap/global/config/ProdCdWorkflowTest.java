@@ -57,6 +57,8 @@ class ProdCdWorkflowTest {
 		assertThat(openSsh).isLessThan(pull);
 		assertThat(closeSsh).isGreaterThan(up);
 		assertThat(workflow.substring(closeSsh)).contains("if: always()", "revoke-security-group-ingress");
+		// 이전 실행 잔재로 같은 규칙이 있어도 열기 스텝이 죽지 않는다 (죽으면 닫기까지 건너뛴다)
+		assertThat(workflow.substring(openSsh, closeSsh)).contains("InvalidPermission.Duplicate");
 
 		// jar 시절 형태로 되돌아가지 않는다
 		assertThat(workflow).doesNotContain("Upload jar", "systemctl restart fillmap-prod", "app.jar");

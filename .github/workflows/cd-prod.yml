@@ -108,8 +108,11 @@ jobs:
         id: sg
         run: |
           ip=$(curl -fsS https://checkip.amazonaws.com)
-          aws ec2 authorize-security-group-ingress --group-id "$PROD_SG" --ip-permissions \
-            "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$ip/32,Description=github-actions-run-${{ github.run_id }}}]" >/dev/null
+          # 같은 (tcp, 22, CIDR) 규칙이 이미 있으면 InvalidPermission.Duplicate 로 거부된다 — 러너 IP 는 재사용되고
+          # 이전 실행의 Close 가 실패했을 수 있다(PR 리뷰). 그 경우 그 규칙을 그대로 쓰고 끝에 뺀다(잔재 정리).
+          out=$(aws ec2 authorize-security-group-ingress --group-id "$PROD_SG" --ip-permissions \
+            "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$ip/32,Description=github-actions-run-${{ github.run_id }}}]" 2>&1) \
+            || { echo "$out" | grep -q InvalidPermission.Duplicate || { echo "$out"; exit 1; }; echo "규칙이 이미 있다(이전 실행 잔재) — 그대로 쓰고 끝에 뺀다"; }
           echo "cidr=$ip/32" >> "$GITHUB_OUTPUT"
           sleep 5   # SG 반영 전파
 
