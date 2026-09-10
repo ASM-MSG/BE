@@ -328,6 +328,7 @@ class EventQueryServiceTest {
 		@Test
 		@DisplayName("노출 시작 전인 예정 행사는 뷰포트 목록에 담기지 않는다")
 		void 노출_시작_전인_예정_행사는_뷰포트_목록에_담기지_않는다() {
+			// 검증: FR-EVENT-01, AC-586-06
 			// visibleFrom = startsAt - 14일이라 15일 뒤 시작은 아직 노출 전이다.
 			EventOccurrence 미노출 = 회차(시리즈(), "미노출 행사", "부산", NOW.plusDays(15), NOW.plusDays(16));
 			EventOccurrence 노출 = 회차(시리즈(), "노출 행사", "부산", NOW.plusDays(13), NOW.plusDays(14));
@@ -338,8 +339,9 @@ class EventQueryServiceTest {
 		}
 
 		@Test
-		@DisplayName("업로드 유예·아카이브 상태의 행사는 칩 목록에 담기지 않는다")
-		void 업로드_유예_상태의_행사는_칩_목록에_담기지_않는다() {
+		@DisplayName("업로드 유예 상태의 행사는 칩 목록에 담기고 아카이브만 빠진다")
+		void 업로드_유예_상태의_행사는_칩_목록에_담기고_아카이브만_빠진다() {
+			// 검증: FR-EVENT-01, AC-586-01, AC-586-02
 			EventSeries series = 시리즈();
 			EventOccurrence 유예 = 회차(series, "유예 행사", "부산", NOW.minusDays(10), NOW.minusDays(1));
 			EventOccurrence 아카이브 = 회차(series, "아카이브 행사", "부산", NOW.minusDays(100), NOW.minusDays(90));
@@ -347,23 +349,68 @@ class EventQueryServiceTest {
 
 			List<EventOccurrenceChipResponseDto> chips = service().getOccurrencesInViewport(바다뷰포트());
 
-			assertThat(회차ids(chips, List.of(유예, 아카이브, 진행중))).containsExactly(진행중.getId());
+			assertThat(회차ids(chips, List.of(유예, 아카이브, 진행중)))
+				.containsExactly(유예.getId(), 진행중.getId());
+			assertThat(chips).filteredOn(chip -> chip.occurrenceId().equals(유예.getId()))
+				.extracting(EventOccurrenceChipResponseDto::status)
+				.containsExactly("UPLOAD_GRACE");
 		}
 
 		@Test
-		@DisplayName("목록의 상태는 예정·진행 중 두 값뿐이고 파생 계산을 그대로 쓴다")
+		@DisplayName("종료 정각에도 칩에 담기고 상태만 업로드 유예로 바뀐다")
+		void 종료_정각에도_칩에_담기고_상태만_유예로_바뀐다() {
+			// 검증: FR-EVENT-01, AC-586-03
+			EventOccurrence 종료정각 = 회차(시리즈(), "방금 끝난 행사", "부산", NOW.minusDays(5), NOW);
+
+			List<EventOccurrenceChipResponseDto> chips = service().getOccurrencesInViewport(바다뷰포트());
+
+			assertThat(chips).filteredOn(chip -> chip.occurrenceId().equals(종료정각.getId()))
+				.extracting(EventOccurrenceChipResponseDto::status)
+				.containsExactly("UPLOAD_GRACE");
+		}
+
+		@Test
+		@DisplayName("종료 30일 정각부터 칩에서 빠진다")
+		void 종료_30일_정각부터_칩에서_빠진다() {
+			// 검증: FR-EVENT-01, AC-586-04
+			EventOccurrence 아카이브정각 =
+				회차(시리즈(), "막 아카이브된 행사", "부산", NOW.minusDays(35), NOW.minusDays(30));
+
+			List<EventOccurrenceChipResponseDto> chips = service().getOccurrencesInViewport(바다뷰포트());
+
+			assertThat(회차ids(chips, List.of(아카이브정각))).isEmpty();
+		}
+
+		@Test
+		@DisplayName("유예 회차가 섞여도 정렬은 시 이름 → 시작일 → id 순서 그대로다")
+		void 유예_회차가_섞여도_정렬은_시_이름_시작일_id_순서_그대로다() {
+			// 검증: FR-EVENT-01, AC-586-05
+			EventSeries series = 시리즈();
+			EventOccurrence 진행중 = 회차(series, "늦게 시작한 진행 중", "부산", NOW.minusDays(2), NOW.plusDays(1));
+			EventOccurrence 유예 = 회차(series, "먼저 시작한 유예", "부산", NOW.minusDays(10), NOW.minusDays(1));
+
+			List<EventOccurrenceChipResponseDto> chips = service().getOccurrencesInViewport(바다뷰포트());
+
+			assertThat(회차ids(chips, List.of(진행중, 유예))).containsExactly(유예.getId(), 진행중.getId());
+		}
+
+		@Test
+		@DisplayName("목록의 상태는 예정·진행 중·업로드 유예 세 값이고 파생 계산을 그대로 쓴다")
 		void 목록의_상태는_파생_계산을_공유한다() {
+			// 검증: FR-EVENT-01, AC-586-01
 			EventSeries series = 시리즈();
 			EventOccurrence 예정 = 회차(series, "예정 행사", "부산", NOW.plusDays(1), NOW.plusDays(2));
 			EventOccurrence 진행중 = 회차(series, "진행 중 행사", "부산", NOW.minusDays(1), NOW.plusDays(1));
+			EventOccurrence 유예 = 회차(series, "유예 행사", "부산", NOW.minusDays(10), NOW.minusDays(1));
 
 			List<EventOccurrenceChipResponseDto> chips = service().getOccurrencesInViewport(바다뷰포트()).stream()
 				.filter(chip -> chip.occurrenceId().equals(예정.getId())
-					|| chip.occurrenceId().equals(진행중.getId()))
+					|| chip.occurrenceId().equals(진행중.getId())
+					|| chip.occurrenceId().equals(유예.getId()))
 				.toList();
 
 			assertThat(chips).extracting(EventOccurrenceChipResponseDto::status)
-				.containsExactlyInAnyOrder("UPCOMING", "LIVE");
+				.containsExactlyInAnyOrder("UPCOMING", "LIVE", "UPLOAD_GRACE");
 		}
 
 		@Test

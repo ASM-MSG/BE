@@ -18,7 +18,7 @@ public interface EventOccurrenceRepository extends JpaRepository<EventOccurrence
 	Optional<EventOccurrence> findByOccurrenceKey(String occurrenceKey);
 
 	/**
-	 * 칩 후보 — 노출이 시작된 회차 전량 (MSG-439 API 1). 상태(예정·진행 중)와 뷰포트 겹침은 자바가 거른다:
+	 * 칩 후보 — 노출이 시작된 회차 전량 (MSG-439 API 1). 상태(칩 노출 상태)와 뷰포트 겹침은 자바가 거른다:
 	 * 상태 판정은 {@link EventOccurrence#statusAt} 하나를 네 조회가 공유해야 하고, 행사 행이 도시당 한둘뿐이라
 	 * 공간 쿼리나 인덱스를 만들 이유가 없다. 미노출 예정 회차는 이 술어에서 이미 빠져 존재 은닉이 성립한다.
 	 */
