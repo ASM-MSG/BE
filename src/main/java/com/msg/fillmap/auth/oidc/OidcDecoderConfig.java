@@ -37,13 +37,29 @@ public class OidcDecoderConfig {
 	}
 
 	/**
+	 * 애플 ID 토큰 검증기 (MSG-594). 카카오 빈과 같은 조립이고 aud 허용값은 iOS 번들 ID 하나다(D-6).
+	 * JWKS 캐시와 모르는 kid 재조회는 Nimbus 기본 동작이라 추가 코드가 없다.
+	 */
+	@Bean
+	public JwtDecoder appleJwtDecoder(AppleOidcProperties properties) {
+		NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri()).build();
+
+		OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(properties.issuer());
+		OAuth2TokenValidator<Jwt> withAudience = audienceValidator(Set.of(properties.bundleId()));
+
+		decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(List.of(withIssuer, withAudience)));
+		return decoder;
+	}
+
+	/**
 	 * 카카오는 인가를 요청한 앱 키를 그대로 aud 에 넣는다 — 같은 카카오 애플리케이션이라도
 	 * 웹(REST API 키)과 앱(네이티브 SDK 의 네이티브 앱 키)의 aud 가 갈리므로 두 키를 모두 허용한다 (MSG-452).
+	 * 애플은 번들 ID 하나다 (MSG-594). 실패 문구는 JwtException 메시지로만 남고 클라이언트 응답에는 실리지 않는다.
 	 */
 	static OAuth2TokenValidator<Jwt> audienceValidator(Set<String> allowedAudiences) {
 		return jwt -> jwt.getAudience().stream().anyMatch(allowedAudiences::contains)
 			? OAuth2TokenValidatorResult.success()
 			: OAuth2TokenValidatorResult.failure(
-				new OAuth2Error("invalid_audience", "ID Token audience 가 허용된 카카오 앱 키가 아닙니다", null));
+				new OAuth2Error("invalid_audience", "ID Token audience 가 허용된 audience 가 아닙니다", null));
 	}
 }
