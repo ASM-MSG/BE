@@ -1,8 +1,8 @@
 package com.msg.fillmap.grid.repository;
 
 /**
- * viewport 조회 네이티브 결과 프로젝션 (접근 A·B 공용). 색칠에 필요한 최소 필드만 노출한다.
- * 네이티브 쿼리는 컬럼 별칭을 gridId/gridY/gridX/regionName 으로 맞춘다.
+ * viewport 조회 결과 프로젝션 (접근 A JPQL·접근 B 네이티브 공용). 색칠에 필요한 최소 필드만 노출한다.
+ * 쿼리는 SELECT 별칭을 gridId/gridY/gridX/regionName 으로 맞춘다.
  */
 public interface OccupiedGridProjection {
 

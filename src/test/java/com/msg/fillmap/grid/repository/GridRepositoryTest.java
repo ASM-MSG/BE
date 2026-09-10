@@ -12,6 +12,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Limit;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.msg.fillmap.grid.GridEncoder;
@@ -121,7 +122,7 @@ class GridRepositoryTest {
 	private List<OccupiedGridProjection> pageA(int limit) {
 		GridIndex sw = GridEncoder.decode(GridEncoder.encode(swLat, swLng));
 		GridIndex ne = GridEncoder.decode(GridEncoder.encode(neLat, neLng));
-		return gridRepository.findOccupiedPage(me, sw.gridY(), ne.gridY(), sw.gridX(), ne.gridX(), limit);
+		return gridRepository.findOccupiedPage(me, sw.gridY(), ne.gridY(), sw.gridX(), ne.gridX(), Limit.of(limit));
 	}
 
 	private List<OccupiedGridProjection> pageAAfter(long cursorY, long cursorX, int limit) {

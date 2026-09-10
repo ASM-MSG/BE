@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,11 +22,11 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 	/**
 	 * 단일 격자 색칠 상태: 내 user_grids row 의 video_count. row 가 없으면(미점령) empty.
 	 */
-	@Query(value = """
-		SELECT ug.video_count
-		FROM user_grids ug
-		WHERE ug.user_id = :userId AND ug.grid_id = :gridId
-		""", nativeQuery = true)
+	@Query("""
+		SELECT ug.videoCount
+		FROM UserGrid ug
+		WHERE ug.id.userId = :userId AND ug.id.gridId = :gridId
+		""")
 	Optional<Integer> findVideoCount(@Param("userId") long userId, @Param("gridId") String gridId);
 
 	/**
@@ -33,17 +34,17 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 	 * uq_grids_yx(btree) 활용, PostGIS 연산 없음.
 	 * regions 는 LEFT JOIN 이다 (MSG-349) — 무귀속 격자(region_code NULL)를 INNER JOIN 으로 떨구면
 	 * 색칠된 칸이 지도에서 사라진다. 이름만 비고 칸은 남는 게 계약이다.
+	 * JPQL 이다 (MSG-585) — 연관(ug.grid, g.region) 경로 조인이라 PostgreSQL 전용 구문이 없다.
 	 */
-	@Query(value = """
-		SELECT g.grid_id AS "gridId", g.grid_y AS "gridY", g.grid_x AS "gridX",
-			r.region_name AS "regionName"
-		FROM user_grids ug
-		JOIN grids g ON g.grid_id = ug.grid_id
-		LEFT JOIN regions r ON r.region_code = g.region_code
-		WHERE ug.user_id = :userId
-			AND g.grid_y BETWEEN :minY AND :maxY
-			AND g.grid_x BETWEEN :minX AND :maxX
-		""", nativeQuery = true)
+	@Query("""
+		SELECT g.gridId AS gridId, g.gridY AS gridY, g.gridX AS gridX, r.regionName AS regionName
+		FROM UserGrid ug
+		JOIN ug.grid g
+		LEFT JOIN g.region r
+		WHERE ug.id.userId = :userId
+			AND g.gridY BETWEEN :minY AND :maxY
+			AND g.gridX BETWEEN :minX AND :maxX
+		""")
 	List<OccupiedGridProjection> findOccupiedInRange(
 		@Param("userId") long userId,
 		@Param("minY") long minY,
@@ -90,15 +91,13 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 		@Param("nameToken") int nameToken
 	);
 
-	@Query(value = """
-		SELECT
-			COUNT(*)::int                     AS "gridCount",
-			COALESCE(SUM(ug.video_count), 0) AS "videoCount"
-		FROM user_grids ug
-		JOIN grids g ON g.grid_id = ug.grid_id
-		WHERE ug.user_id = :userId
-			AND g.region_code = :regionCode
-		""", nativeQuery = true)
+	@Query("""
+		SELECT CAST(COUNT(ug) AS Integer) AS gridCount, COALESCE(SUM(ug.videoCount), 0L) AS videoCount
+		FROM UserGrid ug
+		JOIN ug.grid g
+		WHERE ug.id.userId = :userId
+			AND g.regionCode = :regionCode
+		""")
 	RegionGridSummaryProjection summarizeOccupiedByRegion(
 		@Param("userId") long userId,
 		@Param("regionCode") String regionCode
@@ -108,26 +107,26 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 	 * 접근 A 페이지 — 첫 페이지 (MSG-90 keyset). ORDER BY (grid_y, grid_x) 가 uq_grids_yx(btree)
 	 * 정렬과 일치해 추가 정렬 비용이 없다. OFFSET 미사용, LIMIT 은 서비스의 lookahead(size + 1)다.
 	 * regions LEFT JOIN(MSG-349)은 정렬 키와 무관해 keyset 순서·lookahead 판정을 바꾸지 않는다.
+	 * JPQL 이다 (MSG-585) — LIMIT 은 JPQL 문법이 아니라 Spring Data {@link Limit} 파라미터로 건다.
+	 * 커서 이후 페이지(findOccupiedPageAfter)는 행 값 비교가 PostgreSQL 전용이라 native 로 남는다.
 	 */
-	@Query(value = """
-		SELECT g.grid_id AS "gridId", g.grid_y AS "gridY", g.grid_x AS "gridX",
-			r.region_name AS "regionName"
-		FROM user_grids ug
-		JOIN grids g ON g.grid_id = ug.grid_id
-		LEFT JOIN regions r ON r.region_code = g.region_code
-		WHERE ug.user_id = :userId
-			AND g.grid_y BETWEEN :minY AND :maxY
-			AND g.grid_x BETWEEN :minX AND :maxX
-		ORDER BY g.grid_y, g.grid_x
-		LIMIT :limit
-		""", nativeQuery = true)
+	@Query("""
+		SELECT g.gridId AS gridId, g.gridY AS gridY, g.gridX AS gridX, r.regionName AS regionName
+		FROM UserGrid ug
+		JOIN ug.grid g
+		LEFT JOIN g.region r
+		WHERE ug.id.userId = :userId
+			AND g.gridY BETWEEN :minY AND :maxY
+			AND g.gridX BETWEEN :minX AND :maxX
+		ORDER BY g.gridY, g.gridX
+		""")
 	List<OccupiedGridProjection> findOccupiedPage(
 		@Param("userId") long userId,
 		@Param("minY") long minY,
 		@Param("maxY") long maxY,
 		@Param("minX") long minX,
 		@Param("maxX") long maxX,
-		@Param("limit") int limit
+		Limit limit
 	);
 
 	/**
@@ -164,20 +163,22 @@ public interface GridRepository extends JpaRepository<Grid, String> {
 	 * "gridId → 이름" 사전이라 여기는 INNER JOIN 이다 — 무귀속 격자는 결과에 안 나타나고 맵 miss 로 null 이
 	 * 된다. Collectors.toMap 은 null 값에서 NPE 를 던지므로 null 행을 아예 안 받는 쪽이 조립을 단순하게 한다.
 	 * 빈 목록으로 부르면 IN () 이 SQL 문법 오류라 호출부가 0건일 때 호출을 생략한다.
+	 * JPQL 이다 (MSG-585) — 연관(g.region) INNER 조인이라 무귀속 격자가 빠지는 의미가 그대로다.
 	 */
-	@Query(value = """
-		SELECT g.grid_id AS "gridId", r.region_name AS "regionName"
-		FROM grids g
-		JOIN regions r ON r.region_code = g.region_code
-		WHERE g.grid_id IN (:gridIds)
-		""", nativeQuery = true)
+	@Query("""
+		SELECT g.gridId AS gridId, r.regionName AS regionName
+		FROM Grid g
+		JOIN g.region r
+		WHERE g.gridId IN :gridIds
+		""")
 	List<GridRegionNameProjection> findRegionNames(@Param("gridIds") Collection<String> gridIds);
 
 	/**
 	 * 격자 여러 개의 행정동 코드와 전체 경로 이름을 한 번에 읽는다 (MSG-466, 핫구역 상위 K ≤ 50건).
 	 * 접두 그룹핑에는 이름이 아니라 코드 원값이 키라서 findRegionNames 로는 모자란다.
 	 * 신규 조회라 JPQL 이다 — id 동등 조인 하나에 PostgreSQL 전용 기능이 없어 native 요건이 없다
-	 * (project-conventions "영속 계층" 4항). Grid 에 연관관계를 달지 않고 Hibernate 6 엔티티 조인으로 잇는다.
+	 * (project-conventions "영속 계층" 4항). MSG-585 이전에 짜여 연관 없는 엔티티 조인(ON)으로 잇는다 — 결과는
+	 * g.region 경로 조인과 같다.
 	 * regions 는 LEFT JOIN 이다 — 격자에 라벨이 있는데 regions 행이 없으면(데이터 엣지) INNER 로는
 	 * 묶음이 통째로 무귀속으로 떨어진다. 코드는 있고 이름만 비는 항목이 되는 쪽이 도감 집계와 같은 동작이다.
 	 * 라벨이 없는 격자는 결과에 없고 호출부에서 맵 miss(무귀속)로 처리된다.

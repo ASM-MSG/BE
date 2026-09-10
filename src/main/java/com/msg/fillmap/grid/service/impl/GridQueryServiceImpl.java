@@ -6,6 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -208,7 +209,7 @@ public class GridQueryServiceImpl implements GridQueryService {
 		GridRange range = GridEncoder.viewportRange(bounds);
 		if (cursor == null) {
 			return gridRepository.findOccupiedPage(
-				userId, range.minGridY(), range.maxGridY(), range.minGridX(), range.maxGridX(), limit);
+				userId, range.minGridY(), range.maxGridY(), range.minGridX(), range.maxGridX(), Limit.of(limit));
 		}
 		GridCursor decoded = decodeCursor(cursor);
 		return gridRepository.findOccupiedPageAfter(
