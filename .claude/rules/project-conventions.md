@@ -150,6 +150,12 @@ SQL 직서기가 됐다. 같은 날 멘토링(박원형)에서도 유지보수�
    유틸 계층으로 모은다(멘토 권고).
 5. **N+1은 리뷰에서 잡는다**: 루프 안 지연 로딩이 보이면 fetch join이나 `@EntityGraph`로 수렴.
 6. **무결성은 여전히 DB 소유**: FK 제약·ON DELETE는 Flyway DDL이 보장한다 (JPA는 `validate`만).
+7. **OSIV는 꺼져 있다** (`spring.jpa.open-in-view: false`, 2026-09-10 MSG-587). 지연 로딩은
+   트랜잭션 안에서만 된다 — 컨트롤러나 응답 직렬화 시점에 연관을 건드리면 `LazyInitializationException`이
+   난다. 필요한 것은 서비스 안에서 fetch join·`@EntityGraph`로 미리 채우거나 프로젝션으로 내린다.
+   **다시 켜지 않는다** — 켜면 화면을 그리는 도중에 쿼리가 나가 어디서 몇 번 나가는지 추적이 끊긴다.
+   끄기 전 실측: 지연 로딩 접근 29곳이 전부 트랜잭션 안, 컨트롤러 엔티티 반환 0건, 전체 스위트 통과
+   (`docs/audit/2026-09-08-backend-audit.md` §3.4 · `docs/spec/MSG-587.md`).
 
 **기존 코드 소급 리팩터링은 하지 않는다.** id 보관으로 짜인 기존 도메인(Video·UserGrid·
 Friendship·Report 등)은 그대로 두고 혼재를 허용한다(서지컬 원칙). 2026-09-07 멘토링
