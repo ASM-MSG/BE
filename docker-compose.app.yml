@@ -1,0 +1,49 @@
+# 앱 컨테이너 (MSG-589). dev EC2 는 api, AI EC2 는 worker 만 띄운다. DB·Redis·Kafka 는 docker-compose.server.yml.
+# CD 가 이 파일을 서버 홈에 복사하고 아래 명령으로 교체한다. 롤백은 TAG 를 이전 sha 로 바꿔 같은 명령.
+#
+#   TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d api      # dev EC2
+#   sudo TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d worker   # AI EC2 (ubuntu 가 docker 그룹이 아님)
+#
+# network_mode: host — 앱이 localhost 로 가리키는 postgres·redis·kafka·AI 서버를 기존 env 파일 그대로 쓴다.
+# 포트 매핑도 없어 nginx(→8080)·Prometheus(→8080/8081) 타깃이 그대로다.
+
+x-image: &image "${IMAGE:-951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap}:${TAG:?TAG 필수, 예 sha-abc1234}"
+
+services:
+  api:
+    image: *image
+    container_name: fillmap-api
+    network_mode: host
+    env_file: /home/ubuntu/fillmap-dev.env
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    volumes:
+      # env 파일의 CLOUDFRONT_PRIVATE_KEY_PATH·FCM_CREDENTIALS_PATH 가 가리키는 두 파일. 컨테이너 안 경로를
+      # 호스트와 같게 둬서 env 값을 바꾸지 않는다.
+      - /home/ubuntu/fillmap-cloudfront-private-key.pem:/home/ubuntu/fillmap-cloudfront-private-key.pem:ro
+      - /home/ubuntu/fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json:/home/ubuntu/fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json:ro
+    restart: unless-stopped
+    healthcheck:
+      # dev 는 관리 포트 분리 없이 8080 에 actuator (prod 는 8081 — HEALTH_PORT 로 넘긴다)
+      test: [ "CMD", "curl", "-fs", "http://localhost:${HEALTH_PORT:-8080}/actuator/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 18
+      start_period: 30s
+
+  worker:
+    image: *image
+    container_name: fillmap-encoding-worker
+    network_mode: host
+    # worker.env 가 SPRING_PROFILES_ACTIVE(dev,encoding-worker) 를 포함한다
+    env_file: /home/ubuntu/encoding-worker/worker.env
+    environment:
+      # 구 systemd 유닛의 ExecStart JVM 옵션 그대로 (t3.small 위에서 AI 컨테이너·관측 스택과 동거)
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-fs", "http://localhost:8081/actuator/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 18
+      start_period: 30s

@@ -1,0 +1,4 @@
+# Dockerfile 이 필요한 건 boot jar 하나뿐이다. plain jar 는 COPY 글롭에 같이 잡히므로 제외한다.
+*
+!build/libs/fillmap-*.jar
+build/libs/*-plain.jar
