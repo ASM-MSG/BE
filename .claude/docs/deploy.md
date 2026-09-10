@@ -93,15 +93,15 @@ MSG-495 범위에 포함하지 않았다.
 | 구성 요소 | 값 |
 |---|---|
 | 이미지 | `951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap` — 태그 `sha-<커밋 7자리>`(불변, 롤백 단위) + `develop`(최신 포인터). 라이프사이클: untagged 1일 · `sha-*` 최근 20개 |
-| Dockerfile | 루트. jar 는 밖에서 만들고(`./gradlew bootJar -x test`) 이미지는 담기만 한다. temurin 21 JRE + ffmpeg + curl, layered jar, 비root(uid 1000 = 호스트 ubuntu) |
+| Dockerfile | 루트. jar 는 밖에서 만들고(`./gradlew bootJar -x test`) 이미지는 담기만 한다. temurin 21 JRE + 정적 ffmpeg/ffprobe(`mwader/static-ffmpeg` 태그+digest 고정, apt ffmpeg 는 amd64 에서 453MB 라 뺐다) + curl, layered jar, 비root(uid 1000 = 호스트 ubuntu). amd64 372MB |
 | push 자격 | GitHub OIDC → IAM 역할 `fillmap-ecr-push` (신뢰 `repo:ASM-MSG/BE:*`, 권한은 `fillmap` 리포지토리 push 뿐). 저장된 AWS 키 없음 |
 | pull 자격 | EC2 인스턴스 역할 `FillMapEc2DevRole` 의 `AmazonEC2ContainerRegistryPullOnly` → 서버의 `amazon-ecr-credential-helper`(`~/.docker/config.json` `credsStore: ecr-login`). CD 가 멱등 설치 |
 | 서버 compose | `docker-compose.app.yml` — CD 가 홈(dev: `~`, AI: `~/encoding-worker`)에 복사. `network_mode: host` 라 env 파일·nginx·Prometheus 타깃이 jar 시절 그대로. 프로파일과 헬스 포트는 env 파일이 정한다 (`SPRING_PROFILES_ACTIVE`, `HEALTH_PORT` — 워커 8081, 없으면 8080). env 는 `format: raw` 로 읽어 `$`·`#` 가 든 시크릿이 안 바뀐다 |
 | CD | `cd-dev.yml`: build-image → deploy-dev(api) → deploy-worker(worker) → docs. 워커가 api 뒤인 이유는 Flyway 를 api 만 돌리기 때문(워커는 validate 만). 성공 = `up --wait` 로 healthy **이고** `Config.Image` 가 방금 push 한 태그 **이고** 재시작 0회 **이고** 포트 리스너 PID 가 그 컨테이너 |
 | PR 검사 | `ci.yml` 이 `docker build` 만 해 본다(push 없음) — Dockerfile 이 깨진 채 develop 에 들어가는 것을 막는다 |
 
-**롤백**은 이전 sha 로 같은 명령이다. 서버에는 현재 이미지만 남기므로(이미지 1.37GB — amd64 ffmpeg apt 레이어 453MB,
-dev 디스크 여유 3.4GB) 이전 sha 는 ECR 에서 받는다. 같은 리전이라 30초 안팎이다
+**롤백**은 이전 sha 로 같은 명령이다. 서버에는 현재 이미지만 남기므로(dev 디스크 여유 3.4GB, 이미지 amd64 372MB)
+이전 sha 는 ECR 에서 받는다. 같은 리전이라 30초 안팎이다
 (`aws ecr describe-images --repository-name fillmap` 으로 태그 확인):
 
 ```bash

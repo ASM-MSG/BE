@@ -58,8 +58,8 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      # 레이어 캐시를 GitHub Actions 캐시에 둔다. 없으면 러너가 매번 새것이라 apt(ffmpeg) 레이어 ~300MB 가 빌드마다
-      # 다른 digest 로 다시 push 되고 두 EC2 가 통째로 다시 pull 한다 — "코드만 바뀌면 수 MB" 는 캐시가 있을 때만 참이다.
+      # 레이어 캐시를 GitHub Actions 캐시에 둔다. 없으면 러너가 매번 새것이라 apt(curl) 레이어가 빌드마다 다른 digest 로
+      # 다시 push 되고 두 EC2 가 그 층부터 다시 pull 한다 — "코드만 바뀌면 수 MB" 는 캐시가 있을 때만 참이다.
       # provenance: false — attestation 매니페스트가 ECR 에 untagged 로 따로 잡혀 라이프사이클·목록을 어지럽힌다.
       - name: Build & push image
         uses: docker/build-push-action@v6
@@ -150,8 +150,8 @@ jobs:
             # 정리는 이 이미지의 옛 sha 태그만 — 지금 배포한 태그를 명시적으로 빼고 나머지를 지운다 (`docker images`
             # 출력 순서에 기대면 방금 뜬 이미지를 지우려다 rmi 가 실패한다 — PR 자동 리뷰). `prune -a` 는 같은 데몬의
             # 다른 스택(postgres·redis·kafka, AI 박스의 관측 스택) 이미지까지 지운다 (코드 리뷰).
-            # 직전 sha 를 남기지 않는 이유: 이미지가 1.37GB(amd64 ffmpeg apt 레이어 453MB)인데 dev 디스크 여유가 3.4GB 다.
-            # 롤백은 ECR 에서 같은 리전 pull 이라 30초 안팎이다.
+            # 직전 sha 를 남기지 않는 이유: dev 디스크 여유가 3.4GB 라 이미지(amd64 372MB, 정적 ffmpeg 전환 전 1.37GB)를
+            # 쌓지 않는다. 롤백은 ECR 에서 같은 리전 pull 이라 30초 안팎이다.
             docker images "$IMAGE" --format '{{.Tag}}' | grep '^sha-' | grep -vx "$TAG" \
               | xargs -r -I{} docker rmi "$IMAGE:{}" >/dev/null
             docker image prune -f >/dev/null
