@@ -26,6 +26,8 @@ class ProdCdWorkflowTest {
 		String workflow = Files.readString(WORKFLOW, StandardCharsets.UTF_8);
 
 		assertThat(workflow).contains("environment: production");
+		// 보안그룹 규칙을 만지는 배포는 직렬로 — 겹치면 서로의 SSH 규칙을 지운다
+		assertThat(workflow).contains("concurrency:\n  group: cd-prod\n  cancel-in-progress: false");
 
 		// 순서: 이미지 찾기(HEAD → HEAD^2) → 태그 승격 → pull → up. 빌드는 이미지가 없을 때의 fallback 뿐이다
 		int find = workflow.indexOf("- name: Find dev-verified image");

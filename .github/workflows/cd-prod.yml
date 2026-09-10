@@ -15,6 +15,12 @@ on:
   push:
     branches: [ main ]
 
+# 운영 배포는 한 번에 하나만. Open/Close SSH 가 보안그룹이라는 공유 상태를 만지므로 두 실행이 겹치면(러너 IP 재사용)
+# 먼저 끝난 쪽이 상대의 22 번 규칙을 지워 SSH 타임아웃이 재현된다 (PR 리뷰). 취소하지 않고 순서대로 기다린다.
+concurrency:
+  group: cd-prod
+  cancel-in-progress: false
+
 env:
   IMAGE: 951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap
   REPO: fillmap
