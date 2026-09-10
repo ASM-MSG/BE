@@ -137,7 +137,8 @@ public class RouteCandidateCollector {
 	}
 
 	/**
-	 * 행사 후보 — 뷰포트 조회는 statusAt 파생값이라 재필터가 필요 없다. 회차마다 뷰포트 안에 드는 위치만
+	 * 행사 후보 — 뷰포트 조회는 statusAt 파생값이라 시각 재필터가 필요 없지만, 칩 계약이 유예 회차까지
+	 * 담으므로(MSG-586) 끝난 행사는 여기서 뺀다. 회차마다 뷰포트 안에 드는 위치만
 	 * 남기고 정렬 첫 항목(진입 기본값 계약)을 대표 지점으로 쓰며, 안에 드는 위치가 하나도 없는 회차
 	 * (bbox 교차만으로 잡힌 BIFF류)는 제외한다(FR-ROUTE-06).
 	 */
@@ -150,6 +151,10 @@ public class RouteCandidateCollector {
 			chips.stream().map(EventOccurrenceChipResponseDto::occurrenceId).toList());
 		List<RouteCandidate> candidates = new ArrayList<>();
 		for (EventOccurrenceChipResponseDto chip : chips) {
+			// 경로 추천은 예정·진행 중만 — 칩 조회가 MSG-586부터 유예 회차도 주므로 여기서 거른다.
+			if ("UPLOAD_GRACE".equals(chip.status())) {
+				continue;
+			}
 			if (!periodOverlaps(chip.startsAt(), chip.endsAt(), intent.period())) {
 				continue;
 			}
