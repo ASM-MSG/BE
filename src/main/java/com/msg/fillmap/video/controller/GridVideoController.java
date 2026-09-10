@@ -67,16 +67,19 @@ public class GridVideoController {
 			+ "최신(createdAt) 순으로 페이지 조회한다. 비공개·삭제·인코딩 미완 영상은 본인 것이라도 제외한다. "
 			+ "첫 요청은 cursor 없이 부르고, hasNext 가 true 면 응답의 nextCursor 를 다음 요청 cursor 로 넘기면 "
 			+ "이어진다. 무효 커서는 400(INVALID_CURSOR)이고, size 는 1~50 밖이면 클램프된다. 후보가 없거나 "
-			+ "존재하지 않는 gridId 는 빈 페이지다. 썸네일은 presigned GET URL 로 내려준다."
+			+ "존재하지 않는 gridId 는 빈 페이지다. 썸네일은 presigned GET URL 로 내려준다. 로그인 요청이면 "
+			+ "요청자와 차단 관계(어느 방향이든)인 작성자의 영상은 빠지고, 비로그인이면 차단과 무관하게 같은 결과다. "
+			+ "항목의 userId 는 작성자 식별자라 차단(POST /api/users/{userId}/block)의 경로 값으로 쓴다."
 	)
 	@GetMapping("/api/grids/{gridId}/videos")
 	public SuccessResponse<GridVideoPageResponseDto> getGridGlobalVideos(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "격자 ID", example = "19422_9582") @PathVariable String gridId,
 		@Parameter(description = "직전 응답의 nextCursor (opaque). 생략하면 첫 페이지")
 		@RequestParam(required = false) String cursor,
 		@Parameter(description = "페이지 크기 (1~50, 기본 20)") @RequestParam(defaultValue = "20") int size
 	) {
-		return SuccessResponse.of(videoService.getGridGlobalVideos(gridId, cursor, size));
+		return SuccessResponse.of(videoService.getGridGlobalVideos(userIdOrNull(principal), gridId, cursor, size));
 	}
 
 	@Operation(
@@ -92,5 +95,10 @@ public class GridVideoController {
 		@Parameter(description = "격자 ID", example = "19422_9582") @PathVariable String gridId
 	) {
 		return SuccessResponse.of(videoService.getGridHourlyUploads(gridId));
+	}
+
+	/** 비로그인 요청의 principal 은 null 이다 (MSG-491, VideoController 와 같은 형태). */
+	private Long userIdOrNull(AuthPrincipal principal) {
+		return principal == null ? null : principal.userId();
 	}
 }

@@ -38,6 +38,7 @@ import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.entity.Video;
@@ -79,7 +80,7 @@ class VideoGlobalListServiceTest {
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
-			() -> new ZoneNameResolver(List.of()), mock(EventVideoRepository.class));
+			() -> new ZoneNameResolver(List.of()), mock(EventVideoRepository.class), mock(UserBlockQueryService.class));
 
 		// 기본값 = 요청한 작성자가 전부 살아 있다(탈퇴 CASCADE 로 정상 경로엔 빈손이 없다). 닉네임이 없으면
 		// 항목이 응답에서 빠지므로(MSG-371), 닉네임을 안 보는 테스트도 이 기본 스텁이 있어야 항목을 받는다.
@@ -117,10 +118,10 @@ class VideoGlobalListServiceTest {
 	@Test
 	@DisplayName("각 항목의 썸네일은 presigned GET URL 로 발급된다")
 	void 각_항목의_썸네일은_presigned_GET_URL로_발급된다() {
-		given(videoRepository.findGlobalVideos(GRID_ID, 21))
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 21))
 			.willReturn(List.of(readyVideo(1042L, 37L, at(10))));
 
-		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(GRID_ID, null, 20);
+		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(null, GRID_ID, null, 20);
 
 		assertThat(result.videos()).hasSize(1);
 		GridGlobalVideoResponseDto item = result.videos().get(0);
@@ -136,10 +137,10 @@ class VideoGlobalListServiceTest {
 	@Test
 	@DisplayName("발급된 썸네일 URL 은 서명파라미터를 포함한다")
 	void 발급된_썸네일_URL은_서명파라미터를_포함한다() {
-		given(videoRepository.findGlobalVideos(GRID_ID, 21))
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 21))
 			.willReturn(List.of(readyVideo(1042L, 37L, at(10))));
 
-		String thumbnailUrl = videoService.getGridGlobalVideos(GRID_ID, null, 20).videos().get(0).thumbnailUrl();
+		String thumbnailUrl = videoService.getGridGlobalVideos(null, GRID_ID, null, 20).videos().get(0).thumbnailUrl();
 
 		assertThat(thumbnailUrl)
 			.contains("X-Amz-Algorithm")
@@ -151,12 +152,12 @@ class VideoGlobalListServiceTest {
 	@DisplayName("다음 페이지가 있으면 hasNext 는 true 이고 nextCursor 가 발급된다")
 	void 다음_페이지가_있으면_hasNext는_true이고_nextCursor가_발급된다() {
 		LocalDateTime boundary = at(9);
-		given(videoRepository.findGlobalVideos(GRID_ID, 3)).willReturn(List.of(
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 3)).willReturn(List.of(
 			readyVideo(3L, 30L, at(12)),
 			readyVideo(2L, 20L, boundary),
 			readyVideo(1L, 10L, at(8))));   // lookahead 초과분 — 응답에선 잘린다
 
-		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(GRID_ID, null, 2);
+		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(null, GRID_ID, null, 2);
 
 		assertThat(result.hasNext()).isTrue();
 		assertThat(result.videos()).extracting(GridGlobalVideoResponseDto::videoId).containsExactly(3L, 2L);
@@ -164,9 +165,9 @@ class VideoGlobalListServiceTest {
 		assertThat(VideoCursor.decode(result.nextCursor())).isEqualTo(new VideoCursor(GRID_ID, 20L, boundary, 2L));
 
 		// 발급된 커서를 그대로 되돌려주면 keyset After 조회로 이어진다.
-		given(videoRepository.findGlobalVideosAfter(GRID_ID, 20L, boundary, 2L, 3))
+		given(videoRepository.findGlobalVideosAfter(GRID_ID, null, 20L, boundary, 2L, 3))
 			.willReturn(List.of(readyVideo(1L, 10L, at(8))));
-		GridVideoPageResponseDto nextPage = videoService.getGridGlobalVideos(GRID_ID, result.nextCursor(), 2);
+		GridVideoPageResponseDto nextPage = videoService.getGridGlobalVideos(null, GRID_ID, result.nextCursor(), 2);
 		assertThat(nextPage.videos()).extracting(GridGlobalVideoResponseDto::videoId).containsExactly(1L);
 		assertThat(nextPage.hasNext()).isFalse();
 	}
@@ -174,10 +175,10 @@ class VideoGlobalListServiceTest {
 	@Test
 	@DisplayName("마지막 페이지면 hasNext 는 false 이고 nextCursor 는 null 이다")
 	void 마지막_페이지면_hasNext는_false이고_nextCursor는_null이다() {
-		given(videoRepository.findGlobalVideos(GRID_ID, 21))
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 21))
 			.willReturn(List.of(readyVideo(1042L, 37L, at(10))));
 
-		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(GRID_ID, null, 20);
+		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(null, GRID_ID, null, 20);
 
 		assertThat(result.videos()).hasSize(1);
 		assertThat(result.hasNext()).isFalse();
@@ -187,21 +188,21 @@ class VideoGlobalListServiceTest {
 	@Test
 	@DisplayName("size 가 상한을 초과하면 상한으로 클램프된다 (§D5)")
 	void size가_상한을_초과하면_상한으로_클램프된다() {
-		given(videoRepository.findGlobalVideos(GRID_ID, 51)).willReturn(List.of());
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 51)).willReturn(List.of());
 
-		videoService.getGridGlobalVideos(GRID_ID, null, 999);
+		videoService.getGridGlobalVideos(null, GRID_ID, null, 999);
 
-		then(videoRepository).should().findGlobalVideos(GRID_ID, 51);   // 상한 50 + lookahead 1
+		then(videoRepository).should().findGlobalVideos(GRID_ID, null, 51);   // 상한 50 + lookahead 1
 	}
 
 	@Test
 	@DisplayName("size 가 0 이하면 기본값으로 보정된다 (§D5)")
 	void size가_0이하면_기본값으로_보정된다() {
-		given(videoRepository.findGlobalVideos(GRID_ID, 21)).willReturn(List.of());
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 21)).willReturn(List.of());
 
-		videoService.getGridGlobalVideos(GRID_ID, null, 0);
+		videoService.getGridGlobalVideos(null, GRID_ID, null, 0);
 
-		then(videoRepository).should().findGlobalVideos(GRID_ID, 21);   // 기본 20 + lookahead 1
+		then(videoRepository).should().findGlobalVideos(GRID_ID, null, 21);   // 기본 20 + lookahead 1
 	}
 
 	@Test
@@ -214,7 +215,7 @@ class VideoGlobalListServiceTest {
 			base64Url(GRID_ID + ":a:b:c"));              // 타입 위반 (정수 아님)
 
 		for (String bad : badCursors) {
-			assertThatThrownBy(() -> videoService.getGridGlobalVideos(GRID_ID, bad, 20))
+			assertThatThrownBy(() -> videoService.getGridGlobalVideos(null, GRID_ID, bad, 20))
 				.isInstanceOf(ApiException.class)
 				.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_CURSOR);
 		}
@@ -229,7 +230,7 @@ class VideoGlobalListServiceTest {
 		// 잘린다 — 커서의 gridId 성분을 요청 격자와 대조해 거부한다 (2026-07-28 Codex 교차 리뷰 P2).
 		String foreignCursor = VideoCursor.encode("18784_9109", 20L, at(9), 2L);
 
-		assertThatThrownBy(() -> videoService.getGridGlobalVideos(GRID_ID, foreignCursor, 20))
+		assertThatThrownBy(() -> videoService.getGridGlobalVideos(null, GRID_ID, foreignCursor, 20))
 			.isInstanceOf(ApiException.class)
 			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_CURSOR);
 		assertThat(VideoErrorCode.INVALID_CURSOR.getErrorCode()).isEqualTo(3423);
@@ -239,11 +240,11 @@ class VideoGlobalListServiceTest {
 	@DisplayName("결과가 size 로 나누어떨어지면 마지막 페이지에서 hasNext false 다 (정확 경계 lookahead 회귀)")
 	void 결과가_size로_나누어떨어지면_마지막_페이지에서_hasNext_false다() {
 		// lookahead(size+1) 요청에 정확히 size 행만 오는 경계 — MSG-90 이 잡았던 회귀 지점이다.
-		given(videoRepository.findGlobalVideos(GRID_ID, 3)).willReturn(List.of(
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 3)).willReturn(List.of(
 			readyVideo(2L, 20L, at(10)),
 			readyVideo(1L, 10L, at(9))));
 
-		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(GRID_ID, null, 2);
+		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(null, GRID_ID, null, 2);
 
 		assertThat(result.videos()).hasSize(2);
 		assertThat(result.hasNext()).isFalse();
@@ -253,9 +254,9 @@ class VideoGlobalListServiceTest {
 	@Test
 	@DisplayName("공개 READY 가 없는 격자를 조회하면 빈 페이지를 반환한다 (예외 아님)")
 	void 공개_READY가_없는_격자를_조회하면_빈_페이지를_반환한다() {
-		given(videoRepository.findGlobalVideos(GRID_ID, 21)).willReturn(List.of());
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 21)).willReturn(List.of());
 
-		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(GRID_ID, null, 20);
+		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(null, GRID_ID, null, 20);
 
 		assertThat(result.videos()).isEmpty();
 		assertThat(result.hasNext()).isFalse();
@@ -285,14 +286,14 @@ class VideoGlobalListServiceTest {
 	@DisplayName("전역 목록 각 항목에 작성자 자신의 닉네임이 매핑된다")
 	void 전역_목록_각_항목에_작성자_자신의_닉네임이_매핑된다() {
 		// 작성자 2명을 섞어 교차 매핑을 본다 — 배치 결과가 항목 순서가 아니라 userId 로 되짚어지는지가 요점.
-		given(videoRepository.findGlobalVideos(GRID_ID, 21)).willReturn(List.of(
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 21)).willReturn(List.of(
 			readyVideo(3L, 7L, 30L, at(12)),
 			readyVideo(2L, 9L, 20L, at(11)),
 			readyVideo(1L, 7L, 10L, at(10))));
 		given(videoRepository.findAuthorNicknames(anyCollection()))
 			.willReturn(List.of(authorNickname(9L, "seoul.walk"), authorNickname(7L, "busan.vlog")));
 
-		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(GRID_ID, null, 20);
+		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(null, GRID_ID, null, 20);
 
 		assertThat(result.videos())
 			.extracting(GridGlobalVideoResponseDto::videoId, GridGlobalVideoResponseDto::nickname)
@@ -305,14 +306,14 @@ class VideoGlobalListServiceTest {
 	@Test
 	@DisplayName("닉네임 조회는 페이지당 배치 1회다 (트림된 lookahead 행 작성자는 빠진다)")
 	void 닉네임_조회는_페이지당_배치_1회다() {
-		given(videoRepository.findGlobalVideos(GRID_ID, 3)).willReturn(List.of(
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 3)).willReturn(List.of(
 			readyVideo(3L, 7L, 30L, at(12)),
 			readyVideo(2L, 9L, 20L, at(11)),
 			readyVideo(1L, 99L, 10L, at(10))));   // lookahead 초과분 — 응답에서 잘리는 행
 		given(videoRepository.findAuthorNicknames(anyCollection()))
 			.willReturn(List.of(authorNickname(7L, "busan.vlog"), authorNickname(9L, "seoul.walk")));
 
-		videoService.getGridGlobalVideos(GRID_ID, null, 2);
+		videoService.getGridGlobalVideos(null, GRID_ID, null, 2);
 
 		ArgumentCaptor<Collection<Long>> userIds = ArgumentCaptor.forClass(Collection.class);
 		// 항목 수만큼이 아니라 정확히 1회 — 페이지가 커져도 왕복이 늘지 않는다(N+1 금지).
@@ -326,13 +327,13 @@ class VideoGlobalListServiceTest {
 	void 작성자가_배치_결과에_없는_항목은_응답에서_빠진다() {
 		// 목록 조회와 닉네임 조회 사이(READ COMMITTED, ms 창)에 탈퇴 커밋이 끼는 이론상 케이스.
 		// 닉네임이 빈손 = 그 영상이 방금 CASCADE 로 사라졌다는 뜻이라 숨긴다 — null 을 싣지 않는다.
-		given(videoRepository.findGlobalVideos(GRID_ID, 21)).willReturn(List.of(
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 21)).willReturn(List.of(
 			readyVideo(3L, 7L, 30L, at(12)),
 			readyVideo(2L, 9L, 20L, at(11))));
 		given(videoRepository.findAuthorNicknames(anyCollection()))
 			.willReturn(List.of(authorNickname(9L, "seoul.walk")));
 
-		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(GRID_ID, null, 20);
+		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(null, GRID_ID, null, 20);
 
 		// 살아있는 작성자의 항목만 남고, 사라진 작성자(7)의 항목은 통째로 빠진다.
 		assertThat(result.videos())
@@ -345,14 +346,14 @@ class VideoGlobalListServiceTest {
 	void 숨긴_항목이_페이지_끝이어도_커서는_그_행_기준_그대로다() {
 		// 커서를 "보이는 마지막 항목"에서 뽑으면 숨긴 행 앞에 멈춰 다음 페이지가 같은 자리를 다시 읽는다.
 		// 걸러내기 전 pageRows 의 마지막 행 기준이라는 기존 규칙이 유지되는지 고정한다.
-		given(videoRepository.findGlobalVideos(GRID_ID, 3)).willReturn(List.of(
+		given(videoRepository.findGlobalVideos(GRID_ID, null, 3)).willReturn(List.of(
 			readyVideo(3L, 9L, 30L, at(12)),
 			readyVideo(2L, 7L, 20L, at(11)),     // 작성자 탈퇴 — 응답에서 숨겨지는 페이지 끝 행
 			readyVideo(1L, 9L, 10L, at(10))));   // lookahead 초과분
 		given(videoRepository.findAuthorNicknames(anyCollection()))
 			.willReturn(List.of(authorNickname(9L, "seoul.walk")));
 
-		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(GRID_ID, null, 2);
+		GridVideoPageResponseDto result = videoService.getGridGlobalVideos(null, GRID_ID, null, 2);
 
 		assertThat(result.videos()).extracting(GridGlobalVideoResponseDto::videoId).containsExactly(3L);
 		assertThat(result.hasNext()).isTrue();

@@ -50,16 +50,19 @@ public interface VideoService {
 	 * 포함되지 않는다(개인 축은 getGridVideos — §D1). cursor 는 직전 응답의 nextCursor(opaque) — null 이면
 	 * 첫 페이지, 무효면 INVALID_CURSOR(400). size 는 [1, 50] 밖이면 클램프(0 이하 → 기본 20, §D5). 후보가
 	 * 없거나 존재하지 않는 gridId 는 빈 페이지다(예외 아님).
+	 * viewerId 는 비로그인이면 null 이다(MSG-569) — 로그인 요청자와 어느 방향이든 차단 관계인 작성자의 영상은
+	 * 쿼리 안에서 빠지고, null 이면 차단 행이 있어도 결과가 같다.
 	 */
-	GridVideoPageResponseDto getGridGlobalVideos(String gridId, String cursor, int size);
+	GridVideoPageResponseDto getGridGlobalVideos(Long viewerId, String gridId, String cursor, int size);
 
 	/**
 	 * 미션 영상 목록 조회 (MSG-390). 그 미션의 대상 격자(mission_grids)에서 미션 기간에 촬영된
 	 * 전역 공개 게이트(ACTIVE, PUBLIC, READY) 통과 영상을 촬영 시각(recorded_at) 내림차순으로
-	 * 페이지 조회한다. 무기간 미션은 기간 조건을 타지 않는다. userId 없음 - 결과가 호출자와 무관하다.
+	 * 페이지 조회한다. 무기간 미션은 기간 조건을 타지 않는다. viewerId(비로그인 null)는 차단 필터에만 쓴다
+	 * (MSG-569) — 차단 관계인 작성자의 영상이 빠지는 것 말고는 결과가 호출자와 무관하다.
 	 * 조건에 맞는 영상이 없거나 존재하지 않는 missionId 는 빈 페이지다(예외 아님).
 	 */
-	GridVideoPageResponseDto getMissionVideos(long missionId, String cursor, int size);
+	GridVideoPageResponseDto getMissionVideos(Long viewerId, long missionId, String cursor, int size);
 
 	/**
 	 * 격자 전역 시간대 분포 조회 (MSG-372). 그 격자의 전역 공개 게이트(ACTIVE, PUBLIC, READY) 통과
@@ -71,7 +74,8 @@ public interface VideoService {
 	/**
 	 * 단건 영상 재생 조회 (MSG-206). 접근 제어를 존재/DELETED → BLINDED → visibility → processing_status
 	 * 순서로 판정한다(first-match, 순서가 곧 정보 노출 정책이다). DELETED·BLINDED(타인)는 VIDEO_NOT_FOUND 로
-	 * 존재를 숨기고, PRIVATE(타인)·FRIENDS(비친구)는 VIDEO_FORBIDDEN 으로 존재는 노출하되 접근만 막는다
+	 * 존재를 숨기고, 차단 관계(어느 방향이든, MSG-569)도 BLINDED 다음·visibility 앞에서 같은
+	 * VIDEO_NOT_FOUND 다. PRIVATE(타인)·FRIENDS(비친구)는 VIDEO_FORBIDDEN 으로 존재는 노출하되 접근만 막는다
 	 * (MSG-285 §D1 — 두 실패 응답은 동일하다). 허용된 조회는 READY 면 재생본(blurred 우선, 없으면 encoded)
 	 * presigned GET URL 을, 아니면 playbackUrl=null 을 반환한다.
 	 * 재생 URL 을 실제로 발급했고 소유자가 아닐 때만 view_count 를 원자적으로 +1 하며, 응답 viewCount 는

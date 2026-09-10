@@ -16,7 +16,7 @@ import com.msg.fillmap.video.entity.Video;
  * 신설(MSG-240) 후 additive 로 붙는다.
  */
 @Schema(description = "전역 공개 영상 목록 항목",
-	requiredProperties = {"videoId", "thumbnailUrl", "durationSec", "viewCount", "recordedAt", "nickname"})
+	requiredProperties = {"videoId", "thumbnailUrl", "durationSec", "viewCount", "recordedAt", "nickname", "userId"})
 public record GridGlobalVideoResponseDto(
 	@Schema(description = "영상 ID. 항목 탭 → 단건 재생(GET /api/videos/{videoId}) 진입 키", example = "1042")
 	Long videoId,
@@ -34,7 +34,11 @@ public record GridGlobalVideoResponseDto(
 	LocalDateTime recordedAt,
 
 	@Schema(description = "작성자 닉네임 원문. @ 등 화면 표기는 FE 가 붙인다", example = "busan.vlog")
-	String nickname
+	String nickname,
+
+	@Schema(description = "작성자 사용자 ID (videos.user_id). 차단(POST /api/users/{userId}/block)의 경로 값",
+		example = "42")
+	Long userId
 ) {
 
 	/**
@@ -48,6 +52,7 @@ public record GridGlobalVideoResponseDto(
 			video.getDurationSec(),
 			video.getViewCount(),
 			video.getRecordedAt(),
-			nickname);
+			nickname,
+			video.getUserId());
 	}
 }

@@ -59,6 +59,7 @@ import com.msg.fillmap.mission.exception.MissionErrorCode;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.dto.FriendGridVideoResponseDto;
 import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
 import com.msg.fillmap.video.dto.GridGlobalVideoResponseDto;
@@ -146,6 +147,8 @@ public class VideoServiceImpl implements VideoService {
 	// 행사 영상 판정 (MSG-440) — 공개범위 전환 차단 하나에만 쓴다. 같은 Owner B 내부 의존이고, 엔티티
 	// 방향(event 가 video 참조)과 빈 방향(video 서비스가 event 리포지토리 참조)이 달라 순환이 없다.
 	private final EventVideoRepository eventVideoRepository;
+	// 차단 판정 leaf (MSG-569 D-5) — 재생 단건 경로에만 쓴다. 목록은 SQL 안 NOT EXISTS 로 걸러진다(D-4).
+	private final UserBlockQueryService userBlockQueryService;
 	private final Clock clock;
 
 	/**
@@ -161,11 +164,11 @@ public class VideoServiceImpl implements VideoService {
 		BadgeAwardService badgeAwardService, StreakCommandService streakCommandService,
 		MissionAwardService missionAwardService, HotScoreCommandService hotScoreCommandService,
 		FriendshipQueryService friendshipQueryService, ZoneNameQueryService zoneNameQueryService,
-		EventVideoRepository eventVideoRepository) {
+		EventVideoRepository eventVideoRepository, UserBlockQueryService userBlockQueryService) {
 		this(videoRepository, videoEncodingJobRepository, s3Presigner, s3Client, awsProperties,
 			regionStatsCommandService, thumbnailUrlPresigner, badgeAwardService, streakCommandService,
 			missionAwardService, hotScoreCommandService, friendshipQueryService, zoneNameQueryService,
-			eventVideoRepository, Clock.systemUTC());
+			eventVideoRepository, userBlockQueryService, Clock.systemUTC());
 	}
 
 	@Override
@@ -538,15 +541,16 @@ public class VideoServiceImpl implements VideoService {
 	}
 
 	/**
-	 * 격자 전역 영상 목록 조회 (MSG-237). userId 없음 — 전역 선정이라 결과가 호출자와 무관하다(§D1·D4).
+	 * 격자 전역 영상 목록 조회 (MSG-237). 전역 선정이라 결과가 호출자와 무관하고(§D1·D4), viewerId 는 차단
+	 * 필터(MSG-569)에만 쓴다 — 비로그인은 null 이라 쿼리 절이 단락된다.
 	 * 필터·정렬은 repository(idx_videos_grid_popular 일치)가 정본이고, 여기서는 size 클램프 →
 	 * lookahead(size+1) 조회 → hasNext 판정·트림 → 항목 presign → nextCursor 발급만 한다 (MSG-90 패턴).
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public GridVideoPageResponseDto getGridGlobalVideos(String gridId, String cursor, int size) {
+	public GridVideoPageResponseDto getGridGlobalVideos(Long viewerId, String gridId, String cursor, int size) {
 		int pageSize = PageSizes.clampCursor(size);
-		List<Video> rows = queryGlobalPage(gridId, cursor, pageSize + 1);
+		List<Video> rows = queryGlobalPage(viewerId, gridId, cursor, pageSize + 1);
 		boolean hasNext = rows.size() > pageSize;
 		List<Video> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
 		Map<Long, String> nicknames = authorNicknames(pageRows);
@@ -568,22 +572,22 @@ public class VideoServiceImpl implements VideoService {
 	}
 
 	/**
-	 * 미션 영상 목록 조회 (MSG-390). userId 없음 — 후보가 미션·격자·기간으로만 정해져 결과가 호출자와
-	 * 무관하다(내 PRIVATE·FRIENDS 영상도 나오지 않는다). 후보 술어·정렬은 repository 가 정본이고, 여기서는
+	 * 미션 영상 목록 조회 (MSG-390). 후보가 미션·격자·기간으로만 정해져 결과가 호출자와 무관하고(내 PRIVATE·
+	 * FRIENDS 영상도 나오지 않는다), viewerId 는 차단 필터(MSG-569)에만 쓴다. 후보 술어·정렬은 repository 가 정본이고, 여기서는
 	 * getGridGlobalVideos 와 같은 순서로 size 클램프 → lookahead(size+1) 조회 → hasNext 판정·트림 →
 	 * 닉네임 배치 → 항목 presign → nextCursor 발급만 한다. 클램프 상수를 격자 목록과 공유하는 것은
 	 * 두 목록의 페이지 규격이 같아서다(§API 명세).
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public GridVideoPageResponseDto getMissionVideos(long missionId, String cursor, int size) {
+	public GridVideoPageResponseDto getMissionVideos(Long viewerId, long missionId, String cursor, int size) {
 		// 노출 중지된 미션은 미션 상세와 같은 404 다 (MSG-500 D-3) — 빈 200 을 주면 목록에서 사라진 미션이
 		// "존재하지만 비어 있다"로 읽혀, 알던 missionId 로 존재를 확인하는 경로가 남는다.
 		if (videoRepository.isMissionHidden(missionId)) {
 			throw new ApiException(MissionErrorCode.MISSION_NOT_FOUND);
 		}
 		int pageSize = PageSizes.clampCursor(size);
-		List<Video> rows = queryMissionPage(missionId, cursor, pageSize + 1);
+		List<Video> rows = queryMissionPage(viewerId, missionId, cursor, pageSize + 1);
 		boolean hasNext = rows.size() > pageSize;
 		List<Video> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
 		Map<Long, String> nicknames = authorNicknames(pageRows);
@@ -637,9 +641,9 @@ public class VideoServiceImpl implements VideoService {
 			.collect(Collectors.toMap(AuthorNicknameProjection::getUserId, AuthorNicknameProjection::getNickname));
 	}
 
-	private List<Video> queryGlobalPage(String gridId, String cursor, int limit) {
+	private List<Video> queryGlobalPage(Long viewerId, String gridId, String cursor, int limit) {
 		if (cursor == null) {
-			return videoRepository.findGlobalVideos(gridId, limit);
+			return videoRepository.findGlobalVideos(gridId, viewerId, limit);
 		}
 		VideoCursor decoded = decodeGlobalCursor(cursor);
 		if (!decoded.gridId().equals(gridId)) {
@@ -648,7 +652,7 @@ public class VideoServiceImpl implements VideoService {
 			throw new ApiException(VideoErrorCode.INVALID_CURSOR);
 		}
 		return videoRepository.findGlobalVideosAfter(
-			gridId, decoded.viewCount(), decoded.createdAt(), decoded.id(), limit);
+			gridId, viewerId, decoded.viewCount(), decoded.createdAt(), decoded.id(), limit);
 	}
 
 	/** 무효 커서는 조용히 첫 페이지로 폴백하지 않고 400 으로 거른다 — FE 버그가 무한 첫 페이지 루프로 은폐되는 걸 막는다(§D5). */
@@ -660,9 +664,9 @@ public class VideoServiceImpl implements VideoService {
 		}
 	}
 
-	private List<Video> queryMissionPage(long missionId, String cursor, int limit) {
+	private List<Video> queryMissionPage(Long viewerId, long missionId, String cursor, int limit) {
 		if (cursor == null) {
-			return videoRepository.findMissionVideos(missionId, limit);
+			return videoRepository.findMissionVideos(missionId, viewerId, limit);
 		}
 		MissionVideoCursor decoded = decodeMissionCursor(cursor);
 		if (decoded.missionId() != missionId) {
@@ -670,7 +674,8 @@ public class VideoServiceImpl implements VideoService {
 			// 막는다(격자 커서의 gridId 바인딩과 같은 규칙). 형식 위반과 같은 무효 커서로 취급한다.
 			throw new ApiException(VideoErrorCode.INVALID_CURSOR);
 		}
-		return videoRepository.findMissionVideosAfter(missionId, decoded.recordedAt(), decoded.id(), limit);
+		return videoRepository.findMissionVideosAfter(missionId, viewerId, decoded.recordedAt(), decoded.id(),
+			limit);
 	}
 
 	/**
@@ -711,6 +716,13 @@ public class VideoServiceImpl implements VideoService {
 			if (!owner) {
 				throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);
 			}
+		} else if (!owner && userId != null
+			&& userBlockQueryService.isBlockedEitherWay(userId, video.getUserId())) {
+			// 2.5 차단 (MSG-569 FR-7, FR-9). 소유자는 자기 자신을 차단할 수 없어(CHECK) 타인 경로에서만 본다.
+			//     비로그인은 차단 관계가 있을 수 없어 조회 0회. 응답은 DELETED 와 같은 3404 라 차단 사실이 새지 않는다.
+			//     visibility 앞인 이유: FRIENDS·PRIVATE 의 403 은 존재를 인정하는 응답이라 차단 관계에서 나오면 안 된다.
+			//     여기서 던지면 presign·조회수 증가·표시명 계산·닉네임 조회가 전부 돌지 않는다.
+			throw new ApiException(VideoErrorCode.VIDEO_NOT_FOUND);
 		} else if (!owner) {
 			// 3. visibility — 통과할 값을 명시한다(MSG-285 §D3). "PRIVATE 만 차단"이라는 부정형이면 새 공개범위가
 			// 조용히 전원 공개로 새기 때문이다 — FRIENDS 추가가 바로 그 회귀 지점이었다.

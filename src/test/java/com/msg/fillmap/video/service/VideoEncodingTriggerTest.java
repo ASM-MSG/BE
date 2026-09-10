@@ -24,6 +24,7 @@ import com.msg.fillmap.mission.dto.MissionAwardResult;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
@@ -60,7 +61,7 @@ class VideoEncodingTriggerTest {
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), missionAwardService,
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
-			() -> new ZoneNameResolver(List.of()), mock(EventVideoRepository.class));
+			() -> new ZoneNameResolver(List.of()), mock(EventVideoRepository.class), mock(UserBlockQueryService.class));
 
 		service.saveVideo(USER_ID, new VideoUploadRequestDto(
 			"videos/pending/1/x.mp4", 37.5445, 127.0560, (short) 10,

@@ -26,6 +26,7 @@ import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.dto.GridVideoResponseDto;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
@@ -65,7 +66,7 @@ class VideoGridQueryServiceTest {
 			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
-			() -> new ZoneNameResolver(List.of()), mock(EventVideoRepository.class));
+			() -> new ZoneNameResolver(List.of()), mock(EventVideoRepository.class), mock(UserBlockQueryService.class));
 	}
 
 	private void givenVideos(Video... videos) {
