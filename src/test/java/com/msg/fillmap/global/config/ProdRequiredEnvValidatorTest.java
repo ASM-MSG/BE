@@ -29,15 +29,20 @@ import com.msg.fillmap.auth.jwt.JwtRefreshTokenProvider;
  */
 class ProdRequiredEnvValidatorTest {
 
-	private static final Map<String, String> NORMAL_VALUES = Map.of(
-		"DB_URL", "jdbc:postgresql://prod-db:5432/fillmap",
-		"DB_USERNAME", "fillmap-user",
-		"DB_PASSWORD", "db-secret-value",
-		"REDIS_HOST", "prod-redis",
-		"REDIS_PASSWORD", "redis-secret-value",
-		"KAKAO_CLIENT_ID", "kakao-client-id-value",
-		"JWT_SECRET", "jwt-secret-value",
-		"JWT_REFRESH_SECRET", "jwt-refresh-secret-value"
+	// Map.of 는 10쌍까지라 ofEntries — 애플 4키(MSG-594)로 12쌍이 됐다
+	private static final Map<String, String> NORMAL_VALUES = Map.ofEntries(
+		Map.entry("DB_URL", "jdbc:postgresql://prod-db:5432/fillmap"),
+		Map.entry("DB_USERNAME", "fillmap-user"),
+		Map.entry("DB_PASSWORD", "db-secret-value"),
+		Map.entry("REDIS_HOST", "prod-redis"),
+		Map.entry("REDIS_PASSWORD", "redis-secret-value"),
+		Map.entry("KAKAO_CLIENT_ID", "kakao-client-id-value"),
+		Map.entry("JWT_SECRET", "jwt-secret-value"),
+		Map.entry("JWT_REFRESH_SECRET", "jwt-refresh-secret-value"),
+		Map.entry("APPLE_TEAM_ID", "apple-team-id-value"),
+		Map.entry("APPLE_KEY_ID", "apple-key-id-value"),
+		Map.entry("APPLE_SIGNING_KEY", "apple-signing-key-value"),
+		Map.entry("APPLE_TOKEN_ENCRYPTION_KEY", "apple-token-encryption-key-value")
 	);
 
 	@Test
@@ -66,7 +71,8 @@ class ProdRequiredEnvValidatorTest {
 	@ParameterizedTest
 	@ValueSource(strings = {
 		"DB_URL", "DB_USERNAME", "DB_PASSWORD", "REDIS_HOST",
-		"REDIS_PASSWORD", "KAKAO_CLIENT_ID", "JWT_SECRET", "JWT_REFRESH_SECRET"
+		"REDIS_PASSWORD", "KAKAO_CLIENT_ID", "JWT_SECRET", "JWT_REFRESH_SECRET",
+		"APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_SIGNING_KEY", "APPLE_TOKEN_ENCRYPTION_KEY"
 	})
 	void 필수_env가_미주입이면_기동_실패하고_메시지에_변수명이_있다(String envVar) {
 		DefaultListableBeanFactory beanFactory = beanFactoryWithout(envVar);
@@ -104,7 +110,9 @@ class ProdRequiredEnvValidatorTest {
 			.hasMessageNotContaining(NORMAL_VALUES.get("DB_PASSWORD"))
 			.hasMessageNotContaining(NORMAL_VALUES.get("REDIS_PASSWORD"))
 			.hasMessageNotContaining(NORMAL_VALUES.get("JWT_SECRET"))
-			.hasMessageNotContaining(NORMAL_VALUES.get("JWT_REFRESH_SECRET"));
+			.hasMessageNotContaining(NORMAL_VALUES.get("JWT_REFRESH_SECRET"))
+			.hasMessageNotContaining(NORMAL_VALUES.get("APPLE_SIGNING_KEY"))
+			.hasMessageNotContaining(NORMAL_VALUES.get("APPLE_TOKEN_ENCRYPTION_KEY"));
 	}
 
 	@Test
@@ -142,6 +150,10 @@ class ProdRequiredEnvValidatorTest {
 				"REDIS_PASSWORD=" + NORMAL_VALUES.get("REDIS_PASSWORD"),
 				"KAKAO_CLIENT_ID=" + NORMAL_VALUES.get("KAKAO_CLIENT_ID"),
 				"JWT_SECRET=" + NORMAL_VALUES.get("JWT_SECRET"),
+				"APPLE_TEAM_ID=" + NORMAL_VALUES.get("APPLE_TEAM_ID"),
+				"APPLE_KEY_ID=" + NORMAL_VALUES.get("APPLE_KEY_ID"),
+				"APPLE_SIGNING_KEY=" + NORMAL_VALUES.get("APPLE_SIGNING_KEY"),
+				"APPLE_TOKEN_ENCRYPTION_KEY=" + NORMAL_VALUES.get("APPLE_TOKEN_ENCRYPTION_KEY"),
 				"jwt.secret=" + NORMAL_VALUES.get("JWT_SECRET"))
 			.withUserConfiguration(JwtPropertiesConfig.class, JwtRefreshTokenProvider.class,
 				ProdRequiredEnvValidator.class)

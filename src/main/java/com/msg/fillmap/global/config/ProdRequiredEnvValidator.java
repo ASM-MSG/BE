@@ -36,7 +36,9 @@ public class ProdRequiredEnvValidator implements BeanFactoryPostProcessor {
 
 	private static final List<String> REQUIRED_ENV_VARS = List.of(
 		"DB_URL", "DB_USERNAME", "DB_PASSWORD", "REDIS_HOST",
-		"REDIS_PASSWORD", "KAKAO_CLIENT_ID", "JWT_SECRET", "JWT_REFRESH_SECRET");
+		"REDIS_PASSWORD", "KAKAO_CLIENT_ID", "JWT_SECRET", "JWT_REFRESH_SECRET",
+		// 애플 로그인 (MSG-594 D-10) — 프로퍼티에 @NotBlank 를 안 다는 대신(로컬 부팅) prod 는 여기서 fail-fast
+		"APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_SIGNING_KEY", "APPLE_TOKEN_ENCRYPTION_KEY");
 
 	@Override
 	public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) {

@@ -39,6 +39,13 @@ oauth:
     client-id: CHANGE_ME_KAKAO_CLIENT_ID
     # http://localhost 는 Secure 쿠키를 저장하지 않는다 — 켜두면 nonce 쿠키가 안 실려 웹 로그인이 전부 2423 (MSG-345)
     nonce-cookie-secure: false
+  # 애플 로그인 (MSG-594) — 실제 아이폰으로 로컬 서버를 시험할 때만 채운다. 비워 두면 부팅은 되고
+  # 애플 로그인만 2502 로 실패한다(D-10). 로컬 확인은 POST /api/auth/dev/social-login 의 provider=APPLE 로 충분하다.
+  apple:
+    team-id:                 # 애플 개발자 콘솔 > Membership > Team ID
+    key-id:                  # Certificates, Identifiers & Profiles > Keys > Sign in with Apple 키의 Key ID
+    signing-key:             # 그 키의 .p8 파일에서 BEGIN/END 줄을 뺀 Base64 본문을 개행 없이 한 줄로
+    token-encryption-key:    # openssl rand -base64 32 (리프레시 토큰 AES-256-GCM 보관 키, 로테이션 미지원)
 
 # 메일 발송 (MSG-497) — 로컬은 실발송 없이 LoggingMailSender 가 링크를 로그로 찍는다.
 # 이 base URL 은 로그에 찍히는 재설정 링크의 앞부분이다 (화면 라우트는 FE 확정 몫).

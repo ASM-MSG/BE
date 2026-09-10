@@ -38,6 +38,10 @@ docker compose up -d          # PostGIS 컨테이너(fillmap DB) 기동
 | `JWT_SECRET` | JWT 서명 키 (`application.yml` 주석 기준 운영 주입) |
 | `JWT_REFRESH_SECRET` | JWT 리프레시 토큰 서명 키 — 기본값 없음 (MSG-135) |
 | `KAKAO_CLIENT_ID` | 카카오 OIDC client-id |
+| `APPLE_TEAM_ID` | 애플 로그인(MSG-594) 클라이언트 비밀 JWT 의 `iss` — 애플 개발자 계정 Team ID. 넷 다 기본값 없음, 미설정 시 기동 실패 (`ProdRequiredEnvValidator`) |
+| `APPLE_KEY_ID` | Sign in with Apple 용 키의 Key ID — 클라이언트 비밀 JWT 헤더 `kid` |
+| `APPLE_SIGNING_KEY` | 그 키의 `.p8` 에서 BEGIN/END 줄을 뺀 Base64 본문 한 줄 (ES256 서명 키) |
+| `APPLE_TOKEN_ENCRYPTION_KEY` | 애플 리프레시 토큰 보관용 AES-256-GCM 키, Base64 32바이트 (`openssl rand -base64 32`). 로테이션 미지원 |
 | `REDIS_HOST` / `REDIS_PORT` | EC2 redis-prod 접속 (포트 기본 `6380`) |
 | `REDIS_PASSWORD` | redis-prod requirepass — 기본값 없음, 미설정 시 기동 실패 (`ProdRequiredEnvValidator`, MSG-244 → MSG-260) |
 | `S3_BUCKET_VIDEO` | prod 영상 S3 버킷 — 기본값 없음, 미설정 시 `AwsProperties @Pattern` 이 기동 실패시킴 |
@@ -318,6 +322,44 @@ UPDATE users SET role = 'ADMIN' WHERE id = {대상 id};
    적재하면 전량을 다시 손봐야 했지만, 이벤트 이미지는 키만 저장하고 주소는 조회 시점에 조립하므로
    정책을 나중에 열어도 기존 행이 그대로 살아난다. 그래도 정책을 먼저 여는 것을 권한다 — 화면에
    깨진 이미지가 뜨는 구간이 없다.
+
+### 애플 로그인 (MSG-594) — 배포 전 콘솔 작업 3건
+
+애플 로그인은 서버가 애플 토큰 API 를 부를 때(첫 로그인의 인가 코드 교환, 탈퇴 시 취소) 애플 개발자
+계정의 서명 키로 만든 클라이언트 비밀 JWT 를 쓴다. 키와 식별자는 코드에 없고 서버의 env 파일에만 있어
+아래 절차가 레포 밖 전제다. env 파일은 dev `/home/ubuntu/fillmap-dev.env`(`docker-compose.app.yml`
+의 `env_file`), prod 도 같은 구조다. **dev env 파일에 4키를 넣기 전까지 dev 에서 애플 로그인은 전부
+2502 로 실패한다**(부팅은 된다. `application-dev.yml` 이 빈 기본값을 두기 때문이고, prod 는 기본값이
+없어 `ProdRequiredEnvValidator` 가 기동을 막는다).
+
+1. **앱 ID 에 Sign in with Apple 켜기**. Apple Developer > Certificates, Identifiers & Profiles >
+   Identifiers > `kr.fillmap.app` > Capabilities 에서 Sign in with Apple 을 켜고 저장한다. dev 와
+   prod 가 같은 번들 ID 를 쓰므로 한 번이면 된다(스펙 D-6). 앱 빌드 쪽(`app.config.js` 의
+   `ios.usesAppleSignIn`)은 FE 레인 몫이다.
+2. **Sign in with Apple 용 키 발급과 `.p8` 변환**. 같은 화면의 Keys > `+` 에서 Sign in with Apple 을
+   체크하고 Configure 로 위 앱 ID 를 Primary App ID 로 고른 뒤 Register 한다. **`.p8` 파일은 발급 직후
+   한 번만 내려받을 수 있다**. 잃어버리면 키를 폐기하고 새로 발급해야 하므로 팀 비밀 저장소에 원본을
+   보관한다. 서버에는 `-----BEGIN PRIVATE KEY-----` 와 `END` 줄을 뺀 Base64 본문을 개행 없이 한 줄로
+   넣는다.
+
+   ```bash
+   grep -v '^-----' AuthKey_XXXXXXXXXX.p8 | tr -d '\n'   # 이 출력이 APPLE_SIGNING_KEY
+   ```
+3. **Team ID·Key ID 확인, 암호화 키 생성, env 파일에 4키 추가**. Team ID 는 Apple Developer >
+   Membership details, Key ID 는 2번에서 만든 키의 상세 화면에 있다. 리프레시 토큰 보관용 암호화 키는
+   `openssl rand -base64 32` 로 만든다(32바이트가 아니면 기동 실패, 로테이션 미지원이라 바꾸면 기존
+   암호문을 못 푼다). 네 값을 env 파일에 넣고 컨테이너를 다시 띄운다.
+
+   ```bash
+   APPLE_TEAM_ID=XXXXXXXXXX
+   APPLE_KEY_ID=XXXXXXXXXX
+   APPLE_SIGNING_KEY=MIGTAgEAMBMGByqGSM49...   # 2번 출력
+   APPLE_TOKEN_ENCRYPTION_KEY=...              # openssl rand -base64 32
+   ```
+
+   서명 키와 Team ID 는 애플 개발자 계정 단위라 dev 와 prod 가 같은 값을 쓴다. 로컬에서 실기기로
+   시험할 때만 `application-local.yml` 의 `oauth.apple.*` 에 같은 값을 채운다. 그 외 로컬 확인은
+   `POST /api/auth/dev/social-login` 의 `provider=APPLE` 로 충분하다(애플 왕복 없음).
 
 ### ⚠️ AWS 프로파일 — 로컬에 계정이 둘이고 기본값이 남의 계정이다
 
