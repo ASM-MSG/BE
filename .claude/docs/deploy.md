@@ -356,6 +356,21 @@ docker exec fillmap-postgres-dev psql -U dev -d fillmap -t -A -c \
 3. 머지 **직후** 위 dev 복구 절차를 실행한다 — 자동화돼 있지 않으므로 **사람이 해야 한다**
 4. prod가 이미 떠 있다면 하지 말 것
 
+## dev 도메인 api-dev.fillmap.kr (MSG-592)
+
+2026-09-10부터 dev 앱의 정식 주소는 **`api-dev.fillmap.kr`** 이다. `api.fillmap.kr`은 같은 dev 서버를 가리키는 채로
+남아 있지만 **운영 서버가 준비되면 그쪽으로 돌린다**(MSG-505 5단계) — 새로 dev 를 가리키는 설정은 전부 `api-dev` 를
+쓴다. FE dev 빌드·카카오 개발자 콘솔 Redirect URI 가 아직 `api.fillmap.kr` 이면 전환 순간 dev 화면이 운영을 보게 된다.
+
+| 구성 요소 | 값 |
+|---|---|
+| DNS | Route 53 A `api-dev.fillmap.kr` → 52.79.187.34 (dev EIP, `api.fillmap.kr` 과 같은 값) |
+| nginx | `/etc/nginx/sites-enabled/fillmap` 의 서버 블록 하나가 두 이름을 같이 받는다 (`server_name api.fillmap.kr api-dev.fillmap.kr`). 백업 `~/nginx-fillmap.bak-20260910-msg592` |
+| 인증서 | certbot 인증서 `api.fillmap.kr` 하나에 두 도메인(`--expand`). 자동 갱신 타이머 그대로 |
+| 레포 | docs 스냅샷 `api-docs/scripts/fetch-openapi.sh` 기본 URL, `load-test/measure-msg494.sh` BASE_URL 이 api-dev |
+
+운영 전환(5단계) 때 이 서버 블록에서 `api.fillmap.kr` 을 빼고 인증서를 `api-dev` 만으로 다시 발급한다.
+
 ## API 문서 사이트 docs.fillmap.kr (MSG-568)
 
 팀 전용 API 문서. 소스는 레포 `api-docs/`(MkDocs Material + Scalar), 레퍼런스는 dev 앱의 `/v3/api-docs`
@@ -370,7 +385,7 @@ docker exec fillmap-postgres-dev psql -U dev -d fillmap -t -A -c \
 | 접근 제한 | CloudFront Function `fillmap-docs-basic-auth` (viewer-request). basic auth 검사 + `/auth/` → `/auth/index.html` 리라이트를 한 함수가 한다. 팀 공용 계정 1개, 값은 `~/fillmap-aws-backup-personal/soma-secrets.env`의 `DOCS_BASIC_AUTH_*` |
 | 배포 | `cd-dev.yml`의 `docs` 잡 (`needs: deploy-dev`). OIDC 역할 `fillmap-docs-deploy`(신뢰 `repo:ASM-MSG/BE:*`, 권한은 `fillmap-docs` 버킷과 이 배포의 invalidation뿐). 스펙 수집용 GitHub secret `DOCS_BASIC_AUTH`(`user:pass`) |
 | dev 잠금 | dev nginx가 `/swagger-ui/`, `/v3/api-docs`에 같은 계정으로 `auth_basic`. htpasswd는 `/etc/nginx/.htpasswd-docs` |
-| CORS | 레퍼런스의 Try it이 브라우저에서 api.fillmap.kr을 직접 부르므로 dev `CORS_ALLOWED_ORIGINS`에 `https://docs.fillmap.kr` 포함 |
+| CORS | 레퍼런스의 Try it이 브라우저에서 dev 앱(api-dev.fillmap.kr)을 직접 부르므로 dev `CORS_ALLOWED_ORIGINS`에 `https://docs.fillmap.kr` 포함 |
 
 계정을 바꾸려면 세 곳을 같이 바꾼다: CloudFront Function 코드의 base64 값(`update-function` → `publish-function`),
 dev nginx htpasswd, GitHub secret `DOCS_BASIC_AUTH`. 하나만 바꾸면 사이트는 열리는데 스펙 스냅샷이 실패하거나
