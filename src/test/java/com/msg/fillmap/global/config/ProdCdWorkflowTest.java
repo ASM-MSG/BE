@@ -26,6 +26,8 @@ class ProdCdWorkflowTest {
 		String workflow = Files.readString(WORKFLOW, StandardCharsets.UTF_8);
 
 		assertThat(workflow).contains("environment: production");
+		// 보안그룹 규칙을 만지는 배포는 직렬로 — 겹치면 서로의 SSH 규칙을 지운다
+		assertThat(workflow).contains("concurrency:\n  group: cd-prod\n  cancel-in-progress: false");
 
 		// 순서: 이미지 찾기(HEAD → HEAD^2) → 태그 승격 → pull → up. 빌드는 이미지가 없을 때의 fallback 뿐이다
 		int find = workflow.indexOf("- name: Find dev-verified image");
@@ -49,6 +51,16 @@ class ProdCdWorkflowTest {
 			"docker inspect -f '{{.State.Pid}}' fillmap-api",
 			"sudo ss -ltnpH 'sport = :8081'",
 			"[ \"$listen\" = \"$cpid\" ]");
+
+		// 러너 IP 는 배포 동안만 22 번에 열고 결과와 무관하게 닫는다 (prod SG 는 22 번 전체 공개가 아니다)
+		int openSsh = workflow.indexOf("- name: Open SSH for this runner");
+		int closeSsh = workflow.indexOf("- name: Close SSH for this runner");
+		assertThat(openSsh).isGreaterThan(promote);
+		assertThat(openSsh).isLessThan(pull);
+		assertThat(closeSsh).isGreaterThan(up);
+		assertThat(workflow.substring(closeSsh)).contains("if: always()", "revoke-security-group-ingress");
+		// 이전 실행 잔재로 같은 규칙이 있어도 열기 스텝이 죽지 않는다 (죽으면 닫기까지 건너뛴다)
+		assertThat(workflow.substring(openSsh, closeSsh)).contains("InvalidPermission.Duplicate");
 
 		// jar 시절 형태로 되돌아가지 않는다
 		assertThat(workflow).doesNotContain("Upload jar", "systemctl restart fillmap-prod", "app.jar");
