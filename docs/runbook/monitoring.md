@@ -149,9 +149,12 @@ dev 알림은 최소 구성 2종이다(MSG-377). 지연 SLO와 5xx 비율을 dev
 
 ## up==0 구분 절차 (AppDown, DevAppDown 수신 시)
 
-DevAppDown이면 아래 절차에서 포트 8081을 8080으로, fillmap-prod라는 이름(systemd 서비스명,
-Prometheus 타깃명)을 fillmap-dev로 바꿔 같은 순서로 밟는다. 단 2번의 구성요소별 본문은 dev에
-없다. `show-details: always`가 prod 프로파일 전용이라 dev의 health 응답은 상태 한 줄뿐이다.
+DevAppDown이면 아래 절차에서 포트 8081을 8080으로, Prometheus 타깃명 fillmap-prod를 fillmap-dev로
+바꿔 같은 순서로 밟는다. 단 dev 앱은 컨테이너라(MSG-589) systemd 명령을 docker 명령으로 읽는다:
+`systemctl is-active fillmap-prod` → `docker inspect -f '{{.State.Health.Status}}' fillmap-api`(healthy 면 살아 있음),
+`journalctl -u` → `docker logs --tail 100 fillmap-api`, `systemctl restart` → 홈에서
+`TAG=$(docker inspect -f '{{.Config.Image}}' fillmap-api | cut -d: -f2) docker compose -f docker-compose.app.yml restart api`.
+또 2번의 구성요소별 본문은 dev에 없다. `show-details: always`가 prod 프로파일 전용이라 dev의 health 응답은 상태 한 줄뿐이다.
 dev에서 503이 나오면 본문 대신 앱 로그(`docker logs fillmap-api`)로 어느 구성요소가
 병들었는지 확인한다.
 
