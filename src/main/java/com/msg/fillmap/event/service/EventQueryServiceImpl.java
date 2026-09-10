@@ -156,8 +156,7 @@ public class EventQueryServiceImpl implements EventQueryService {
 		GridRange view = GridEncoder.viewportRange(bounds);
 		// 노출 시작분 전량을 읽어 자바에서 거른다 — 행사 행이 도시당 한둘이라 공간 쿼리·인덱스를 만들지 않는다.
 		return occurrenceRepository.findByVisibleFromLessThanEqual(now).stream()
-			.filter(occurrence -> CHIP_STATUSES.contains(occurrence.statusAt(now)))
-			.filter(occurrence -> intersects(occurrence, view))
+			.filter(occurrence -> isChipCandidate(occurrence, now, view))
 			.sorted(CHIP_ORDER)
 			.map(occurrence -> EventOccurrenceChipResponseDto.of(occurrence, occurrence.statusAt(now)))
 			.toList();
@@ -397,6 +396,11 @@ public class EventQueryServiceImpl implements EventQueryService {
 	 */
 	private boolean isVisible(EventOccurrence occurrence, LocalDateTime now) {
 		return occurrence.isVisibleAt(now);
+	}
+
+	/** 칩 후보 판정 — 칩에 담는 상태(§API 1)이면서 노출 영역이 뷰포트에 걸친 회차. */
+	private boolean isChipCandidate(EventOccurrence occurrence, LocalDateTime now, GridRange view) {
+		return CHIP_STATUSES.contains(occurrence.statusAt(now)) && intersects(occurrence, view);
 	}
 
 	/** 노출 영역 사각형과 뷰포트(보정 포함)의 정수 부등식 겹침 판정 — 과다 포함 쪽으로만 틀리고 누락이 없다. */
