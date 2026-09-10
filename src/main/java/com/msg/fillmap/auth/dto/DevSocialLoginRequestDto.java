@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 
 @Schema(description = "[로컬/dev 전용] 소셜 로그인 모의 요청 — 실제 소셜 ID Token 없이 (provider, oid)로 로그인/가입한다.")
 public record DevSocialLoginRequestDto(
-	@Schema(description = "소셜 제공자 (기본 KAKAO)", example = "KAKAO")
+	@Schema(description = "소셜 제공자 (기본 KAKAO, APPLE 가능 — 애플 왕복 없이 계정만 만든다)", example = "KAKAO")
 	String provider,
 
 	@Schema(description = "소셜 고유 식별자(oid). 같은 값이면 같은 사용자로 재로그인된다.", example = "dev-kakao-1")

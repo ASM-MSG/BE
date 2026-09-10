@@ -95,4 +95,21 @@ class DevAuthControllerTest {
 
 		verify(oidcLoginService, never()).issueForOidcUser(any(), any(), anyString());
 	}
+
+	// 검증: FR-AUTH-12, AC-594-12
+	@Test
+	@DisplayName("APPLE 제공자로 모의 로그인하면 issueForOidcUser 가 APPLE 로 호출된다 — 애플 왕복 없음 (FR-12)")
+	void APPLE_제공자로_모의_로그인하면_issueForOidcUser가_APPLE로_호출된다() throws Exception {
+		given(oidcLoginService.issueForOidcUser(eq(AuthProvider.APPLE), any(OidcUserInfo.class), anyString()))
+			.willReturn(new LoginResponseDto("access-jwt", "refresh-jwt", "USER"));
+		DevSocialLoginRequestDto request = new DevSocialLoginRequestDto("apple", "dev-apple-1", null, null);
+
+		mockMvc.perform(post(DEV_SOCIAL_LOGIN_URL)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(objectMapper.writeValueAsString(request)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.accessToken").value("access-jwt"));
+
+		verify(oidcLoginService).issueForOidcUser(eq(AuthProvider.APPLE), any(OidcUserInfo.class), anyString());
+	}
 }
