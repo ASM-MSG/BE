@@ -146,7 +146,7 @@ docker compose up -d
 ## AWS 인프라 (목표 설계, MVP: Single VPC · Single AZ · Single Instance)
 
 > 아래는 인프라 **목표 설계**다. `deploy.md`가 기술하는 "현재 저장소에 실제로 존재하는 것"
-> (로컬 Docker + 프로파일 설정)과는 별개이며, 아직 이 저장소에 Dockerfile·CI 파이프라인은 없다.
+> (로컬 Docker + 프로파일 설정 + Dockerfile·CI/CD)과는 별개다. 이 중 ECR 이미지 배포는 MSG-589(2026-09-10)로 dev 에 먼저 들어왔고, SSM Run Command·RDS·ElastiCache 는 아직 목표다.
 
 **리전/네트워크**: `ap-northeast-2` (Seoul), VPC `10.0.0.0/16`, AZ `ap-northeast-2a` 단일.
 
