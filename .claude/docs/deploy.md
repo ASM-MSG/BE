@@ -100,8 +100,9 @@ MSG-495 범위에 포함하지 않았다.
 | CD | `cd-dev.yml`: build-image → deploy-dev(api) → deploy-worker(worker) → docs. 워커가 api 뒤인 이유는 Flyway 를 api 만 돌리기 때문(워커는 validate 만). 성공 = `up --wait` 로 healthy **이고** `Config.Image` 가 방금 push 한 태그 **이고** 재시작 0회 **이고** 포트 리스너 PID 가 그 컨테이너 |
 | PR 검사 | `ci.yml` 이 `docker build` 만 해 본다(push 없음) — Dockerfile 이 깨진 채 develop 에 들어가는 것을 막는다 |
 
-**롤백**은 이전 sha 로 같은 명령이다. 서버에 최근 sha 2개가 남아 있어 직전 sha 는 pull 없이 바로 뜨고, 그보다 오래된 건 ECR 에서
-받는다 (`aws ecr describe-images --repository-name fillmap` 으로 태그 확인):
+**롤백**은 이전 sha 로 같은 명령이다. 서버에는 현재 이미지만 남기므로(이미지 1.37GB — amd64 ffmpeg apt 레이어 453MB,
+dev 디스크 여유 3.4GB) 이전 sha 는 ECR 에서 받는다. 같은 리전이라 30초 안팎이다
+(`aws ecr describe-images --repository-name fillmap` 으로 태그 확인):
 
 ```bash
 # dev EC2
@@ -110,11 +111,14 @@ TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait api
 sudo TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait worker
 ```
 
-**첫 전환**: CD 의 deploy 스텝이 구 systemd 유닛(`fillmap-dev`·`fillmap-encoding-worker`)을 `mask --now` 하고
-컨테이너를 올린다 — 사람이 서버에서 할 일은 없다. disable 이 아니라 mask 인 이유: 유닛 파일과 `app.jar` 가 남아 있어
-누가 런북대로 `systemctl start/restart` 를 치면 옛 jar 가 컨테이너 옆에 다시 떠 포트를 다툰다. mask 면 그 명령이
-거부된다. jar 방식으로 되돌리려면 컨테이너를 `docker compose -f docker-compose.app.yml down` 한 뒤
-`sudo systemctl unmask fillmap-dev && sudo systemctl enable --now fillmap-dev`.
+**첫 전환**: CD 의 deploy 스텝이 구 systemd 유닛(`fillmap-dev`·`fillmap-encoding-worker`)을 stop+disable 하고 유닛
+파일을 홈으로 치운(`~/fillmap-dev.service.pre-msg589`, 워커는 `~/encoding-worker/...`) 뒤 mask 하고 컨테이너를 올린다 —
+사람이 서버에서 할 일은 없다. disable 이 아니라 mask 인 이유: `app.jar` 가 남아 있어 누가 런북대로 `systemctl start` 를
+치면 옛 jar 가 컨테이너 옆에 다시 떠 포트를 다툰다. mask 면 그 명령이 거부된다. 유닛 파일을 치우는 이유: 파일이
+`/etc/systemd/system` 에 직접 있으면 mask 가 "already exists" 로 거부된다 — 2026-09-10 첫 배포가 이걸 `|| true` 로 삼켜
+구 앱이 8080 을 쥔 채 신원 검사에서 실패했다(다운타임 없음, 검사가 설계대로 막음). jar 방식으로 되돌리려면 컨테이너를
+`docker compose -f docker-compose.app.yml down` 한 뒤 `sudo systemctl unmask fillmap-dev`, 유닛 파일을 제자리로,
+`sudo systemctl daemon-reload && sudo systemctl enable --now fillmap-dev`.
 
 **앱 조작은 systemd 가 아니라 compose·docker 로 한다** (2026-09-10 이후):
 

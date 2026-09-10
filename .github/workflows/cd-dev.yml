@@ -117,9 +117,18 @@ jobs:
             # 이미지를 먼저 받는다 — ECR 인증·네트워크·디스크로 pull 이 실패해도 돌고 있는 서비스는 그대로다 (Codex 리뷰).
             docker compose -f docker-compose.app.yml pull -q api
             # 구 jar 방식 systemd 유닛이 살아 있으면 8080 을 두 프로세스가 다툰다. mask — disable 만 하면 런북의
-            # `systemctl start/restart` 가 옛 app.jar 를 컨테이너 옆에 다시 띄운다 (코드 리뷰). 첫 전환 뒤엔 no-op.
-            # 되돌리려면 컨테이너를 내리고 `systemctl unmask fillmap-dev && systemctl enable --now fillmap-dev`.
-            sudo systemctl mask --now fillmap-dev 2>/dev/null || true
+            # `systemctl start/restart` 가 옛 app.jar 를 컨테이너 옆에 다시 띄운다 (코드 리뷰). 그런데 mask 는 유닛
+            # 파일이 /etc/systemd/system 에 직접 있으면 "already exists" 로 거부한다 — 첫 배포(2026-09-10)가 이걸
+            # `|| true` 로 삼켜 구 앱이 8080 을 쥔 채 신원 검사에서 실패했다. 그래서 stop+disable 뒤 유닛 파일을 홈으로
+            # 치우고 mask 한다. 오류는 더 삼키지 않는다. 첫 전환 뒤엔 전부 no-op (mask 심볼릭 링크는 -f 가 거짓).
+            # 되돌리려면 컨테이너를 내리고 `sudo systemctl unmask fillmap-dev && sudo mv ~/fillmap-dev.service.pre-msg589
+            # /etc/systemd/system/fillmap-dev.service && sudo systemctl daemon-reload && sudo systemctl enable --now fillmap-dev`.
+            if [ -f /etc/systemd/system/fillmap-dev.service ]; then
+              sudo systemctl disable --now fillmap-dev
+              sudo mv /etc/systemd/system/fillmap-dev.service ~/fillmap-dev.service.pre-msg589
+              sudo systemctl daemon-reload
+            fi
+            sudo systemctl mask fillmap-dev
             # --wait: healthy 가 될 때까지 기다리고 아니면 non-zero (기동 ~15초 + healthcheck start_period 30초).
             docker compose -f docker-compose.app.yml up -d --wait --wait-timeout 180 api \
               || { echo "::error::api 컨테이너가 180초 안에 healthy 가 되지 않았다"; docker logs --tail 50 fillmap-api 2>&1 || true; exit 1; }
@@ -138,13 +147,13 @@ jobs:
               docker logs --tail 50 fillmap-api 2>&1 || true
               exit 1
             fi
-            # 정리는 이 이미지의 옛 sha 태그만 (최근 2개 유지 = 직전 sha 로 즉시 롤백). `prune -a` 는 같은 데몬의
+            # 정리는 이 이미지의 옛 sha 태그만 — 지금 배포한 태그를 명시적으로 빼고 나머지를 지운다 (`docker images`
+            # 출력 순서에 기대면 방금 뜬 이미지를 지우려다 rmi 가 실패한다 — PR 자동 리뷰). `prune -a` 는 같은 데몬의
             # 다른 스택(postgres·redis·kafka, AI 박스의 관측 스택) 이미지까지 지운다 (코드 리뷰).
-            # 생성시각으로 명시 정렬하고 지금 배포한 태그는 목록에서 뺀다 — `docker images` 출력 순서에 기대면 방금 뜬
-            # 이미지를 지우려다 rmi 가 실패해 헬스는 통과했는데 잡만 빨간불이 된다 (PR 자동 리뷰). 직전 sha 1개만 남긴다.
-            # bash 전용 문법($'\t' 등)은 안 쓴다 — ssh-action 은 원격 기본 셸로 실행해 dash 로 떨어질 수 있다.
-            docker images "$IMAGE" --format '{{.CreatedAt}} {{.Tag}}' | grep ' sha-' | sort -r | awk '{print $NF}' \
-              | grep -vx "$TAG" | tail -n +2 | xargs -r -I{} docker rmi "$IMAGE:{}" >/dev/null
+            # 직전 sha 를 남기지 않는 이유: 이미지가 1.37GB(amd64 ffmpeg apt 레이어 453MB)인데 dev 디스크 여유가 3.4GB 다.
+            # 롤백은 ECR 에서 같은 리전 pull 이라 30초 안팎이다.
+            docker images "$IMAGE" --format '{{.Tag}}' | grep '^sha-' | grep -vx "$TAG" \
+              | xargs -r -I{} docker rmi "$IMAGE:{}" >/dev/null
             docker image prune -f >/dev/null
 
   deploy-worker:
@@ -187,7 +196,13 @@ jobs:
             json.dump(c, open(p, 'w'), indent=2)
             PY
             sudo TAG="$TAG" docker compose -f docker-compose.app.yml pull -q worker   # pull 먼저 (api 와 같은 이유)
-            sudo systemctl mask --now fillmap-encoding-worker 2>/dev/null || true
+            # 구 유닛 정리 — api 와 같은 이유·같은 순서 (유닛 파일이 직접 있으면 mask 가 거부된다)
+            if [ -f /etc/systemd/system/fillmap-encoding-worker.service ]; then
+              sudo systemctl disable --now fillmap-encoding-worker
+              sudo mv /etc/systemd/system/fillmap-encoding-worker.service ~/encoding-worker/fillmap-encoding-worker.service.pre-msg589
+              sudo systemctl daemon-reload
+            fi
+            sudo systemctl mask fillmap-encoding-worker
             sudo TAG="$TAG" docker compose -f docker-compose.app.yml up -d --wait --wait-timeout 180 worker \
               || { echo "::error::worker 컨테이너가 180초 안에 healthy 가 되지 않았다"; sudo docker logs --tail 50 fillmap-encoding-worker 2>&1 || true; exit 1; }
             running=$(sudo docker inspect -f '{{.Config.Image}}' fillmap-encoding-worker)
@@ -202,8 +217,8 @@ jobs:
               sudo docker logs --tail 50 fillmap-encoding-worker 2>&1 || true
               exit 1
             fi
-            sudo docker images "$IMAGE" --format '{{.CreatedAt}} {{.Tag}}' | grep ' sha-' | sort -r | awk '{print $NF}' \
-              | grep -vx "$TAG" | tail -n +2 | xargs -r -I{} sudo docker rmi "$IMAGE:{}" >/dev/null
+            sudo docker images "$IMAGE" --format '{{.Tag}}' | grep '^sha-' | grep -vx "$TAG" \
+              | xargs -r -I{} sudo docker rmi "$IMAGE:{}" >/dev/null
             sudo docker image prune -f >/dev/null
 
   # API 문서 사이트 (MSG-568). dev 배포가 끝난 뒤 그 앱의 /v3/api-docs 를 받아 docs.fillmap.kr 에 올린다 —
