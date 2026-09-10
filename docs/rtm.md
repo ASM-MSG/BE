@@ -5,9 +5,9 @@
 **병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(`git checkout --ours docs/rtm.md` 등)
 스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다.
 
-요약: FR 302건 중 테스트 연결 270건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 25건, 성격상 테스트 비대상 7건 별도)
+요약: FR 302건 중 테스트 연결 271건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
 
-AC 요약: 스펙 성공 기준 64건 중 테스트 연결 61건, 미커버 3건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
+AC 요약: 스펙 성공 기준 79건 중 테스트 연결 75건, 미커버 4건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -290,7 +290,7 @@ AC 요약: 스펙 성공 기준 64건 중 테스트 연결 61건, 미커버 3건
 | FR-AUTH-09 | 구현됨 | AuthControllerTest, AuthServiceTest, JwtFilterIntegrationTest, JwtTokenProviderTest, RedisInvalidatedTokenStoreTest |
 | FR-AUTH-10 | 구현됨 | AuthControllerTest, KakaoAuthCodeExchangerTest |
 | FR-AUTH-11 | 구현됨 | AuthControllerTest, AuthServiceTest |
-| FR-AUTH-12 | 계획 | (없음) |
+| FR-AUTH-12 | 진행 중 | AppleOidcIdTokenVerifierTest, AppleRefreshTokenCipherTest, AppleTokenClientTest, AuthControllerTest, DevAuthControllerTest, OidcDecoderConfigTest, OidcLoginServiceTest, UserAccountS3CleanupTest, UserAppleProviderPersistenceTest |
 | FR-AUTH-13 | 구현됨 | AdminOrgAccountControllerTest, AdminOrgAccountRequestControllerTest, AuthControllerTest, AuthServiceTest, InitialPasswordResendConcurrencyTest, OrgAccountApprovalConcurrencyTest, OrgAccountRequestControllerTest, OrgAccountRequestPersistenceTest |
 | FR-AUTH-14 | 구현됨 | EventSubmissionAuthorizationTest, JwtTokenProviderTest, OidcLoginServiceTest, OrgAccountControllerTest, OrgAuthorizationTest, PasswordControllerTest, UserProfileIntegrationTest, UserRoleOrgPersistenceTest |
 | FR-AUTH-15 | 구현됨 | AdminOrgAccountControllerTest, EventSubmissionAuthorizationTest, OrgAccountControllerTest, OrgAccountSecurityPersistenceTest, PasswordControllerTest |
@@ -344,7 +344,6 @@ AC 요약: 스펙 성공 기준 64건 중 테스트 연결 61건, 미커버 3건
 - FR-FRIEND-13 (계획)
 - FR-MOD-14 (계획)
 - FR-MOD-19 (폐기됨)
-- FR-AUTH-12 (계획)
 
 ## 성격상 테스트로 검증하지 않는 요구 (사유 정본: SRS 8장 목록)
 
@@ -443,12 +442,28 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 | AC-586-05 | MSG-586 | EventQueryServiceTest |
 | AC-586-06 | MSG-586 | EventQueryServiceTest |
 | AC-586-07 | MSG-586 | RouteCandidateCollectorTest |
+| AC-594-01 | MSG-594 | AppleOidcIdTokenVerifierTest, AuthControllerTest |
+| AC-594-02 | MSG-594 | AppleOidcIdTokenVerifierTest, AuthControllerTest, OidcDecoderConfigTest |
+| AC-594-03 | MSG-594 | AppleOidcIdTokenVerifierTest, OidcLoginServiceTest |
+| AC-594-04 | MSG-594 | OidcLoginServiceTest |
+| AC-594-05 | MSG-594 | OidcLoginServiceTest |
+| AC-594-06 | MSG-594 | OidcLoginServiceTest |
+| AC-594-07 | MSG-594 | OidcLoginServiceTest |
+| AC-594-08 | MSG-594 | AppleRefreshTokenCipherTest, AppleTokenClientTest, OidcLoginServiceTest, UserAppleProviderPersistenceTest |
+| AC-594-09 | MSG-594 | AppleTokenClientTest, OidcLoginServiceTest |
+| AC-594-10 | MSG-594 | AppleTokenClientTest, UserAccountS3CleanupTest |
+| AC-594-11 | MSG-594 | AppleTokenClientTest |
+| AC-594-12 | MSG-594 | DevAuthControllerTest, OidcLoginServiceTest |
+| AC-594-13 | MSG-594 | UserAppleProviderPersistenceTest |
+| AC-594-14 | MSG-594 | (없음) |
+| AC-594-15 | MSG-594 | AppleOidcIdTokenVerifierTest, AppleTokenClientTest, OidcLoginServiceTest |
 
 ## 미커버 AC (보고만 — 실패 아님)
 
 - AC-538-07 (MSG-538)
 - AC-539-08 (MSG-539)
 - AC-569-16 (MSG-569)
+- AC-594-14 (MSG-594)
 
 ## 테스트에만 있고 스펙에 없는 AC (마커 오타 의심)
 
