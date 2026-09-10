@@ -145,7 +145,7 @@ sudo TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait worke
 | env 파일 | `fillmap-prod.env` (템플릿 `~/fillmap-aws-backup-personal/fillmap-prod.env.template`). `SPRING_PROFILES_ACTIVE=prod`·`HEALTH_PORT=8081` 포함 |
 | 바인드 마운트 | `fillmap-prod-cloudfront-private-key.pem`, `fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json` (같은 폴더) |
 | compose 변수 | `APP_ENV_FILE`·`CLOUDFRONT_KEY_FILE`·`FCM_FILE` — CD 가 넘긴다. 손으로 올릴 때도 같은 변수를 앞에 붙인다 |
-| Kafka | prod 박스에서 `docker compose -f docker-compose.server.yml up -d kafka` (사람이 1회, CD 밖) |
+| Kafka | prod 박스에서 `docker compose -f docker-compose.kafka.yml up -d` (사람이 1회, CD 밖). server.yml 은 DB 비밀번호 검증이 파일 로드에 걸려 kafka 만 못 골라 쓴다 |
 | DB / Redis | RDS `fillmap-prod` / ElastiCache `fillmap-prod` (TLS + AUTH) — 3단계 스크립트 `prod-infra-setup.sh` 산출 |
 | 인프라 ID·비밀 | `~/fillmap-aws-backup-personal/soma-ids.env`(`PROD_*`), `soma-secrets.env`(`PROD_RDS_MASTER_PASSWORD`, `PROD_ELASTICACHE_AUTH_TOKEN`) |
 
@@ -153,8 +153,10 @@ sudo TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait worke
 
 1. `prod-infra-setup.sh` 실행 → RDS·ElastiCache `available` 확인, EC2 EIP 확보.
 2. GitHub environment `production` 에 `PROD_EC2_HOST`(EIP)·`PROD_EC2_USER`(ubuntu)·`PROD_EC2_SSH_KEY` 등록.
-3. prod EC2: `~/fillmap-prod/` 에 env 파일·pem·FCM json 배치(600), `docker-compose.server.yml` 복사 후 kafka 만 up,
-   nginx 서버 블록(api.fillmap.kr → 127.0.0.1:8080, `/actuator/` 차단, docs 경로 basic auth)과 certbot.
+3. prod EC2: `~/fillmap-prod/` 에 env 파일·pem·FCM json 배치(600), `docker-compose.kafka.yml` 복사 후 up,
+   nginx 서버 블록(api.fillmap.kr·api-prod.fillmap.kr → 127.0.0.1:8080, `/actuator/` 차단, docs 경로 basic auth)과
+   certbot — DNS 가 아직 dev 를 가리키므로 HTTP-01 이 아니라 **DNS-01(route53 플러그인, 인스턴스 역할
+   `FillMapCertbotRoute53`)** 로 받는다. 그래서 전환 순간 HTTPS 공백이 없다.
 4. S3 prod 버킷 정책(위 "프로필 이미지" 절 3·5번)과 이벤트 이미지 저작자 표시 — **시더가 첫 기동에 돈다**.
 5. `monitoring/prod/prometheus/prometheus.yml` prod 타깃을 새 사설 IP 로, 보안그룹 8081 은 스크립트가 열었다.
 6. main 머지 → 승인 → CD. 통과하면 5단계: Route 53 `api.fillmap.kr` 을 prod EIP 로, dev nginx 에서 그 이름 제거,
