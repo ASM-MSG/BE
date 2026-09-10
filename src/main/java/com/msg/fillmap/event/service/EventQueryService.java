@@ -24,7 +24,7 @@ import com.msg.fillmap.grid.dto.ViewportBounds;
  */
 public interface EventQueryService {
 
-	/** 뷰포트에 걸친 예정·진행 중 회차 (API 1). 겹치는 행사가 없으면 실패가 아니라 빈 목록이다. */
+	/** 뷰포트에 걸친 예정·진행 중·업로드 유예 회차 (API 1, 아카이브 제외). 겹치는 행사가 없으면 실패가 아니라 빈 목록이다. */
 	List<EventOccurrenceChipResponseDto> getOccurrencesInViewport(ViewportBounds bounds);
 
 	/**

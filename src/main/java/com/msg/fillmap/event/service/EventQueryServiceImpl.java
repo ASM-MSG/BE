@@ -55,8 +55,9 @@ import com.msg.fillmap.zone.service.ZoneNameResolver;
 @Transactional(readOnly = true)
 public class EventQueryServiceImpl implements EventQueryService {
 
-	/** 칩에 담기는 상태 — 유예·아카이브 회차는 상세·역조회로만 접근한다 (§API 1). */
-	private static final Set<EventStatus> CHIP_STATUSES = Set.of(EventStatus.UPCOMING, EventStatus.LIVE);
+	/** 칩에 담기는 상태 — 아카이브 회차만 상세·역조회로 접근한다 (§API 1, MSG-586에서 유예 포함). */
+	private static final Set<EventStatus> CHIP_STATUSES =
+		Set.of(EventStatus.UPCOMING, EventStatus.LIVE, EventStatus.UPLOAD_GRACE);
 
 	/**
 	 * 역조회 정렬 1차 키 (§API 4) — 첫 항목이 행사방 진입 기본값이라 "지금"이 앞이다. 예정이 유예보다 앞인

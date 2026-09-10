@@ -29,8 +29,8 @@ public record EventOccurrenceChipResponseDto(
 	@Schema(description = "행사 종료 시각", example = "2026-10-15T13:00:00Z")
 	LocalDateTime endsAt,
 
-	@Schema(description = "서버 시각 기준 파생 상태 — 이 목록에는 두 값만 담긴다",
-		example = "LIVE", allowableValues = {"UPCOMING", "LIVE"})
+	@Schema(description = "서버 시각 기준 파생 상태 — 이 목록에는 세 값만 담긴다 (아카이브 회차는 빠진다)",
+		example = "LIVE", allowableValues = {"UPCOMING", "LIVE", "UPLOAD_GRACE"})
 	String status
 ) {
 
