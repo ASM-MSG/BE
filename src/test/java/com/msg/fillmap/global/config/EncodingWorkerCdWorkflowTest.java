@@ -37,7 +37,8 @@ class EncodingWorkerCdWorkflowTest {
 			"TAG: ${{ needs.build-image.outputs.tag }}",
 			"source: docker-compose.app.yml",
 			"sudo TAG=\"$TAG\" docker compose -f docker-compose.app.yml pull -q worker",
-			"sudo systemctl mask --now fillmap-encoding-worker",
+			"sudo systemctl disable --now fillmap-encoding-worker",
+			"sudo systemctl mask fillmap-encoding-worker",
 			"sudo TAG=\"$TAG\" docker compose -f docker-compose.app.yml up -d --wait --wait-timeout 180 worker",
 			// 8081 리스너가 방금 띄운 컨테이너의 프로세스인지 (jar 시절 MainPID 검사의 컨테이너판)
 			"sudo docker inspect -f '{{.State.Pid}}' fillmap-encoding-worker",
