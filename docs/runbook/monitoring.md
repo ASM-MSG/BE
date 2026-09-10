@@ -73,15 +73,17 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-단위 파일을 `/etc/systemd/system/fillmap-encoding-worker.service`에 둔 뒤 `systemctl daemon-reload`와
-`systemctl enable fillmap-encoding-worker`를 실행한다. GitHub dev 환경의 `AI_EC2_HOST`, `AI_EC2_USER`,
-`AI_EC2_SSH_KEY`도 없으면 CD가 JAR 업로드 단계에서 멈춘다.
+위 유닛 파일은 jar 시절 기록이다. **2026-09-10(MSG-589)부터 워커는 컨테이너**라 CD가 이 유닛을 `mask --now` 해 두었고
+새 인스턴스에는 만들지 않는다. 서버에 있어야 하는 것은 `~/encoding-worker/worker.env`(`SPRING_PROFILES_ACTIVE=dev,encoding-worker`,
+`HEALTH_PORT=8081` 포함)뿐이고 compose 파일과 이미지는 CD가 가져온다. 조작은 `.claude/docs/deploy.md` "컨테이너 이미지·배포"의
+표대로 `sudo docker compose -f docker-compose.app.yml ...`(홈 `~/encoding-worker`). GitHub dev 환경의 `AI_EC2_HOST`,
+`AI_EC2_USER`, `AI_EC2_SSH_KEY`가 없으면 CD가 compose 파일 업로드 단계에서 멈춘다.
 
 1. 서비스와 health 확인:
-   `systemctl is-active fillmap-encoding-worker`와
+   `sudo docker inspect -f '{{.State.Health.Status}}' fillmap-encoding-worker`(healthy)와
    `curl -sS http://127.0.0.1:8081/actuator/health`
 2. 최근 로그 확인:
-   `journalctl -u fillmap-encoding-worker -n 100 --no-pager`
+   `sudo docker logs --tail 100 fillmap-encoding-worker`
 3. Prometheus 컨테이너에서도 같은 health가 보이는지 확인:
    `cd ~/BE && sudo docker compose -f monitoring/prod/docker-compose.yml exec -T prometheus wget -qO- http://host.docker.internal:8081/actuator/health`
 
@@ -111,9 +113,9 @@ sum by (node) (increase(video_encoding_job_total{event=~"claimed|reclaimed"}[1h]
 
 PENDING이 계속 늘거나 PROCESSING의 `lease_until`이 지난 채 남으면 두 워커의 로그를 함께 본다.
 임대[^2]가 끝난 작업은 다른 노드가 다시 가져가므로 DB 행을 손으로 바꾸지 않는다. 재시작이 필요하면
-`sudo systemctl restart fillmap-encoding-worker`를 실행한 뒤 1번과 3번을 다시 확인한다. 정상 종료 때는
+`cd ~/encoding-worker && sudo TAG=$(sudo docker inspect -f '{{.Config.Image}}' fillmap-encoding-worker | cut -d: -f2) docker compose -f docker-compose.app.yml restart worker`를 실행한 뒤 1번과 3번을 다시 확인한다. 정상 종료 때는
 현재 claim[^3]을 PENDING으로 즉시 반납하며, 강제 종료면 임대 만료 후 다른 노드가 회수한다.
-BE 쪽 워커 로그는 fillmap-dev EC2에서 `journalctl -u fillmap-dev -n 100 --no-pager`로 본다.
+BE 쪽 워커 로그는 fillmap-dev EC2에서 `docker logs --tail 100 fillmap-api`로 본다.
 
 ## 알림: 기준, 의미, 대응 (prod 8종 + dev 2종)
 
@@ -150,7 +152,7 @@ dev 알림은 최소 구성 2종이다(MSG-377). 지연 SLO와 5xx 비율을 dev
 DevAppDown이면 아래 절차에서 포트 8081을 8080으로, fillmap-prod라는 이름(systemd 서비스명,
 Prometheus 타깃명)을 fillmap-dev로 바꿔 같은 순서로 밟는다. 단 2번의 구성요소별 본문은 dev에
 없다. `show-details: always`가 prod 프로파일 전용이라 dev의 health 응답은 상태 한 줄뿐이다.
-dev에서 503이 나오면 본문 대신 앱 로그(`journalctl -u fillmap-dev`)로 어느 구성요소가
+dev에서 503이 나오면 본문 대신 앱 로그(`docker logs fillmap-api`)로 어느 구성요소가
 병들었는지 확인한다.
 
 `up == 0`은 앱 중단과 수집 실패(네트워크, 보안그룹)를 구분하지 못한다. 알림 규칙이 아니라

@@ -96,22 +96,34 @@ MSG-495 범위에 포함하지 않았다.
 | Dockerfile | 루트. jar 는 밖에서 만들고(`./gradlew bootJar -x test`) 이미지는 담기만 한다. temurin 21 JRE + ffmpeg + curl, layered jar, 비root(uid 1000 = 호스트 ubuntu) |
 | push 자격 | GitHub OIDC → IAM 역할 `fillmap-ecr-push` (신뢰 `repo:ASM-MSG/BE:*`, 권한은 `fillmap` 리포지토리 push 뿐). 저장된 AWS 키 없음 |
 | pull 자격 | EC2 인스턴스 역할 `FillMapEc2DevRole` 의 `AmazonEC2ContainerRegistryPullOnly` → 서버의 `amazon-ecr-credential-helper`(`~/.docker/config.json` `credsStore: ecr-login`). CD 가 멱등 설치 |
-| 서버 compose | `docker-compose.app.yml` — CD 가 홈(dev: `~`, AI: `~/encoding-worker`)에 복사. `network_mode: host` 라 env 파일·nginx·Prometheus 타깃이 jar 시절 그대로 |
-| CD | `cd-dev.yml`: build-image → deploy-dev(api) ∥ deploy-worker(worker) → docs. 성공 = 컨테이너 healthy **이고** `Config.Image` 가 방금 push 한 태그 |
+| 서버 compose | `docker-compose.app.yml` — CD 가 홈(dev: `~`, AI: `~/encoding-worker`)에 복사. `network_mode: host` 라 env 파일·nginx·Prometheus 타깃이 jar 시절 그대로. 프로파일과 헬스 포트는 env 파일이 정한다 (`SPRING_PROFILES_ACTIVE`, `HEALTH_PORT` — 워커 8081, 없으면 8080). env 는 `format: raw` 로 읽어 `$`·`#` 가 든 시크릿이 안 바뀐다 |
+| CD | `cd-dev.yml`: build-image → deploy-dev(api) → deploy-worker(worker) → docs. 워커가 api 뒤인 이유는 Flyway 를 api 만 돌리기 때문(워커는 validate 만). 성공 = `up --wait` 로 healthy **이고** `Config.Image` 가 방금 push 한 태그 **이고** 재시작 0회 **이고** 포트 리스너 PID 가 그 컨테이너 |
 | PR 검사 | `ci.yml` 이 `docker build` 만 해 본다(push 없음) — Dockerfile 이 깨진 채 develop 에 들어가는 것을 막는다 |
 
-**롤백**은 이전 sha 로 같은 명령이다 (ECR 콘솔이나 `aws ecr describe-images --repository-name fillmap` 으로 태그 확인):
+**롤백**은 이전 sha 로 같은 명령이다. 서버에 최근 sha 2개가 남아 있어 직전 sha 는 pull 없이 바로 뜨고, 그보다 오래된 건 ECR 에서
+받는다 (`aws ecr describe-images --repository-name fillmap` 으로 태그 확인):
 
 ```bash
 # dev EC2
-TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d api
-# AI EC2 (ubuntu 가 docker 그룹이 아님)
-sudo TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d worker
+TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait api
+# AI EC2 (ubuntu 가 docker 그룹이 아님, 홈은 ~/encoding-worker)
+sudo TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait worker
 ```
 
-**첫 전환**: CD 의 deploy 스텝이 구 systemd 유닛(`fillmap-dev`·`fillmap-encoding-worker`)을 `disable --now` 하고
-컨테이너를 올린다 — 사람이 서버에서 할 일은 없다. jar 방식으로 되돌리려면 `app.jar` 가 홈에 남아 있으니
-`systemctl enable --now` 로 살리고 컨테이너를 `docker compose ... down` 한다.
+**첫 전환**: CD 의 deploy 스텝이 구 systemd 유닛(`fillmap-dev`·`fillmap-encoding-worker`)을 `mask --now` 하고
+컨테이너를 올린다 — 사람이 서버에서 할 일은 없다. disable 이 아니라 mask 인 이유: 유닛 파일과 `app.jar` 가 남아 있어
+누가 런북대로 `systemctl start/restart` 를 치면 옛 jar 가 컨테이너 옆에 다시 떠 포트를 다툰다. mask 면 그 명령이
+거부된다. jar 방식으로 되돌리려면 컨테이너를 `docker compose -f docker-compose.app.yml down` 한 뒤
+`sudo systemctl unmask fillmap-dev && sudo systemctl enable --now fillmap-dev`.
+
+**앱 조작은 systemd 가 아니라 compose·docker 로 한다** (2026-09-10 이후):
+
+| 하던 일 | 지금 |
+|---|---|
+| `systemctl stop/start fillmap-dev` | `docker compose -f docker-compose.app.yml stop api` / `... up -d --wait api` (홈에서, TAG 는 `docker inspect -f '{{.Config.Image}}' fillmap-api` 로 확인) |
+| `journalctl -u fillmap-dev -n 100` | `docker logs --tail 100 fillmap-api` |
+| `systemctl is-active fillmap-dev` | `docker inspect -f '{{.State.Health.Status}}' fillmap-api` |
+| 워커(AI EC2) | 같은 명령에 `sudo`, 서비스명 `worker`, 컨테이너 `fillmap-encoding-worker`, 홈은 `~/encoding-worker` |
 
 **로컬에서 이미지 확인**: `./gradlew bootJar -x test && docker build -t fillmap .` 뒤 로컬 DB·Redis(`docker compose up -d`)에
 붙여 본다 — `docker run --rm -p 18080:8080 -e SPRING_PROFILES_ACTIVE=local -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/fillmap -e SPRING_DATA_REDIS_HOST=host.docker.internal fillmap` 후 `curl localhost:18080/actuator/health`.
@@ -359,15 +371,15 @@ Validate failed: Migrations have failed validation
 # 1. 백업 (되돌릴 수 있게)
 docker exec fillmap-postgres-dev pg_dump -U dev -d fillmap > ~/fillmap-dev-backup-$(date +%Y%m%d-%H%M%S).sql
 
-# 2. 크래시 루프 정지 (재시작 중 재생성 방지)
-sudo systemctl stop fillmap-dev
+# 2. 크래시 루프 정지 (재시작 중 재생성 방지) — 컨테이너 배포(MSG-589) 이후는 compose 로
+docker compose -f ~/docker-compose.app.yml stop api
 
 # 3. 스키마 초기화
 docker exec fillmap-postgres-dev psql -U dev -d fillmap -c \
   "DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO dev; GRANT ALL ON SCHEMA public TO public;"
 
 # 4. 재기동 — Flyway가 새 V1을 처음부터 적용한다 (V1이 CREATE EXTENSION postgis 를 포함하므로 확장도 복구됨)
-sudo systemctl start fillmap-dev
+TAG=$(docker inspect -f '{{.Config.Image}}' fillmap-api | cut -d: -f2) docker compose -f ~/docker-compose.app.yml up -d --wait api
 
 # 5. 확인
 docker exec fillmap-postgres-dev psql -U dev -d fillmap -t -A -c \
