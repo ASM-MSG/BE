@@ -5,9 +5,9 @@
 **병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(`git checkout --ours docs/rtm.md` 등)
 스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다.
 
-요약: FR 296건 중 테스트 연결 265건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
+요약: FR 302건 중 테스트 연결 270건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 25건, 성격상 테스트 비대상 7건 별도)
 
-AC 요약: 스펙 성공 기준 39건 중 테스트 연결 37건, 미커버 2건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
+AC 요약: 스펙 성공 기준 57건 중 테스트 연결 54건, 미커버 3건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -273,6 +273,12 @@ AC 요약: 스펙 성공 기준 39건 중 테스트 연결 37건, 미커버 2건
 | FR-MOD-12 | 구현됨 | AdminReportApproveConcurrencyTest, AdminReportControllerTest, AdminReportIntegrationTest |
 | FR-MOD-13 | 구현됨 | AdminAuthorizationTest, AdminReportIntegrationTest |
 | FR-MOD-14 | 계획 | (없음) |
+| FR-MOD-15 | 구현됨 | UserBlockConcurrencyTest, UserBlockControllerTest, UserBlockIntegrationTest |
+| FR-MOD-16 | 구현됨 | UserBlockIntegrationTest |
+| FR-MOD-17 | 구현됨 | EventVideoCommentServiceTest, EventVideoPublicAccessHttpTest, EventVideoQueryServiceTest, GridGlobalVideoControllerTest, MissionVideoListQueryTest, UserBlockIntegrationTest, VideoGlobalListQueryTest, VideoPlaybackServiceTest, VideoPlaybackViewCountIntegrationTest |
+| FR-MOD-18 | 구현됨 | EventVideoPublicAccessHttpTest, EventVideoQueryServiceTest, GridGlobalVideoControllerTest, MissionVideoControllerTest, VideoPlaybackControllerTest |
+| FR-MOD-19 | 폐기됨 | (없음) |
+| FR-MOD-20 | 구현됨 | UserBlockIntegrationTest |
 | FR-AUTH-01 | 구현됨 | AuthControllerTest, OidcLoginServiceTest |
 | FR-AUTH-02 | 구현됨 | AuthControllerTest, KakaoAuthCodeExchangerTest |
 | FR-AUTH-03 | 구현됨 | AuthControllerTest, KakaoAuthCodeExchangerTest |
@@ -337,6 +343,7 @@ AC 요약: 스펙 성공 기준 39건 중 테스트 연결 37건, 미커버 2건
 - FR-NOTI-13 (폐기됨)
 - FR-FRIEND-13 (계획)
 - FR-MOD-14 (계획)
+- FR-MOD-19 (폐기됨)
 - FR-AUTH-12 (계획)
 
 ## 성격상 테스트로 검증하지 않는 요구 (사유 정본: SRS 8장 목록)
@@ -399,6 +406,24 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 | AC-539-07 | MSG-539 | RouteIntentClientTest, RouteRecommendServiceTest |
 | AC-539-08 | MSG-539 | (없음) |
 | AC-539-09 | MSG-539 | RouteRecommendServiceTest |
+| AC-569-01 | MSG-569 | UserBlockControllerTest, UserBlockIntegrationTest |
+| AC-569-02 | MSG-569 | UserBlockConcurrencyTest, UserBlockIntegrationTest |
+| AC-569-03 | MSG-569 | UserBlockControllerTest, UserBlockIntegrationTest |
+| AC-569-04 | MSG-569 | UserBlockControllerTest, UserBlockIntegrationTest |
+| AC-569-05 | MSG-569 | UserBlockIntegrationTest |
+| AC-569-06 | MSG-569 | MissionVideoListQueryTest, VideoGlobalListQueryTest |
+| AC-569-07 | MSG-569 | EventVideoPublicAccessHttpTest, GridGlobalVideoControllerTest, MissionVideoListQueryTest, VideoGlobalListQueryTest, VideoPlaybackServiceTest |
+| AC-569-08 | MSG-569 | VideoPlaybackServiceTest, VideoPlaybackViewCountIntegrationTest |
+| AC-569-09 | MSG-569 | EventVideoQueryServiceTest |
+| AC-569-10 | MSG-569 | EventVideoCommentServiceTest |
+| AC-569-11 | MSG-569 | UserBlockIntegrationTest |
+| AC-569-12 | MSG-569 | EventVideoPublicAccessHttpTest, EventVideoQueryServiceTest, GridGlobalVideoControllerTest, MissionVideoControllerTest, VideoPlaybackControllerTest |
+| AC-569-13 | MSG-569 | VideoPlaybackServiceTest, VideoPlaybackViewCountIntegrationTest |
+| AC-569-14 | MSG-569 | UserBlockIntegrationTest |
+| AC-569-15 | MSG-569 | UserBlockControllerTest |
+| AC-569-16 | MSG-569 | (없음) |
+| AC-569-17 | MSG-569 | EventVideoCommentServiceTest |
+| AC-569-18 | MSG-569 | UserBlockIntegrationTest |
 | AC-575-01 | MSG-575 | AdminOrgAccountRequestControllerTest |
 | AC-575-02 | MSG-575 | AdminOrgAccountRequestControllerTest |
 | AC-575-03 | MSG-575 | AdminOrgAccountRequestControllerTest, FillMapMailTemplateTest |
@@ -416,6 +441,7 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 
 - AC-538-07 (MSG-538)
 - AC-539-08 (MSG-539)
+- AC-569-16 (MSG-569)
 
 ## 테스트에만 있고 스펙에 없는 AC (마커 오타 의심)
 
