@@ -1,4 +1,4 @@
-# 앱 컨테이너 (MSG-589). dev EC2 는 api, AI EC2 는 worker 만 띄운다. DB·Redis·Kafka 는 docker-compose.server.yml.
+# 앱 컨테이너 (MSG-589·MSG-595). dev·prod EC2 는 api, AI EC2 는 worker 만 띄운다. DB·Redis·Kafka 는 docker-compose.server.yml.
 # CD 가 이 파일을 서버 홈에 복사하고 아래 명령으로 교체한다. 롤백은 TAG 를 이전 sha 로 바꿔 같은 명령.
 #
 #   TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait api      # dev EC2
@@ -31,22 +31,24 @@ services:
     image: *image
     container_name: fillmap-api
     network_mode: host
+    # 경로 셋은 셸 변수로 — 기본값이 dev 이고 cd-prod.yml 이 prod 경로를 넘긴다 (MSG-595). env 파일 값이 아니라
+    # compose 파일 변수라서 실행 셸(envs:)에서 넘겨야 한다.
     env_file:
-      - path: /home/ubuntu/fillmap-dev.env
+      - path: ${APP_ENV_FILE:-/home/ubuntu/fillmap-dev.env}
         format: raw
     volumes:
       # env 파일의 CLOUDFRONT_PRIVATE_KEY_PATH·FCM_CREDENTIALS_PATH 가 가리키는 두 파일. 컨테이너 안 경로를 호스트와
       # 같게 둬서 env 값을 바꾸지 않는다. create_host_path: false — 파일이 없으면 docker 가 그 자리에 root 디렉터리를
       # 만들어 놓고 앱이 "키를 읽을 수 없다"로 죽는 대신, 기동 자체가 실패해 원인이 바로 보인다 (코드 리뷰).
       - type: bind
-        source: /home/ubuntu/fillmap-cloudfront-private-key.pem
-        target: /home/ubuntu/fillmap-cloudfront-private-key.pem
+        source: ${CLOUDFRONT_KEY_FILE:-/home/ubuntu/fillmap-cloudfront-private-key.pem}
+        target: ${CLOUDFRONT_KEY_FILE:-/home/ubuntu/fillmap-cloudfront-private-key.pem}
         read_only: true
         bind:
           create_host_path: false
       - type: bind
-        source: /home/ubuntu/fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json
-        target: /home/ubuntu/fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json
+        source: ${FCM_FILE:-/home/ubuntu/fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json}
+        target: ${FCM_FILE:-/home/ubuntu/fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json}
         read_only: true
         bind:
           create_host_path: false
