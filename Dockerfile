@@ -8,11 +8,15 @@ WORKDIR /w
 COPY build/libs/fillmap-*.jar app.jar
 RUN java -Djarmode=tools -jar app.jar extract --layers --launcher --destination extracted
 
-# 2) 런타임. ffmpeg 는 인코딩·선분석 probe 의 런타임 의존(전에는 CD 가 호스트에 apt 로 깔았다).
+# 2) 런타임. ffmpeg·ffprobe 는 정적 빌드 바이너리를 복사한다 — apt 의 ffmpeg 는 amd64 에서 의존 라이브러리까지
+#    453MB 라 이미지가 1.37GB 였다(2026-09-10 실측). 정적 빌드는 두 바이너리 합쳐 ~100MB 이고 앱이 쓰는
+#    libx264·aac·scale·faststart·mjpeg 썸네일을 전부 포함한다 (FfmpegRunner 의 인자 기준). 태그+digest 로 고정.
 #    curl 은 compose healthcheck 용.
 FROM eclipse-temurin:21-jre-noble
+COPY --from=mwader/static-ffmpeg:7.1.1@sha256:11a44711684c0b9f754c047dcd64235b8b52deab251bd0e0a86f22faa160749c \
+	/ffmpeg /ffprobe /usr/local/bin/
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends ffmpeg curl \
+	&& apt-get install -y --no-install-recommends curl \
 	&& rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=extract /w/extracted/dependencies/ ./

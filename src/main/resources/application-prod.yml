@@ -16,11 +16,14 @@ spring:
   jpa:
     show-sql: false                # 운영에선 절대 켜지 말 것
 
-  # Redis — EC2 docker-compose.server.yml 의 fillmap-redis-prod (6380, requirepass 필수)
+  # Redis — ElastiCache (MSG-595, 2026-09-10 전환). 전송 암호화를 켠 노드라 TLS 로 붙고, AUTH 토큰이 REDIS_PASSWORD 다.
+  # 전에는 EC2 docker-compose.server.yml 의 fillmap-redis-prod(6380) 였다 — 컨테이너로 되돌리려면 ssl 을 끄고 포트를 6380 으로.
   data:
     redis:
       host: ${REDIS_HOST}
-      port: ${REDIS_PORT:6380}
+      port: ${REDIS_PORT:6379}
+      ssl:
+        enabled: true
       # 기본값을 두지 않는다. 단 미설정 시에도 바인더는 리터럴 "${REDIS_PASSWORD}" 로 통과시키므로
       # 기동 실패는 ProdRequiredEnvValidator 가 보장한다. (MSG-244 → MSG-260 일반화)
       password: ${REDIS_PASSWORD}

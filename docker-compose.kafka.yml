@@ -1,0 +1,32 @@
+# prod EC2 전용 — Kafka 브로커 하나 (MSG-595). DB·Redis 는 RDS·ElastiCache 라 컨테이너가 없다.
+# docker-compose.server.yml(dev 박스)의 kafka 서비스와 같은 설정을 따로 둔 이유: 그 파일은 postgres-prod·redis-prod 의
+# `${...:?}` 비밀번호 검증이 파일 전체 로드 시점에 걸려 kafka 만 골라 띄울 수 없다. 설정을 바꾸면 두 파일을 같이 바꾼다.
+#
+#   docker compose -f docker-compose.kafka.yml up -d        # 사람이 1회, CD 밖 (deploy.md "운영 배포")
+name: fillmap-infra
+
+services:
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: fillmap-kafka
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      # 이미지 기본 log.dirs 는 /tmp/kraft-combined-logs — 지정 없으면 볼륨 마운트가 무효라
+      # 컨테이너 재생성 시 브로커 데이터가 소실된다 (PUBLISHED 행 영구 미발송).
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx256m"
+    ports:
+      - "127.0.0.1:9092:9092"   # 앱은 host 네트워크 컨테이너라 localhost 로 붙는다 — 외부 노출 없음
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+
+volumes:
+  kafkadata:

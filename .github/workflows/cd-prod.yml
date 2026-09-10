@@ -1,96 +1,195 @@
 name: CD (prod)
 
-# main 브랜치 push -> prod 환경 배포.
-# environment: production 에 GitHub 보호 규칙(수동 승인 리뷰어)을 걸어 승인 후 배포한다.
-# EC2(MSG-51) 준비 전까지 DEPLOY_ENABLED 로 비활성(skip). 준비되면 secrets 등록:
-#   PROD_EC2_HOST / PROD_EC2_USER / PROD_EC2_SSH_KEY
-# prod 앱은 systemd 서비스 fillmap-prod (profile=prod, DB 5433 컨테이너)로 상시 구동.
-# 지금은 dev와 같은 EC2를 가리켜도 되고, 나중에 EC2를 분리하면 secret만 바꾸면 된다.
+# main 브랜치 push -> 승인 -> prod 배포 (MSG-595 부터 도커 이미지, dev 와 같은 아티팩트).
+#
+# 이미지를 다시 만들지 않는다. dev CD(cd-dev.yml)가 develop 커밋마다 ECR 에 sha-<7> 태그로 올린 이미지 중
+# 이 main 커밋에 해당하는 것을 찾아 `prod` 태그만 붙인다(태그 승격). main 이 develop 을 머지 커밋으로 받으면
+# HEAD 자체의 이미지는 없고 HEAD^2(develop 쪽 부모)의 이미지가 그것이다. 둘 다 없을 때(squash 머지, 첫 실행)만
+# 같은 Dockerfile 로 빌드하는 fallback 이 돈다.
+#
+# 서버 쪽은 cd-dev.yml 의 deploy-dev 와 같은 절차(compose pull/up --wait, 이미지·재시작·리스너 PID 신원 검사)이고
+# 경로만 다르다: 홈 ~/fillmap-prod, env 파일 fillmap-prod.env, 관리 포트 8081 (application-prod.yml).
+# environment: production 의 보호 규칙(수동 승인)이 게이트다 — 승인 전에는 prod 태그도 붙지 않는다.
+# secrets(production): PROD_EC2_HOST / PROD_EC2_USER / PROD_EC2_SSH_KEY. repo variable DEPLOY_ENABLED=true.
 on:
   push:
     branches: [ main ]
+
+# 운영 배포는 한 번에 하나만. Open/Close SSH 가 보안그룹이라는 공유 상태를 만지므로 두 실행이 겹치면(러너 IP 재사용)
+# 먼저 끝난 쪽이 상대의 22 번 규칙을 지워 SSH 타임아웃이 재현된다 (PR 리뷰). 취소하지 않고 순서대로 기다린다.
+concurrency:
+  group: cd-prod
+  cancel-in-progress: false
+
+env:
+  IMAGE: 951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap
+  REPO: fillmap
+  PROD_SG: sg-0693ef4445559cefc   # fillmap-prod-sg — 배포 동안만 러너 IP 의 22 번을 연다
 
 jobs:
   deploy-prod:
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production        # 보호 규칙으로 수동 승인
+    permissions:
+      id-token: write   # OIDC 토큰 발급 (aws-actions/configure-aws-credentials)
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # 머지 커밋이면 HEAD^2(develop 쪽 부모)가 필요하다
 
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::951142447485:role/fillmap-ecr-push
+          aws-region: ap-northeast-2
+
+      # dev 가 검증한 이미지를 찾는다: HEAD 의 sha 태그 → 없으면 HEAD^2 의 sha 태그
+      - name: Find dev-verified image
+        id: find
+        run: |
+          for c in "$GITHUB_SHA" "$(git rev-parse -q --verify HEAD^2 2>/dev/null || true)"; do
+            [ -n "$c" ] || continue
+            t="sha-${c:0:7}"
+            if aws ecr describe-images --repository-name "$REPO" --image-ids imageTag="$t" >/dev/null 2>&1; then
+              echo "dev 검증 이미지 사용: $t (커밋 $c)"; echo "tag=$t" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+          done
+          echo "::warning::HEAD·HEAD^2 어느 쪽도 ECR 에 이미지가 없다 — 이 커밋으로 새로 빌드한다 (build-once 예외)"
+          echo "tag=" >> "$GITHUB_OUTPUT"
+
+      # 배포 태그: dev 검증 이미지가 있으면 그것, 없으면 이 커밋의 sha-<7> (아래 fallback 이 그 태그로 빌드한다)
+      - name: Resolve tag
+        id: meta
+        run: |
+          t="${{ steps.find.outputs.tag }}"
+          [ -n "$t" ] || t="sha-${GITHUB_SHA:0:7}"
+          echo "tag=$t" >> "$GITHUB_OUTPUT"
+
+      # ---- fallback: 이미지가 없을 때만 (cd-dev.yml build-image 와 같은 절차) ----
       - name: Set up JDK 21
+        if: steps.find.outputs.tag == ''
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
-
       - name: Build bootJar
+        if: steps.find.outputs.tag == ''
         run: ./gradlew bootJar -x test
+      - name: Login to ECR
+        if: steps.find.outputs.tag == ''
+        uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/setup-buildx-action@v3
+        if: steps.find.outputs.tag == ''
+      - name: Build & push image (fallback)
+        if: steps.find.outputs.tag == ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
 
-      - name: Upload jar to prod EC2
+      # 태그 승격: 같은 매니페스트에 prod 태그를 붙인다 (pull/push 없음). 이미 그 이미지를 가리키면 건너뛴다.
+      # 라이프사이클이 sha-* 를 20개 넘게 지워도 prod 태그가 붙은 이미지는 prod 보호 규칙(우선순위 1)에 잡혀 남는다.
+      - name: Promote to prod tag
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          new=$(aws ecr describe-images --repository-name "$REPO" --image-ids imageTag="$TAG" --query 'imageDetails[0].imageDigest' --output text)
+          cur=$(aws ecr describe-images --repository-name "$REPO" --image-ids imageTag=prod --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)
+          if [ "$new" = "$cur" ]; then echo "prod 태그가 이미 $TAG 를 가리킨다"; exit 0; fi
+          manifest=$(aws ecr batch-get-image --repository-name "$REPO" --image-ids imageTag="$TAG" --query 'images[0].imageManifest' --output text)
+          aws ecr put-image --repository-name "$REPO" --image-tag prod --image-manifest "$manifest" >/dev/null
+          echo "prod 태그 → $TAG ($new)"
+
+      # prod 보안그룹은 22 번을 개발자 IP 에만 연다(dev 처럼 0.0.0.0/0 이 아니다). 그래서 GitHub 러너가 붙으려면
+      # 이 실행의 공인 IP 를 배포 동안만 넣었다가 마지막 스텝(if: always())에서 뺀다. 첫 운영 배포(2026-09-10)가
+      # 여기서 `dial tcp :22 i/o timeout` 으로 멈춘 뒤 추가. 권한은 OIDC 역할의 FillMapProdSgRunnerSsh (이 SG 한정).
+      - name: Open SSH for this runner
+        id: sg
+        run: |
+          ip=$(curl -fsS https://checkip.amazonaws.com)
+          # 같은 (tcp, 22, CIDR) 규칙이 이미 있으면 InvalidPermission.Duplicate 로 거부된다 — 러너 IP 는 재사용되고
+          # 이전 실행의 Close 가 실패했을 수 있다(PR 리뷰). 그 경우 그 규칙을 그대로 쓰고 끝에 뺀다(잔재 정리).
+          out=$(aws ec2 authorize-security-group-ingress --group-id "$PROD_SG" --ip-permissions \
+            "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$ip/32,Description=github-actions-run-${{ github.run_id }}}]" 2>&1) \
+            || { echo "$out" | grep -q InvalidPermission.Duplicate || { echo "$out"; exit 1; }; echo "규칙이 이미 있다(이전 실행 잔재) — 그대로 쓰고 끝에 뺀다"; }
+          echo "cidr=$ip/32" >> "$GITHUB_OUTPUT"
+          sleep 5   # SG 반영 전파
+
+      - name: Upload compose file to prod EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.PROD_EC2_HOST }}
           username: ${{ secrets.PROD_EC2_USER }}
           key: ${{ secrets.PROD_EC2_SSH_KEY }}
-          source: build/libs/fillmap-0.0.1-SNAPSHOT.jar
+          source: docker-compose.app.yml
           target: /home/${{ secrets.PROD_EC2_USER }}/fillmap-prod
-          strip_components: 2
 
-      - name: Restart prod service
+      - name: Deploy api container
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          APP_ENV_FILE: /home/${{ secrets.PROD_EC2_USER }}/fillmap-prod/fillmap-prod.env
+          CLOUDFRONT_KEY_FILE: /home/${{ secrets.PROD_EC2_USER }}/fillmap-prod/fillmap-prod-cloudfront-private-key.pem
+          FCM_FILE: /home/${{ secrets.PROD_EC2_USER }}/fillmap-prod/fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json
         with:
           host: ${{ secrets.PROD_EC2_HOST }}
           username: ${{ secrets.PROD_EC2_USER }}
           key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          envs: IMAGE,TAG,APP_ENV_FILE,CLOUDFRONT_KEY_FILE,FCM_FILE
           script: |
             set -e
             cd /home/${{ secrets.PROD_EC2_USER }}/fillmap-prod
-            # ffmpeg 는 인코딩·선분석 probe 의 런타임 의존 — cd-dev.yml 과 같은 멱등 보장 (MSG-351)
-            command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
-            mv -f fillmap-0.0.1-SNAPSHOT.jar app.jar
-            sudo systemctl restart fillmap-prod
-
-      # systemctl restart 는 기동을 '지시'하고 즉시 0 을 반환한다 — 앱이 직후 죽어도 위 step 은 성공이다 (MSG-129).
-      - name: Health check
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PROD_EC2_HOST }}
-          username: ${{ secrets.PROD_EC2_USER }}
-          key: ${{ secrets.PROD_EC2_SSH_KEY }}
-          script: |
-            # health 는 관리 포트(8081, MSG-344)에서 본다 — 공개 포트에선 /actuator/** 가 404 다.
-            # 200 만 통과시킨다: DB·Redis 장애면 health 가 503(DOWN)이라 "떠 있지만 병든" 배포를 잡고,
-            # 미기동(000)도 당연히 실패다. 기존 "401 이 곧 기동 성공"(루트 경로 4xx 허용)은 간접
-            # 신호라 폐기했다. 연결 실패 시 curl 은 000 을 '출력하므로' `|| echo 000` 을 붙이면
-            # 000000 이 되어 오판한다 — `|| true` 로 실제 코드만 본다.
-            # 재시도는 회수가 아니라 경과 시간으로 센다 — 회수x간격(30x5초)은 curl 대기(최대 3초)가
-            # 회마다 얹혀 최악 240초까지 늘어나 명시한 150초 데드라인과 어긋났다.
-            # 시계는 bash 전용 SECONDS 가 아니라 date +%s 를 쓴다 — ssh-action 이 원격 기본 셸로
-            # 실행하므로 sh/dash 로 떨어지면 SECONDS 는 0 고정 변수가 되어 무한 루프가 된다 (PR #153 리뷰).
-            deadline_start=$(date +%s)
-            while [ $(( $(date +%s) - deadline_start )) -lt 150 ]; do
-              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:8081/actuator/health || true)
-              if [ "$code" = "200" ]; then
-                # 200 만으로는 부족하다 (MSG-382) — 고아 프로세스나 다른 앱이 8081 을 물고 있으면
-                # 재시작이 실패해도 초록불이 된다. 8081 리스너의 PID 가 fillmap-prod 유닛의 MainPID 와
-                # 같을 때만 성공으로 친다 (cd-dev.yml 과 같은 기준).
-                # 리스너 PID 는 전부 모아 유일값으로 비교한다 — v4/v6 두 소켓이 각 행으로 나오고,
-                # 첫 행만 보면(head -1) 다른 프로세스가 섞여 있어도 우연히 통과할 수 있다 (Codex 리뷰).
-                main_pid=$(systemctl show -p MainPID --value fillmap-prod)
-                listen_pids=$(sudo ss -ltnpH 'sport = :8081' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
-                if [ -n "$main_pid" ] && [ "$main_pid" != "0" ] && [ "$listen_pids" = "$main_pid" ]; then
-                  echo "기동 확인 — health HTTP 200, 8081 리스너(pid=$listen_pids) = fillmap-prod MainPID ($(( $(date +%s) - deadline_start ))초)"
-                  exit 0
-                fi
-                echo "::error::200 응답을 재시작한 유닛이 아닌 프로세스가 줬다 — MainPID=$main_pid, 8081 리스너 pid=[$listen_pids]"
-                sudo ss -ltnp 'sport = :8081' || true
-                journalctl -u fillmap-prod -n 50 --no-pager
-                exit 1
-              fi
-              sleep 5
+            # 서버에 사람이 놓아야 하는 파일 셋 — 없으면 compose 가 뜨기 전에 여기서 멈춘다 (deploy.md "운영 배포" 절)
+            for f in "$APP_ENV_FILE" "$CLOUDFRONT_KEY_FILE" "$FCM_FILE"; do
+              [ -f "$f" ] || { echo "::error::필수 파일 없음: $f"; exit 1; }
             done
-            echo "::error::150초 내 health 200 실패 (마지막 코드: $code) — 아래 로그에서 원인 확인"
-            journalctl -u fillmap-prod -n 50 --no-pager
-            exit 1
+            command -v docker-credential-ecr-login >/dev/null \
+              || (sudo apt-get update -qq && sudo apt-get install -y -qq amazon-ecr-credential-helper)
+            python3 - <<'PY'
+            import json, os
+            p = os.path.expanduser('~/.docker/config.json'); os.makedirs(os.path.dirname(p), exist_ok=True)
+            try: c = json.load(open(p))
+            except Exception: c = {}
+            c.setdefault('credHelpers', {})['951142447485.dkr.ecr.ap-northeast-2.amazonaws.com'] = 'ecr-login'
+            json.dump(c, open(p, 'w'), indent=2)
+            PY
+            docker compose -f docker-compose.app.yml pull -q api
+            # 새 prod EC2 에는 jar 시절 유닛이 없다. 혹시 남아 있으면 dev 와 같은 순서로 치운다.
+            if [ -f /etc/systemd/system/fillmap-prod.service ]; then
+              sudo systemctl disable --now fillmap-prod
+              sudo mv /etc/systemd/system/fillmap-prod.service ~/fillmap-prod/fillmap-prod.service.pre-msg595
+              sudo systemctl daemon-reload
+            fi
+            sudo systemctl mask fillmap-prod
+            docker compose -f docker-compose.app.yml up -d --wait --wait-timeout 180 api \
+              || { echo "::error::api 컨테이너가 180초 안에 healthy 가 되지 않았다"; docker logs --tail 50 fillmap-api 2>&1 || true; exit 1; }
+            # 신원 검사 (cd-dev.yml 과 같다). 리스너는 관리 포트 8081 — health 가 그 포트에서 나온다.
+            running=$(docker inspect -f '{{.Config.Image}}' fillmap-api)
+            restarts=$(docker inspect -f '{{.RestartCount}}' fillmap-api)
+            cpid=$(docker inspect -f '{{.State.Pid}}' fillmap-api)
+            listen=$(sudo ss -ltnpH 'sport = :8081' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
+            if [ "$running" = "$IMAGE:$TAG" ] && [ "$restarts" = "0" ] && [ -n "$cpid" ] && [ "$listen" = "$cpid" ]; then
+              echo "기동 확인 — healthy, image=$running, 8081 리스너(pid=$listen) = 컨테이너 PID"
+            else
+              echo "::error::healthy 지만 신원이 다르다 — 기대 image=$IMAGE:$TAG restarts=0 pid=$cpid / 실제 image=$running restarts=$restarts 8081 리스너 pid=[$listen]"
+              sudo ss -ltnp 'sport = :8081' || true
+              docker logs --tail 50 fillmap-api 2>&1 || true
+              exit 1
+            fi
+            docker images "$IMAGE" --format '{{.Tag}}' | grep '^sha-' | grep -vx "$TAG" \
+              | xargs -r -I{} docker rmi "$IMAGE:{}" >/dev/null
+            docker image prune -f >/dev/null
+
+      # 배포 결과와 무관하게 러너 IP 규칙을 뺀다 — 실패해도 22 번이 열린 채 남지 않게
+      - name: Close SSH for this runner
+        if: always() && steps.sg.outputs.cidr != ''
+        run: |
+          aws ec2 revoke-security-group-ingress --group-id "$PROD_SG" --protocol tcp --port 22 \
+            --cidr "${{ steps.sg.outputs.cidr }}" >/dev/null || echo "::warning::러너 IP 규칙 제거 실패 — 콘솔에서 $PROD_SG 의 22 번 규칙을 확인한다"
