@@ -78,7 +78,8 @@
 
 - MSG-439: `GridQueryService.resolveRegionNames(Collection<String> gridIds)` — 계약 메서드 비파괴 추가(A→B read, event 위치 표시명 재료). `gridId → 행정동 이름` 사전이고 무귀속·범위 밖은 키 부재(null 값 없음). **grids 행 존재와 무관하게 격자 중심점 행정동 판정 보장** — lazy insert라 행사 대표 격자는 행이 없는 게 정상이며, `GridRepository.findRegionNames`(grids INNER JOIN이라 행 없는 격자 누락)와는 이름부터 분리(javadoc 사유 명시). 구현은 격자당 `resolveByPoint`(ST_Covers) 1회 루프 — 소수 격자 전제, 수백 건 소비처가 생기면 점 배열 벌크 쿼리 승격(javadoc 상한). 계약 테스트 3건(행 부재 내륙·무귀속 해상·빈 목록)
 
-- MSG-585: 네이티브 → 연관관계 JPQL 파일럿 — `Grid.region`(`` LAZY, region_code 읽기 전용)·`UserGrid.grid`(grid_id 읽기 전용) 연관 추가, `GridRepository` native 8건 중 5건(`findVideoCount`·`findOccupiedInRange`·`findOccupiedPage`(+Spring Data `Limit`)·`summarizeOccupiedByRegion`·`findRegionNames`)을 JPQL 경로 조인으로 전환. 잔존 native 3건은 `split_part`·`ST_Y`(집계)·행 값 비교(커서 이후 페이지)·GIST(접근 B). 생성 SQL·실행 계획 전후 동일 실측(`docs/spec/MSG-585.md` 작업 로그). 쓰기 경로·API 계약·마이그레이션 무변경
+- MSG-585: 네이티브 → 연관관계 JPQL 파일럿 — `Grid.region`(LAZY, region_code 읽기 전용)·`UserGrid.grid`(grid_id 읽기 전용) 연관 추가, `GridRepository` native 8건 중 5건(`findVideoCount`·`findOccupiedInRange`·`findOccupiedPage`(+Spring Data `Limit`)·`summarizeOccupiedByRegion`·`findRegionNames`)을 JPQL 경로 조인으로 전환. 잔존 native 3건은 `split_part`·`ST_Y`(집계)·행 값 비교(커서 이후 페이지)·GIST(접근 B). 생성 SQL·실행 계획 전후 동일 실측(`docs/spec/MSG-585.md` 작업 로그). 쓰기 경로·API 계약·마이그레이션 무변경
+
 ### `usergrid` (Owner B · 구현 강정민) — 🟡 부분
 - MSG-152: `repository/{UserGridRepository,CollectionSummaryProjection}`(user_grids·videos 네이티브 집계), `service/UserGridQueryService`(+impl, read 계약 B→A)·`CollectionSummaryView`, `controller/CollectionController`(`GET /api/collections/summary`), `dto/CollectionSummaryResponseDto`
 - MSG-246: 도감 요약 `visitedRegionCount` 정정(`getCollectionSummary` 서브쿼리 — dead `videos.region_code` 대신 `JOIN grids` 후 `COUNT(DISTINCT g.region_code)`, MSG-167 by-grid 귀속 정합. 테스트 시딩도 프로덕션 형상(videos.region_code NULL)으로 재작성)
