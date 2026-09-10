@@ -36,6 +36,17 @@ class OidcDecoderConfigTest {
 		assertThat(validator.validate(jwtWithAudience("other-app-key")).hasErrors()).isTrue();
 	}
 
+	// 검증: FR-AUTH-12, AC-594-02
+	@Test
+	@DisplayName("애플 디코더의 audience 검증은 번들 ID 하나만 허용한다 (D-6, dev·prod 단일값)")
+	void 애플_디코더의_audience_검증은_번들_ID만_허용한다() {
+		OAuth2TokenValidator<Jwt> appleValidator = OidcDecoderConfig.audienceValidator(Set.of("kr.fillmap.app"));
+
+		assertThat(appleValidator.validate(jwtWithAudience("kr.fillmap.app")).hasErrors()).isFalse();
+		assertThat(appleValidator.validate(jwtWithAudience("kr.fillmap.other")).hasErrors()).isTrue();
+		assertThat(appleValidator.validate(jwtWithAudience(NATIVE_APP_KEY)).hasErrors()).isTrue();
+	}
+
 	private Jwt jwtWithAudience(String audience) {
 		return Jwt.withTokenValue("id-token")
 			.header("alg", "RS256")

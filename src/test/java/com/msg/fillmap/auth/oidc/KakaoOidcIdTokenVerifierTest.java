@@ -53,7 +53,7 @@ class KakaoOidcIdTokenVerifierTest {
 			.build();
 		given(kakaoJwtDecoder.decode("id-token")).willReturn(jwt);
 
-		OidcUserInfo info = verifier.verify("id-token");
+		OidcUserInfo info = verifier.verify("id-token", null);
 
 		assertThat(info.oid()).isEqualTo("kakao-12345");
 		assertThat(info.email()).isEqualTo("test@kakao.com");
@@ -65,7 +65,7 @@ class KakaoOidcIdTokenVerifierTest {
 	void verify_invalidToken() {
 		given(kakaoJwtDecoder.decode("bad-token")).willThrow(new BadJwtException("invalid"));
 
-		assertThatThrownBy(() -> verifier.verify("bad-token"))
+		assertThatThrownBy(() -> verifier.verify("bad-token", null))
 			.isInstanceOf(ApiException.class)
 			.satisfies(thrown -> {
 				ApiException api = (ApiException)thrown;

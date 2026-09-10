@@ -93,7 +93,7 @@ class UserLocationConsentIntegrationTest {
 	 * 트랜잭션은 이 테스트 클래스가 이미 열어 뒀으므로 프록시 없는 직접 호출로도 @Modifying 쿼리가 실행된다.
 	 */
 	private UserService serviceAt(LocalDateTime utc) {
-		return new UserServiceImpl(userRepository, null, null, null, null, null,
+		return new UserServiceImpl(userRepository, null, null, null, null, null, null, null,
 			Clock.fixed(utc.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 

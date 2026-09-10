@@ -36,6 +36,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
+import com.msg.fillmap.auth.oidc.AppleRefreshTokenCipher;
+import com.msg.fillmap.auth.oidc.AppleTokenClient;
 import com.msg.fillmap.auth.service.RefreshTokenService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
@@ -91,6 +93,9 @@ public class UserServiceImpl implements UserService {
 	private final S3Presigner s3Presigner;
 	private final S3Client s3Client;
 	private final AwsProperties awsProperties;
+	// 애플 계정 탈퇴의 토큰 취소 (MSG-594 FR-9). auth 패키지 의존이지만 RefreshTokenService 와 같은 Owner B 내부다.
+	private final AppleTokenClient appleTokenClient;
+	private final AppleRefreshTokenCipher appleRefreshTokenCipher;
 	private final Clock clock;
 
 	/**
@@ -100,9 +105,10 @@ public class UserServiceImpl implements UserService {
 	 */
 	@Autowired
 	public UserServiceImpl(UserRepository userRepository, RefreshTokenService refreshTokenService,
-		TokenProvider tokenProvider, S3Presigner s3Presigner, S3Client s3Client, AwsProperties awsProperties) {
+		TokenProvider tokenProvider, S3Presigner s3Presigner, S3Client s3Client, AwsProperties awsProperties,
+		AppleTokenClient appleTokenClient, AppleRefreshTokenCipher appleRefreshTokenCipher) {
 		this(userRepository, refreshTokenService, tokenProvider, s3Presigner, s3Client, awsProperties,
-			Clock.systemUTC());
+			appleTokenClient, appleRefreshTokenCipher, Clock.systemUTC());
 	}
 
 	@Override
@@ -111,6 +117,8 @@ public class UserServiceImpl implements UserService {
 		// 삭제 전에 수집한다 — DELETE 가 CASCADE 로 videos 행을 지우면 키의 접근 경로가 사라진다.
 		// status DELETED(soft) 행도 전량 포함 — 없는 키는 DeleteObjects 가 에러 없이 넘어가므로 무해.
 		List<String> s3Keys = collectS3Keys(userId);
+		// 같은 이유로 삭제 전에 읽는다 — APPLE 이 아니거나 dev 모의 로그인 계정이면 null (MSG-594)
+		String appleRefreshTokenEncrypted = userRepository.findAppleRefreshTokenById(userId).orElse(null);
 		if (userRepository.deleteUser(userId) == 0) {
 			// 이미 없는 유저 — 멱등 성공은 블랙리스트 결함(정상이면 재호출 자체가 401)을 숨기므로 배제 (§D3).
 			throw new ApiException(UserErrorCode.USER_NOT_FOUND);
@@ -120,6 +128,7 @@ public class UserServiceImpl implements UserService {
 		afterCommit(() -> {
 			deleteS3Objects(s3Keys);
 			invalidateSessions(userId, accessToken);
+			revokeAppleToken(userId, appleRefreshTokenEncrypted);
 		});
 	}
 
@@ -429,6 +438,23 @@ public class UserServiceImpl implements UserService {
 			tokenProvider.invalidateAccessToken(accessToken);
 		} catch (RuntimeException e) {
 			log.error("계정 삭제 액세스 토큰 블랙리스트 실패 — 토큰 만료가 안전망이다: userId={}", userId, e);
+		}
+	}
+
+	/**
+	 * 애플 리프레시 토큰 취소 (MSG-594 FR-9·D-9) — 앱스토어 심사가 보는 "계정 삭제 + 취소 호출" 요건. 커밋 이후
+	 * best-effort 라 복호화·호출 실패는 error 로그만 남기고 탈퇴 응답은 200 이다(탈퇴가 애플 장애에 막히면 안 된다).
+	 * 암호문이 없으면(APPLE 아님·dev 모의 로그인) 호출 자체가 없다. 사용자가 아이폰 설정에서 연결을 끊은 뒤면
+	 * 보관 토큰이 낡아 invalid_grant 로 실패하는데 그것도 로그만이다(D-5).
+	 */
+	private void revokeAppleToken(Long userId, String appleRefreshTokenEncrypted) {
+		if (appleRefreshTokenEncrypted == null) {
+			return;
+		}
+		try {
+			appleTokenClient.revoke(appleRefreshTokenCipher.decrypt(appleRefreshTokenEncrypted));
+		} catch (RuntimeException e) {
+			log.error("계정 삭제 애플 토큰 취소 실패 — 탈퇴는 이미 커밋됐다: userId={}", userId, e);
 		}
 	}
 

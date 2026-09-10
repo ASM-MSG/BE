@@ -89,6 +89,16 @@ public class User {
 	private String orgName;
 
 	/**
+	 * 애플 리프레시 토큰의 AES-256-GCM 암호문 (MSG-594 D-3). 탈퇴 시 애플 취소 호출에만 쓰고 로그인 발급에는
+	 * 쓰지 않는다. 게터를 막는 이유는 클래스 레벨 @Getter 가 만든 접근자를 응답 DTO 가 실수로 싣는 일을
+	 * 원천 차단하기 위해서다 — 읽기는 탈퇴 경로의 스칼라 JPQL(findAppleRefreshTokenById) 하나뿐이다.
+	 * APPLE 이 아니거나 dev 모의 로그인으로 만든 계정은 null.
+	 */
+	@Column(name = "apple_refresh_token_encrypted", columnDefinition = "text")
+	@Getter(AccessLevel.NONE)
+	private String appleRefreshTokenEncrypted;
+
+	/**
 	 * 가입 시각. @CreationTimestamp 를 쓰지 않고 생성자에서 UTC 로 직접 넣는다 (MSG-376) —
 	 * 그 애너테이션은 JVM 기본 존의 벽시계를 만들어 KST 개발 머신에서 +9h 가 저장되는데, 이 값은
 	 * 응답에 실려 전역 코덱이 UTC 로 표기하므로 저장 축이 UTC 여야 한다.
@@ -240,6 +250,15 @@ public class User {
 	 */
 	public void resetInitialPassword(String newPasswordHash) {
 		this.passwordHash = newPasswordHash;
+	}
+
+	/**
+	 * 애플 리프레시 토큰 암호문 보관 (MSG-594). 암호화는 서비스(AppleRefreshTokenCipher) 몫이고 엔티티는
+	 * 전달값만 반영한다(updateNickname 과 같은 규칙, 더티 체킹 UPDATE). 첫 로그인의 인가 코드 교환 뒤에만
+	 * 호출되고, 동시 첫 로그인 경합에서는 마지막 쓰기가 남는다(D-8).
+	 */
+	public void storeAppleRefreshToken(String encrypted) {
+		this.appleRefreshTokenEncrypted = encrypted;
 	}
 
 	/** 담당자 이름·연락처 변경 (MSG-497 FR-23). ORG 계정의 nickname 이 곧 담당자 이름이다. */

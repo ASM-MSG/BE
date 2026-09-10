@@ -99,11 +99,12 @@ public class AuthController {
 		summary = "소셜 로그인 (OIDC)",
 		description = "소셜 제공자의 ID Token으로 로그인/가입하고 JWT 액세스 토큰과 리프레시 토큰을 발급받는다. "
 			+ "웹(X-Client-Type: web, 기본)은 리프레시가 HttpOnly 쿠키(Set-Cookie)로 내려가 body 의 "
-			+ "refreshToken 이 null 이고, 앱(app)은 body 로 내려간다."
+			+ "refreshToken 이 null 이고, 앱(app)은 body 로 내려간다. provider=apple 은 nonce 원문과 "
+			+ "authorizationCode 가 필수이고(첫 로그인에서만 애플 토큰 교환), fullName 은 계정 생성 때만 닉네임으로 쓴다."
 	)
 	@PostMapping("/oauth/{provider}")
 	public SuccessResponse<LoginResponseDto> oauthLogin(
-		@Parameter(description = "소셜 제공자", example = "KAKAO") @PathVariable String provider,
+		@Parameter(description = "소셜 제공자 (KAKAO|APPLE)", example = "KAKAO") @PathVariable String provider,
 		@Valid @RequestBody OidcLoginRequestDto request,
 		@Parameter(description = "클라이언트 유형 (web|app, 기본 web)")
 		@RequestHeader(value = CLIENT_TYPE_HEADER, defaultValue = CLIENT_TYPE_WEB) String clientType,
@@ -113,7 +114,7 @@ public class AuthController {
 	) {
 		AuthProvider authProvider = parseProvider(provider);
 		String deviceId = resolveDeviceId(deviceIdHeader);
-		LoginResponseDto issued = oidcLoginService.login(authProvider, request.idToken(), deviceId);
+		LoginResponseDto issued = oidcLoginService.login(authProvider, request, deviceId);
 		response.setHeader(DEVICE_ID_HEADER, deviceId);
 		return SuccessResponse.of(applyTransport(issued, clientType, response));
 	}

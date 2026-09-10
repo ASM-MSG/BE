@@ -23,6 +23,7 @@ import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -68,6 +69,7 @@ class AuthControllerTest {
 	private static final String SIGNUP_URL = "/api/auth/signup";
 	private static final String LOGIN_URL = "/api/auth/login";
 	private static final String OAUTH_URL = "/api/auth/oauth/kakao";
+	private static final String OAUTH_APPLE_URL = "/api/auth/oauth/apple";
 	private static final String OAUTH_CODE_URL = "/api/auth/oauth/kakao/code";
 	private static final String OAUTH_AUTHORIZE_URL = "/api/auth/oauth/kakao/authorize";
 	private static final String REISSUE_URL = "/api/auth/reissue";
@@ -321,8 +323,8 @@ class AuthControllerTest {
 		@Test
 		@DisplayName("성공: kakao provider 로 정상 요청하면 200 과 accessToken 을 반환한다")
 		void oauthLogin_success() throws Exception {
-			OidcLoginRequestDto request = new OidcLoginRequestDto("kakao-id-token");
-			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("kakao-id-token"), anyString()))
+			OidcLoginRequestDto request = new OidcLoginRequestDto("kakao-id-token", null, null, null);
+			given(oidcLoginService.login(eq(AuthProvider.KAKAO), any(OidcLoginRequestDto.class), anyString()))
 				.willReturn(new LoginResponseDto("jwt-token", "refresh-jwt", "USER"));
 
 			mockMvc.perform(post(OAUTH_URL)
@@ -338,21 +340,21 @@ class AuthControllerTest {
 		@Test
 		@DisplayName("실패: idToken 이 비어있으면 400 을 반환하고 서비스는 호출되지 않는다")
 		void oauthLogin_blankIdToken() throws Exception {
-			OidcLoginRequestDto request = new OidcLoginRequestDto("");
+			OidcLoginRequestDto request = new OidcLoginRequestDto("", null, null, null);
 
 			mockMvc.perform(post(OAUTH_URL)
 					.contentType(MediaType.APPLICATION_JSON)
 					.content(objectMapper.writeValueAsString(request)))
 				.andExpect(status().isBadRequest());
 
-			verify(oidcLoginService, never()).login(any(), any(), any());
+			verify(oidcLoginService, never()).login(any(), any(OidcLoginRequestDto.class), any());
 		}
 
 		// 검증: FR-AUTH-01
 		@Test
 		@DisplayName("실패: 지원하지 않는 provider 면 400 과 UNSUPPORTED_PROVIDER 코드를 반환하고 서비스는 호출되지 않는다")
 		void oauthLogin_unsupportedProvider() throws Exception {
-			OidcLoginRequestDto request = new OidcLoginRequestDto("some-id-token");
+			OidcLoginRequestDto request = new OidcLoginRequestDto("some-id-token", null, null, null);
 
 			mockMvc.perform(post("/api/auth/oauth/naver")
 					.contentType(MediaType.APPLICATION_JSON)
@@ -360,14 +362,14 @@ class AuthControllerTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.developCode").value(2422));
 
-			verify(oidcLoginService, never()).login(any(), any(), any());
+			verify(oidcLoginService, never()).login(any(), any(OidcLoginRequestDto.class), any());
 		}
 
 		@Test
 		@DisplayName("실패: ID Token 검증에 실패하면 401 과 INVALID_ID_TOKEN 코드를 반환한다")
 		void oauthLogin_invalidIdToken() throws Exception {
-			OidcLoginRequestDto request = new OidcLoginRequestDto("bad-id-token");
-			given(oidcLoginService.login(eq(AuthProvider.KAKAO), eq("bad-id-token"), anyString()))
+			OidcLoginRequestDto request = new OidcLoginRequestDto("bad-id-token", null, null, null);
+			given(oidcLoginService.login(eq(AuthProvider.KAKAO), any(OidcLoginRequestDto.class), anyString()))
 				.willThrow(new ApiException(AuthErrorCode.INVALID_ID_TOKEN));
 
 			mockMvc.perform(post(OAUTH_URL)
@@ -375,6 +377,62 @@ class AuthControllerTest {
 					.content(objectMapper.writeValueAsString(request)))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.developCode").value(2421));
+		}
+
+		// 검증: FR-AUTH-12, AC-594-01
+		@Test
+		@DisplayName("애플: nonce·authorizationCode·fullName 이 DTO 통째로 서비스에 전달된다")
+		void 애플_로그인은_nonce와_인가_코드와_fullName을_서비스에_전달한다() throws Exception {
+			OidcLoginRequestDto request = new OidcLoginRequestDto("apple-id-token", "raw-nonce", "auth-code", "김필맵");
+			given(oidcLoginService.login(eq(AuthProvider.APPLE), any(OidcLoginRequestDto.class), anyString()))
+				.willReturn(new LoginResponseDto("jwt-token", "refresh-jwt", "USER"));
+
+			mockMvc.perform(post(OAUTH_APPLE_URL)
+					.header(CLIENT_TYPE_HEADER, "app")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isOk());
+
+			ArgumentCaptor<OidcLoginRequestDto> captor = ArgumentCaptor.forClass(OidcLoginRequestDto.class);
+			verify(oidcLoginService).login(eq(AuthProvider.APPLE), captor.capture(), anyString());
+			assertThat(captor.getValue()).isEqualTo(request);
+		}
+
+		// 검증: FR-AUTH-12, AC-594-01
+		@Test
+		@DisplayName("애플: 앱 클라이언트는 리프레시 토큰이 body 로 내려가고 X-Device-Id 를 돌려받는다 — 카카오 앱 로그인과 같은 형태")
+		void 애플_로그인_앱_클라이언트는_리프레시_토큰이_body로_내려간다() throws Exception {
+			OidcLoginRequestDto request = new OidcLoginRequestDto("apple-id-token", "raw-nonce", "auth-code", null);
+			given(oidcLoginService.login(eq(AuthProvider.APPLE), any(OidcLoginRequestDto.class), eq("device-ios-1")))
+				.willReturn(new LoginResponseDto("jwt-token", "refresh-jwt", "USER"));
+
+			mockMvc.perform(post(OAUTH_APPLE_URL)
+					.header(CLIENT_TYPE_HEADER, "app")
+					.header(DEVICE_ID_HEADER, "device-ios-1")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isOk())
+				.andExpect(header().string(DEVICE_ID_HEADER, "device-ios-1"))
+				.andExpect(jsonPath("$.data.accessToken").value("jwt-token"))
+				.andExpect(jsonPath("$.data.refreshToken").value("refresh-jwt"))
+				.andExpect(jsonPath("$.data.role").value("USER"));
+		}
+
+		// 검증: FR-AUTH-12, AC-594-02
+		@Test
+		@DisplayName("애플: 검증 실패 예외는 401 developCode 2421 응답으로 변환된다")
+		void 검증_실패_예외는_2421_응답으로_변환된다() throws Exception {
+			OidcLoginRequestDto request = new OidcLoginRequestDto("apple-id-token", "raw-nonce", "auth-code", null);
+			given(oidcLoginService.login(eq(AuthProvider.APPLE), any(OidcLoginRequestDto.class), anyString()))
+				.willThrow(new ApiException(AuthErrorCode.INVALID_ID_TOKEN));
+
+			mockMvc.perform(post(OAUTH_APPLE_URL)
+					.header(CLIENT_TYPE_HEADER, "app")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content(objectMapper.writeValueAsString(request)))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.developCode").value(2421))
+				.andExpect(jsonPath("$.message").value("유효하지 않은 소셜 로그인 토큰입니다"));
 		}
 	}
 
@@ -536,7 +594,7 @@ class AuthControllerTest {
 				.andExpect(jsonPath("$.message").value("유효하지 않은 인가 코드입니다"));
 
 			verify(kakaoAuthCodeExchanger, never()).exchange(any(), any(), any());
-			verify(oidcLoginService, never()).login(any(), any(), any());
+			verify(oidcLoginService, never()).login(any(), anyString(), any());
 		}
 
 		@Test
@@ -550,7 +608,7 @@ class AuthControllerTest {
 				.andExpect(jsonPath("$.developCode").value(400));
 
 			verify(kakaoAuthCodeExchanger, never()).exchange(any(), any(), any());
-			verify(oidcLoginService, never()).login(any(), any(), any());
+			verify(oidcLoginService, never()).login(any(), anyString(), any());
 		}
 
 		@Test
@@ -564,7 +622,7 @@ class AuthControllerTest {
 				.andExpect(jsonPath("$.developCode").value(400));
 
 			verify(kakaoAuthCodeExchanger, never()).exchange(any(), any(), any());
-			verify(oidcLoginService, never()).login(any(), any(), any());
+			verify(oidcLoginService, never()).login(any(), anyString(), any());
 		}
 
 		// 검증: FR-AUTH-10
@@ -582,7 +640,7 @@ class AuthControllerTest {
 				.andExpect(jsonPath("$.developCode").value(2423))
 				.andExpect(jsonPath("$.message").value("유효하지 않은 인가 코드입니다"));
 
-			verify(oidcLoginService, never()).login(any(), any(), any());
+			verify(oidcLoginService, never()).login(any(), anyString(), any());
 		}
 
 		@Test

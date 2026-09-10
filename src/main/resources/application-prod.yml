@@ -37,6 +37,13 @@ spring:
 oauth:
   kakao:
     client-id: ${KAKAO_CLIENT_ID}
+  # 애플 로그인 비밀 4키 (MSG-594) — 기본값 없음. dev·prod 가 같은 애플 개발자 계정 값을 쓴다(D-6).
+  # 공개 고정값(issuer·jwk-set-uri·token-uri·revoke-uri·bundle-id)은 공통 application.yml 에 있다.
+  apple:
+    team-id: ${APPLE_TEAM_ID}
+    key-id: ${APPLE_KEY_ID}
+    signing-key: ${APPLE_SIGNING_KEY}
+    token-encryption-key: ${APPLE_TOKEN_ENCRYPTION_KEY}
 
 jwt:
   # kebab-case(refresh-secret)는 JWT_REFRESH_SECRET env 로 relaxed binding 이 되지 않아 명시적으로 매핑한다.

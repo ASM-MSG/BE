@@ -23,6 +23,16 @@ spring:
 oauth:
   kakao:
     client-id: ${KAKAO_CLIENT_ID}
+  # 애플 로그인 비밀 4키 (MSG-594). dev·prod 가 같은 애플 개발자 계정 값을 쓴다(D-6). 공개 고정값(issuer·
+  # jwk-set-uri·token-uri·revoke-uri·bundle-id)은 공통 application.yml 에 있다.
+  # dev 만 빈 기본값을 둔다 — env 가 없으면 리터럴 "${APPLE_TOKEN_ENCRYPTION_KEY}" 가 그대로 바인딩돼 암호화 키
+  # Base64 디코드가 기동에서 터진다(EncodingWorkerContextTest 가 dev 프로파일로 실측). 비어 있으면 부팅은 되고
+  # 애플 로그인만 2502·탈퇴 취소만 로그로 실패한다(D-10). prod 는 기본값 없이 ProdRequiredEnvValidator 가 막는다.
+  apple:
+    team-id: ${APPLE_TEAM_ID:}
+    key-id: ${APPLE_KEY_ID:}
+    signing-key: ${APPLE_SIGNING_KEY:}
+    token-encryption-key: ${APPLE_TOKEN_ENCRYPTION_KEY:}
 
 server:
   port: ${SERVER_PORT:8080}

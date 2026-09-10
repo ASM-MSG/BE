@@ -72,6 +72,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	@Query("SELECT u.profileImageUrl FROM User u WHERE u.id = :userId")
 	Optional<String> findProfileImageUrlById(@Param("userId") Long userId);
 
+	/**
+	 * 계정 삭제용 애플 리프레시 토큰 암호문 조회 (MSG-594). findProfileImageUrlById 와 같은 이유로 엔티티를
+	 * 띄우지 않는 스칼라 조회다 — 벌크 JPQL DELETE 앞이라서다. 엔티티에 게터가 없는 컬럼이라 읽기 경로는
+	 * 이것 하나뿐이고, 컬럼이 null(APPLE 아님·dev 모의 로그인)이면 빈 Optional 이라 호출부가 취소를 건너뛴다.
+	 */
+	@Query("SELECT u.appleRefreshTokenEncrypted FROM User u WHERE u.id = :userId")
+	Optional<String> findAppleRefreshTokenById(@Param("userId") Long userId);
+
 	/** 삭제 행 수 반환 — 0 이면 이미 없는 유저(1404). deleteById 는 부재 시 조용히 무시라 판별 불가. */
 	@Modifying
 	@Query("DELETE FROM User u WHERE u.id = :userId")
