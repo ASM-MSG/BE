@@ -31,6 +31,8 @@ import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
+import com.msg.fillmap.auth.oidc.AppleRefreshTokenCipher;
+import com.msg.fillmap.auth.oidc.AppleTokenClient;
 import com.msg.fillmap.auth.service.RefreshTokenService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
@@ -72,7 +74,8 @@ class UserProfileImageS3Test {
 
 		userService = new UserServiceImpl(userRepository, mock(RefreshTokenService.class), mock(TokenProvider.class),
 			mock(S3Presigner.class), s3Client,
-			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)));
+			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
+			mock(AppleTokenClient.class), mock(AppleRefreshTokenCipher.class));
 	}
 
 	private List<String> deletedKeys() {

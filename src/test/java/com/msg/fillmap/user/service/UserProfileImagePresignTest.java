@@ -22,6 +22,8 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
+import com.msg.fillmap.auth.oidc.AppleRefreshTokenCipher;
+import com.msg.fillmap.auth.oidc.AppleTokenClient;
 import com.msg.fillmap.auth.service.RefreshTokenService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.global.exception.ApiException;
@@ -53,7 +55,8 @@ class UserProfileImagePresignTest {
 			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
 
 		userService = new UserServiceImpl(mock(UserRepository.class), mock(RefreshTokenService.class),
-			mock(TokenProvider.class), presigner, mock(S3Client.class), properties);
+			mock(TokenProvider.class), presigner, mock(S3Client.class), properties,
+			mock(AppleTokenClient.class), mock(AppleRefreshTokenCipher.class));
 	}
 
 	private ProfileImagePresignResponseDto issue(String extension, String contentType, long contentLength) {

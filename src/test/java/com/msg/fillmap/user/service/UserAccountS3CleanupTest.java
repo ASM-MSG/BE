@@ -9,6 +9,7 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,8 +17,10 @@ import java.util.stream.LongStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.web.client.RestClientException;
 
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -27,6 +30,8 @@ import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 import com.msg.fillmap.auth.jwt.TokenProvider;
+import com.msg.fillmap.auth.oidc.AppleRefreshTokenCipher;
+import com.msg.fillmap.auth.oidc.AppleTokenClient;
 import com.msg.fillmap.auth.service.RefreshTokenService;
 import com.msg.fillmap.global.config.AwsProperties;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -46,6 +51,8 @@ class UserAccountS3CleanupTest {
 	private RefreshTokenService refreshTokenService;
 	private TokenProvider tokenProvider;
 	private S3Client s3Client;
+	private AppleTokenClient appleTokenClient;
+	private AppleRefreshTokenCipher appleRefreshTokenCipher;
 	private UserService service;
 
 	@BeforeEach
@@ -54,12 +61,15 @@ class UserAccountS3CleanupTest {
 		refreshTokenService = mock(RefreshTokenService.class);
 		tokenProvider = mock(TokenProvider.class);
 		s3Client = mock(S3Client.class);
+		appleTokenClient = mock(AppleTokenClient.class);
+		appleRefreshTokenCipher = mock(AppleRefreshTokenCipher.class);
 		given(s3Client.deleteObjects(any(DeleteObjectsRequest.class)))
 			.willReturn(DeleteObjectsResponse.builder().build());
 		given(userRepository.deleteUser(USER_ID)).willReturn(1);
 		service = new UserServiceImpl(userRepository, refreshTokenService, tokenProvider, mock(S3Presigner.class),
 			s3Client,
-			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)));
+			new AwsProperties("ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L)),
+			appleTokenClient, appleRefreshTokenCipher);
 	}
 
 	private List<List<String>> deletedKeyBatches() {
@@ -167,5 +177,53 @@ class UserAccountS3CleanupTest {
 		assertThat(batches.get(0)).hasSize(1000);
 		assertThat(batches.get(1)).hasSize(1);
 		assertThat(batches.stream().flatMap(List::stream)).hasSize(1001).doesNotHaveDuplicates();
+	}
+
+	/**
+	 * 애플 토큰 취소 (MSG-594 FR-9·D-9). 같은 클래스에 두는 이유: 취소는 S3 정리·세션 무효화와 같은 afterCommit
+	 * 묶음이라 트랜잭션 없는 폴백(즉시 실행)으로 관찰하는 구도가 동일하다. 삭제 전 스칼라 조회를 스텁한다.
+	 */
+	@Nested
+	@DisplayName("애플 토큰 취소")
+	class AppleRevocation {
+
+		// 검증: FR-AUTH-12, AC-594-10
+		@Test
+		void 애플_계정_탈퇴는_커밋_후_복호화한_토큰으로_취소를_호출한다() {
+			given(userRepository.findAppleRefreshTokenById(USER_ID)).willReturn(Optional.of("ENC(apple-refresh)"));
+			given(appleRefreshTokenCipher.decrypt("ENC(apple-refresh)")).willReturn("apple-refresh-plain");
+
+			service.deleteAccount(USER_ID, "access-token");
+
+			then(appleTokenClient).should().revoke("apple-refresh-plain");
+			then(userRepository).should().deleteUser(USER_ID);
+		}
+
+		// 검증: FR-AUTH-12, AC-594-10
+		@Test
+		void 취소_호출이_실패해도_탈퇴는_성공한다() {
+			given(userRepository.findAppleRefreshTokenById(USER_ID)).willReturn(Optional.of("ENC(apple-refresh)"));
+			given(appleRefreshTokenCipher.decrypt("ENC(apple-refresh)")).willReturn("apple-refresh-plain");
+			willThrow(new RestClientException("apple down")).given(appleTokenClient).revoke("apple-refresh-plain");
+
+			assertThatCode(() -> service.deleteAccount(USER_ID, "access-token")).doesNotThrowAnyException();
+
+			then(userRepository).should().deleteUser(USER_ID);
+			// 복호화 실패도 같은 catch — 탈퇴는 이미 커밋됐다
+			given(appleRefreshTokenCipher.decrypt("ENC(apple-refresh)"))
+				.willThrow(new IllegalStateException("bad tag"));
+			assertThatCode(() -> service.deleteAccount(USER_ID, "access-token")).doesNotThrowAnyException();
+		}
+
+		// 검증: FR-AUTH-12, AC-594-10
+		@Test
+		void 애플_토큰이_없는_계정은_취소를_호출하지_않는다() {
+			given(userRepository.findAppleRefreshTokenById(USER_ID)).willReturn(Optional.empty());
+
+			service.deleteAccount(USER_ID, "access-token");
+
+			verifyNoInteractions(appleTokenClient, appleRefreshTokenCipher);
+			then(userRepository).should().deleteUser(USER_ID);
+		}
 	}
 }
