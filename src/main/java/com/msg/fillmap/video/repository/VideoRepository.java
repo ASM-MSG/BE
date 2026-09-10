@@ -91,15 +91,28 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	 * id DESC 는 인덱스에 없는 동률 타이브레이크 — (view_count, created_at) 까지 같은 행의 페이지 간 순서를
 	 * 결정적으로 만들며, 동률 그룹 국소 정렬이라 단일 격자 소량 규모에 무해하다(§D2).
 	 * limit 은 서비스가 size+1 lookahead 로 넘기고 hasNext 판정도 서비스 소관이다.
+	 * <p>
+	 * 차단 절(MSG-569 D-4): viewerId(비로그인 null)가 있으면 어느 방향이든 차단 관계인 작성자의 영상을 NOT EXISTS
+	 * 안티 조인으로 뺀다 — 쿼리 안에서 걸러야 빠진 행이 페이지 크기를 소비하지 않고 keyset 커서가 그대로
+	 * 성립한다. CAST(:viewerId AS bigint) 는 null 파라미터의 native 타입 추론 문제(getRegionExplorePage 의
+	 * CAST(:limit AS bigint) 선례)를 푼 것이고, null 이면 절 전체가 참으로 단락돼 비로그인 결과는 기존과 같다.
+	 * 게이트 줄(status·visibility·processing_status)은 글자 하나 바꾸지 않았다 — countHourlyUploadsByGrid 와의
+	 * 문자열 동일 계약과 idx_videos_grid_popular 부분 인덱스 매칭이 그 줄에 걸려 있다. 격자 영상 개수·시간대
+	 * 집계에는 이 절을 붙이지 않는다(PRD 비목표) — 카드 숫자가 목록 행 수보다 클 수 있고 그 차이를 허용한다.
 	 */
 	@Query(value = """
 		SELECT * FROM videos
 		WHERE grid_id = :gridId
 		  AND status = 'ACTIVE' AND visibility = 'PUBLIC' AND processing_status = 'READY'
+		  AND (CAST(:viewerId AS bigint) IS NULL OR NOT EXISTS (
+		    SELECT 1 FROM user_blocks b
+		    WHERE (b.blocker_id = :viewerId AND b.blocked_id = videos.user_id)
+		       OR (b.blocker_id = videos.user_id AND b.blocked_id = :viewerId)))
 		ORDER BY view_count DESC, created_at DESC, id DESC
 		LIMIT :limit
 		""", nativeQuery = true)
-	List<Video> findGlobalVideos(@Param("gridId") String gridId, @Param("limit") int limit);
+	List<Video> findGlobalVideos(@Param("gridId") String gridId, @Param("viewerId") Long viewerId,
+		@Param("limit") int limit);
 
 	/**
 	 * 전역 목록 커서 이후 페이지 (MSG-237 §D2 keyset). 직전 페이지 마지막 항목의 경계값
@@ -111,12 +124,17 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		SELECT * FROM videos
 		WHERE grid_id = :gridId
 		  AND status = 'ACTIVE' AND visibility = 'PUBLIC' AND processing_status = 'READY'
+		  AND (CAST(:viewerId AS bigint) IS NULL OR NOT EXISTS (
+		    SELECT 1 FROM user_blocks b
+		    WHERE (b.blocker_id = :viewerId AND b.blocked_id = videos.user_id)
+		       OR (b.blocker_id = videos.user_id AND b.blocked_id = :viewerId)))
 		  AND (view_count, created_at, id) < (:cursorViewCount, :cursorCreatedAt, :cursorId)
 		ORDER BY view_count DESC, created_at DESC, id DESC
 		LIMIT :limit
 		""", nativeQuery = true)
 	List<Video> findGlobalVideosAfter(
 		@Param("gridId") String gridId,
+		@Param("viewerId") Long viewerId,
 		@Param("cursorViewCount") long cursorViewCount,
 		@Param("cursorCreatedAt") LocalDateTime cursorCreatedAt,
 		@Param("cursorId") long cursorId,
@@ -134,6 +152,9 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 	 * 행사 영상 안티조인(NOT EXISTS event_videos)은 미션 계열 세 쿼리(이 쿼리·findMissionVideosAfter·
 	 * countMissionVideosByGrid)에만 있는 술어 동등 계약이다 — 행사 영상은 현장에 없어도 올릴 수 있어 미션
 	 * 비연계가 확정 계약이라 여기서 빠지고, 격자 전역 목록 쪽에는 그대로 남는다(MSG-450).
+	 * 차단 절(NOT EXISTS user_blocks, MSG-569 D-4)은 요청자를 아는 목록 두 쿼리(이 쿼리·findMissionVideosAfter)
+	 * 에만 있고 countMissionVideosByGrid 에는 없다 — "노출 게이트 3종은 동등, 차단 절은 요청자를 아는 목록에만"
+	 * 이라 차단한 사용자에게만 개수가 목록 행 수보다 클 수 있다(findGlobalVideos 주석과 같은 허용).
 	 * mission_grids PK 가 (mission_id, grid_id)이고 영상은 격자를 하나만 가리켜 조인 팬아웃이 없다 —
 	 * DISTINCT 불요. 기간은 IS NULL OR 형태라 무기간 미션(코스·지속형)이 코드 분기 없이 흡수되고 경계는
 	 * 양끝 포함이다. 활성 여부는 보지 않는다 — 끝난 미션도 목록은 열린다.
@@ -150,12 +171,17 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		  AND m.hidden_at IS NULL
 		  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
 		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
+		  AND (CAST(:viewerId AS bigint) IS NULL OR NOT EXISTS (
+		    SELECT 1 FROM user_blocks b
+		    WHERE (b.blocker_id = :viewerId AND b.blocked_id = v.user_id)
+		       OR (b.blocker_id = v.user_id AND b.blocked_id = :viewerId)))
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		ORDER BY v.recorded_at DESC, v.id DESC
 		LIMIT :limit
 		""", nativeQuery = true)
-	List<Video> findMissionVideos(@Param("missionId") long missionId, @Param("limit") int limit);
+	List<Video> findMissionVideos(@Param("missionId") long missionId, @Param("viewerId") Long viewerId,
+		@Param("limit") int limit);
 
 	/**
 	 * 미션 목록 커서 이후 페이지 (MSG-390). 첫 페이지 쿼리에 경계 조건 한 줄만 더한 것이다 — 직전 페이지
@@ -171,6 +197,10 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		  AND m.hidden_at IS NULL
 		  AND v.status = 'ACTIVE' AND v.visibility = 'PUBLIC' AND v.processing_status = 'READY'
 		  AND NOT EXISTS (SELECT 1 FROM event_videos ev WHERE ev.video_id = v.id)
+		  AND (CAST(:viewerId AS bigint) IS NULL OR NOT EXISTS (
+		    SELECT 1 FROM user_blocks b
+		    WHERE (b.blocker_id = :viewerId AND b.blocked_id = v.user_id)
+		       OR (b.blocker_id = v.user_id AND b.blocked_id = :viewerId)))
 		  AND (m.start_at IS NULL OR v.recorded_at >= m.start_at)
 		  AND (m.end_at IS NULL OR v.recorded_at <= m.end_at)
 		  AND (v.recorded_at, v.id) < (:cursorRecordedAt, :cursorId)
@@ -179,6 +209,7 @@ public interface VideoRepository extends JpaRepository<Video, Long> {
 		""", nativeQuery = true)
 	List<Video> findMissionVideosAfter(
 		@Param("missionId") long missionId,
+		@Param("viewerId") Long viewerId,
 		@Param("cursorRecordedAt") LocalDateTime cursorRecordedAt,
 		@Param("cursorId") long cursorId,
 		@Param("limit") int limit

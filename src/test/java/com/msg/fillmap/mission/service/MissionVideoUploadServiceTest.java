@@ -315,7 +315,7 @@ class MissionVideoUploadServiceTest {
 
 			// 같은 컨트롤러에 POST 가 붙어도 GET 계약은 그대로다. 방금 올린 영상은 인코딩 전(UPLOADED)이라
 			// 목록 게이트(READY)에 잡히지 않는다 — 이 역시 이번 변경 이전과 같은 동작이다.
-			assertThat(videoService.getMissionVideos(missionId, null, 20).videos()).isEmpty();
+			assertThat(videoService.getMissionVideos(null, missionId, null, 20).videos()).isEmpty();
 		}
 	}
 

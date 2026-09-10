@@ -59,7 +59,7 @@ class VideoPlaybackControllerTest {
 			VIDEO_ID, "https://bucket.s3/play.mp4?X-Amz-Signature=abc",
 			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
 			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
-			"서면", "I-9", "서울특별시 강남구 역삼1동", null, "busan.vlog"));
+			"서면", "I-9", "서울특별시 강남구 역삼1동", null, "busan.vlog", 501L));
 
 		mockMvc.perform(get(URL, VIDEO_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -74,7 +74,9 @@ class VideoPlaybackControllerTest {
 			.andExpect(jsonPath("$.data.zoneName").value("서면"))
 			.andExpect(jsonPath("$.data.zoneCell").value("I-9"))
 			.andExpect(jsonPath("$.data.regionName").value("서울특별시 강남구 역삼1동"))
-			.andExpect(jsonPath("$.data.nickname").value("busan.vlog"));
+			.andExpect(jsonPath("$.data.nickname").value("busan.vlog"))
+			// 검증: FR-MOD-18, AC-569-12 — 작성자 식별자가 닉네임과 함께 실린다(차단 대상 지정용)
+			.andExpect(jsonPath("$.data.userId").value(501));
 	}
 
 	// 검증: FR-MEDIA-10
@@ -87,7 +89,7 @@ class VideoPlaybackControllerTest {
 			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
 			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
 			"서면", "I-9", "서울특별시 강남구 역삼1동",
-			List.of(List.of(0.0, 4.25), List.of(12.0, 18.5), List.of(20.0, 27.5)), "busan.vlog"));
+			List.of(List.of(0.0, 4.25), List.of(12.0, 18.5), List.of(20.0, 27.5)), "busan.vlog", 501L));
 
 		mockMvc.perform(get(URL, VIDEO_ID)
 				.header(HttpHeaders.AUTHORIZATION, bearer()))

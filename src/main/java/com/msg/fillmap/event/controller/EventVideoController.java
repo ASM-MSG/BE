@@ -76,17 +76,21 @@ public class EventVideoController {
 			+ "생략하면 20 이다.\n\n"
 			+ "아카이브된 행사에서도 조회할 수 있고 영상이 없으면 실패가 아니라 빈 페이지다. 존재하지 않거나 "
 			+ "노출 기간 전인 회차는 404 + 13404, 위치가 없거나 그 회차의 위치가 아니면 404 + 13405 다. "
-			+ "비로그인으로도 조회할 수 있다."
+			+ "비로그인으로도 조회할 수 있다. 로그인 요청이면 요청자와 차단 관계(어느 방향이든)인 작성자의 영상은 "
+			+ "빠지고(위치 카드의 영상 수는 그대로다), 항목의 uploaderId 는 작성자 식별자라 차단"
+			+ "(POST /api/users/{userId}/block)의 경로 값으로 쓴다."
 	)
 	@GetMapping("/api/event-occurrences/{occurrenceId}/locations/{locationId}/videos")
 	public SuccessResponse<EventLocationVideoPageResponseDto> getLocationVideos(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "행사 회차 id", example = "12") @PathVariable long occurrenceId,
 		@Parameter(description = "행사 위치 id", example = "34") @PathVariable long locationId,
 		@Parameter(description = "직전 응답의 nextCursor. 첫 페이지는 생략") @RequestParam(required = false) String cursor,
 		@Parameter(description = "페이지 크기 (1~50, 기본 20)", example = "20")
 		@RequestParam(required = false, defaultValue = "0") int size
 	) {
-		return SuccessResponse.of(eventVideoService.getLocationVideos(occurrenceId, locationId, cursor, size));
+		return SuccessResponse.of(
+			eventVideoService.getLocationVideos(userId(principal), occurrenceId, locationId, cursor, size));
 	}
 
 	@Operation(
@@ -95,7 +99,7 @@ public class EventVideoController {
 			+ "격자와 그 표시명 재료가 함께 담겨, 상세 화면이 추가 호출 없이 위치줄을 그린다.\n\n"
 			+ "피드에 보이는 영상만 열린다 — 삭제·블라인드·비공개·처리 미완료 영상은 올린 본인에게도 404 + "
 			+ "developCode 13406 이다(본인 영상 확인은 GET /api/videos/{videoId}). 행사 영상이 아닌 영상 id 도 "
-			+ "같은 404 다.\n\n"
+			+ "같은 404 이고, 작성자와 차단 관계(어느 방향이든)인 요청자에게도 같은 404 다.\n\n"
 			+ "interactionLocked 는 아카이브 전환(행사 종료 + 30일)부터 true 이며 댓글·도움돼요 입력 UI 를 "
 			+ "비활성화하는 재료다(기존 수는 계속 표시. 유예 기간에는 반응을 계속 남길 수 있다). 재생 URL 을 "
 			+ "발급받은 타인 조회는 조회수를 올린다 — 비로그인 조회도 "

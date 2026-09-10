@@ -29,6 +29,7 @@ import com.msg.fillmap.event.support.EventVideoCommentCursor;
 import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.user.exception.UserErrorCode;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
@@ -48,6 +49,8 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 	private final EventVideoHelpfulRepository helpfulRepository;
 	// 작성·수정 응답의 작성자 닉네임 조회 (MSG-371 선례). 같은 Owner B 내부 의존이고 읽기 전용이다.
 	private final VideoRepository videoRepository;
+	// 서두(open)의 차단 판정 leaf (MSG-569 D-5·D-7) — 일곱 소비자가 전부 이 한 곳을 지난다.
+	private final UserBlockQueryService userBlockQueryService;
 	private final Clock clock;
 
 	/**
@@ -60,9 +63,11 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 		EventVideoRepository eventVideoRepository,
 		EventVideoCommentRepository commentRepository,
 		EventVideoHelpfulRepository helpfulRepository,
-		VideoRepository videoRepository
+		VideoRepository videoRepository,
+		UserBlockQueryService userBlockQueryService
 	) {
-		this(eventVideoRepository, commentRepository, helpfulRepository, videoRepository, Clock.systemUTC());
+		this(eventVideoRepository, commentRepository, helpfulRepository, videoRepository, userBlockQueryService,
+			Clock.systemUTC());
 	}
 
 	public EventVideoInteractionServiceImpl(
@@ -70,12 +75,14 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 		EventVideoCommentRepository commentRepository,
 		EventVideoHelpfulRepository helpfulRepository,
 		VideoRepository videoRepository,
+		UserBlockQueryService userBlockQueryService,
 		Clock clock
 	) {
 		this.eventVideoRepository = eventVideoRepository;
 		this.commentRepository = commentRepository;
 		this.helpfulRepository = helpfulRepository;
 		this.videoRepository = videoRepository;
+		this.userBlockQueryService = userBlockQueryService;
 		this.clock = clock;
 	}
 
@@ -83,7 +90,7 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 	@Transactional
 	public EventVideoCommentResponseDto createComment(long userId, long videoId, String content) {
 		LocalDateTime now = LocalDateTime.now(clock);
-		EventVideo link = openForWrite(videoId, now);
+		EventVideo link = openForWrite(videoId, userId, now);
 		// 같은 now 로 저장 시각을 채운다 — 엔티티가 스스로 시계를 읽으면 한 요청 안에서 두 시각이 갈린다.
 		EventVideoComment comment = commentRepository.save(EventVideoComment.create(link, userId, content, now));
 		return new EventVideoCommentResponseDto(comment.getId(), userId, nickname(userId), content,
@@ -109,7 +116,7 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 	@Override
 	@Transactional
 	public EventVideoHelpfulResponseDto addHelpful(long userId, long videoId) {
-		openForWrite(videoId, LocalDateTime.now(clock));
+		openForWrite(videoId, userId, LocalDateTime.now(clock));
 		// 유일성은 복합 PK 가, 멱등은 ON CONFLICT DO NOTHING 이 진다 — 반환 행 수는 성공 판정에 안 쓴다.
 		helpfulRepository.insertHelpful(videoId, userId);
 		return new EventVideoHelpfulResponseDto(helpfulRepository.countById_VideoId(videoId), true);
@@ -118,7 +125,7 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 	@Override
 	@Transactional
 	public EventVideoHelpfulResponseDto removeHelpful(long userId, long videoId) {
-		openForWrite(videoId, LocalDateTime.now(clock));
+		openForWrite(videoId, userId, LocalDateTime.now(clock));
 		// native 1문장 DELETE — deleteById(SELECT 후 DELETE)면 동시 취소에서 진 쪽이 500 이 된다.
 		helpfulRepository.deleteHelpful(videoId, userId);
 		return new EventVideoHelpfulResponseDto(helpfulRepository.countById_VideoId(videoId), false);
@@ -126,10 +133,10 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 
 	@Override
 	@Transactional(readOnly = true)
-	public EventVideoCommentPageResponseDto getComments(long videoId, String cursor, int size) {
+	public EventVideoCommentPageResponseDto getComments(Long viewerId, long videoId, String cursor, int size) {
 		// 조회 경로다 — 노출 판정만 하고 잠금 가드는 부르지 않는다 (FR-14).
-		open(videoId, LocalDateTime.now(clock));
-		return commentPage(videoId, cursor, PageSizes.clampCursor(size));
+		open(videoId, viewerId, LocalDateTime.now(clock));
+		return commentPage(videoId, cursor, PageSizes.clampCursor(size), viewerId);
 	}
 
 	@Override
@@ -141,8 +148,10 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 		return new EventVideoDetailReactions(
 			helpfulRepository.countById_VideoId(videoId),
 			helpfulByMe,
+			// 댓글 수는 차단 기준으로 줄이지 않는다(MSG-569 D-7) — 영상 수와 같은 취급이라 차단한 사람에게만
+			// 수와 목록 행 수가 어긋날 수 있다. 품기는 첫 페이지는 둘째 페이지(getComments)와 같은 viewer 로 거른다.
 			commentRepository.countByVideo_VideoId(videoId),
-			commentPage(videoId, null, PageSizes.CURSOR_DEFAULT));
+			commentPage(videoId, null, PageSizes.CURSOR_DEFAULT, userId));
 	}
 
 	@Override
@@ -164,8 +173,12 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 	/**
 	 * 대상 영상 열기 — 상세와 <b>같은 술어</b>다. 행사 영상 연결이 없거나 노출 게이트(ACTIVE·PUBLIC·READY)
 	 * 밖이거나 소속 회차가 아직 노출 전이면 전부 같은 404 다(소유자 본인도 예외가 아니다).
+	 * 요청자가 작성자와 차단 관계(어느 방향이든)여도 같은 404 다(MSG-569 D-7) — 일곱 소비자(댓글 목록·작성·수정·
+	 * 삭제·도움돼요 추가·취소, 상세 품김 제외)가 전부 이 서두를 지나므로 판정은 여기 한 번만 적힌다. userId 는
+	 * 비로그인이면 null 이고 그때는 차단 관계가 있을 수 없어 조회 0회다. ev.video 는 fetch join 이라 작성자 id
+	 * 읽기에 지연 로딩이 없다.
 	 */
-	private EventVideo open(long videoId, LocalDateTime now) {
+	private EventVideo open(long videoId, Long userId, LocalDateTime now) {
 		EventVideo link = eventVideoRepository.findVisibleWithOccurrence(videoId)
 			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_VIDEO_NOT_FOUND));
 		if (!link.getLocation().getOccurrence().isVisibleAt(now)) {
@@ -175,12 +188,17 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 		if (link.getLocation().getHiddenAt() != null) {
 			throw new ApiException(EventErrorCode.EVENT_VIDEO_NOT_FOUND);
 		}
+		Long uploaderId = link.getVideo().getUserId();
+		boolean owner = userId != null && userId.equals(uploaderId);
+		if (userId != null && !owner && userBlockQueryService.isBlockedEitherWay(userId, uploaderId)) {
+			throw new ApiException(EventErrorCode.EVENT_VIDEO_NOT_FOUND);
+		}
 		return link;
 	}
 
 	/** 변경 경로의 서두 — 노출 판정 다음에 잠금 가드다. 판정 시각은 한 요청에 하나로 고정한다. */
-	private EventVideo openForWrite(long videoId, LocalDateTime now) {
-		EventVideo link = open(videoId, now);
+	private EventVideo openForWrite(long videoId, long userId, LocalDateTime now) {
+		EventVideo link = open(videoId, userId, now);
 		EventLifecycleGuard.checkInteractionOpen(link.getLocation().getOccurrence(), now);
 		return link;
 	}
@@ -191,7 +209,7 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 	 * 건드리지 못하게 하는 것이고, 어긋나면 "없는 댓글"과 같은 응답이다.
 	 */
 	private EventVideoComment openCommentForWrite(long userId, long videoId, long commentId) {
-		openForWrite(videoId, LocalDateTime.now(clock));
+		openForWrite(videoId, userId, LocalDateTime.now(clock));
 		EventVideoComment comment = commentRepository.findById(commentId)
 			.filter(found -> found.getVideo().getVideoId() == videoId)
 			.orElseThrow(() -> new ApiException(EventErrorCode.EVENT_COMMENT_NOT_FOUND));
@@ -201,13 +219,16 @@ public class EventVideoInteractionServiceImpl implements EventVideoInteractionSe
 		return comment;
 	}
 
-	/** 목록 한 장 — lookahead(size+1) 조회 → hasNext 판정·트림 → nextCursor 발급 (피드와 같은 순서). */
-	private EventVideoCommentPageResponseDto commentPage(long videoId, String cursor, int pageSize) {
+	/**
+	 * 목록 한 장 — lookahead(size+1) 조회 → hasNext 판정·트림 → nextCursor 발급 (피드와 같은 순서).
+	 * viewerId 는 차단 절(MSG-569)에만 쓴다 — 상세 품김과 둘째 페이지가 같은 viewer 로 같은 집합을 본다.
+	 */
+	private EventVideoCommentPageResponseDto commentPage(long videoId, String cursor, int pageSize, Long viewerId) {
 		// 정렬 없는 PageRequest — 정렬은 쿼리의 ORDER BY 고정이라 Pageable 이 덧붙이면 안 된다.
 		Pageable page = PageRequest.of(0, pageSize + 1);
 		List<EventVideoCommentRow> rows = cursor == null
-			? commentRepository.findPageByVideoId(videoId, page)
-			: commentRepository.findPageByVideoIdAfter(videoId, cursorId(videoId, cursor), page);
+			? commentRepository.findPageByVideoId(videoId, viewerId, page)
+			: commentRepository.findPageByVideoIdAfter(videoId, viewerId, cursorId(videoId, cursor), page);
 		boolean hasNext = rows.size() > pageSize;
 		List<EventVideoCommentRow> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
 		List<EventVideoCommentResponseDto> comments = pageRows.stream()

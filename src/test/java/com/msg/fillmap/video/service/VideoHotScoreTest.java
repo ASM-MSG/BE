@@ -33,6 +33,7 @@ import com.msg.fillmap.mission.dto.MissionAwardResult;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.dto.VideoReplaceRequestDto;
 import com.msg.fillmap.video.dto.VideoUploadRequestDto;
 import com.msg.fillmap.video.entity.Video;
@@ -81,7 +82,7 @@ class VideoHotScoreTest {
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class), mock(BadgeAwardService.class),
 			mock(StreakCommandService.class), missionAwardService, hotScoreCommandService,
 			mock(FriendshipQueryService.class), () -> new ZoneNameResolver(List.of()),
-			mock(EventVideoRepository.class));
+			mock(EventVideoRepository.class), mock(UserBlockQueryService.class));
 	}
 
 	private void givenSavedVideo() {

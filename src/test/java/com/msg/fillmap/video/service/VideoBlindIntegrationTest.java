@@ -154,7 +154,7 @@ class VideoBlindIntegrationTest {
 
 	private List<Long> globalVideoIds() {
 		flushAndClear();
-		return videoService.getGridGlobalVideos(gridId, null, 20).videos().stream()
+		return videoService.getGridGlobalVideos(null, gridId, null, 20).videos().stream()
 			.map(video -> video.videoId())
 			.toList();
 	}

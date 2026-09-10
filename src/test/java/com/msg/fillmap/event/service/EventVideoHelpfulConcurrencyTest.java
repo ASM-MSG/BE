@@ -40,6 +40,7 @@ import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
@@ -92,6 +93,9 @@ class EventVideoHelpfulConcurrencyTest {
 
 	@Autowired
 	private UserRepository userRepository;
+
+	@Autowired
+	private UserBlockQueryService userBlockQueryService;
 
 	@Autowired
 	private EntityManager em;
@@ -159,7 +163,7 @@ class EventVideoHelpfulConcurrencyTest {
 
 	private EventVideoInteractionService service() {
 		return new EventVideoInteractionServiceImpl(eventVideoRepository, commentRepository, helpfulRepository,
-			videoRepository, Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+			videoRepository, userBlockQueryService, Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 
 	/** 같은 호출을 두 스레드가 동시에 시작하도록 래치로 맞춘 뒤 각자의 트랜잭션에서 돌린다. */

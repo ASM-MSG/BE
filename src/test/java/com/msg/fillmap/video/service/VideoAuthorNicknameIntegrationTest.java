@@ -110,7 +110,7 @@ class VideoAuthorNicknameIntegrationTest {
 		Long others = publicReady(otherAuthorId, 5L);
 		flushAndClear();
 
-		assertThat(videoService.getGridGlobalVideos(gridId, null, 20).videos())
+		assertThat(videoService.getGridGlobalVideos(null, gridId, null, 20).videos())
 			.extracting(GridGlobalVideoResponseDto::videoId, GridGlobalVideoResponseDto::nickname)
 			.containsExactly(tuple(mine, "부산브이로그"), tuple(others, "서울산책"));
 		// 대표는 조회수 최상위 1건 — 그 작성자의 닉네임이 실린다.
@@ -133,7 +133,7 @@ class VideoAuthorNicknameIntegrationTest {
 
 		// 응답에도 videos 행에도 사본이 없으므로 다음 조회가 바뀐 값을 그대로 읽는다 (FR-3).
 		assertThat(videoService.getGridCover(gridId).nickname()).isEqualTo("부산기록가");
-		assertThat(videoService.getGridGlobalVideos(gridId, null, 20).videos().get(0).nickname())
+		assertThat(videoService.getGridGlobalVideos(null, gridId, null, 20).videos().get(0).nickname())
 			.isEqualTo("부산기록가");
 		assertThat(videoService.getVideoPlayback(otherAuthorId, videoId).nickname()).isEqualTo("부산기록가");
 	}

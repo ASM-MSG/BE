@@ -46,6 +46,7 @@ import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.repository.VideoRepository;
 import com.msg.fillmap.video.service.VideoEncodingService;
 import com.msg.fillmap.video.service.VideoService;
@@ -95,6 +96,9 @@ class EventVideoUploadConcurrencyTest {
 
 	@Autowired
 	private UserRepository userRepository;
+
+	@Autowired
+	private UserBlockQueryService userBlockQueryService;
 
 	@Autowired
 	private VideoService videoService;
@@ -174,7 +178,8 @@ class EventVideoUploadConcurrencyTest {
 
 	private EventVideoService service() {
 		return new EventVideoServiceImpl(occurrenceRepository, locationRepository, eventVideoRepository,
-			videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em, interactionService,
+			videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em,
+			interactionService, userBlockQueryService,
 			Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 

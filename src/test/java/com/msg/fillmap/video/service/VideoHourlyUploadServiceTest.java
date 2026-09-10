@@ -23,6 +23,7 @@ import com.msg.fillmap.hotzone.service.HotScoreCommandService;
 import com.msg.fillmap.mission.service.MissionAwardService;
 import com.msg.fillmap.region.service.RegionStatsCommandService;
 import com.msg.fillmap.streak.service.StreakCommandService;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.dto.GridHourlyUploadResponseDto;
 import com.msg.fillmap.video.dto.HourlyUploadCountResponseDto;
 import com.msg.fillmap.video.repository.HourlyUploadProjection;
@@ -55,7 +56,7 @@ class VideoHourlyUploadServiceTest {
 			mock(RegionStatsCommandService.class), mock(ThumbnailUrlPresigner.class),
 			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
 			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
-			mock(ZoneNameQueryService.class), mock(EventVideoRepository.class));
+			mock(ZoneNameQueryService.class), mock(EventVideoRepository.class), mock(UserBlockQueryService.class));
 	}
 
 	/** 저장 존 인자가 어긋나면 이 스텁이 매치되지 않아 테스트가 깨진다 — UTC 배선 검증을 겸한다. */

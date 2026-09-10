@@ -21,6 +21,7 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.user.entity.User;
+import com.msg.fillmap.user.repository.UserBlockRepository;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
@@ -48,6 +49,9 @@ class VideoGlobalListQueryTest {
 
 	@Autowired
 	private UserRepository userRepository;
+
+	@Autowired
+	private UserBlockRepository userBlockRepository;
 
 	@Autowired
 	private EntityManager em;
@@ -101,13 +105,13 @@ class VideoGlobalListQueryTest {
 	private List<Video> list(String gridId, int limit) {
 		em.flush();
 		em.clear();
-		return videoRepository.findGlobalVideos(gridId, limit);
+		return videoRepository.findGlobalVideos(gridId, null, limit);
 	}
 
 	private List<Video> listAfter(String gridId, long viewCount, LocalDateTime createdAt, long id, int limit) {
 		em.flush();
 		em.clear();
-		return videoRepository.findGlobalVideosAfter(gridId, viewCount, createdAt, id, limit);
+		return videoRepository.findGlobalVideosAfter(gridId, null, viewCount, createdAt, id, limit);
 	}
 
 	private static LocalDateTime at(int hour) {
@@ -242,5 +246,99 @@ class VideoGlobalListQueryTest {
 		}
 
 		assertThat(traversed).containsExactlyElementsOf(all);
+	}
+
+	/** viewer 를 지정한 조회 — 차단 절(MSG-569 D-4)이 걸리는 경로. */
+	private List<Long> listAs(Long viewerId, String gridId, int limit) {
+		em.flush();
+		em.clear();
+		return videoRepository.findGlobalVideos(gridId, viewerId, limit).stream().map(Video::getId).toList();
+	}
+
+	private Long seedUser(String nickname) {
+		return userRepository.save(
+			User.createLocalUser("global-list-" + UUID.randomUUID() + "@example.com", "hash", nickname)).getId();
+	}
+
+	private void block(Long blockerId, Long blockedId) {
+		userBlockRepository.insertIgnore(blockerId, blockedId, at(0));
+	}
+
+	// 검증: FR-MOD-17, AC-569-06
+	@Test
+	@DisplayName("내가 차단한 작성자의 영상은 목록에서 빠진다")
+	void 내가_차단한_작성자의_영상은_목록에서_빠진다() {
+		Long viewer = seedUser("보는이");
+		Long blocked = seedUser("차단됨");
+		Long mine = publicReady(userId, 성수_GRID, 9L, at(10));
+		publicReady(blocked, 성수_GRID, 99L, at(9));
+		block(viewer, blocked);
+
+		assertThat(listAs(viewer, 성수_GRID, 20)).containsExactly(mine);
+	}
+
+	// 검증: FR-MOD-17, AC-569-06
+	@Test
+	@DisplayName("나를 차단한 작성자의 영상도 빠진다")
+	void 나를_차단한_작성자의_영상도_빠진다() {
+		Long viewer = seedUser("보는이");
+		Long blocker = seedUser("차단자");
+		Long mine = publicReady(userId, 성수_GRID, 9L, at(10));
+		publicReady(blocker, 성수_GRID, 99L, at(9));
+		block(blocker, viewer);
+
+		assertThat(listAs(viewer, 성수_GRID, 20)).containsExactly(mine);
+	}
+
+	// 검증: FR-MOD-17, AC-569-06
+	@Test
+	@DisplayName("차단된 영상은 페이지 크기를 소비하지 않는다")
+	void 차단된_영상은_페이지_크기를_소비하지_않는다() {
+		Long viewer = seedUser("보는이");
+		Long blocked = seedUser("차단됨");
+		int size = 2;
+		// 차단 작성자 영상 size+1 건이 정렬상 앞(조회수 높음)에 있어도 뒤의 다른 영상 size 건이 그대로 채워진다.
+		for (int i = 0; i <= size; i++) {
+			publicReady(blocked, 성수_GRID, 100L + i, at(9));
+		}
+		Long a = publicReady(userId, 성수_GRID, 9L, at(10));
+		Long b = publicReady(userId, 성수_GRID, 8L, at(10));
+		block(viewer, blocked);
+
+		assertThat(listAs(viewer, 성수_GRID, size)).containsExactly(a, b);
+	}
+
+	// 검증: FR-MOD-17, AC-569-06
+	@Test
+	@DisplayName("커서 이후 페이지에도 같은 차단 절이 걸린다")
+	void 커서_이후_페이지에도_같은_차단_절이_걸린다() {
+		Long viewer = seedUser("보는이");
+		Long blocked = seedUser("차단됨");
+		Long first = publicReady(userId, 성수_GRID, 9L, at(10));
+		publicReady(blocked, 성수_GRID, 8L, at(10));
+		Long third = publicReady(userId, 성수_GRID, 7L, at(10));
+		block(viewer, blocked);
+		em.flush();
+		em.clear();
+		Video last = videoRepository.findById(first).orElseThrow();
+
+		List<Long> next = videoRepository.findGlobalVideosAfter(
+				성수_GRID, viewer, last.getViewCount(), last.getCreatedAt(), last.getId(), 20)
+			.stream().map(Video::getId).toList();
+
+		assertThat(next).containsExactly(third);
+	}
+
+	// 검증: FR-MOD-17, AC-569-07
+	@Test
+	@DisplayName("viewer 가 null 이면 차단 행이 있어도 결과가 같다")
+	void viewer가_null이면_차단_행이_있어도_결과가_같다() {
+		Long viewer = seedUser("보는이");
+		Long blocked = seedUser("차단됨");
+		Long mine = publicReady(userId, 성수_GRID, 9L, at(10));
+		Long theirs = publicReady(blocked, 성수_GRID, 99L, at(9));
+		block(viewer, blocked);
+
+		assertThat(listAs(null, 성수_GRID, 20)).containsExactly(theirs, mine);
 	}
 }

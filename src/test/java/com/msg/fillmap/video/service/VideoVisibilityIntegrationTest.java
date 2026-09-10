@@ -280,7 +280,7 @@ class VideoVisibilityIntegrationTest {
 	private List<Video> globalVideos() {
 		em.flush();
 		em.clear();
-		return videoRepository.findGlobalVideos(gridId, 20);
+		return videoRepository.findGlobalVideos(gridId, null, 20);
 	}
 
 	private Optional<Video> findCover() {

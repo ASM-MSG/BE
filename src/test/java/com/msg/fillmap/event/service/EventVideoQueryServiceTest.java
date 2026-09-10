@@ -47,7 +47,9 @@ import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.user.entity.User;
+import com.msg.fillmap.user.repository.UserBlockRepository;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
@@ -105,6 +107,12 @@ class EventVideoQueryServiceTest {
 	private UserRepository userRepository;
 
 	@Autowired
+	private UserBlockQueryService userBlockQueryService;
+
+	@Autowired
+	private UserBlockRepository userBlockRepository;
+
+	@Autowired
 	private ZoneRepository zoneRepository;
 
 	@Autowired
@@ -142,7 +150,8 @@ class EventVideoQueryServiceTest {
 
 	private EventVideoService service(LocalDateTime now) {
 		return new EventVideoServiceImpl(occurrenceRepository, locationRepository, eventVideoRepository,
-			videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em, 반응서비스(now),
+			videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em,
+			반응서비스(now), userBlockQueryService,
 			Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 
@@ -153,7 +162,7 @@ class EventVideoQueryServiceTest {
 
 	private EventVideoInteractionService 반응서비스(LocalDateTime now) {
 		return new EventVideoInteractionServiceImpl(eventVideoRepository, commentRepository, helpfulRepository,
-			videoRepository, Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+			videoRepository, userBlockQueryService, Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 
 	private String 격자(long dy) {
@@ -204,7 +213,7 @@ class EventVideoQueryServiceTest {
 	}
 
 	private EventLocationVideoPageResponseDto 피드(EventLocation location, String cursor, int size) {
-		return service().getLocationVideos(location.getOccurrence().getId(), location.getId(), cursor, size);
+		return service().getLocationVideos(null, location.getOccurrence().getId(), location.getId(), cursor, size);
 	}
 
 	@Nested
@@ -376,7 +385,7 @@ class EventVideoQueryServiceTest {
 				.extracting(e -> ((ApiException) e).getErrorCode())
 				.isEqualTo(EventErrorCode.EVENT_NOT_FOUND);
 			assertThatThrownBy(() -> service()
-				.getLocationVideos(정상.getOccurrence().getId(), 정상.getId() + 10_000, null, 0))
+				.getLocationVideos(null, 정상.getOccurrence().getId(), 정상.getId() + 10_000, null, 0))
 				.isInstanceOf(ApiException.class)
 				.extracting(e -> ((ApiException) e).getErrorCode())
 				.isEqualTo(EventErrorCode.EVENT_LOCATION_NOT_FOUND);
@@ -636,6 +645,126 @@ class EventVideoQueryServiceTest {
 				.singleElement()
 				.extracting(EventVideoCommentResponseDto::content)
 				.isEqualTo("대상 영상 댓글");
+		}
+	}
+
+	@Nested
+	@DisplayName("차단 (MSG-569)")
+	class 차단 {
+
+		private long 조회수(Long videoId) {
+			em.flush();
+			em.clear();
+			return ((Number) em.createNativeQuery("SELECT view_count FROM videos WHERE id = :i")
+				.setParameter("i", videoId).getSingleResult()).longValue();
+		}
+
+		private void 차단(Long blockerId, Long blockedId) {
+			userBlockRepository.insertIgnore(blockerId, blockedId, NOW);
+		}
+
+		private List<Long> 피드ids(Long viewerId, EventLocation location, int size) {
+			return 영상ids(service().getLocationVideos(viewerId, location.getOccurrence().getId(), location.getId(),
+				null, size));
+		}
+
+		// 검증: FR-MOD-17, AC-569-09
+		@Test
+		@DisplayName("차단 관계(어느 방향이든) 작성자의 행사 영상은 위치 목록에서 빠지고 위치 카드 영상 수는 그대로다")
+		void 차단_관계_작성자의_행사_영상은_위치_목록에서_빠진다() {
+			EventLocation location = 위치(30);
+			Long viewer = 사용자();
+			Long blocked = 사용자();
+			Long blocker = 사용자();
+			Video mine = 노출영상(location);
+			Video theirs = 영상(location, Visibility.PUBLIC, blocked);
+			theirs.markReady("videos/encoded/b1.mp4", "thumb/b1.jpg", theirs.getDurationSec());
+			Video reverse = 영상(location, Visibility.PUBLIC, blocker);
+			reverse.markReady("videos/encoded/b2.mp4", "thumb/b2.jpg", reverse.getDurationSec());
+			차단(viewer, blocked);
+			차단(blocker, viewer);
+
+			assertThat(피드ids(viewer, location, 0)).containsExactly(mine.getId());
+			// 비로그인(viewer null)은 차단 행이 있어도 결과가 같다 — JPQL 의 :viewerId IS NULL 단락 (AC-07).
+			assertThat(피드ids(null, location, 0))
+				.containsExactlyInAnyOrder(mine.getId(), theirs.getId(), reverse.getId());
+			// 위치 카드의 영상 수(countVisibleByLocationIds)는 차단 절이 없어 3 그대로다 (PRD 비목표).
+			long 집계 = eventVideoRepository.countVisibleByLocationIds(List.of(location.getId())).stream()
+				.mapToLong(EventLocationVideoCount::videoCount).sum();
+			assertThat(집계).isEqualTo(3);
+		}
+
+		// 검증: FR-MOD-17, AC-569-09
+		@Test
+		@DisplayName("빠진 행사 영상은 페이지 크기를 소비하지 않고 커서 이후 페이지에도 절이 걸린다")
+		void 빠진_행사_영상은_페이지_크기를_소비하지_않는다() {
+			EventLocation location = 위치(31);
+			Long viewer = 사용자();
+			Long blocked = 사용자();
+			for (int i = 0; i < 3; i++) {
+				Video v = 영상(location, Visibility.PUBLIC, blocked);
+				v.markReady("videos/encoded/p" + i + ".mp4", "thumb/p" + i + ".jpg", v.getDurationSec());
+				업로드시각(v.getId(), NOW.minusMinutes(i));   // 정렬상 앞(최신)에 차단 작성자 영상 3건
+			}
+			Video a = 노출영상(location);
+			Video b = 노출영상(location);
+			Video c = 노출영상(location);
+			업로드시각(a.getId(), NOW.minusHours(1));
+			업로드시각(b.getId(), NOW.minusHours(2));
+			업로드시각(c.getId(), NOW.minusHours(3));
+			차단(viewer, blocked);
+
+			EventLocationVideoPageResponseDto first = service().getLocationVideos(viewer,
+				location.getOccurrence().getId(), location.getId(), null, 2);
+			EventLocationVideoPageResponseDto second = service().getLocationVideos(viewer,
+				location.getOccurrence().getId(), location.getId(), first.nextCursor(), 2);
+
+			assertThat(영상ids(first)).containsExactly(a.getId(), b.getId());
+			assertThat(first.hasNext()).isTrue();
+			assertThat(영상ids(second)).containsExactly(c.getId());
+		}
+
+		// 검증: FR-MOD-17, AC-569-09
+		@Test
+		@DisplayName("차단 관계 행사 영상 상세는 13406 이고 조회수가 늘지 않는다 — 방향 무관")
+		void 차단_관계_행사_영상_상세는_13406이고_조회수가_늘지_않는다() {
+			EventLocation location = 위치(32);
+			Video video = 노출영상(location);
+			Long viewer = 사용자();
+			차단(viewer, userId);
+
+			assertThatThrownBy(() -> service().getVideoDetail(video.getId(), viewer))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", EventErrorCode.EVENT_VIDEO_NOT_FOUND);
+			assertThat(조회수(video.getId())).isZero();
+
+			userBlockRepository.deletePair(viewer, userId);
+			차단(userId, viewer);
+			assertThatThrownBy(() -> service().getVideoDetail(video.getId(), viewer))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", EventErrorCode.EVENT_VIDEO_NOT_FOUND);
+			assertThat(조회수(video.getId())).isZero();
+
+			// 역방향 행까지 지우면 다음 요청부터 바로 열린다(캐시 없음, AC-13).
+			userBlockRepository.deletePair(userId, viewer);
+			assertThat(service().getVideoDetail(video.getId(), viewer).uploaderId()).isEqualTo(userId);
+			assertThat(조회수(video.getId())).isEqualTo(1);
+		}
+
+		// 검증: FR-MOD-18, AC-569-12
+		@Test
+		@DisplayName("피드 항목과 상세에 uploaderId(videos.user_id)가 실리고 닉네임 필드는 그대로다")
+		void 피드_항목과_상세에_uploaderId가_실린다() {
+			EventLocation location = 위치(33);
+			Video video = 노출영상(location);
+
+			EventLocationVideoResponseDto item = service().getLocationVideos(null, location.getOccurrence().getId(),
+				location.getId(), null, 0).videos().get(0);
+			EventVideoDetailResponseDto detail = service().getVideoDetail(video.getId(), null);
+
+			assertThat(item.uploaderId()).isEqualTo(userId);
+			assertThat(detail.uploaderId()).isEqualTo(userId);
+			assertThat(detail.uploaderNickname()).isEqualTo("행사업로더");
 		}
 	}
 }

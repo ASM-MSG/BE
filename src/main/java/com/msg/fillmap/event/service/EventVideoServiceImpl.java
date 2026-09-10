@@ -33,6 +33,7 @@ import com.msg.fillmap.global.PageSizes;
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.entity.ProcessingStatus;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.VideoStatus;
@@ -64,6 +65,8 @@ public class EventVideoServiceImpl implements EventVideoService {
 	private final EntityManager entityManager;
 	// 상세의 반응 네 필드와 피드 카드의 두 수를 읽는다 (MSG-441). 같은 도메인 안의 읽기 전용 의존이다.
 	private final EventVideoInteractionService interactionService;
+	// 상세의 차단 판정 leaf (MSG-569 D-5). 피드는 SQL 안 NOT EXISTS 로 걸러진다(D-4).
+	private final UserBlockQueryService userBlockQueryService;
 	private final Clock clock;
 
 	/**
@@ -81,10 +84,12 @@ public class EventVideoServiceImpl implements EventVideoService {
 		ThumbnailUrlPresigner thumbnailUrlPresigner,
 		ZoneNameQueryService zoneNameQueryService,
 		EntityManager entityManager,
-		EventVideoInteractionService interactionService
+		EventVideoInteractionService interactionService,
+		UserBlockQueryService userBlockQueryService
 	) {
 		this(occurrenceRepository, locationRepository, eventVideoRepository, videoService, videoRepository,
-			thumbnailUrlPresigner, zoneNameQueryService, entityManager, interactionService, Clock.systemUTC());
+			thumbnailUrlPresigner, zoneNameQueryService, entityManager, interactionService, userBlockQueryService,
+			Clock.systemUTC());
 	}
 
 	public EventVideoServiceImpl(
@@ -97,6 +102,7 @@ public class EventVideoServiceImpl implements EventVideoService {
 		ZoneNameQueryService zoneNameQueryService,
 		EntityManager entityManager,
 		EventVideoInteractionService interactionService,
+		UserBlockQueryService userBlockQueryService,
 		Clock clock
 	) {
 		this.occurrenceRepository = occurrenceRepository;
@@ -108,6 +114,7 @@ public class EventVideoServiceImpl implements EventVideoService {
 		this.zoneNameQueryService = zoneNameQueryService;
 		this.entityManager = entityManager;
 		this.interactionService = interactionService;
+		this.userBlockQueryService = userBlockQueryService;
 		this.clock = clock;
 	}
 
@@ -151,18 +158,18 @@ public class EventVideoServiceImpl implements EventVideoService {
 	 * 위치별 영상 피드 (§API 2). 술어·정렬은 리포지토리가 정본이고 여기서는 size 클램프 →
 	 * lookahead(size+1) 조회 → hasNext 판정·트림 → 썸네일 presign → nextCursor 발급만 한다
 	 * (getGridGlobalVideos 와 같은 순서). 아카이브를 포함한 모든 노출 상태에서 조회되고 영상이 없으면
-	 * 빈 페이지다 — 빈 상태 문구는 화면 몫이라 예외가 아니다.
+	 * 빈 페이지다 — 빈 상태 문구는 화면 몫이라 예외가 아니다. viewerId 는 차단 절(MSG-569)에만 쓴다.
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public EventLocationVideoPageResponseDto getLocationVideos(long occurrenceId, long locationId, String cursor,
-		int size) {
+	public EventLocationVideoPageResponseDto getLocationVideos(Long viewerId, long occurrenceId, long locationId,
+		String cursor, int size) {
 		LocalDateTime now = LocalDateTime.now(clock);
 		visibleOccurrence(occurrenceId, now);
 		openLocationOf(occurrenceId, locationRepository.findById(locationId));
 
 		int pageSize = PageSizes.clampCursor(size);
-		List<EventLocationVideoRow> rows = queryPage(locationId, cursor, pageSize + 1);
+		List<EventLocationVideoRow> rows = queryPage(viewerId, locationId, cursor, pageSize + 1);
 		boolean hasNext = rows.size() > pageSize;
 		List<EventLocationVideoRow> pageRows = hasNext ? rows.subList(0, pageSize) : rows;
 		// 반응 수는 이 페이지의 영상 id 집합으로 도는 group by 두 번이다 — 항목마다 세면 N+1 이다.
@@ -175,7 +182,7 @@ public class EventVideoServiceImpl implements EventVideoService {
 		for (EventLocationVideoRow row : pageRows) {
 			videos.add(new EventLocationVideoResponseDto(row.videoId(),
 				thumbnailUrlPresigner.presign(row.thumbnailKey()), row.durationSec(), row.createdAt(),
-				reactions.helpfulCount(row.videoId()), reactions.commentCount(row.videoId())));
+				reactions.helpfulCount(row.videoId()), reactions.commentCount(row.videoId()), row.uploaderId()));
 		}
 		String nextCursor = null;
 		if (hasNext) {
@@ -185,11 +192,11 @@ public class EventVideoServiceImpl implements EventVideoService {
 		return new EventLocationVideoPageResponseDto(videos, hasNext, nextCursor);
 	}
 
-	private List<EventLocationVideoRow> queryPage(long locationId, String cursor, int limit) {
+	private List<EventLocationVideoRow> queryPage(Long viewerId, long locationId, String cursor, int limit) {
 		// 정렬 없는 PageRequest — 정렬은 쿼리의 ORDER BY 고정이라 Pageable 이 덧붙이면 안 된다.
 		Pageable page = PageRequest.of(0, limit);
 		if (cursor == null) {
-			return eventVideoRepository.findVisibleByLocationId(locationId, page);
+			return eventVideoRepository.findVisibleByLocationId(locationId, viewerId, page);
 		}
 		EventVideoCursor decoded = decodeCursor(cursor);
 		if (decoded.locationId() != locationId) {
@@ -198,7 +205,7 @@ public class EventVideoServiceImpl implements EventVideoService {
 			throw new ApiException(EventErrorCode.INVALID_CURSOR);
 		}
 		return eventVideoRepository.findVisibleByLocationIdAfter(
-			locationId, decoded.createdAt(), decoded.id(), page);
+			locationId, viewerId, decoded.createdAt(), decoded.id(), page);
 	}
 
 	/**
@@ -240,10 +247,16 @@ public class EventVideoServiceImpl implements EventVideoService {
 		if (!isVisible(occurrence, now)) {
 			throw new ApiException(EventErrorCode.EVENT_VIDEO_NOT_FOUND);
 		}
+		boolean owner = userId != null && userId.equals(video.getUserId());
+		// 차단 (MSG-569 FR-8, FR-9) — 어느 방향이든 차단 관계면 노출 술어 밖과 같은 13406 이라 차단 사실이 새지
+		// 않는다. 비로그인은 차단 관계가 있을 수 없어 조회 0회이고, 여기서 던지면 presign·조회수 증가·반응 조회가
+		// 전부 돌지 않는다.
+		if (!owner && userId != null && userBlockQueryService.isBlockedEitherWay(userId, video.getUserId())) {
+			throw new ApiException(EventErrorCode.EVENT_VIDEO_NOT_FOUND);
+		}
 
 		String playbackKey = video.getBlurredS3Key() != null ? video.getBlurredS3Key() : video.getEncodedUrl();
 		String playbackUrl = thumbnailUrlPresigner.presign(playbackKey);
-		boolean owner = userId != null && userId.equals(video.getUserId());
 		if (playbackUrl != null && !owner) {
 			videoRepository.incrementViewCount(videoId);
 		}
@@ -277,7 +290,8 @@ public class EventVideoServiceImpl implements EventVideoService {
 			reactions.helpfulCount(),
 			reactions.helpfulByMe(),
 			reactions.commentCount(),
-			reactions.comments());
+			reactions.comments(),
+			video.getUserId());
 	}
 
 	/**
