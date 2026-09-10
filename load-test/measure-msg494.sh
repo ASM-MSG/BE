@@ -5,21 +5,21 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 사용법:
-  BASE_URL=https://api.fillmap.kr \
+  BASE_URL=https://api-dev.fillmap.kr \
   SSH_KEY_PATH=~/.ssh/fillmap-key-soma.pem \
   ./load-test/measure-msg494.sh video-1.mp4 video-2.mp4 video-3.mp4
 
-  ALLOW_SERVICE_SIGNALS=true BASE_URL=https://api.fillmap.kr \
+  ALLOW_SERVICE_SIGNALS=true BASE_URL=https://api-dev.fillmap.kr \
   SSH_KEY_PATH=~/.ssh/fillmap-key-soma.pem \
   ./load-test/measure-msg494.sh signal-term video.mp4
 
   # 두 노드 lease-duration=PT1M 적용·재시작 뒤 실행하고, 끝나면 PT35M로 복구한다.
-  ALLOW_SERVICE_SIGNALS=true BASE_URL=https://api.fillmap.kr \
+  ALLOW_SERVICE_SIGNALS=true BASE_URL=https://api-dev.fillmap.kr \
   SSH_KEY_PATH=~/.ssh/fillmap-key-soma.pem \
   ./load-test/measure-msg494.sh signal-kill video.mp4
 
   # AI job이 PROCESSING인 BLURRING 영상과 새 영상 두 개를 겹쳐 처리한다.
-  BASE_URL=https://api.fillmap.kr SSH_KEY_PATH=~/.ssh/fillmap-key-soma.pem \
+  BASE_URL=https://api-dev.fillmap.kr SSH_KEY_PATH=~/.ssh/fillmap-key-soma.pem \
   ./load-test/measure-msg494.sh blur 123 video-1.mp4 video-2.mp4
 
 선택 환경변수:
