@@ -7,6 +7,7 @@ import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -108,4 +109,16 @@ public interface FriendshipRepository extends JpaRepository<Friendship, Friendsh
 				OR (f.id.requesterId = :b AND f.id.addresseeId = :a))
 		""")
 	boolean existsAcceptedPair(@Param("a") Long a, @Param("b") Long b);
+
+	/**
+	 * 방향 무관 쌍 벌크 삭제 (MSG-569 D-3) — 차단 시 두 사용자 사이의 friendships 행을 상태(ACCEPTED·PENDING)와
+	 * 방향에 무관하게 지운다. 조회 없이 한 문장이라 0행도 성공이고, 차단 저장과 같은 트랜잭션에서 돈다.
+	 */
+	@Modifying
+	@Query("""
+		DELETE FROM Friendship f
+		WHERE (f.id.requesterId = :a AND f.id.addresseeId = :b)
+			OR (f.id.requesterId = :b AND f.id.addresseeId = :a)
+		""")
+	int deletePair(@Param("a") Long a, @Param("b") Long b);
 }

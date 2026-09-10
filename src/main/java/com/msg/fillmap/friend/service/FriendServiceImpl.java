@@ -265,6 +265,12 @@ public class FriendServiceImpl implements FriendService {
 		friendshipRepository.delete(friendship);
 	}
 
+	@Override
+	@Transactional
+	public void deleteRelationsBetween(Long a, Long b) {
+		friendshipRepository.deletePair(a, b);
+	}
+
 	/**
 	 * 친구 열람 API 공용 인가 가드 (MSG-186 §D4). 판정은 leaf 에 맡긴다 — video 재생 판정과 같은 코드를
 	 * 타야 규칙이 갈라지지 않는다 (MSG-312). 실패는 언제나 9424 하나뿐이라 비친구·본인 ID(자기 쌍 행은
