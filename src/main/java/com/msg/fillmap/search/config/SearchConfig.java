@@ -13,8 +13,9 @@ import org.springframework.web.client.RestClient;
  *
  * 완성된 RestClient 빈이다 — RestClient.Builder 빈이 아니다. AiClient 가 Builder 를 by-type 무한정
  * 주입받고 있어(ai.enabled 환경) 두 번째 Builder 빈은 기동 모호성을 만든다. 완성 RestClient 빈은 이것과
- * kakaoTokenRestClient(MSG-345) 둘이라 주입은 필드명=빈 이름의 by-name 으로 갈린다 — KakaoLocalClient 의
- * 필드명이 이 빈 이름과 같다. KakaoAK 인증 헤더까지 여기서 조립해 KakaoLocalClient 는 호출·파싱만 한다.
+ * kakaoTokenRestClient(MSG-345)·appleTokenRestClient(MSG-594) 셋이라 주입은 필드명=빈 이름의 by-name 으로
+ * 갈린다 — KakaoLocalClient 의 필드명이 이 빈 이름과 같다. KakaoAK 인증 헤더까지 여기서 조립해 KakaoLocalClient 는
+ * 호출·파싱만 한다.
  */
 @Configuration
 public class SearchConfig {
