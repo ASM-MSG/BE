@@ -1,0 +1,8 @@
+# 변환·검수 산출물은 커밋하지 않는다 (MSG-259 스펙 D-6) — 스크립트로 재생성 가능
+# zones-draft.*  : convert-zones.py 산출 (공공데이터 원본 CSV/SHP 필요 — 출처는 위키 06-research 노트)
+# zones-candidate.* : build-candidate.py 산출 (zones-draft.json 입력)
+*.json
+*.geojson
+
+# 예외: zones-manual.json 은 산출물이 아니라 수동 작도 원본(재생성 불가) — 커밋 대상 (2026-07-31)
+!zones-manual.json

@@ -1,0 +1,194 @@
+package com.msg.fillmap.video.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+
+import java.lang.reflect.RecordComponent;
+import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+
+import com.msg.fillmap.badge.service.BadgeAwardService;
+import com.msg.fillmap.event.repository.EventVideoRepository;
+import com.msg.fillmap.friend.service.FriendshipQueryService;
+import com.msg.fillmap.global.config.AwsProperties;
+import com.msg.fillmap.hotzone.service.HotScoreCommandService;
+import com.msg.fillmap.mission.service.MissionAwardService;
+import com.msg.fillmap.region.service.RegionStatsCommandService;
+import com.msg.fillmap.streak.service.StreakCommandService;
+import com.msg.fillmap.user.service.UserBlockQueryService;
+import com.msg.fillmap.video.dto.GridCoverVideoResponseDto;
+import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.entity.Visibility;
+import com.msg.fillmap.video.repository.VideoRepository;
+import com.msg.fillmap.video.support.ThumbnailUrlPresigner;
+import com.msg.fillmap.zone.service.ZoneNameResolver;
+
+/**
+ * 전역 대표 조회 + 썸네일 presign (MSG-87). 정렬·필터는 repository 계약이라 VideoGlobalCoverQueryTest 가 실
+ * DB 로 검증하고, 여기서는 서비스가 대표 1건을 presigned URL 로 매핑하는지·없으면 null 을 주는지만 본다.
+ * presign 은 네트워크 없는 로컬 서명이라 더미 자격증명으로 실제 S3Presigner 를 쓴다(VideoPresignTest 전략).
+ */
+@DisplayName("VideoService 격자 전역 대표 조회")
+class VideoGlobalCoverServiceTest {
+
+	private static final String GRID_ID = "19422_9582";
+	private static final String THUMB_KEY = "videos/thumb/1042.jpg";
+	private static final Long AUTHOR_ID = 1L;
+
+	private VideoRepository videoRepository;
+	private VideoService videoService;
+
+	@BeforeEach
+	void setUp() {
+		videoRepository = mock(VideoRepository.class);
+		S3Presigner presigner = S3Presigner.builder()
+			.region(Region.AP_NORTHEAST_2)
+			.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create("ak", "sk")))
+			.build();
+		AwsProperties properties = new AwsProperties(
+			"ap-northeast-2", new AwsProperties.S3("fillmap-video-dev", 104857600L, 2147483648L));
+
+		videoService = new VideoServiceImpl(
+			videoRepository, mock(com.msg.fillmap.video.repository.VideoEncodingJobRepository.class),
+			presigner, mock(S3Client.class), properties,
+			mock(RegionStatsCommandService.class), new ThumbnailUrlPresigner(presigner, properties),
+			mock(BadgeAwardService.class), mock(StreakCommandService.class), mock(MissionAwardService.class),
+			mock(HotScoreCommandService.class), mock(FriendshipQueryService.class),
+			() -> new ZoneNameResolver(List.of()), mock(EventVideoRepository.class), mock(UserBlockQueryService.class));
+
+		// 기본값 = 작성자가 살아 있다. 닉네임이 빈손이면 대표 없음(null)이 되므로(MSG-371), 닉네임을 안 보는
+		// 테스트도 이 기본 스텁이 있어야 대표를 받는다. 탈퇴 경합을 보는 테스트는 given 으로 덮어쓴다.
+		given(videoRepository.findAuthorNickname(AUTHOR_ID)).willReturn(Optional.of("busan.vlog"));
+	}
+
+	private Video readyVideo(long id, String thumbKey, LocalDateTime recordedAt, long viewCount) {
+		Video video = Video.create(AUTHOR_ID, GRID_ID, "videos/original/x.mp4", null, (short) 12, recordedAt,
+			Visibility.PRIVATE);
+		video.markReady("videos/encoded/" + id + ".mp4", thumbKey, video.getDurationSec());
+		ReflectionTestUtils.setField(video, "id", id);
+		ReflectionTestUtils.setField(video, "viewCount", viewCount);
+		return video;
+	}
+
+	@Test
+	@DisplayName("대표 영상의 썸네일은 presigned GET URL 로 발급된다")
+	void 대표_영상의_썸네일은_presigned_GET_URL로_발급된다() {
+		LocalDateTime recordedAt = LocalDateTime.of(2026, 7, 20, 18, 3, 11);
+		given(videoRepository.findGlobalCover(GRID_ID))
+			.willReturn(Optional.of(readyVideo(1042L, THUMB_KEY, recordedAt, 37L)));
+
+		GridCoverVideoResponseDto result = videoService.getGridCover(GRID_ID);
+
+		assertThat(result.videoId()).isEqualTo(1042L);
+		assertThat(result.viewCount()).isEqualTo(37L);
+		assertThat(result.recordedAt()).isEqualTo(recordedAt);
+		assertThat(result.thumbnailUrl())
+			.startsWith("https://")
+			.contains("fillmap-video-dev")
+			.contains("videos/thumb/1042.jpg");
+	}
+
+	@Test
+	@DisplayName("발급된 썸네일 URL 은 서명파라미터를 포함한다")
+	void 발급된_썸네일_URL은_서명파라미터를_포함한다() {
+		given(videoRepository.findGlobalCover(GRID_ID))
+			.willReturn(Optional.of(readyVideo(1042L, THUMB_KEY, LocalDateTime.now(), 0L)));
+
+		String thumbnailUrl = videoService.getGridCover(GRID_ID).thumbnailUrl();
+
+		assertThat(thumbnailUrl)
+			.contains("X-Amz-Algorithm")
+			.contains("X-Amz-Signature")
+			.contains("X-Amz-Expires");
+	}
+
+	@Test
+	@DisplayName("대표가 없으면 null 을 반환한다")
+	void 대표가_없으면_null을_반환한다() {
+		given(videoRepository.findGlobalCover(GRID_ID)).willReturn(Optional.empty());
+
+		assertThat(videoService.getGridCover(GRID_ID)).isNull();
+	}
+
+	@Test
+	@DisplayName("view_count 가 모두 0이면 최신 영상이 대표가 된다")
+	void view_count가_모두_0이면_최신_영상이_대표가_된다() {
+		// view_count 전부 0일 때의 최신순 폴백은 repository 정렬(view_count DESC, created_at DESC)이 보장한다.
+		// 서비스는 repository 가 고른 그 1건을 그대로 매핑한다 — 여기서는 최신 영상이 넘어온다고 두고 매핑을 본다.
+		LocalDateTime newest = LocalDateTime.of(2026, 7, 20, 12, 0, 0);
+		given(videoRepository.findGlobalCover(GRID_ID))
+			.willReturn(Optional.of(readyVideo(2L, THUMB_KEY, newest, 0L)));
+
+		GridCoverVideoResponseDto result = videoService.getGridCover(GRID_ID);
+
+		assertThat(result.videoId()).isEqualTo(2L);
+		assertThat(result.viewCount()).isEqualTo(0L);
+	}
+
+	@Test
+	@DisplayName("대표 응답의 작성자 축은 닉네임 하나다 (도감 색상·userId 비노출)")
+	void 대표_응답의_작성자_축은_닉네임_하나다() {
+		// 2026-08-04 확정으로 닉네임은 표시 대상이 됐다(MSG-371). 도감 색상·작성자 id 는 여전히 안 담는다.
+		List<String> fields = Arrays.stream(GridCoverVideoResponseDto.class.getRecordComponents())
+			.map(RecordComponent::getName)
+			.toList();
+
+		assertThat(fields)
+			.containsExactly("videoId", "thumbnailUrl", "durationSec", "viewCount", "recordedAt", "nickname")
+			.noneMatch(name -> name.toLowerCase().contains("user") || name.toLowerCase().contains("color"));
+	}
+
+	// 검증: FR-VIDEO-18
+	@Test
+	@DisplayName("전역 대표 영상 응답에 작성자 닉네임이 담긴다")
+	void 전역_대표_영상_응답에_작성자_닉네임이_담긴다() {
+		given(videoRepository.findGlobalCover(GRID_ID))
+			.willReturn(Optional.of(readyVideo(1042L, THUMB_KEY, LocalDateTime.now(), 37L)));
+		given(videoRepository.findAuthorNickname(AUTHOR_ID)).willReturn(Optional.of("busan.vlog"));
+
+		GridCoverVideoResponseDto result = videoService.getGridCover(GRID_ID);
+
+		assertThat(result.nickname()).isEqualTo("busan.vlog");
+		// 대표 1건이라 닉네임 조회도 딱 1회 — 대표를 고른 작성자로만 부른다.
+		then(videoRepository).should(times(1)).findAuthorNickname(AUTHOR_ID);
+	}
+
+	@Test
+	@DisplayName("대표가 없는 격자는 기존처럼 null 이고 닉네임 조회가 돌지 않는다")
+	void 대표가_없는_격자는_기존처럼_null이고_닉네임_조회가_돌지_않는다() {
+		given(videoRepository.findGlobalCover(GRID_ID)).willReturn(Optional.empty());
+
+		assertThat(videoService.getGridCover(GRID_ID)).isNull();
+		then(videoRepository).should(never()).findAuthorNickname(any());
+	}
+
+	@Test
+	@DisplayName("작성자 닉네임이 빈손이면 대표 없음으로 응답한다 — 방금 연쇄 삭제된 영상")
+	void 작성자_닉네임이_빈손이면_대표_없음으로_응답한다() {
+		// 대표 조회와 닉네임 조회 사이(READ COMMITTED, ms 창)에 탈퇴 커밋이 끼는 이론상 케이스.
+		// 대표가 원래 없는 격자와 완전히 같은 응답(null)이라 nickname 이 null 로 실리는 경로가 없다.
+		given(videoRepository.findGlobalCover(GRID_ID))
+			.willReturn(Optional.of(readyVideo(1042L, THUMB_KEY, LocalDateTime.now(), 37L)));
+		given(videoRepository.findAuthorNickname(AUTHOR_ID)).willReturn(Optional.empty());
+
+		assertThat(videoService.getGridCover(GRID_ID)).isNull();
+	}
+}

@@ -1,0 +1,360 @@
+package com.msg.fillmap.region.repository;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.msg.fillmap.region.entity.Region;
+
+/**
+ * 행정동 마스터 리포지토리 (MSG-154). 읽기는 JpaRepository 기본(count 등, 검증용),
+ * 쓰기는 PostGIS 가 geometry 파싱·면적 산출을 한 문장에서 처리하는 native UPSERT.
+ */
+public interface RegionRepository extends JpaRepository<Region, String> {
+
+	/**
+	 * 행정동 한 건 멱등 UPSERT. geometryJson 을 ST_GeomFromGeoJSON 으로 파싱하고 ST_Multi 로
+	 * MULTIPOLYGON 정규화한 뒤 GEOGRAPHY 로 캐스트해 저장한다. total_grid_count 는 경계 면적을
+	 * 셀 면적(cellAreaM2)으로 나눠 시딩 시 1회 산출한다(D1, 면적 근사). ON CONFLICT 로 재실행 시 값이 수렴한다.
+	 */
+	@Modifying
+	@Query(value = """
+		INSERT INTO regions (region_code, region_name, parent_code, boundary_geom, total_grid_count)
+		VALUES (
+			:regionCode, :regionName, :parentCode,
+			ST_Multi(ST_GeomFromGeoJSON(:geometryJson))::geography,
+			ROUND(ST_Area(ST_Multi(ST_GeomFromGeoJSON(:geometryJson))::geography) / :cellAreaM2)
+		)
+		ON CONFLICT (region_code) DO UPDATE SET
+			region_name      = EXCLUDED.region_name,
+			parent_code      = EXCLUDED.parent_code,
+			boundary_geom    = EXCLUDED.boundary_geom,
+			total_grid_count = EXCLUDED.total_grid_count
+		""", nativeQuery = true)
+	int upsert(
+		@Param("regionCode") String regionCode,
+		@Param("regionName") String regionName,
+		@Param("parentCode") String parentCode,
+		@Param("geometryJson") String geometryJson,
+		@Param("cellAreaM2") long cellAreaM2
+	);
+
+	/**
+	 * 역지오코딩 (MSG-93): (lat, lon) 을 포함하는 행정동 1건. boundary_geom 이 GEOGRAPHY 이므로
+	 * ST_Covers 로 GIST 인덱스(idx_regions_boundary)를 태운다 — ST_Contains(::geometry 캐스트)는 인덱스를
+	 * 우회하므로 쓰지 않는다(§D2). 좌표 순서는 PostGIS 관례대로 ST_MakePoint(lon, lat)(X=경도). 경계선에 정확히
+	 * 걸린 극소수 다중매칭은 ORDER BY region_code LIMIT 1 로 결정적으로 단일화한다 — recompute(refreshRegionStats)와
+	 * 같은 규칙이라 역지오코딩과 수집률의 행정동 귀속이 항상 일치한다.
+	 */
+	@Query(value = """
+		SELECT region_code AS "regionCode", region_name AS "regionName", parent_code AS "parentCode"
+		FROM regions
+		WHERE ST_Covers(boundary_geom, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography)
+		ORDER BY region_code
+		LIMIT 1
+		""", nativeQuery = true)
+	Optional<RegionProjection> findContainingRegion(@Param("lat") double lat, @Param("lon") double lon);
+
+	/**
+	 * 최근접 행정동 (MSG-492): 좌표를 품는 행정동이 없을 때(바다·경계 밖) 경계까지 거리가 가장 짧은 1건.
+	 * 거리 상한을 두지 않는다 — 호출이 스팟당 생애 1회(시더)라 비용이 문제되지 않고, 상한을 두면 그만큼이
+	 * 이름 없이 남아 FR-1 을 스스로 깬다(§D-5).
+	 *
+	 * <p><b>2단 구조인 이유</b>: PostgreSQL 은 ORDER BY 가 KNN 연산자(&lt;-&gt;) <b>하나뿐일 때만</b> GIST
+	 * 인덱스의 순서 스캔을 쓴다. 동률 결정성을 위해 region_code 를 정렬 키로 덧붙이면 인덱스를 통째로 버리고
+	 * regions 전량을 읽어 정렬한다 — dev 실측(2026-08-27, 행정동 3,558건)에서 Seq Scan 1,666ms 대
+	 * Index Scan 13ms 로 128배 차이였다. 그래서 안쪽에서 거리만으로 최근접 후보를 인덱스로 뽑고,
+	 * 바깥에서 그 후보 안에서만 region_code 로 동률을 가른다(실측 20.7ms, Incremental Sort).
+	 *
+	 * <p>후보 수 8은 "경계선에서 거리가 정확히 같은 행정동"의 현실적 상한이다. 행정동 경계는 서로 변을
+	 * 공유하므로 한 점에서 동시에 최단거리인 행정동은 사실상 2~3개이고, 8을 넘는 동률이 나오면 그때는
+	 * 지오메트리 자체가 이상한 상황이다. 후보를 늘려도 인덱스 스캔은 실제로 필요한 만큼만 읽는다
+	 * (실측에서 LIMIT 8 을 걸어도 읽은 행은 2건이었다).
+	 */
+	@Query(value = """
+		SELECT "regionCode", "regionName", "parentCode"
+		FROM (
+			SELECT region_code AS "regionCode", region_name AS "regionName", parent_code AS "parentCode",
+				boundary_geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography AS distance
+			FROM regions
+			ORDER BY boundary_geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+			LIMIT 8
+		) nearest
+		ORDER BY distance, "regionCode"
+		LIMIT 1
+		""", nativeQuery = true)
+	Optional<RegionProjection> findNearestRegion(@Param("lat") double lat, @Param("lon") double lon);
+
+	/**
+	 * 거리 상한이 있는 최근접 행정동 (MSG-493). 구조는 findNearestRegion 과 같은 2단 KNN 이고, 바깥 단에서
+	 * 경계까지 거리가 상한을 넘는 후보를 버린다 — 바다 한가운데 격자에 수십 km 떨어진 동 이름이 붙는 것을
+	 * 막는다. 상한 필터가 바깥 단인 이유는 안쪽 LIMIT 이 인덱스 순서 스캔을 끊는 지점이라 WHERE 를 안쪽에
+	 * 넣으면 인덱스 사용이 다시 흔들리기 때문이다(2단 구조의 존재 이유와 같다).
+	 * 호출처는 단일 격자 조회(getCell) 표시 폴백 하나다. 코스 시더는 상한 없는 쪽을 쓴다(MSG-492 D-5).
+	 */
+	@Query(value = """
+		SELECT "regionCode", "regionName", "parentCode"
+		FROM (
+			SELECT region_code AS "regionCode", region_name AS "regionName", parent_code AS "parentCode",
+				boundary_geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography AS distance
+			FROM regions
+			ORDER BY boundary_geom <-> ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+			LIMIT 8
+		) nearest
+		WHERE distance <= :maxDistanceMeters
+		ORDER BY distance, "regionCode"
+		LIMIT 1
+		""", nativeQuery = true)
+	Optional<RegionProjection> findNearestRegionWithin(
+		@Param("lat") double lat, @Param("lon") double lon,
+		@Param("maxDistanceMeters") double maxDistanceMeters);
+
+	/**
+	 * grids.region_code 멱등 보정 백필 (MSG-167 §D2 보정). V5 백필과 같은 판정·같은 IS NULL 가드다.
+	 * V5 는 Flyway 시점(RegionSeeder 이전)에 돌아, "격자는 있는데 regions 가 빈" 환경에선 no-op 으로 끝나고
+	 * upsertGrid 는 기존 격자를 건너뛰므로 라벨이 영구 NULL 로 남는다 — 시딩 직후 이 보정을 1회 돌려 닫는다.
+	 * EXISTS 가드로 실제 라벨될 행만 갱신한다 — 무귀속(해안) 격자를 IS NULL 만으로 잡으면 PostgreSQL 이
+	 * NULL→NULL 재기록(행 잠금·dead tuple·허위 카운트)을 만들어, 시딩 켠 기동마다 같은 행을 다시 쓴다.
+	 * 라벨 완비 환경에선 진짜 0행 no-op. 실제 라벨된 행 수 반환.
+	 */
+	@Modifying
+	@Query(value = """
+		UPDATE grids g SET region_code = (
+			SELECT r.region_code FROM regions r
+			WHERE ST_Covers(r.boundary_geom, g.center_geom)
+			ORDER BY r.region_code
+			LIMIT 1)
+		WHERE g.region_code IS NULL
+		  AND EXISTS (
+			SELECT 1 FROM regions r
+			WHERE ST_Covers(r.boundary_geom, g.center_geom))
+		""", nativeQuery = true)
+	int backfillGridRegionCodes();
+
+	/**
+	 * 언급 지명 대조 (MSG-468): 시도·시군구·동 세 단위를 UNION ALL 로 훑어 완전 일치 그룹을 낸다.
+	 * 시도 분기는 첫 토큰이 입력 그대로거나 입력+행정 접미 5종(특별시·광역시·특별자치시·도·특별자치도)이면
+	 * 매칭("부산"→"부산광역시" 접미 보정, 문법 규칙이지 별칭 사전 아님 — "충북" 류 축약은 대조 실패로 흘림).
+	 * 시군구는 둘째, 동은 셋째 토큰 완전 일치만. split_part 위치는 리터럴로 박는다 — 파라미터 자리로 빼면
+	 * 플랜이 갈라지는 MSG-356 실측(findDistricts 주석) 선례. 토큰 번호·코드 접두 길이(동 10/3, 시군구 5/2,
+	 * 시도 2/1)의 정본은 RegionUnit 이다. 그룹은 단위별 코드 접두(left)로 묶고 이름은 매칭 토큰의 MIN 단일화
+	 * (그룹 안 토큰은 WHERE 일치로 전부 같아 값 선택이 아니라 집계 자리 채우기다). 중심은
+	 * ST_Centroid(ST_Collect) 무게중심 — 외접 사각형 중점은 섬(백령도·울릉도)이 사각형을 늘리는 시도에서
+	 * 바다에 떨어진다. 외접 사각형은 ST_Extent, 뷰포트 겹침은 실경계 ST_Intersects 의 BOOL_OR — 외접
+	 * 사각형 겹침으로 하면 김해 뷰포트가 부산 사각형에 들어 종류 판정(MOVE/ZOOM_OUT)이 틀린다.
+	 * regions 3,558행 순차 스캔 한 문장으로 충분해 토큰 인덱스 없음(스펙 데이터 모델 절).
+	 */
+	@Query(value = """
+		SELECT
+			MIN(split_part(region_name, ' ', 1))                    AS "name",
+			ST_Y(ST_Centroid(ST_Collect(boundary_geom::geometry)))  AS "centerLat",
+			ST_X(ST_Centroid(ST_Collect(boundary_geom::geometry)))  AS "centerLng",
+			ST_YMin(ST_Extent(boundary_geom::geometry))             AS "minLat",
+			ST_XMin(ST_Extent(boundary_geom::geometry))             AS "minLng",
+			ST_YMax(ST_Extent(boundary_geom::geometry))             AS "maxLat",
+			ST_XMax(ST_Extent(boundary_geom::geometry))             AS "maxLng",
+			BOOL_OR(ST_Intersects(boundary_geom,
+				ST_MakeEnvelope(:swLng, :swLat, :neLng, :neLat, 4326)::geography)) AS "overlapsViewport"
+		FROM regions
+		WHERE split_part(region_name, ' ', 1) IN (:name,
+			:name || '특별시', :name || '광역시', :name || '특별자치시', :name || '도', :name || '특별자치도')
+		GROUP BY left(region_code, 2)
+		UNION ALL
+		SELECT
+			MIN(split_part(region_name, ' ', 2)),
+			ST_Y(ST_Centroid(ST_Collect(boundary_geom::geometry))),
+			ST_X(ST_Centroid(ST_Collect(boundary_geom::geometry))),
+			ST_YMin(ST_Extent(boundary_geom::geometry)),
+			ST_XMin(ST_Extent(boundary_geom::geometry)),
+			ST_YMax(ST_Extent(boundary_geom::geometry)),
+			ST_XMax(ST_Extent(boundary_geom::geometry)),
+			BOOL_OR(ST_Intersects(boundary_geom,
+				ST_MakeEnvelope(:swLng, :swLat, :neLng, :neLat, 4326)::geography))
+		FROM regions
+		WHERE split_part(region_name, ' ', 2) = :name
+		GROUP BY left(region_code, 5)
+		UNION ALL
+		SELECT
+			MIN(split_part(region_name, ' ', 3)),
+			ST_Y(ST_Centroid(ST_Collect(boundary_geom::geometry))),
+			ST_X(ST_Centroid(ST_Collect(boundary_geom::geometry))),
+			ST_YMin(ST_Extent(boundary_geom::geometry)),
+			ST_XMin(ST_Extent(boundary_geom::geometry)),
+			ST_YMax(ST_Extent(boundary_geom::geometry)),
+			ST_XMax(ST_Extent(boundary_geom::geometry)),
+			BOOL_OR(ST_Intersects(boundary_geom,
+				ST_MakeEnvelope(:swLng, :swLat, :neLng, :neLat, 4326)::geography))
+		FROM regions
+		WHERE split_part(region_name, ' ', 3) = :name
+		GROUP BY left(region_code, 10)
+		""", nativeQuery = true)
+	List<RegionMentionProjection> matchMentionedRegions(
+		@Param("name") String name,
+		@Param("swLat") double swLat,
+		@Param("swLng") double swLng,
+		@Param("neLat") double neLat,
+		@Param("neLng") double neLng
+	);
+
+	/**
+	 * 사용자 단위 advisory 트랜잭션 잠금 (MSG-155). 같은 사용자의 점령/롤백 트랜잭션이 겹칠 때
+	 * recompute COUNT 가 서로의 미커밋 user_grids 를 못 봐 낮은 값으로 덮어쓰는 lost update 를 막는다 —
+	 * 잠금 대기 후 실행되는 recompute 문장은 새 스냅샷(READ COMMITTED)으로 커밋된 진값을 센다.
+	 * 트랜잭션 종료 시 자동 해제(xact lock). 키는 'region_stats:' 접두로 다른 advisory 사용처와 분리.
+	 */
+	@Query(value = "SELECT pg_advisory_xact_lock(hashtextextended('region_stats:' || :userId, 0))", nativeQuery = true)
+	Object acquireUserRegionStatsLock(@Param("userId") long userId);
+
+	/**
+	 * parentCode 실존 검증 (MSG-156 §D3). regions.parent_code 에 그 시군구가 하나라도 있으면 true.
+	 * 파생 쿼리라 idx_regions_parent 를 태운다 — geospatial 이 아니라 인덱스 equality 검사다.
+	 * "데이터 없음"(유효 코드인데 수집 0)이 아니라 "존재하지 않는 코드"(오타·없는 시군구)만 6404 로 가른다.
+	 */
+	boolean existsByParentCode(String parentCode);
+
+	/**
+	 * 내 행정동별 수집률 조회 (MSG-156 §도메인 로직). region_stats 를 regions 와 PK equi-join 해
+	 * regionName·parentCode 를 채운다 — geospatial 연산 0(성공 기준 8), 155 가 쓰기 시 물질화한 값을 그대로 읽는다.
+	 * parentCode 가 null 이면 전국, 아니면 그 시군구 산하만(§D1). collectedOnly=true 면 collected_count>0 행만,
+	 * false 면 손댄 행 전부(롤백 0-row 포함, 전체 regions outer-join 아님 — §D1). progress_rate 는 표시 100 clamp(§D4).
+	 * nullable/boolean 파라미터는 PostgreSQL 타입 추론이 흔들리지 않도록 CAST 로 명시한다. LIMIT 없음 —
+	 * 결과는 구조적으로 사용자당 최대 regions 행 수(3,558)로 유한해서, 인위적 상한은 조용한 절단만 만든다(§D2 정정).
+	 */
+	@Query(value = """
+		SELECT
+			rs.region_code     AS "regionCode",
+			r.region_name      AS "regionName",
+			r.parent_code      AS "parentCode",
+			rs.collected_count AS "collectedCount",
+			rs.total_count     AS "totalCount",
+			LEAST(rs.progress_rate, 100.00) AS "progressRate",
+			rs.updated_at      AS "updatedAt"
+		FROM region_stats rs
+		JOIN regions r ON r.region_code = rs.region_code
+		WHERE rs.user_id = :userId
+		  AND (CAST(:parentCode AS varchar) IS NULL OR r.parent_code = CAST(:parentCode AS varchar))
+		  AND (CAST(:collectedOnly AS boolean) = FALSE OR rs.collected_count > 0)
+		ORDER BY r.parent_code, r.region_name
+		""", nativeQuery = true)
+	List<RegionStatProjection> findStats(
+		@Param("userId") long userId,
+		@Param("parentCode") String parentCode,
+		@Param("collectedOnly") boolean collectedOnly
+	);
+
+	/**
+	 * 전국 탐험률 재료 조회 (MSG-406). 분자는 내 region_stats.collected_count 합, 분모는 regions.total_grid_count 합.
+	 * 스칼라 서브쿼리 2개를 한 문장에 묶어 왕복 1회다. geospatial 0 — 155 가 쓰기 시 물질화한 값과 시딩 때 확정된
+	 * 격자 수를 더하기만 한다(§성공 기준 5). 분자를 user_grids COUNT 로 세지 않는 이유는 무귀속(해상) 격자 점령이
+	 * 섞여 "행정동 귀속 격자 총수"인 분모와 축이 어긋나기 때문이다 — region_stats 는 라벨 있는 격자만 세므로
+	 * 행정동 수집률(findStats)의 합과 항상 일치한다(§D-4). LEAST 100 clamp 를 걸지 않는다: 이 응답은 비율이 아니라
+	 * 원값 2개이고, 자르면 실제 수집 개수를 거짓 보고하게 된다(§D-3, 상한은 비율을 만드는 화면 몫).
+	 * 행이 없어도 COALESCE 로 0 이라 결과는 항상 1행이다.
+	 */
+	@Query(value = """
+		SELECT
+			(SELECT COALESCE(SUM(collected_count), 0) FROM region_stats WHERE user_id = :userId) AS "collectedCount",
+			(SELECT COALESCE(SUM(total_grid_count), 0) FROM regions)                             AS "totalCount"
+		""", nativeQuery = true)
+	RegionNationalStatProjection findNationalStat(@Param("userId") long userId);
+
+	/**
+	 * 시군구 목록 조회 (MSG-435, 검색 지역 필터의 "전체 지역"). 행정동 마스터를 parent_code 로 묶어
+	 * 이름(전체 경로 이름의 둘째 토큰)과 격자 수 합을 낸다 — 사용자 무관 값이라 userId 가 없고,
+	 * 시딩 때 물질화된 total_grid_count 를 더하기만 해 geospatial 연산이 0 이다(§D-2).
+	 * 토큰 번호 2 의 정본은 RegionUnit.SIGUNGU.getNameTokenIndex() 로, 뷰포트 시군구 집계
+	 * (GridRepository.aggregateOccupiedInRange)와 같은 규칙이라 두 화면의 시군구 이름이 항상 같다(§D-4).
+	 * 같은 그룹의 이름은 접두가 같아 어차피 한 값이지만 집계 함수 자리라 MIN 으로 단일화한다.
+	 * HAVING 으로 격자 수 0 인 시군구를 빼고(§D-3), WHERE 로 parent_code NULL 그룹이 유령 행으로 서는 것을 막는다.
+	 * COLLATE "C" 는 DB 로케일에 무관한 코드포인트 순서를 강제한다 — 한글 음절 블록은 코드포인트 순서가 곧
+	 * 가나다순이다. MIN 밖이 아니라 집계 입력에 붙이는 이유: 밖에 붙이면 "어떤 이름을 고를지"의 비교가 DB
+	 * 기본 collation 으로 남아, 한 그룹에 다른 토큰이 섞였을 때 선택 결과가 환경 의존이 된다(§D-4 결정성).
+	 * ORDER BY 는 출력 컬럼 번호에 COLLATE 를 못 걸어 같은 식을 글자 그대로 반복한다 — 토큰 번호가
+	 * 리터럴이라 MSG-356 이 실측한 파라미터 자리 분리 문제는 없다.
+	 */
+	@Query(value = """
+		SELECT
+			parent_code                                        AS "parentCode",
+			MIN(split_part(region_name, ' ', 2) COLLATE "C")   AS "name",
+			SUM(total_grid_count)                              AS "gridCount"
+		FROM regions
+		WHERE parent_code IS NOT NULL
+		GROUP BY parent_code
+		HAVING SUM(total_grid_count) > 0
+		ORDER BY MIN(split_part(region_name, ' ', 2) COLLATE "C"), parent_code
+		""", nativeQuery = true)
+	List<RegionDistrictProjection> findDistricts();
+
+	/**
+	 * 한 행정동의 내 수집률 단건 조회 (MSG-153 §도메인 로직 ②③). regionCode 는 resolveByPoint 가 판정한 실존 행정동이라
+	 * regions 행이 반드시 있고, region_stats 를 LEFT JOIN 해 아직 수집이 없는(155 미실행) 행정동은 0% 로 합성한다 —
+	 * collected_count 는 0, total_count 는 regions.total_grid_count 폴백, progress_rate 는 0.00, updated_at 은 null(§D6).
+	 * region_stats 행이 있으면 그 값(progress_rate 는 156 D4 표시 100 clamp). geospatial 0 — 순수 equi 조회다.
+	 * progress_rate 는 COALESCE 를 LEAST 안에 둔다 — PostgreSQL LEAST 는 NULL 인자를 건너뛰어 LEAST(NULL,100)=100 이 되므로,
+	 * 미수집 행(rs.progress_rate NULL)을 먼저 0.00 으로 채운 뒤 100 clamp 해야 0% 합성이 100 으로 새지 않는다.
+	 */
+	@Query(value = """
+		SELECT
+			r.region_code                                   AS "regionCode",
+			r.region_name                                   AS "regionName",
+			r.parent_code                                   AS "parentCode",
+			COALESCE(rs.collected_count, 0)                 AS "collectedCount",
+			COALESCE(rs.total_count, r.total_grid_count)    AS "totalCount",
+			LEAST(COALESCE(rs.progress_rate, 0.00), 100.00) AS "progressRate",
+			rs.updated_at                                   AS "updatedAt"
+		FROM regions r
+		LEFT JOIN region_stats rs ON rs.region_code = r.region_code AND rs.user_id = :userId
+		WHERE r.region_code = :regionCode
+		""", nativeQuery = true)
+	Optional<RegionStatProjection> findStatByRegion(
+		@Param("userId") long userId,
+		@Param("regionCode") String regionCode
+	);
+
+	/**
+	 * 수집률 캐시(region_stats) recompute UPSERT (MSG-155, MSG-236 equi 치환). gridId 격자의 저장 라벨
+	 * (grids.region_code — 167 이 쓰기 시 중심점 판정으로 1회 저장)을 regions 와 PK equi-join 해 귀속 행정동을 얻고,
+	 * 그 (user, region) 의 collected_count 를 "그 사용자가 점령(user_grids)한 격자 중 저장 라벨이 그 행정동인 수"로
+	 * 재계산한다. 두 판정 모두 저장 라벨 equi 라 ST_Covers 가 없다 — 167 이 라벨=라이브 판정을 고정해 등가다(§D1·D2).
+	 * 다중매칭 타이브레이크(ORDER BY region_code)는 라벨 저장 시 이미 결정적으로 단일화돼 승계된다.
+	 * 분자는 videos 가 아니라 user_grids(격자 1 row) 라 경계 격자 이중 카운트가 없다. total_count 는
+	 * regions.total_grid_count 사본, progress_rate 는 ROUND(collected*100/total, 2) 물질화(§D4). 대상 격자가
+	 * 무라벨(region_code IS NULL — 해안·무귀속)이면 가드로 SELECT 가 empty → 무변경 no-op(equi JOIN 도 NULL 을
+	 * 탈락시키나 no-op 의도를 명시한다). recompute 라 방향 무관·멱등 — 첫 점령/롤백 둘 다 이 한 문장(롤백 마지막 격자는 0 으로 UPSERT).
+	 * updated_at 은 statement_timestamp() AT TIME ZONE 'UTC' (NotificationRepository.markSent 선례) —
+	 * now()(timestamptz)는 timestamp 컬럼 대입 시 세션 TZ 로 캐스트돼 KST JVM 에서 +9h 저장된다. 이 값은
+	 * RegionStatResponseDto.updatedAt 으로 API 에 나가고 전역 코덱이 UTC 'Z' 를 붙이므로 축자 UTC 여야 한다(MSG-376).
+	 */
+	@Modifying
+	@Query(value = """
+		INSERT INTO region_stats (user_id, region_code, collected_count, total_count, progress_rate, updated_at)
+		SELECT
+			:userId,
+			tr.region_code,
+			cnt.collected,
+			tr.total_grid_count,
+			COALESCE(ROUND(cnt.collected * 100.0 / NULLIF(tr.total_grid_count, 0), 2), 0.00),
+			statement_timestamp() AT TIME ZONE 'UTC'
+		FROM grids g
+		JOIN regions tr ON tr.region_code = g.region_code
+		JOIN LATERAL (
+			SELECT COUNT(*) AS collected
+			FROM user_grids ug
+			JOIN grids g2 ON g2.grid_id = ug.grid_id
+			WHERE ug.user_id = :userId
+			  AND g2.region_code = tr.region_code
+		) cnt ON TRUE
+		WHERE g.grid_id = :gridId
+		  AND g.region_code IS NOT NULL
+		ON CONFLICT (user_id, region_code) DO UPDATE SET
+			collected_count = EXCLUDED.collected_count,
+			total_count     = EXCLUDED.total_count,
+			progress_rate   = EXCLUDED.progress_rate,
+			updated_at      = statement_timestamp() AT TIME ZONE 'UTC'
+		""", nativeQuery = true)
+	int refreshRegionStats(@Param("userId") long userId, @Param("gridId") String gridId);
+}

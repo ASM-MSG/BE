@@ -1,0 +1,291 @@
+package com.msg.fillmap.video.service;
+
+import static com.msg.fillmap.video.support.S3VideoObjectStub.givenUploadedVideoObject;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import jakarta.persistence.EntityManager;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Transactional;
+
+import software.amazon.awssdk.services.s3.S3Client;
+
+import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.GridEncoder;
+import com.msg.fillmap.user.entity.User;
+import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.video.dto.VideoUploadRequestDto;
+import com.msg.fillmap.video.dto.VideoVisibilityRequestDto;
+import com.msg.fillmap.video.entity.Video;
+import com.msg.fillmap.video.exception.VideoErrorCode;
+import com.msg.fillmap.video.repository.VideoRepository;
+
+/**
+ * 영상 공개 범위 전환 (MSG-162, MSG-285). 소유자가 자기 영상의 visibility 를 PUBLIC·PRIVATE·FRIENDS 로 돌린다.
+ * 이 티켓은 MSG-87 전역 대표(PUBLIC·READY 필터)의 노출 대상을 실데이터로 채우는 게 목적이라,
+ * 마지막 테스트가 "PRIVATE 만 있어 대표가 null 이던 격자가 공개 전환으로 대표가 잡히는지"를 실 PostGIS 로 본다.
+ */
+@SpringBootTest
+@Transactional
+@DisplayName("영상 공개 범위 전환 (실 PostGIS)")
+class VideoVisibilityIntegrationTest {
+
+	// 다른 테스트와 겹치지 않는 좌표 (구로디지털단지 인근).
+	private static final double 구로_LAT = 37.4851;
+	private static final double 구로_LON = 126.9014;
+
+	@Autowired
+	private VideoService videoService;
+
+	@Autowired
+	private VideoRepository videoRepository;
+
+	@Autowired
+	private UserRepository userRepository;
+
+	@Autowired
+	private EntityManager em;
+
+	@MockitoBean
+	private S3Client s3Client;
+
+	private Long userId;
+	private String gridId;
+
+	@BeforeEach
+	void setUp() {
+		givenUploadedVideoObject(s3Client);
+		userId = userRepository.save(User.createLocalUser("visibility@example.com", "hash", "공개전환자")).getId();
+		gridId = GridEncoder.encode(구로_LAT, 구로_LON);
+	}
+
+	private String newKey() {
+		return "videos/pending/" + userId + "/" + UUID.randomUUID() + ".mp4";
+	}
+
+	/** PRIVATE 명시 업로드 — MSG-204 부터 미지정은 PUBLIC 이라, "PRIVATE→PUBLIC 전환" 전제를 명시로 보존한다. */
+	private long upload() {
+		return videoService.saveVideo(userId, new VideoUploadRequestDto(
+			newKey(), 구로_LAT, 구로_LON, (short) 10, LocalDateTime.now(ZoneOffset.UTC), "PRIVATE")).videoId();
+	}
+
+	private VideoVisibilityRequestDto request(String visibility) {
+		return new VideoVisibilityRequestDto(visibility);
+	}
+
+	private String visibilityOf(long videoId) {
+		em.flush();
+		return (String) em.createNativeQuery("SELECT visibility FROM videos WHERE id = :i")
+			.setParameter("i", videoId)
+			.getSingleResult();
+	}
+
+	/** 엔티티(Visibility enum)를 우회해 DDL CHECK 자체를 때린다 — V20 적용 여부의 직접 증거. */
+	private void updateVisibilityNative(long videoId, String visibility) {
+		em.flush();
+		em.createNativeQuery("UPDATE videos SET visibility = :v WHERE id = :i")
+			.setParameter("v", visibility)
+			.setParameter("i", videoId)
+			.executeUpdate();
+	}
+
+	// 검증: FR-VIDEO-15
+	@Test
+	void 본인_영상을_PUBLIC으로_전환하면_visibility가_PUBLIC이_된다() {
+		long videoId = upload();
+
+		assertThat(videoService.setVisibility(userId, videoId, request("PUBLIC")).visibility()).isEqualTo("PUBLIC");
+		assertThat(visibilityOf(videoId)).as("DB 에도 반영된다").isEqualTo("PUBLIC");
+	}
+
+	// 검증: FR-VIDEO-15
+	@Test
+	void 본인_영상을_다시_PRIVATE로_전환할_수_있다() {
+		long videoId = upload();
+		videoService.setVisibility(userId, videoId, request("PUBLIC"));
+
+		assertThat(videoService.setVisibility(userId, videoId, request("PRIVATE")).visibility()).isEqualTo("PRIVATE");
+		assertThat(visibilityOf(videoId)).isEqualTo("PRIVATE");
+	}
+
+	// 검증: FR-VIDEO-15
+	@Test
+	void 타인_영상을_전환하면_VIDEO_FORBIDDEN이다() {
+		long videoId = upload();
+		Long otherUserId = userRepository.save(
+			User.createLocalUser("other-visibility@example.com", "hash", "타인")).getId();
+
+		assertThatThrownBy(() -> videoService.setVisibility(otherUserId, videoId, request("PUBLIC")))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_FORBIDDEN);
+	}
+
+	@Test
+	void 없는_영상을_전환하면_VIDEO_NOT_FOUND다() {
+		assertThatThrownBy(() -> videoService.setVisibility(userId, 999_999L, request("PUBLIC")))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
+	}
+
+	@Test
+	void 삭제된_영상을_전환하면_VIDEO_NOT_FOUND다() {
+		long videoId = upload();
+		videoService.deleteVideo(userId, videoId);
+
+		assertThatThrownBy(() -> videoService.setVisibility(userId, videoId, request("PUBLIC")))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.VIDEO_NOT_FOUND);
+	}
+
+	// 검증: FR-VIDEO-15
+	@Test
+	void 허용_외_값이면_INVALID_VISIBILITY다() {
+		long videoId = upload();
+
+		assertThatThrownBy(() -> videoService.setVisibility(userId, videoId, request("BOGUS")))
+			.isInstanceOf(ApiException.class)
+			.hasFieldOrPropertyWithValue("errorCode", VideoErrorCode.INVALID_VISIBILITY)
+			.hasMessageContaining("PUBLIC, PRIVATE, FRIENDS");   // 3 값 안내 (MSG-285 FR-8)
+	}
+
+	// 검증: FR-VIDEO-15
+	@Test
+	@DisplayName("공개범위를 FRIENDS 로 전환하고 다시 PUBLIC 으로 되돌릴 수 있다 (MSG-285 FR-2)")
+	void 공개범위를_FRIENDS로_전환하고_다시_PUBLIC으로_되돌릴_수_있다() {
+		long videoId = upload();
+
+		assertThat(videoService.setVisibility(userId, videoId, request("FRIENDS")).visibility()).isEqualTo("FRIENDS");
+		assertThat(visibilityOf(videoId)).as("DB 에도 반영된다").isEqualTo("FRIENDS");
+
+		assertThat(videoService.setVisibility(userId, videoId, request("PUBLIC")).visibility()).isEqualTo("PUBLIC");
+		assertThat(visibilityOf(videoId)).isEqualTo("PUBLIC");
+	}
+
+	// 검증: FR-VIDEO-17
+	@Test
+	@DisplayName("FRIENDS 영상은 격자 대표 영상·격자 전역 목록 어디에도 잡히지 않는다 (MSG-285 FR-7)")
+	void FRIENDS_영상은_전역_노출_경로에_잡히지_않는다() {
+		long videoId = upload();
+		markReady(videoId);   // 노출 후보 조건 중 READY 충족 — 남은 축은 visibility 뿐이다
+
+		videoService.setVisibility(userId, videoId, request("FRIENDS"));
+
+		// 전역 노출 쿼리는 visibility = 'PUBLIC' 등식이라 FRIENDS 행을 무변경으로 제외한다.
+		// 서비스가 아니라 리포지토리를 직접 부른다 — 서비스 경로는 썸네일 presign 에 실 AWS 자격증명이 필요하고
+		// (이 컨텍스트엔 S3Client 목만 있다), FR-7 이 검증할 대상은 그 위의 SQL 등식이다.
+		assertThat(findCover()).as("격자 대표 영상").isEmpty();
+		assertThat(globalVideos()).as("격자 전역 목록").isEmpty();
+
+		// 같은 영상을 PUBLIC 으로 되돌리면 둘 다 잡힌다 — 위 빈 결과가 READY·격자 오류가 아니라 visibility 때문임을 못박는다.
+		videoService.setVisibility(userId, videoId, request("PUBLIC"));
+		assertThat(findCover()).map(Video::getId).contains(videoId);
+		assertThat(globalVideos()).map(Video::getId).containsExactly(videoId);
+	}
+
+	// 검증: FR-VIDEO-15
+	@Test
+	@DisplayName("V20 이후 visibility='FRIENDS' 행은 CHECK 를 통과하고 허용 외 값은 위반한다 (MSG-285)")
+	void FRIENDS는_CHECK를_통과하고_허용_외_값은_위반한다() {
+		long videoId = upload();
+
+		updateVisibilityNative(videoId, "FRIENDS");
+		assertThat(visibilityOf(videoId)).isEqualTo("FRIENDS");
+
+		// CHECK 위반은 PG 트랜잭션 전체를 abort 시키므로 이 단언이 이 테스트의 마지막이어야 한다.
+		assertThatThrownBy(() -> updateVisibilityNative(videoId, "BOGUS"))
+			.hasStackTraceContaining("chk_videos_visibility");
+	}
+
+	@Test
+	void 이미_PUBLIC인_영상을_다시_PUBLIC으로_전환하면_성공한다() {
+		long videoId = upload();
+		videoService.setVisibility(userId, videoId, request("PUBLIC"));
+
+		assertThatCode(() -> videoService.setVisibility(userId, videoId, request("PUBLIC")))
+			.doesNotThrowAnyException();
+		assertThat(visibilityOf(videoId)).isEqualTo("PUBLIC");
+	}
+
+	// 검증: FR-VIDEO-15
+	@Test
+	void 인코딩중_UPLOADED_영상도_PUBLIC으로_전환된다() {
+		long videoId = upload();   // 업로드 직후는 UPLOADED — 노출 게이트는 read 경로 책임이라 전환은 허용된다
+
+		assertThat(videoService.setVisibility(userId, videoId, request("PUBLIC")).visibility()).isEqualTo("PUBLIC");
+	}
+
+	@Test
+	@DisplayName("동시 삭제가 반영된 뒤 공개 전환을 커밋해도 삭제가 되살아나지 않는다 (@DynamicUpdate lost-update 가드)")
+	void 동시_삭제_후_공개_전환은_삭제를_되살리지_않는다() {
+		long videoId = upload();
+		em.flush();
+		em.find(Video.class, videoId);   // tx1 스냅샷 확보: status=ACTIVE (managed)
+
+		// 동시 삭제를 흉내 — persistence context 밖에서 DB row 만 DELETED 로 바꾼다.
+		// native UPDATE 는 managed 스냅샷을 갱신하지 않으므로 방금 로드한 엔티티는 여전히 ACTIVE 다.
+		em.createNativeQuery("UPDATE videos SET status='DELETED' WHERE id = :i")
+			.setParameter("i", videoId)
+			.executeUpdate();
+
+		// 공개 전환(자기 축)만 커밋한다. @DynamicUpdate 가 없으면 전체 컬럼 UPDATE 라 스냅샷의
+		// status=ACTIVE 가 함께 실려 DELETED 를 덮어써 삭제를 부활시킨다 — 그게 이 가드가 막는 lost update 다.
+		videoService.setVisibility(userId, videoId, request("PUBLIC"));
+		em.flush();
+		em.clear();
+
+		String status = (String) em.createNativeQuery("SELECT status FROM videos WHERE id = :i")
+			.setParameter("i", videoId)
+			.getSingleResult();
+		assertThat(status).as("공개 전환이 삭제를 되살리면 안 된다 — 자기 dirty 컬럼만 UPDATE 돼야 한다")
+			.isEqualTo("DELETED");
+	}
+
+	// 검증: FR-VIDEO-17
+	@Test
+	@DisplayName("PRIVATE만 있던 격자는 대표가 null이지만 PUBLIC·READY로 전환하면 대표로 잡힌다 (MSG-87 연동)")
+	void PRIVATE만_있던_격자는_대표가_null이지만_PUBLIC_READY로_전환하면_대표로_잡힌다() {
+		long videoId = upload();
+		assertThat(findCover()).as("업로드 직후엔 PRIVATE·UPLOADED 라 대표 없음").isEmpty();
+
+		markReady(videoId);   // 대표 후보 조건 중 READY 를 맞춘다. visibility 는 아직 PRIVATE.
+
+		videoService.setVisibility(userId, videoId, request("PUBLIC"));
+
+		assertThat(findCover()).as("공개 전환으로 findGlobalCover 가 실데이터로 대표를 반환한다")
+			.map(Video::getId).contains(videoId);
+	}
+
+	/** 인코딩 완료를 흉내 — 전역 노출 후보 조건 중 READY·재생 key 를 채운다. */
+	private void markReady(long videoId) {
+		em.createNativeQuery("UPDATE videos SET processing_status='READY', encoded_url='enc.mp4',"
+				+ " thumbnail_url='th.jpg' WHERE id = :i")
+			.setParameter("i", videoId)
+			.executeUpdate();
+		em.clear();
+	}
+
+	private List<Video> globalVideos() {
+		em.flush();
+		em.clear();
+		return videoRepository.findGlobalVideos(gridId, null, 20);
+	}
+
+	private Optional<Video> findCover() {
+		em.flush();
+		em.clear();
+		return videoRepository.findGlobalCover(gridId);
+	}
+}

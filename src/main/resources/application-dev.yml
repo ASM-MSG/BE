@@ -1,0 +1,60 @@
+# 개발(dev) — EC2 위 Docker PostGIS (dev 전용 컨테이너, prod와 격리)
+# 값은 환경변수로 주입하되, 없으면 로컬/서버 dev 컨테이너 기본값으로 동작한다.
+# DB는 prod와 물리적으로 분리된 별도 컨테이너다 (docker-compose.server.yml: postgres-dev, 5432).
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/fillmap}
+    username: ${DB_USERNAME:dev}
+    password: ${DB_PASSWORD:dev1234}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    show-sql: true                 # dev에서는 SQL 확인 허용 (운영은 false)
+
+  # Redis — dev 는 docker-compose.server.yml 의 fillmap-redis-dev 컨테이너 (MSG-135)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+oauth:
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+jwt:
+  secret: ${JWT_SECRET:dev-only-secret-change-me-0123456789abcdef}
+  refresh-secret: ${JWT_REFRESH_SECRET:dev-only-refresh-secret-change-me-0123456789abcdef-0123456789abcdef}
+
+logging:
+  level:
+    root: INFO
+    com.msg.fillmap: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.flywaydb: INFO
+
+# zone 시딩 — 기동마다 seed/zones.json 멱등 UPSERT (MSG-259 D-8). 코드 기본값 false — 로컬·테스트 무영향
+fillmap:
+  # 메일 발송 (MSG-497) — dev 는 실발송 없이 로그로 링크를 확인한다(enabled 는 공통 기본 false).
+  # 링크 base URL 은 여기에만 둔다 — 공통에 두면 prod 가 상속받아 localhost 링크가 실제로 발송된다.
+  mail:
+    reset-link-base-url: ${MAIL_RESET_LINK_BASE_URL:http://localhost:5173/reset-password}
+
+  zone:
+    seed:
+      enabled: true
+
+  # 행사 시딩 — 기동마다 seed/events.json 멱등 UPSERT (MSG-438). 코드 기본값 false — 로컬·테스트 무영향
+  event:
+    seed:
+      enabled: true
+
+  # 알림 발송 (MSG-179 D1) — 브로커는 dev/prod 공유(단일 KRaft), 토픽 prefix·컨슈머 그룹으로 격리
+  notification:
+    topic: dev.notification.send
+    consumer-group: fillmap-notification-dev

@@ -1,0 +1,186 @@
+package com.msg.fillmap.mission.entity;
+
+import java.time.LocalDateTime;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+/**
+ * 미션 정의 (missions, MSG-166 V6). MSG-222 는 조회 전용 최소 매핑, MSG-224 가 시드용 쓰기 경로(빌더)를
+ * 더하고 MSG-225 가 빌더에 path 를 확장한다 — path 는 코스 시더 전용(chk_missions_path 가 COURSE 만 허용,
+ * 타 시더는 미지정=NULL), region_code(AREA 전용)는 시드에서 NULL 고정이라 빌더에서 제외. path 는 코스
+ * 표시용 GeoJSON LineString jsonb 원문을 String 으로 읽어(§D7) FE 로 그대로 passthrough 한다.
+ * start_at/end_at NULL = 무기간(상시, 코스). MSG-383 이 화면용 메타데이터 8종(V31)을 더한다 —
+ * 생성은 빌더의 metadata 파라미터, 갱신은 applyMetadata(시더 재실행 백필, §D6).
+ */
+@Entity
+@Table(name = "missions")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Mission {
+
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "type", nullable = false, length = 20)
+	private MissionType type;
+
+	@Column(name = "title", nullable = false, length = 200)
+	private String title;
+
+	@Column(name = "region_code", length = 10)
+	private String regionCode;
+
+	@Column(name = "start_at")
+	private LocalDateTime startAt;
+
+	@Column(name = "end_at")
+	private LocalDateTime endAt;
+
+	@Column(name = "target_count", nullable = false)
+	private Integer targetCount;
+
+	/** 코스 표시용 GeoJSON LineString jsonb 원문 (코스 외 NULL, chk_missions_path). raw 문자열로 읽어 재직렬화 없이 발행(§D7). */
+	@JdbcTypeCode(SqlTypes.JSON)
+	@Column(name = "path", columnDefinition = "jsonb")
+	private String path;
+
+	/**
+	 * 적재 출처 (V13, D7) — NULL = 수동/미상. String 유지(enum 금지): 공유 엔티티라 후속 소스(POPUP 등)가
+	 * 상수 추가를 잊으면 기존 조회 경로 전체가 역직렬화로 터진다. 값 상수는 각 러너가 보유한다.
+	 */
+	@Column(name = "source", length = 30)
+	private String source;
+
+	/**
+	 * 외부 안정 id 멱등 키 (V14, MSG-235 D3) — 팝가 id 문자열화. NULL = 외부 id 없는 적재(수동·축제·코스).
+	 * (source, source_key) 부분 유니크 인덱스가 앱 dedupe 의 DB 백스톱이다.
+	 */
+	@Column(name = "source_key", length = 30)
+	private String sourceKey;
+
+	/**
+	 * 미션 경유 업로드가 영상을 붙일 격자 (V42, MSG-459). 축제·팝업이고 목표 칸수가 1인 행만 값을 갖는다
+	 * (chk_missions_rep_grid_type) — 값이 있다는 것이 곧 "미션 경유 업로드 대상"이라는 뜻이다.
+	 * 판정 격자 집합(mission_grids) 소속은 지연 FK 가 커밋 시점에 보장한다.
+	 */
+	@Column(name = "representative_grid_id", length = 20)
+	private String representativeGridId;
+
+	/**
+	 * 노출 중지 시각 (V51, MSG-500 D-3). NULL = 노출 중이고, 값이 있으면 사용자 대면 조회·스탬프 판정에서
+	 * 빠진다. 시드 미션은 전부 NULL 이라 기존 동작이 불변이다. 삭제가 아니라 숨김인 것은 user_missions FK 가
+	 * 스탬프 걸린 미션의 하드삭제를 막고, 이미 받은 스탬프를 뺏는 것이 비회수 원칙과 충돌하기 때문이다.
+	 */
+	@Column(name = "hidden_at")
+	private LocalDateTime hiddenAt;
+
+	/** insertable=false — DB DEFAULT(CURRENT_TIMESTAMP) 위임. save 직후엔 null, 재조회 시 채워진다(MSG-224). */
+	@Column(name = "created_at", nullable = false, insertable = false, updatable = false)
+	private LocalDateTime createdAt;
+
+	/** 화면용 메타데이터 8종 (V31, MSG-383 §D2) — 전부 nullable, 값은 시더가 원본에서 읽어 채운다. */
+	@Column(name = "description", columnDefinition = "text")
+	private String description;
+
+	@Column(name = "place_name", length = 200)
+	private String placeName;
+
+	@Column(name = "source_url", columnDefinition = "text")
+	private String sourceUrl;
+
+	@Column(name = "operation_time", columnDefinition = "text")
+	private String operationTime;
+
+	/**
+	 * 우리 스토리지(S3) URL 만 — 외부 도메인 주소 금지(MSG-383 §D7). 축제는 MSG-384 가 채운다(시더가
+	 * 버킷 상대 키를 받아 공개 주소를 조립). 팝업 포스터·코스 스팟 사진은 아직 NULL 이고 후속 티켓 몫이다.
+	 */
+	@Column(name = "image_url", columnDefinition = "text")
+	private String imageUrl;
+
+	/** 코스 전용 3종 — chk_missions_course_metrics 가 COURSE 외의 값을 거부한다(§D2). */
+	@Column(name = "distance_meters")
+	private Integer distanceMeters;
+
+	@Column(name = "duration_minutes")
+	private Integer durationMinutes;
+
+	/** 두루누비 등급 1(쉬움)·2(보통)·3(어려움). SMALLINT 컬럼이라 jdbc 타입을 명시한다(ddl-auto=validate). */
+	@JdbcTypeCode(SqlTypes.SMALLINT)
+	@Column(name = "difficulty")
+	private Integer difficulty;
+
+	@Builder
+	private Mission(MissionType type, String title, LocalDateTime startAt, LocalDateTime endAt, Integer targetCount,
+		String source, String sourceKey, String path, MissionMetadata metadata) {
+		this.type = type;
+		this.title = title;
+		this.startAt = startAt;
+		this.endAt = endAt;
+		this.targetCount = targetCount;
+		this.source = source;
+		// sourceKey 는 팝업(MSG-235) 전용 멱등 키 — 외부 안정 id 없는 시더(축제·코스)는 미지정(null).
+		this.sourceKey = sourceKey;
+		// path 는 코스(MSG-225) 전용 — chk_missions_path 가 COURSE 외 path 를 거부하므로 타 시더는 미지정(null).
+		this.path = path;
+		if (metadata != null) {
+			assign(metadata);
+		}
+	}
+
+	/**
+	 * 메타데이터 갱신 (MSG-383 §D6) — 시더 재실행이 곧 백필이라, 이미 적재된 미션에 이 메서드로 값을 넣고
+	 * JPA 더티 체킹이 UPDATE 를 내보낸다. 바뀐 값이 있을 때만 true 를 돌려줘 시더가 갱신 건수를 센다.
+	 * setter 를 열지 않는 상태 전이 메서드다({@code Video.markBlinded()} 선례) — 시각을 만들지 않으므로
+	 * Clock 이 필요 없다.
+	 */
+	public boolean applyMetadata(MissionMetadata metadata) {
+		if (metadata.equals(currentMetadata())) {
+			return false;
+		}
+		assign(metadata);
+		return true;
+	}
+
+	/**
+	 * 대표 격자 반영 (MSG-459) — 시더가 산출값을 넣으면 더티 체킹이 커밋 시점에 UPDATE 를 내보낸다.
+	 * setter 를 열지 않는 상태 전이 메서드다(applyMetadata 선례). 언제 부르는지(비었거나 판정 집합 밖일
+	 * 때만)는 호출자인 시더 쪽 규칙이라 여기서 판정하지 않는다.
+	 */
+	public void assignRepresentativeGrid(String gridId) {
+		this.representativeGridId = gridId;
+	}
+
+	private MissionMetadata currentMetadata() {
+		return new MissionMetadata(description, placeName, sourceUrl, operationTime, imageUrl,
+			distanceMeters, durationMinutes, difficulty);
+	}
+
+	private void assign(MissionMetadata metadata) {
+		this.description = metadata.description();
+		this.placeName = metadata.placeName();
+		this.sourceUrl = metadata.sourceUrl();
+		this.operationTime = metadata.operationTime();
+		this.imageUrl = metadata.imageUrl();
+		this.distanceMeters = metadata.distanceMeters();
+		this.durationMinutes = metadata.durationMinutes();
+		this.difficulty = metadata.difficulty();
+	}
+}

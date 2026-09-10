@@ -1,0 +1,50 @@
+[
+	{
+		"seriesKey": "msg438-runner",
+		"seriesName": "MSG438 러너 계약 시리즈",
+		"occurrences": [
+			{
+				"occurrenceKey": "msg438-runner-ok",
+				"title": "정상 회차",
+				"cityName": "부산",
+				"startsAt": "2026-10-06T10:00:00+09:00",
+				"endsAt": "2026-10-15T22:00:00+09:00",
+				"exposure": { "minGridY": 91000, "maxGridY": 91100, "minGridX": 91500, "maxGridX": 91600 },
+				"locations": [
+					{
+						"locationKey": "msg438-runner-ok-loc",
+						"name": "정상 위치",
+						"type": "ETC",
+						"operatingHours": null,
+						"displayOrder": 1,
+						"areaRects": [
+							{ "minGridY": 91010, "maxGridY": 91012, "minGridX": 91510, "maxGridX": 91512 }
+						],
+						"representativeGridId": null
+					}
+				]
+			},
+			{
+				"occurrenceKey": "msg438-runner-bad",
+				"title": "마지막에 깨지는 회차",
+				"cityName": "부산",
+				"startsAt": "2026-10-06T10:00:00+09:00",
+				"endsAt": "2026-10-15T22:00:00+09:00",
+				"exposure": { "minGridY": 91000, "maxGridY": 91100, "minGridX": 91500, "maxGridX": 91600 },
+				"locations": [
+					{
+						"locationKey": "msg438-runner-bad-loc",
+						"name": "역전된 사각형",
+						"type": "ETC",
+						"operatingHours": null,
+						"displayOrder": 1,
+						"areaRects": [
+							{ "minGridY": 91030, "maxGridY": 91020, "minGridX": 91530, "maxGridX": 91532 }
+						],
+						"representativeGridId": null
+					}
+				]
+			}
+		]
+	}
+]

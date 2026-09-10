@@ -1,0 +1,91 @@
+# 운영 — AWS RDS + ElastiCache
+# 실제 값은 환경변수로 주입 (EC2/ECS 환경변수, Secrets Manager 등)
+spring:
+  datasource:
+    url: ${DB_URL}                 # 예: jdbc:postgresql://fillmap.xxx.ap-northeast-2.rds.amazonaws.com:5432/fillmap
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    show-sql: false                # 운영에선 절대 켜지 말 것
+
+  # Redis — ElastiCache (MSG-595, 2026-09-10 전환). 전송 암호화를 켠 노드라 TLS 로 붙고, AUTH 토큰이 REDIS_PASSWORD 다.
+  # 전에는 EC2 docker-compose.server.yml 의 fillmap-redis-prod(6380) 였다 — 컨테이너로 되돌리려면 ssl 을 끄고 포트를 6380 으로.
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      ssl:
+        enabled: true
+      # 기본값을 두지 않는다. 단 미설정 시에도 바인더는 리터럴 "${REDIS_PASSWORD}" 로 통과시키므로
+      # 기동 실패는 ProdRequiredEnvValidator 가 보장한다. (MSG-244 → MSG-260 일반화)
+      password: ${REDIS_PASSWORD}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+oauth:
+  kakao:
+    client-id: ${KAKAO_CLIENT_ID}
+
+jwt:
+  # kebab-case(refresh-secret)는 JWT_REFRESH_SECRET env 로 relaxed binding 이 되지 않아 명시적으로 매핑한다.
+  # 기본값을 두지 않는다. 단 미설정 시에도 바인더는 리터럴 "${JWT_REFRESH_SECRET}" 로 통과시켜
+  # 기동 실패하지 않으므로, 기동 실패는 ProdRequiredEnvValidator 가 보장한다. (MSG-135 → MSG-260 정정)
+  refresh-secret: ${JWT_REFRESH_SECRET}
+
+aws:
+  s3:
+    # 기본값을 두지 않는다 — 미설정 시 application.yml 기본값(fillmap-video-dev)으로 흘러
+    # prod 영상이 dev 버킷에 조용히 쌓인다. 미설정 시 리터럴 "${S3_BUCKET_VIDEO}" 를
+    # AwsProperties 의 @Pattern 이 거부해 기동 실패가 보장된다. (MSG-260 주체 명시)
+    bucket: ${S3_BUCKET_VIDEO}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+# 관측(MSG-344) — Actuator 를 관리 포트로 분리한다. 공개 포트에서 /actuator/** 는 404 가 되고,
+# 8081 은 보안그룹에서 수집 서버(fillmap-ai, sg-05e4d5c7ddfa6c438)만 인바운드 허용한다.
+# 앱 레벨 IP 검사(X-Forwarded-For)는 위조 가능해 기각 — 접근 제한은 포트 분리 + 보안그룹이 담당.
+management:
+  server:
+    # 8081 고정 (env 오버라이드 없음) — CD 헬스체크(cd-prod.yml)와 Prometheus 타깃(monitoring/prod)이
+    # 8081 을 하드코딩하므로 여기만 움직이면 어긋난다. 바꿀 일이 생기면 세 곳을 같이 바꾼다.
+    port: 8081
+  endpoint:
+    health:
+      # 기본(never)이면 DOWN 시 어느 구성요소(DB·Redis)가 병들었는지 본문에 안 실려 runbook 의
+      # 장애 구분 절차가 성립하지 않는다. 관리 포트는 보안그룹으로 수집 서버만 접근하므로 노출 허용.
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.msg.fillmap: INFO
+    org.hibernate.SQL: WARN
+    org.flywaydb: INFO
+# zone 시딩 — 기동마다 seed/zones.json 멱등 UPSERT (MSG-259 D-8). 코드 기본값 false — 로컬·테스트 무영향
+fillmap:
+  zone:
+    seed:
+      enabled: true
+
+  # 행사 시딩 — 기동마다 seed/events.json 멱등 UPSERT (MSG-438). 코드 기본값 false — 로컬·테스트 무영향
+  event:
+    seed:
+      enabled: true
+
+  # 알림 발송 (MSG-179 D1) — 브로커는 dev/prod 공유(단일 KRaft), 토픽 prefix·컨슈머 그룹으로 격리
+  notification:
+    topic: prod.notification.send
+    consumer-group: fillmap-notification-prod

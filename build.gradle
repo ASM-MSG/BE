@@ -1,5 +1,6 @@
 plugins {
 	id 'java'
+	id 'jacoco'
 	id 'org.springframework.boot' version '4.1.0'
 	id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -21,6 +22,53 @@ repositories {
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+
+	// --- Redis (리프레시 토큰 세션 · 액세스 토큰 블랙리스트, MSG-135) ---
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+	// --- Observability (Actuator + Prometheus, MSG-128) ---
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
+	// --- API 문서 (Swagger UI / OpenAPI 3.1, MSG-131) — v3.x가 Spring Boot 4 지원 ---
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+    // --- Flyway (마이그레이션) ---
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+
+	// --- JWT (JJWT) ---
+	implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+	runtimeOnly    'io.jsonwebtoken:jjwt-impl:0.13.0'
+	runtimeOnly    'io.jsonwebtoken:jjwt-jackson:0.13.0'
+
+	// --- OAuth2 / OIDC ID Token 검증 (카카오, 추후 애플) ---
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+	// --- AWS S3 (presigned URL 발급, MSG-64) ---
+	implementation platform('software.amazon.awssdk:bom:2.48.0')
+	implementation 'software.amazon.awssdk:s3'             // S3Presigner 포함
+	implementation 'software.amazon.awssdk:cloudfront'     // CloudFront signed URL 발급
+	implementation 'software.amazon.awssdk:sesv2'          // 재설정·초기 비밀번호 메일 발송 (MSG-497)
+
+	// --- 알림 발송 파이프라인 (MSG-179) ---
+	implementation 'org.springframework.kafka:spring-kafka'
+	implementation 'com.google.firebase:firebase-admin:9.9.0'   // BOM 밖 — mavenCentral 최신 9.x (2026-08 실측)
+	testImplementation 'org.springframework.kafka:spring-kafka-test'
+
+	// --- PostgreSQL + PostGIS ---
+	runtimeOnly  'org.postgresql:postgresql'
+	implementation 'org.hibernate.orm:hibernate-spatial'   // Spring Boot 3.x가 버전 관리
+
+	// --- 좌표 변환 (WGS84 → EPSG:5179 미터 평면, MSG-347) ---
+	implementation 'org.locationtech.proj4j:proj4j:1.4.3'
+	// EPSG 코드 내장 정의 — 계약 문자열(GridConstants.CRS_DEF_EPSG5179)이 표준 EPSG:5179 와
+	// 같은 좌표를 내는지 대조하는 테스트 전용이라 test 스코프다. 운영 경로의 CRS 는 계약 문자열로만 만든다.
+	testImplementation 'org.locationtech.proj4j:proj4j-epsg:1.4.3'
+
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
@@ -31,6 +79,43 @@ dependencies {
 	testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
+// 로컬 실행 JVM 존 고정 (MSG-379 D3). naive LocalDateTime = UTC 규약(MSG-376)에서, KST 맥의 기본 존으로
+// 뜬 앱이 만드는 시각은 9시간 앞선 값이 된다. 저장식 자체는 V33 이 존 무관으로 바꿔 뒀으니 이건 방어선
+// 중첩이다 — 컨벤션을 어긴 코드나 V33 이전 마이그레이션 재실행 같은 잔여 경로를 덮는다.
+// IDE 로 메인 클래스를 직접 실행하면 이 설정을 안 타므로 실행 구성 VM 옵션에 같은 값을 넣는다.
+// 테스트에는 걸지 않는다 — 존 의존 버그를 로컬에서 재현해 잡는 창을 남긴다.
+tasks.named('bootRun') {
+	jvmArgs '-Duser.timezone=UTC'
+}
+
 tasks.named('test') {
 	useJUnitPlatform()
+	// 테스트 워커 힙 (MSG-343). Gradle 기본 512m 은 @EmbeddedKafka 통합 테스트에 빠듯해 전체 빌드가
+	// 실행마다 되다 말다 했다 — 2026-08-12 실측으로 워커가 RSS 1GB 에서 GC 스래싱(CPU 400%, 12분간
+	// 산출물 0)에 빠져 멈추는 것을 확인했다. OOM 으로 죽으면 원인이 보이지만 스래싱은 그냥 느린 빌드로
+	// 보여 진단이 늦는다. jacoco 에이전트도 같은 워커에 붙는다.
+	maxHeapSize = '2g'
+	finalizedBy 'jacocoTestReport'
+}
+
+// --- JaCoCo 커버리지 리포트 (MSG-249) ---
+// XML은 CI의 PR 코멘트 액션(madrapps/jacoco-report) 입력. 최소 기준선 게이트는 비스코프 — 기준선 실측 후 별도 티켓.
+jacocoTestReport {
+	reports {
+		xml.required = true
+	}
+}
+
+// --- Git hooks 자동 활성화 ---
+// clone 직후 팀원이 별도 설정 없이도 .githooks/ 하위 훅이 적용되도록
+// compileJava 앞에 한 번 git config 를 걸어둔다. 이미 설정돼 있으면 idempotent.
+tasks.register('installGitHooks', Exec) {
+	workingDir = project.rootDir
+	commandLine 'git', 'config', 'core.hooksPath', '.githooks'
+	ignoreExitValue = true
+	onlyIf { file('.git').exists() }
+}
+
+tasks.named('compileJava') {
+	dependsOn 'installGitHooks'
 }

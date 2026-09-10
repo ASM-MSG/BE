@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>행사방 열람 인원 집계 — MSG-443 Redis 흐름</title>
+<style>
+	:root {
+		--bg: #ffffff;
+		--bg-soft: #f6f7f9;
+		--bg-code: #f2f4f7;
+		--fg: #1b1f24;
+		--fg-soft: #5b6673;
+		--line: #dfe3e8;
+		--accent: #2d6cdf;
+		--accent-soft: #eaf1fd;
+		--warn: #b4690e;
+		--warn-soft: #fdf3e3;
+		--danger: #c0392b;
+		--danger-soft: #fdeeec;
+		--ok: #1e7e4e;
+		--ok-soft: #e8f6ee;
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; padding: 32px 16px 80px;
+		font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+		background: var(--bg); color: var(--fg); line-height: 1.65;
+	}
+	main { max-width: 860px; margin: 0 auto; }
+	h1 { font-size: 1.6rem; margin: 0 0 4px; }
+	h2 { font-size: 1.2rem; margin: 44px 0 12px; padding-top: 20px; border-top: 1px solid var(--line); }
+	h3 { font-size: 1.02rem; margin: 24px 0 8px; }
+	p { margin: 10px 0; }
+	.sub { color: var(--fg-soft); font-size: .92rem; margin-bottom: 24px; }
+	.tldr {
+		background: var(--accent-soft); border-left: 4px solid var(--accent);
+		padding: 14px 18px; border-radius: 6px; margin: 20px 0;
+	}
+	.warnbox {
+		background: var(--warn-soft); border-left: 4px solid var(--warn);
+		padding: 12px 16px; border-radius: 6px; margin: 16px 0;
+	}
+	.okbox {
+		background: var(--ok-soft); border-left: 4px solid var(--ok);
+		padding: 12px 16px; border-radius: 6px; margin: 16px 0;
+	}
+	pre {
+		background: var(--bg-code); border: 1px solid var(--line); border-radius: 8px;
+		padding: 14px 16px; overflow-x: auto; font-size: .86rem; line-height: 1.55;
+	}
+	code { background: var(--bg-code); padding: 1px 5px; border-radius: 4px; font-size: .88em; }
+	pre code { background: none; padding: 0; }
+	table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: .92rem; }
+	th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+	th { background: var(--bg-soft); }
+	.timeline { list-style: none; padding-left: 0; }
+	.timeline li { padding: 6px 0 6px 26px; position: relative; }
+	.timeline li::before {
+		content: ""; position: absolute; left: 8px; top: 14px;
+		width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+	}
+</style>
+</head>
+<body>
+<main>
+
+<h1>행사방 열람 인원 집계 — Redis 흐름</h1>
+<p class="sub">MSG-443 · 스펙 <code>docs/spec/MSG-443.md</code> · 구현 <code>com.msg.fillmap.event</code> · PR #196</p>
+
+<div class="tldr">
+<strong>TL;DR</strong> — 행사방 헤더의 "N명 보는 중"은 회차당 Redis Sorted Set 하나로 센다.
+클라이언트가 30초마다 heartbeat를 보내면 Lua 스크립트가 <em>청소 → ZADD GT → EXPIRE 120</em>을
+원자로 실행하고, 조회는 <code>ZCOUNT</code> 한 방이다. DB 테이블 없음, 유실 허용 근사값,
+캐시가 죽으면 인원 수만 숨긴다.
+</div>
+
+<h2>1. 저장 구조</h2>
+
+<table>
+<tr><th>항목</th><th>값</th></tr>
+<tr><td>키</td><td><code>eventviewer:{occurrenceId}</code> (회차당 Sorted Set 하나)</td></tr>
+<tr><td>member</td><td>세션 식별자 — 로그인 <code>u:{userId}</code> · 비로그인 <code>s:{X-Viewer-Session 헤더값}</code></td></tr>
+<tr><td>score</td><td>마지막 heartbeat의 epoch 초 (주입된 <code>Clock</code>, UTC)</td></tr>
+<tr><td>키 TTL</td><td>120초 — heartbeat마다 재설정. <strong>메모리 회수 전용</strong>이고 활성 판정에는 안 쓴다</td></tr>
+</table>
+
+<p>Sorted Set 하나가 두 문제를 동시에 푼다. 같은 사용자의 중복 탭은 member가 같아 ZADD가
+score만 덮어쓰니 자동으로 1명이고, "90초 이내" 판정은 score 범위 연산 하나다.
+세션당 String 키(만료는 공짜지만 세는 게 SCAN 순회)와 HyperLogLog(제거 불가)는 기각했다.</p>
+
+<h2>2. heartbeat 쓰기 — Lua 원자 실행</h2>
+
+<pre><code>-- EventViewerServiceImpl.HEARTBEAT_SCRIPT (원문)
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])  -- ARGV[1] = "(now-90"  배타 청소
+redis.call('ZADD', KEYS[1], 'GT', ARGV[2], ARGV[3])       -- ARGV[2] = now, ARGV[3] = member
+redis.call('EXPIRE', KEYS[1], ARGV[4])                    -- ARGV[4] = 120
+return 1</code></pre>
+
+<ul class="timeline">
+<li><strong>청소</strong> — 90초 지난 멤버를 쓰기 경로에서 지운다. 인기 행사방은 heartbeat가 계속 와서
+키가 안 죽으므로, 여기서 안 지우면 하루 동안 다녀간 전원이 멤버로 쌓인다.</li>
+<li><strong>ZADD GT</strong> — 기존보다 큰 score만 덮어쓴다(신규 멤버 추가는 그대로). 네트워크에서
+지연된 옛 heartbeat가 나중에 도착해 최신 score를 과거로 되돌리는 역순 실행 방지.</li>
+<li><strong>EXPIRE 120</strong> — 분리 명령이면 ZADD 후 연결이 끊길 때 TTL 없는 키가 남는다
+(핫구역 <code>INCREMENT_SCRIPT</code>와 같은 이유로 Lua에 묶음).</li>
+</ul>
+
+<h2>3. 조회</h2>
+
+<pre><code>ZCOUNT eventviewer:{occurrenceId}  now-90  +inf
+-- 자바: opsForZSet().count(key, cutoff, Double.POSITIVE_INFINITY)  — 포함 경계</code></pre>
+
+<p>청소는 쓰기가 이미 하므로 조회는 세기만 한다. 키가 없으면 ZCOUNT가 0을 돌려주고,
+그 0은 "아무도 없음"으로 그대로 응답한다(장애 null과 다름 — 5절).</p>
+
+<h2>4. 경계 숫자 세 개의 의미</h2>
+
+<table>
+<tr><th>숫자</th><th>역할</th><th>왜 이 값인가</th></tr>
+<tr><td>30초</td><td>클라이언트 전송 주기</td><td>FE 계약 값. 서버 코드에는 없다</td></tr>
+<tr><td>90초</td><td>활성 판정 창 (<code>ACTIVE_WINDOW_SECONDS</code>)</td><td>신호 3번을 놓쳐야 빠진다. <strong>딱 90초 경과는 포함</strong></td></tr>
+<tr><td>120초</td><td>키 TTL (<code>KEY_TTL_SECONDS</code>)</td><td>활성 창과 같은 90초면 마지막 신호 후 정확히 90초에 키째 만료돼, 세어야 할 경계 멤버가 세어지기 전에 사라진다 (Codex 리뷰 적발). 그래서 분리</td></tr>
+</table>
+
+<div class="okbox">
+청소식 <code>(now-90</code>은 <strong>배타</strong>, 조회식 <code>now-90</code>은 <strong>포함</strong> —
+문법이 다른 게 의도다. 딱 90초 경과한 멤버를 청소가 남기고 조회가 세어, 둘이 합쳐
+"90초 이내 포함" 판정이 된다. 어느 한쪽을 "통일"하면 경계 테스트
+<code>경계_90초는_포함이다</code>가 깨진다.
+</div>
+
+<h2>5. 세션 식별과 API</h2>
+
+<pre><code>POST /api/event-occurrences/{occurrenceId}/heartbeat     (본문 없음, 200)
+GET  /api/event-occurrences/{occurrenceId}/viewer-count  → { viewerCount: Integer }</code></pre>
+
+<p>둘 다 비로그인 허용(2026-08-20 확정 — 열람 계열은 비로그인, 업로드류만 로그인).
+<code>resolveViewerKey</code> 판정 순서:</p>
+
+<ul class="timeline">
+<li>principal 있음 → <code>u:{userId}</code>. <strong>헤더가 와도 무시</strong> — 탭마다 헤더 세션 ID가
+달라도 로그인 사용자는 항상 1명으로 수렴</li>
+<li>principal 없음 → <code>X-Viewer-Session</code> 헤더 (공백 아님 · 64자 이하) → <code>s:{값}</code></li>
+<li>둘 다 없거나 헤더 불량 → 공통 400 (도메인 에러코드 신설 없음)</li>
+</ul>
+
+<p>접두사 <code>u:</code>/<code>s:</code>는 userId 숫자와 익명 ID의 문자열 충돌 방지다.
+익명 ID는 클라이언트 생성 값이라 새 ID 연타로 인원을 부풀릴 수 있는데, 열람 인원은
+보호 자산이 아닌 공개 근사값이라 수용했다(rate limit은 요구사항 신설이라 미도입).</p>
+
+<div class="warnbox">
+<strong>함정 — permitAll 배선.</strong> 두 경로는 <code>SecurityConfig</code> permitAll에만 등록한다.
+<code>JwtAuthenticationFilter.PUBLIC_AUTH_PATHS</code>(skip 목록)에는 <strong>절대 넣지 않는다</strong> —
+필드 주석이 "permitAll 경로와 함께 갱신"을 유도하지만, 여기 넣으면 Bearer 파싱이 통째로
+건너뛰어져 로그인 사용자의 principal이 null이 되고 전부 익명으로 잘못 집계된다.
+이 경로들은 "인증 불요"이지 "토큰 무시"가 아니다. 만료·위조 토큰이 실린 요청은 기존 필터
+의미론대로 401 — 익명으로 보내려면 토큰을 빼면 된다.
+</div>
+
+<h2>6. 장애 격리 (FR-19)</h2>
+
+<table>
+<tr><th>상황</th><th>동작</th></tr>
+<tr><td>heartbeat 중 Redis 예외</td><td>삼키고 warn 로그, 응답 200 — 클라이언트가 할 일이 없고 30초 뒤 재전송이 내장</td></tr>
+<tr><td>조회 중 Redis 예외</td><td><code>viewerCount: null</code> — FE는 문구 자체를 숨긴다. <strong>0(아무도 없음, 표시)과 구분</strong></td></tr>
+<tr><td>영상 조회·업로드</td><td>영향 없음 — 열람 집계 코드가 그 경로에 아예 없다(구조적 분리)</td></tr>
+</table>
+
+<div class="warnbox">
+<strong>격리 범위의 한정.</strong> 위 격리는 "집계 연산의 실패"에 대한 것이다. 공유 Redis가
+<em>전면</em> 장애면 인증 필터의 토큰 블랙리스트 조회(<code>JwtTokenProvider.validateToken</code> →
+<code>RedisInvalidatedTokenStore.isInvalidated</code>, try-catch 없음)가 먼저 실패해, 토큰을 실은
+요청은 인증 단계에서 죽는다 — 영상 API 포함 전 인증 API 공통의 기존 플랫폼 특성이다.
+토큰 없는 익명 요청은 블랙리스트 조회를 거치지 않으므로 격리가 그대로 동작한다.
+</div>
+
+<h2>7. 시나리오로 보는 타임라인</h2>
+
+<pre><code>t=0    사용자 A(로그인, 탭2개)·B(익명) 입장
+       ZADD u:42 → 1명 … ZADD u:42(다른 탭, 같은 member) → 여전히 1명 … ZADD s:abc → 2명
+t=30   heartbeat 재전송 → score만 갱신, EXPIRE 120 리셋
+t=60   B가 창을 닫음 (신호 중단 — 퇴장 이벤트 없음)
+t=150  A의 heartbeat가 청소 실행 → s:abc(마지막 신호 t=60, 90초 초과) 제거 → 1명
+t=151  A도 닫음
+t=271  마지막 신호(t=151) + 120초 → 키째 TTL 소멸. 조회는 그 전에도 t=241부터 0
+       (score 창 90초가 판정하므로 TTL과 무관하게 "90초 지나면 0")</code></pre>
+
+<h2>8. 어디를 보면 되나</h2>
+
+<table>
+<tr><th>무엇</th><th>위치</th></tr>
+<tr><td>Lua 스크립트·상수</td><td><code>event/service/EventViewerServiceImpl.java</code></td></tr>
+<tr><td>세션 식별·400 규칙</td><td><code>event/controller/EventViewerController.java # resolveViewerKey</code></td></tr>
+<tr><td>permitAll 등록</td><td><code>global/config/SecurityConfig.java</code> (필터 skip 목록 미등록 이유 주석 포함)</td></tr>
+<tr><td>경계·GT·TTL 테스트</td><td><code>event/service/EventViewerServiceImplTest.java</code> (실 Redis + 이동 Clock, 13건)</td></tr>
+<tr><td>필터체인·장애 테스트</td><td><code>event/controller/EventViewer*Test.java</code> (@SpringBootTest, dead-port 6390)</td></tr>
+<tr><td>결정 근거(D1~D6)·작업 로그</td><td><code>docs/spec/MSG-443.md</code></td></tr>
+</table>
+
+</main>
+</body>
+</html>

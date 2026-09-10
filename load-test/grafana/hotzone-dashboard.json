@@ -1,0 +1,281 @@
+{
+  "dashboard": {
+    "uid": "fillmap-hotzone-load",
+    "title": "FillMap · 핫구역 조회 부하 관측 (MSG-321)",
+    "tags": [
+      "fillmap",
+      "msg-321",
+      "hotzone"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "refresh": "",
+    "time": {
+      "from": "now-30m",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "type": "timeseries",
+        "title": "요청량 — GET /api/hotzones",
+        "description": "30초 rate. 스크랩 간격이 5초라 구간 경계가 뭉개지지 않는다.",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "h": 7,
+          "w": 24,
+          "x": 0,
+          "y": 0
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 12,
+              "showPoints": "never"
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum(rate(http_server_requests_seconds_count{uri=\"/api/hotzones\"}[30s]))",
+            "legendFormat": "req/s"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "type": "timeseries",
+        "title": "서버 측 지연 백분위 — 꼬리(p99.9)만 크게 튄다",
+        "description": "30초 rate. p50·p95·p99 는 평평한데 p99.9 만 주기적으로 솟는다. 스파이크에 걸리는 요청이 전체의 0.1~0.3% 뿐이라 p99 에는 안 잡히고 그 위 꼬리에만 잡힌다. 봉우리 간격이 hotzone:top 캐시 TTL(30초)과 같다는 것이 이 티켓의 핵심 근거다. 15초 창이 봉우리를 더 뾰족하게 잡지만(83ms) 구간에 따라 NaN 이 생겨 30초로 뒀다.",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "h": 11,
+          "w": 24,
+          "x": 0,
+          "y": 7
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 8,
+              "showPoints": "never"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "p99.9"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "mode": "fixed",
+                    "fixedColor": "red"
+                  }
+                },
+                {
+                  "id": "custom.lineWidth",
+                  "value": 2
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 16
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "p99"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "mode": "fixed",
+                    "fixedColor": "orange"
+                  }
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 0
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "p95"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "mode": "fixed",
+                    "fixedColor": "yellow"
+                  }
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 0
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "p50"
+              },
+              "properties": [
+                {
+                  "id": "color",
+                  "value": {
+                    "mode": "fixed",
+                    "fixedColor": "green"
+                  }
+                },
+                {
+                  "id": "custom.fillOpacity",
+                  "value": 0
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "histogram_quantile(0.999, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/hotzones\"}[30s])))",
+            "legendFormat": "p99.9"
+          },
+          {
+            "refId": "B",
+            "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/hotzones\"}[30s])))",
+            "legendFormat": "p99"
+          },
+          {
+            "refId": "C",
+            "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/hotzones\"}[30s])))",
+            "legendFormat": "p95"
+          },
+          {
+            "refId": "D",
+            "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{uri=\"/api/hotzones\"}[30s])))",
+            "legendFormat": "p50"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "type": "timeseries",
+        "title": "최대 지연",
+        "description": "http_server_requests_seconds_max. 슬라이딩 윈도 최대라 봉우리가 유지돼 포락선처럼 보인다.",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 0,
+          "y": 18
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 14,
+              "showPoints": "never"
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "max(http_server_requests_seconds_max{uri=\"/api/hotzones\"})",
+            "legendFormat": "max"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "type": "timeseries",
+        "title": "응답 상태 — 실패 없음",
+        "description": "outcome 별 rate. 부하 전 구간에서 SUCCESS 만 나왔다는 것이 요지다.",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "h": 7,
+          "w": 12,
+          "x": 12,
+          "y": 18
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "custom": {
+              "lineWidth": 2,
+              "fillOpacity": 25,
+              "showPoints": "never",
+              "stacking": {
+                "mode": "normal"
+              }
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "sum by (outcome) (rate(http_server_requests_seconds_count{uri=\"/api/hotzones\"}[30s]))",
+            "legendFormat": "{{outcome}}"
+          }
+        ]
+      }
+    ]
+  },
+  "overwrite": true,
+  "message": "MSG-321 핫구역 조회 부하 관측"
+}

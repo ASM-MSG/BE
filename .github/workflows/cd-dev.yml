@@ -1,0 +1,269 @@
+name: CD (dev)
+
+# develop 브랜치 push -> dev 환경 자동 배포 (MSG-589 부터 도커 이미지).
+#
+#   build-image  : jar 빌드 -> Dockerfile 로 이미지 -> ECR fillmap 에 sha-<7>·develop 태그로 push.
+#                  인증은 GitHub OIDC -> IAM 역할 fillmap-ecr-push (저장된 AWS 키 없음, docs 잡과 같은 방식).
+#   deploy-dev   : dev EC2 가 그 sha 태그를 pull 해 compose 로 교체 (api 서비스). Flyway 는 여기서 돈다.
+#   deploy-worker: AI EC2 의 인코딩 워커도 같은 이미지 (worker 서비스). api 뒤에 돈다 — 워커는 Flyway 를 끄고
+#                  스키마를 validate 만 하므로 api 가 마이그레이션을 끝낸 뒤 떠야 한다 (MSG-494 §9.2).
+#   docs         : dev 앱의 /v3/api-docs 스냅샷 -> docs.fillmap.kr (MSG-568).
+#
+# prod 는 이 sha 이미지를 다시 빌드하지 않고 태그만 옮겨 쓴다 (cd-prod.yml, 후속). 롤백 = 이전 sha 로 compose up.
+# 서버의 env 파일·바인드 마운트 파일·nginx 는 그대로다. ECR pull 자격은 EC2 인스턴스 역할(FillMapEc2DevRole,
+# AmazonEC2ContainerRegistryPullOnly) -> amazon-ecr-credential-helper 가 IMDS 로 얻는다. CD 는 헬퍼를 멱등 설치한다.
+# repo variable DEPLOY_ENABLED=true 와 secrets DEV_EC2_* / AI_EC2_* 는 종전 그대로.
+on:
+  push:
+    branches: [ develop ]
+
+env:
+  IMAGE: 951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap
+
+jobs:
+  build-image:
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # OIDC 토큰 발급 (aws-actions/configure-aws-credentials)
+      contents: read
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      # jar 는 gradle 캐시가 있는 러너에서 만들고 Dockerfile 은 담기만 한다 (Dockerfile 주석 참조)
+      - name: Build bootJar
+        run: ./gradlew bootJar -x test
+
+      - name: Image tag
+        id: meta
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::951142447485:role/fillmap-ecr-push
+          aws-region: ap-northeast-2
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      # 레이어 캐시를 GitHub Actions 캐시에 둔다. 없으면 러너가 매번 새것이라 apt(curl) 레이어가 빌드마다 다른 digest 로
+      # 다시 push 되고 두 EC2 가 그 층부터 다시 pull 한다 — "코드만 바뀌면 수 MB" 는 캐시가 있을 때만 참이다.
+      # provenance: false — attestation 매니페스트가 ECR 에 untagged 로 따로 잡혀 라이프사이클·목록을 어지럽힌다.
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE }}:develop
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+  deploy-dev:
+    needs: build-image
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      TAG: ${{ needs.build-image.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload compose file to dev EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEV_EC2_HOST }}
+          username: ${{ secrets.DEV_EC2_USER }}
+          key: ${{ secrets.DEV_EC2_SSH_KEY }}
+          source: docker-compose.app.yml
+          target: /home/${{ secrets.DEV_EC2_USER }}
+
+      - name: Deploy api container
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEV_EC2_HOST }}
+          username: ${{ secrets.DEV_EC2_USER }}
+          key: ${{ secrets.DEV_EC2_SSH_KEY }}
+          envs: IMAGE,TAG
+          script: |
+            set -e
+            cd /home/${{ secrets.DEV_EC2_USER }}
+            # ECR 자격 헬퍼 — 설치돼 있으면 통과, 새 인스턴스면 다음 배포가 알아서 복구 (ffmpeg 때와 같은 멱등 패턴).
+            # config.json 은 덮어쓰지 않고 이 레지스트리 항목만 credHelpers 에 합친다 — 전역 credsStore 로 덮으면
+            # 이 호스트의 다른 docker login(예: Docker Hub 한도 해제)이 조용히 지워진다 (코드 리뷰).
+            command -v docker-credential-ecr-login >/dev/null \
+              || (sudo apt-get update -qq && sudo apt-get install -y -qq amazon-ecr-credential-helper)
+            python3 - <<'PY'
+            import json, os
+            p = os.path.expanduser('~/.docker/config.json'); os.makedirs(os.path.dirname(p), exist_ok=True)
+            try: c = json.load(open(p))
+            except Exception: c = {}
+            c.setdefault('credHelpers', {})['951142447485.dkr.ecr.ap-northeast-2.amazonaws.com'] = 'ecr-login'
+            json.dump(c, open(p, 'w'), indent=2)
+            PY
+            # 이미지를 먼저 받는다 — ECR 인증·네트워크·디스크로 pull 이 실패해도 돌고 있는 서비스는 그대로다 (Codex 리뷰).
+            docker compose -f docker-compose.app.yml pull -q api
+            # 구 jar 방식 systemd 유닛이 살아 있으면 8080 을 두 프로세스가 다툰다. mask — disable 만 하면 런북의
+            # `systemctl start/restart` 가 옛 app.jar 를 컨테이너 옆에 다시 띄운다 (코드 리뷰). 그런데 mask 는 유닛
+            # 파일이 /etc/systemd/system 에 직접 있으면 "already exists" 로 거부한다 — 첫 배포(2026-09-10)가 이걸
+            # `|| true` 로 삼켜 구 앱이 8080 을 쥔 채 신원 검사에서 실패했다. 그래서 stop+disable 뒤 유닛 파일을 홈으로
+            # 치우고 mask 한다. 오류는 더 삼키지 않는다. 첫 전환 뒤엔 전부 no-op (mask 심볼릭 링크는 -f 가 거짓).
+            # 되돌리려면 컨테이너를 내리고 `sudo systemctl unmask fillmap-dev && sudo mv ~/fillmap-dev.service.pre-msg589
+            # /etc/systemd/system/fillmap-dev.service && sudo systemctl daemon-reload && sudo systemctl enable --now fillmap-dev`.
+            if [ -f /etc/systemd/system/fillmap-dev.service ]; then
+              sudo systemctl disable --now fillmap-dev
+              sudo mv /etc/systemd/system/fillmap-dev.service ~/fillmap-dev.service.pre-msg589
+              sudo systemctl daemon-reload
+            fi
+            sudo systemctl mask fillmap-dev
+            # --wait: healthy 가 될 때까지 기다리고 아니면 non-zero (기동 ~15초 + healthcheck start_period 30초).
+            docker compose -f docker-compose.app.yml up -d --wait --wait-timeout 180 api \
+              || { echo "::error::api 컨테이너가 180초 안에 healthy 가 되지 않았다"; docker logs --tail 50 fillmap-api 2>&1 || true; exit 1; }
+            # healthy 만으로는 부족하다. network_mode: host 라 컨테이너 안 localhost 가 호스트와 같아서 다른 프로세스가
+            # 8080 을 물고 있어도 healthcheck 가 통과한다 — 방금 push 한 이미지이고, 재시작 0회이고, 8080 리스너 PID 가
+            # 이 컨테이너의 프로세스일 때만 성공 (jar 시절 "리스너 PID = MainPID" 검사(MSG-382)의 컨테이너판).
+            running=$(docker inspect -f '{{.Config.Image}}' fillmap-api)
+            restarts=$(docker inspect -f '{{.RestartCount}}' fillmap-api)
+            cpid=$(docker inspect -f '{{.State.Pid}}' fillmap-api)
+            listen=$(sudo ss -ltnpH 'sport = :8080' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
+            if [ "$running" = "$IMAGE:$TAG" ] && [ "$restarts" = "0" ] && [ -n "$cpid" ] && [ "$listen" = "$cpid" ]; then
+              echo "기동 확인 — healthy, image=$running, 8080 리스너(pid=$listen) = 컨테이너 PID"
+            else
+              echo "::error::healthy 지만 신원이 다르다 — 기대 image=$IMAGE:$TAG restarts=0 pid=$cpid / 실제 image=$running restarts=$restarts 8080 리스너 pid=[$listen]"
+              sudo ss -ltnp 'sport = :8080' || true
+              docker logs --tail 50 fillmap-api 2>&1 || true
+              exit 1
+            fi
+            # 정리는 이 이미지의 옛 sha 태그만 — 지금 배포한 태그를 명시적으로 빼고 나머지를 지운다 (`docker images`
+            # 출력 순서에 기대면 방금 뜬 이미지를 지우려다 rmi 가 실패한다 — PR 자동 리뷰). `prune -a` 는 같은 데몬의
+            # 다른 스택(postgres·redis·kafka, AI 박스의 관측 스택) 이미지까지 지운다 (코드 리뷰).
+            # 직전 sha 를 남기지 않는 이유: dev 디스크 여유가 3.4GB 라 이미지(amd64 372MB, 정적 ffmpeg 전환 전 1.37GB)를
+            # 쌓지 않는다. 롤백은 ECR 에서 같은 리전 pull 이라 30초 안팎이다.
+            docker images "$IMAGE" --format '{{.Tag}}' | grep '^sha-' | grep -vx "$TAG" \
+              | xargs -r -I{} docker rmi "$IMAGE:{}" >/dev/null
+            docker image prune -f >/dev/null
+
+  deploy-worker:
+    needs: [ build-image, deploy-dev ]
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      TAG: ${{ needs.build-image.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload compose file to encoding worker EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.AI_EC2_HOST }}
+          username: ${{ secrets.AI_EC2_USER }}
+          key: ${{ secrets.AI_EC2_SSH_KEY }}
+          source: docker-compose.app.yml
+          target: /home/${{ secrets.AI_EC2_USER }}/encoding-worker
+
+      # AI EC2 는 ubuntu 가 docker 그룹이 아니라 sudo 로 돈다 — 자격 헬퍼 설정도 root 의 /root/.docker 에 둔다.
+      - name: Deploy worker container
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AI_EC2_HOST }}
+          username: ${{ secrets.AI_EC2_USER }}
+          key: ${{ secrets.AI_EC2_SSH_KEY }}
+          envs: IMAGE,TAG
+          script: |
+            set -e
+            cd /home/${{ secrets.AI_EC2_USER }}/encoding-worker
+            command -v docker-credential-ecr-login >/dev/null \
+              || (sudo apt-get update -qq && sudo apt-get install -y -qq amazon-ecr-credential-helper)
+            sudo python3 - <<'PY'
+            import json, os
+            p = '/root/.docker/config.json'; os.makedirs(os.path.dirname(p), exist_ok=True)
+            try: c = json.load(open(p))
+            except Exception: c = {}
+            c.setdefault('credHelpers', {})['951142447485.dkr.ecr.ap-northeast-2.amazonaws.com'] = 'ecr-login'
+            json.dump(c, open(p, 'w'), indent=2)
+            PY
+            sudo TAG="$TAG" docker compose -f docker-compose.app.yml pull -q worker   # pull 먼저 (api 와 같은 이유)
+            # 구 유닛 정리 — api 와 같은 이유·같은 순서 (유닛 파일이 직접 있으면 mask 가 거부된다)
+            if [ -f /etc/systemd/system/fillmap-encoding-worker.service ]; then
+              sudo systemctl disable --now fillmap-encoding-worker
+              sudo mv /etc/systemd/system/fillmap-encoding-worker.service ~/encoding-worker/fillmap-encoding-worker.service.pre-msg589
+              sudo systemctl daemon-reload
+            fi
+            sudo systemctl mask fillmap-encoding-worker
+            sudo TAG="$TAG" docker compose -f docker-compose.app.yml up -d --wait --wait-timeout 180 worker \
+              || { echo "::error::worker 컨테이너가 180초 안에 healthy 가 되지 않았다"; sudo docker logs --tail 50 fillmap-encoding-worker 2>&1 || true; exit 1; }
+            running=$(sudo docker inspect -f '{{.Config.Image}}' fillmap-encoding-worker)
+            restarts=$(sudo docker inspect -f '{{.RestartCount}}' fillmap-encoding-worker)
+            cpid=$(sudo docker inspect -f '{{.State.Pid}}' fillmap-encoding-worker)
+            listen=$(sudo ss -ltnpH 'sport = :8081' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
+            if [ "$running" = "$IMAGE:$TAG" ] && [ "$restarts" = "0" ] && [ -n "$cpid" ] && [ "$listen" = "$cpid" ]; then
+              echo "기동 확인 — healthy, image=$running, 8081 리스너(pid=$listen) = 컨테이너 PID"
+            else
+              echo "::error::healthy 지만 신원이 다르다 — 기대 image=$IMAGE:$TAG restarts=0 pid=$cpid / 실제 image=$running restarts=$restarts 8081 리스너 pid=[$listen]"
+              sudo ss -ltnp 'sport = :8081' || true
+              sudo docker logs --tail 50 fillmap-encoding-worker 2>&1 || true
+              exit 1
+            fi
+            sudo docker images "$IMAGE" --format '{{.Tag}}' | grep '^sha-' | grep -vx "$TAG" \
+              | xargs -r -I{} sudo docker rmi "$IMAGE:{}" >/dev/null
+            sudo docker image prune -f >/dev/null
+
+  # API 문서 사이트 (MSG-568). dev 배포가 끝난 뒤 그 앱의 /v3/api-docs 를 받아 docs.fillmap.kr 에 올린다 —
+  # 문서는 언제나 "지금 dev 에 떠 있는 코드"다. 스펙 URL 은 nginx basic auth 뒤라 DOCS_BASIC_AUTH 로 받고,
+  # 앱이 올라오는 동안은 fetch 스크립트가 최대 2분 재시도한다. AWS 는 OIDC 역할(fillmap-docs-deploy)로,
+  # 저장된 키 없음. 실패해도 dev 배포 자체는 이미 끝난 뒤라 앱에는 영향이 없다.
+  docs:
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # OIDC 토큰 발급 (aws-actions/configure-aws-credentials)
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: api-docs/requirements.txt
+
+      - name: Install MkDocs
+        run: python3 -m pip install -r api-docs/requirements.txt
+
+      - name: Snapshot OpenAPI from dev
+        env:
+          DOCS_BASIC_AUTH: ${{ secrets.DOCS_BASIC_AUTH }}
+        run: api-docs/scripts/fetch-openapi.sh
+
+      - name: Generate error code table
+        run: python3 api-docs/scripts/gen-error-codes.py
+
+      - name: Build site
+        run: python3 -m mkdocs build --strict -f api-docs/mkdocs.yml
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::951142447485:role/fillmap-docs-deploy
+          aws-region: ap-northeast-2
+
+      - name: Upload to S3
+        run: |
+          aws s3 sync api-docs/site s3://fillmap-docs --delete \
+            --cache-control "public, max-age=300"
+
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id EEC1CHNPO5W2W --paths "/*"

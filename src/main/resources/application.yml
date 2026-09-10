@@ -1,1 +1,190 @@
-spring.application.name=msgbe
+spring:
+  application:
+    name: fillmap
+  profiles:
+    active: local                  # local yml로 돌린다 일단은
+
+  jpa:
+    hibernate:
+      ddl-auto: validate        # 나중에는 update나 validate(운영 중 일때)로 변경
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect   # 여기만 수정
+        format_sql: true
+        default_batch_fetch_size: 100
+    open-in-view: false     # 응답을 만든 뒤에는 영속성 컨텍스트를 닫는다 — 지연 로딩은 트랜잭션 안에서만 (MSG-587)
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-on-migrate: true
+
+  # 알림 발송 파이프라인 (MSG-179 D1) — 단일 KRaft 브로커, 앱은 localhost 접속 (postgres·redis 동일 형상)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+# 관측 (MSG-128) — Actuator/Micrometer Prometheus 엔드포인트.
+# 부하테스트 시 대상 밖 Prometheus 가 /actuator/prometheus 를 원격 scrape 한다.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus
+  metrics:
+    tags:
+      application: fillmap
+    distribution:
+      # 지연 백분위(p95·p99)를 Prometheus 쪽에서 histogram_quantile 로 뽑기 위한 버킷 (MSG-321).
+      # percentiles-histogram: true 는 쓰지 않는다 — 그건 기본 버킷 수십 개를 만들어 시계열이
+      # 한 자리 수 배로 늘어난다. 관측에 필요한 경계만 직접 준다.
+      # 경계는 실측에 맞췄다: 평시가 1~3ms 라 저구간을 촘촘히, 캐시 만료 시점의 지연(40~190ms)이
+      # 어느 칸에 떨어지는지 보이게 100~300ms 를 남겼다. 300ms·800ms 는 MSG-134 가 정한 SLO 선
+      # (p95<300ms, p99<800ms) — 경계가 없으면 준수 여부가 구간 보간에 좌우된다.
+      #
+      # 비용: 이 설정은 http.server.requests 전체에 걸린다(uri 별 지정이 아니다). Prometheus 에는
+      # +Inf 가 더해져 uri·method·status·outcome 조합마다 18개 bucket 시계열이 생긴다.
+      # 지금 API 수에서는 감당 가능하다고 보고 켰다 — 늘어나면 uri 별 MeterFilter 로 좁힌다.
+      slo:
+        http.server.requests: 1ms,2ms,3ms,5ms,8ms,10ms,15ms,25ms,50ms,75ms,100ms,150ms,200ms,300ms,500ms,800ms,1s
+        # 영상 처리 시간 SLO 버킷 (MSG-343) — 30초 경계가 "30초 이내 완료 비율"의 판정선이라 필수.
+        # 비용: 태그 조합 4개 × (버킷 7 + Inf + count + sum + max) 수준으로 시계열 약 44개.
+        "[video.processing.duration]": 5s, 10s, 15s, 30s, 60s, 120s, 300s
+
+# API 문서 (MSG-131) — Swagger UI: /swagger-ui.html, OpenAPI 스펙: /v3/api-docs
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  default-produces-media-type: application/json
+
+jwt:
+  # secret / refresh-secret 은 application-local.yml (로컬) / JWT_SECRET · JWT_REFRESH_SECRET 환경변수 (운영) 로 주입한다.
+  # 여기서는 만료시간만 관리.
+  access-token-ttl: PT1H
+  refresh-token-ttl: P14D    # 리프레시 토큰 TTL — 로테이션마다 재설정되는 슬라이딩 세션 (MSG-135)
+
+oauth:
+  kakao:
+    issuer: https://kauth.kakao.com
+    jwk-set-uri: https://kauth.kakao.com/.well-known/jwks.json
+    token-uri: https://kauth.kakao.com/oauth/token    # 웹 인가 코드 → ID Token 교환 (MSG-345)
+    authorize-uri: https://kauth.kakao.com/oauth/authorize  # 로그인 시작 진입점이 302 로 보낼 곳 (MSG-345)
+    nonce-cookie-secure: true                         # nonce 쿠키를 Secure; SameSite=None 로 (http 로컬만 false)
+    # client-id(카카오 REST API 키) 는 application-local.yml (로컬) / KAKAO_CLIENT_ID 환경변수 (운영) 로 주입한다.
+    # 네이티브 앱 키 — 앱(네이티브 SDK) 경로 ID Token 의 aud (MSG-452). APK 에 포함되는 공개 식별자라 여기 둔다.
+    app-client-id: 73558381b47d1b7c53b551a7596c56cf
+
+# 장소 검색 — 카카오 로컬 키워드 검색 프록시 (MSG-251). rest-api-key 는 OAuth 로그인과 같은 "필맵" 카카오 앱의
+# REST API 키라 oauth.kakao.client-id 를 프로퍼티 레벨로 참조한다 — 신규 시크릿·env 0 (§D5, 키 로테이션 시 검색도 함께 영향).
+search:
+  kakao:
+    base-url: https://dapi.kakao.com
+    rest-api-key: ${oauth.kakao.client-id:}
+
+# 핫구역 판정 값 (MSG-233 D3) — 초기 데이터를 보고 튜닝. top-k: 전국 상위 개수, min-score: 48h 합산 최소 임계.
+fillmap:
+  video:
+    encoding-job:
+      enabled: true
+      poll-interval: PT1S
+      retry-delay: PT5S
+      lease-duration: PT35M
+
+  hotzone:
+    top-k: 50
+    min-score: 3
+
+  # 미션 목록 뷰포트 여유 마진(미터, MSG-398 D4) — "화면 밖 얼마까지 보여 줄까"라는 노출 정책.
+  # FE 와 값 협의 전 기본 0 (축제·팝업은 사방 450m 판정 범위가 이미 데이터에 있고, 코스는 경로 전체가
+  # 사각형에 들어온다). 투영 보정 1칸과 별개 값이라 0 이어도 그 1칸은 항상 붙는다.
+  mission:
+    viewport:
+      margin-meters:
+        EVENT: 0
+        POPUP: 0
+        COURSE: 0
+
+  # 메일 발송 (MSG-497) — 기본 off: 로컬·dev 는 실발송 없이 로그로 링크를 확인한다.
+  # reset-link-base-url 은 여기에 기본값을 두지 않는다. 두면 prod 가 상속받아, 실발송이 켜졌는데
+  # URL 이 미주입이면 localhost 링크가 실제 메일로 나간다 — local·dev 프로파일 문서에만 둔다.
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:contact@fillmap.kr}
+    reset-link-base-url: ${MAIL_RESET_LINK_BASE_URL:}
+
+  # 알림 발송 파이프라인 (MSG-179) — 기본 off: 로컬·CI 는 Kafka·FCM 없이 그대로 green, dev/prod 만 env 로 on
+  notification:
+    enabled: ${NOTIFICATION_ENABLED:false}
+    topic: notification.send                  # 프로파일이 env prefix 로 오버라이드
+    consumer-group: fillmap-notification
+    relay:
+      poll-interval-ms: 5000
+      batch-size: 100
+      stale-published-minutes: 30             # 초과 PUBLISHED 는 PENDING 복구·재발행 (컨슈머 장기 다운 대비)
+    rate-limit:
+      hotzone-per-day: 1                      # FR-12 — BADGE 는 무제한이라 키 자체가 없다
+      remind-per-day: 1
+    stale-token-days: 60
+    fcm:
+      credentials-path: ${FCM_CREDENTIALS_PATH:}
+
+aws:
+  region: ${AWS_REGION:ap-northeast-2}
+  s3:
+    # 원본 영상 버킷. dev/prod 는 S3_BUCKET_VIDEO 환경변수로 주입한다 (버킷 자체가 분리돼 있음).
+    bucket: ${S3_BUCKET_VIDEO:fillmap-video-dev}
+    max-upload-bytes: ${S3_MAX_UPLOAD_BYTES:104857600}   # 100MB
+    # 하이라이트 선분석 원본(purpose=HIGHLIGHT_PREVIEW) 전용 상한 — 3분 4K 원본까지 (MSG-351 D-4)
+    max-highlight-upload-bytes: ${S3_MAX_HIGHLIGHT_UPLOAD_BYTES:2147483648}   # 2GiB
+
+# 영상·썸네일 전송망 (MSG-67). 로컬·CI 는 S3 presigned URL, dev 는 CloudFront signed URL 을 쓴다.
+cloudfront:
+  enabled: ${CLOUDFRONT_ENABLED:false}
+  domain: ${CLOUDFRONT_DOMAIN:}
+  key-pair-id: ${CLOUDFRONT_KEY_PAIR_ID:}
+  private-key-path: ${CLOUDFRONT_PRIVATE_KEY_PATH:}
+
+# AI Highlight-Blur 서버 연동 (MSG-149). 기본 off — AI 서버가 붙는 환경에서만 AI_ENABLED=true 로 켠다.
+# 플래그 2개 체계 (MSG-456): enabled 는 AI 연동 전체(선분석·재생 하이라이트 계산), blur-enabled 는 블러
+# 파이프라인 전용. 둘 다 켜져야(실효 블러 활성) 인코딩 완료가 BLURRING 으로 가고 폴러가 base-url 서버에
+# 제출·폴링한다. enabled 만 켜면 인코딩이 READY 로 끝나되 하이라이트는 전용 워커가 후행 계산해 채운다.
+ai:
+  enabled: ${AI_ENABLED:false}
+  blur-enabled: ${AI_BLUR_ENABLED:false}
+  base-url: ${AI_BASE_URL:http://localhost:8000}
+  timeout: ${AI_TIMEOUT:PT30M}          # 이 시간을 넘겨도 DONE/FAILED 가 안 오면 FAILED 로 수렴
+  poll-interval-ms: ${AI_POLL_INTERVAL_MS:30000}
+
+# AI 경로 추천 (MSG-457). 위 ai.* (블러·하이라이트)와 독립 게이트 — 블러가 꺼진 환경에서도 따로 켠다.
+route:
+  ai:
+    enabled: ${ROUTE_AI_ENABLED:false}      # 기본 꺼짐(NFR-OPS-06 관례). 꺼지면 호출은 14503
+    base-url: ${ROUTE_AI_BASE_URL:http://localhost:8000}
+    timeout: ${ROUTE_AI_TIMEOUT:PT10S}      # AI 호출당 교환 전체 시한 — 실측 근거는 MSG-457 상한 확정 절
+  # AI 경로 추천 보행 경로 (MSG-483). route.ai 와 독립 게이트다. 추천만 켜고 보행 경로는 끌 수 있다.
+  walk:
+    enabled: ${ROUTE_WALK_ENABLED:false}    # 기본 꺼짐 (NFR-OPS-06 관례). 꺼지면 호출은 14504
+    base-url: ${ROUTE_WALK_BASE_URL:https://apis.openapi.sk.com}
+    app-key: ${TMAP_APP_KEY:}               # NFR-SEC-10, 서버에만 둔다. dev/prod env 주입
+    daily-limit: ${ROUTE_WALK_DAILY_LIMIT:900}
+    timeout: ${ROUTE_WALK_TIMEOUT:PT3S}     # 교환 전체 시한 (카카오 선례와 같은 급)
+
+server:
+  port: 8080
+  # nginx가 https를 종단하므로 X-Forwarded-Proto/Host를 존중해야 springdoc·리다이렉트가 https URL을 만든다 (MSG-266)
+  forward-headers-strategy: framework
+  # 응답 압축 (MSG-318). 좌표·필드명이 수만 번 반복되는 JSON 이라 압축이 잘 듣는다 —
+  # GET /api/missions/active 실측 520,007 → 118,082 bytes (77% 감소, 서버 응답 수신 기준).
+  # 2KB 미만은 제외한다: 압축 CPU 와 Content-Encoding 왕복이 절감분보다 커지는 구간이다.
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 2KB
+
+cors:
+  # 콤마 구분 허용 origin 목록. 로컬 기본값 외에는 CORS_ALLOWED_ORIGINS 환경변수로 주입
+  # (예: S3 website URL, https://fillmap.kr). Vite 로컬 dev = localhost:5173~5180 (FE 워크트리 병렬, MSG-532)
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177,http://localhost:5178,http://localhost:5179,http://localhost:5180}

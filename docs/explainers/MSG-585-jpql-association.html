@@ -1,0 +1,453 @@
+<title>격자 리포지토리 JPQL 전환</title>
+<style>
+	:root {
+		--bg: #ffffff; --bg-soft: #f6f7f9; --bg-code: #f2f4f7; --fg: #1b1f24; --fg-soft: #5b6673;
+		--line: #dfe3e8; --accent: #2d6cdf; --accent-soft: #eaf1fd; --warn: #b4690e; --warn-soft: #fdf3e3;
+		--danger: #c0392b; --danger-soft: #fdeeec; --ok: #1e7e4e; --ok-soft: #e8f6ee; --tx: #6b3fa0; --tx-soft: #f1ebfa;
+		--del: #c0392b; --del-soft: #fdf0ee; --add: #1e7e4e; --add-soft: #eaf7ef;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) {
+			--bg: #14171c; --bg-soft: #1c2129; --bg-code: #1f252e; --fg: #e6e9ee; --fg-soft: #9aa5b3;
+			--line: #2c333d; --accent: #6b9cf2; --accent-soft: #1b2a45; --warn: #e0a24a; --warn-soft: #33271a;
+			--danger: #ef7b6f; --danger-soft: #3a1f1c; --ok: #5cc48a; --ok-soft: #173124; --tx: #b18ae6; --tx-soft: #2a2140;
+			--del: #ef7b6f; --del-soft: #3a1f1c; --add: #5cc48a; --add-soft: #173124;
+		}
+	}
+	:root[data-theme="dark"] {
+		--bg: #14171c; --bg-soft: #1c2129; --bg-code: #1f252e; --fg: #e6e9ee; --fg-soft: #9aa5b3;
+		--line: #2c333d; --accent: #6b9cf2; --accent-soft: #1b2a45; --warn: #e0a24a; --warn-soft: #33271a;
+		--danger: #ef7b6f; --danger-soft: #3a1f1c; --ok: #5cc48a; --ok-soft: #173124; --tx: #b18ae6; --tx-soft: #2a2140;
+		--del: #ef7b6f; --del-soft: #3a1f1c; --add: #5cc48a; --add-soft: #173124;
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; padding: 40px 16px 96px; background: var(--bg); color: var(--fg);
+		font-family: -apple-system, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+		font-size: 15px; line-height: 1.7; word-break: keep-all;
+	}
+	main { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+	h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; letter-spacing: -0.01em; text-wrap: balance; }
+	h2 { font-size: 21px; margin: 0 0 16px; letter-spacing: -0.01em; text-wrap: balance; }
+	h3 { font-size: 16px; margin: 24px 0 8px; }
+	p { margin: 0 0 12px; max-width: 70ch; }
+	.eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-soft); margin-bottom: 8px; }
+	.lede { font-size: 17px; color: var(--fg-soft); max-width: 62ch; }
+	code, pre { font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; }
+	code { font-size: 0.9em; background: var(--bg-code); padding: 1px 5px; border-radius: 4px; }
+	pre { margin: 0; padding: 14px 16px; background: var(--bg-code); border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+	pre code { background: none; padding: 0; font-size: inherit; }
+	.facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px; }
+	.fact { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; background: var(--bg-soft); }
+	.fact b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+	.fact span { color: var(--fg-soft); font-size: 13px; }
+	.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 10px 0 6px; }
+	.pair > div { min-width: 0; }
+	.pair .tag { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; display: inline-block; padding: 1px 8px; border-radius: 999px; }
+	.tag-before { background: var(--del-soft); color: var(--del); }
+	.tag-after { background: var(--add-soft); color: var(--add); }
+	.query { padding: 20px 0; border-top: 1px solid var(--line); }
+	.query:last-child { border-bottom: 1px solid var(--line); }
+	.query h3 { margin-top: 0; }
+	.query .role { color: var(--fg-soft); font-weight: 400; }
+	.why { color: var(--fg-soft); max-width: 72ch; }
+	.callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 12px 0; max-width: 72ch; }
+	.callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+	.callout.ok { border-color: var(--ok); background: var(--ok-soft); }
+	table { border-collapse: collapse; width: 100%; font-size: 14px; }
+	th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+	th { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-soft); font-weight: 600; }
+	td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+	.scroll { overflow-x: auto; }
+	figure { margin: 16px 0 0; }
+	figure svg { max-width: 100%; height: auto; display: block; }
+	figcaption { font-size: 13px; color: var(--fg-soft); margin-top: 8px; max-width: 72ch; }
+	ul { padding-left: 20px; margin: 0 0 12px; max-width: 72ch; }
+	li { margin-bottom: 6px; }
+	.kept { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+	.kept > div { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+	.kept b { display: block; font-family: "SF Mono", Menlo, monospace; font-size: 13px; margin-bottom: 6px; }
+	.kept span { font-size: 13px; color: var(--fg-soft); }
+	.pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--tx-soft); color: var(--tx); }
+	@media (max-width: 720px) { .facts, .pair, .kept { grid-template-columns: 1fr; } }
+</style>
+
+<main>
+<header>
+	<div class="eyebrow">MSG-585 · 2026-09-08 · 파일럿</div>
+	<h1>격자 리포지토리의 네이티브 SQL 5건을 연관관계 기반 JPQL로 옮겼다</h1>
+	<p class="lede">동작은 하나도 안 바뀌었고, 바뀐 것은 "쿼리를 어떤 언어로 적느냐"뿐이다. 이 페이지는 무엇을 왜 바꿨는지, 그리고 정말 같은지를 어떻게 확인했는지를 코드를 안 연 사람이 따라갈 수 있게 적는다.</p>
+	<div class="facts">
+		<div class="fact"><b>2</b><span>새로 붙인 연관관계 (읽기 전용)</span></div>
+		<div class="fact"><b>5 / 8</b><span>JPQL로 옮긴 네이티브 쿼리 / 전체</span></div>
+		<div class="fact"><b>3,059</b><span>변경 후 통과한 테스트 (실패 0)</span></div>
+	</div>
+</header>
+
+<section>
+	<h2>왜 했나</h2>
+	<p>9월 7일 멘토링에서 "네이티브 쿼리를 줄이고 JPQL과 애플리케이션 로직을 우선하라"는 권고가 있었다. 다음 날 백엔드 감사에서 네이티브 쿼리 108건을 전수 분류했더니 42건은 PostgreSQL 전용 문법이 하나도 없어서 JPQL로 갈 수 있는 것이었다.</p>
+	<p>42건을 한 번에 바꾸는 대신 <code>GridRepository</code> 하나로 먼저 해 보고, 실제 실행되는 SQL과 실행 계획이 전후로 같은지 재 봤다. 같으면 나머지에 같은 방식을 쓰고, 다르면 여기서 멈춘다. 그래서 "파일럿"이다.</p>
+	<div class="callout">이 작업은 요구사항을 바꾸지 않는 리팩터링이라 PRD 없이 진행했다. API 응답, 저장되는 데이터, DB 스키마 전부 그대로다.</div>
+</section>
+
+<section>
+	<h2>1. 연관관계 두 개를 붙였다</h2>
+	<p>JPQL은 테이블이 아니라 자바 엔티티를 기준으로 쓰는 쿼리 언어다. 엔티티끼리 "이게 저걸 가리킨다"는 연관관계가 있으면 조인 조건을 매번 적지 않아도 <code>ug.grid.gridY</code>처럼 점으로 따라갈 수 있다. 격자 도메인에는 그 연관이 없어서 지금까지 조인이 필요한 조회는 전부 네이티브 SQL이었다.</p>
+	<figure>
+		<svg viewBox="0 0 860 300" role="img" aria-label="UserGrid가 grid_id로 Grid를, Grid가 region_code로 Region을 읽기 전용 지연 로딩으로 가리킨다. 쓰기는 종전대로 VideoServiceImpl의 native upsert가 user_grids와 grids에 직접 한다." xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Apple SD Gothic Neo', sans-serif" font-size="12" color="currentColor">
+			<defs>
+				<marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+				<marker id="arr-tx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#6b3fa0"/></marker>
+			</defs>
+			<!-- entity boxes -->
+			<g>
+				<rect x="20" y="70" width="230" height="110" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+				<text x="34" y="92" font-weight="700" font-size="13">UserGrid <tspan fill="#5b6673" font-weight="400">user_grids</tspan></text>
+				<text x="34" y="114" font-family="Menlo, monospace" font-size="11.5">id: (user_id, grid_id)</text>
+				<text x="34" y="132" font-family="Menlo, monospace" font-size="11.5">video_count · cover_video_id</text>
+				<text x="34" y="160" font-family="Menlo, monospace" font-size="11.5" fill="#1e7e4e">+ grid  → Grid</text>
+			</g>
+			<g>
+				<rect x="315" y="70" width="230" height="110" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+				<text x="329" y="92" font-weight="700" font-size="13">Grid <tspan fill="#5b6673" font-weight="400">grids</tspan></text>
+				<text x="329" y="114" font-family="Menlo, monospace" font-size="11.5">grid_id · grid_y · grid_x</text>
+				<text x="329" y="132" font-family="Menlo, monospace" font-size="11.5">region_code (문자열, 그대로)</text>
+				<text x="329" y="160" font-family="Menlo, monospace" font-size="11.5" fill="#1e7e4e">+ region  → Region</text>
+			</g>
+			<g>
+				<rect x="610" y="70" width="230" height="110" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+				<text x="624" y="92" font-weight="700" font-size="13">Region <tspan fill="#5b6673" font-weight="400">regions</tspan></text>
+				<text x="624" y="114" font-family="Menlo, monospace" font-size="11.5">region_code · region_name</text>
+				<text x="624" y="132" font-family="Menlo, monospace" font-size="11.5">parent_code · total_grid_count</text>
+				<text x="624" y="160" font-size="11.5" fill="#5b6673">변경 없음</text>
+			</g>
+			<!-- association arrows -->
+			<line x1="250" y1="125" x2="313" y2="125" stroke="#1e7e4e" stroke-width="1.6" marker-end="url(#arr)" style="color:#1e7e4e"/>
+			<text x="281" y="112" text-anchor="middle" font-size="11" fill="#1e7e4e">grid_id</text>
+			<text x="281" y="146" text-anchor="middle" font-size="10.5" fill="#5b6673">읽기 전용 · LAZY</text>
+			<line x1="545" y1="125" x2="608" y2="125" stroke="#1e7e4e" stroke-width="1.6" marker-end="url(#arr)" style="color:#1e7e4e"/>
+			<text x="576" y="112" text-anchor="middle" font-size="11" fill="#1e7e4e">region_code</text>
+			<text x="576" y="146" text-anchor="middle" font-size="10.5" fill="#5b6673">읽기 전용 · LAZY</text>
+			<!-- write path unchanged -->
+			<rect x="190" y="236" width="300" height="40" rx="8" fill="none" stroke="#6b3fa0" stroke-width="1.2" stroke-dasharray="5 4"/>
+			<text x="340" y="261" text-anchor="middle" font-size="12" fill="#6b3fa0">VideoServiceImpl · native upsert (쓰기 경로, 변경 없음)</text>
+			<line x1="260" y1="236" x2="150" y2="182" stroke="#6b3fa0" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#arr-tx)"/>
+			<line x1="420" y1="236" x2="430" y2="182" stroke="#6b3fa0" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#arr-tx)"/>
+			<text x="150" y="215" text-anchor="middle" font-size="10.5" fill="#6b3fa0">INSERT … ON CONFLICT</text>
+			<text x="500" y="215" text-anchor="middle" font-size="10.5" fill="#6b3fa0">INSERT … ON CONFLICT</text>
+			<text x="20" y="30" font-size="12" fill="#5b6673">초록 실선 = 이번에 붙인 연관 (조회 전용)   ·   보라 점선 = 원래 있던 쓰기 경로 (그대로)</text>
+		</svg>
+		<figcaption>연관은 조회할 때만 쓴다. 저장은 예전과 똑같이 네이티브 upsert가 하고, 연관 필드는 저장·수정에서 빠져 있다(<code>insertable = false, updatable = false</code>).</figcaption>
+	</figure>
+
+	<h3>코드로는 이 두 줄이 핵심이다</h3>
+	<div class="pair">
+		<div><span class="tag tag-after">Grid.java</span>
+<pre><code>@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "region_code",
+            insertable = false, updatable = false)
+private Region region;</code></pre></div>
+		<div><span class="tag tag-after">UserGrid.java</span>
+<pre><code>@ManyToOne(fetch = FetchType.LAZY)
+@JoinColumn(name = "grid_id",
+            insertable = false, updatable = false)
+private Grid grid;</code></pre></div>
+	</div>
+	<ul>
+		<li><b>읽기 전용.</b> 저장·수정에 관여하지 않는다. 그래서 원래 있던 <code>regionCode</code> 문자열 필드도 지우지 않고 그대로 뒀다. 같은 컬럼을 두 필드가 읽는 셈인데, 둘 다 읽기 전용이라 JPA가 허용한다.</li>
+		<li><b>LAZY.</b> "필요할 때만 가져온다." 격자 하나를 id로 조회해도 <code>regions</code>를 같이 읽지 않는다. JPQL에서 <code>JOIN g.region</code>이라고 명시할 때만 조인된다. DB 로그로 확인했다. 격자 단건 조회 SQL은 변경 전과 똑같이 <code>grids</code> 한 테이블만 읽는다.</li>
+		<li><b>스키마 무변경.</b> 컬럼도 FK도 원래 있던 것이다. 자바 쪽에 이름표만 붙였다.</li>
+	</ul>
+</section>
+
+<section>
+	<h2>2. 쿼리 5건, 전과 후</h2>
+	<p>왼쪽이 원래 네이티브 SQL, 오른쪽이 JPQL이다. 테이블 이름이 엔티티 이름으로, 컬럼이 필드로 바뀌었고, 조인 조건은 연관 경로로 대체됐다. 각 쿼리 아래에 "무엇이 왜 달라졌나"를 한두 줄로 적었다.</p>
+
+	<div class="query">
+		<h3>findVideoCount <span class="role">· 격자 하나를 내가 영상 몇 개로 채웠나</span></h3>
+		<div class="pair">
+			<div><span class="tag tag-before">전 · native</span>
+<pre><code>SELECT ug.video_count
+FROM user_grids ug
+WHERE ug.user_id = :userId
+  AND ug.grid_id = :gridId</code></pre></div>
+			<div><span class="tag tag-after">후 · JPQL</span>
+<pre><code>SELECT ug.videoCount
+FROM UserGrid ug
+WHERE ug.id.userId = :userId
+  AND ug.id.gridId = :gridId</code></pre></div>
+		</div>
+		<p class="why">조인이 없어 연관관계도 필요 없다. 이름만 자바식으로 바뀌었다. <code>ug.id.userId</code>는 복합키(<code>UserGridId</code>) 안의 필드를 가리키는 표기다.</p>
+	</div>
+
+	<div class="query">
+		<h3>findOccupiedInRange <span class="role">· 지도 화면 범위 안의 내 점령 격자 전부</span></h3>
+		<div class="pair">
+			<div><span class="tag tag-before">전 · native</span>
+<pre><code>SELECT g.grid_id AS "gridId", g.grid_y AS "gridY",
+       g.grid_x AS "gridX", r.region_name AS "regionName"
+FROM user_grids ug
+JOIN grids g ON g.grid_id = ug.grid_id
+LEFT JOIN regions r ON r.region_code = g.region_code
+WHERE ug.user_id = :userId
+  AND g.grid_y BETWEEN :minY AND :maxY
+  AND g.grid_x BETWEEN :minX AND :maxX</code></pre></div>
+			<div><span class="tag tag-after">후 · JPQL</span>
+<pre><code>SELECT g.gridId AS gridId, g.gridY AS gridY,
+       g.gridX AS gridX, r.regionName AS regionName
+FROM UserGrid ug
+JOIN ug.grid g
+LEFT JOIN g.region r
+WHERE ug.id.userId = :userId
+  AND g.gridY BETWEEN :minY AND :maxY
+  AND g.gridX BETWEEN :minX AND :maxX</code></pre></div>
+		</div>
+		<p class="why">연관관계의 효과가 보이는 곳이다. <code>ON g.grid_id = ug.grid_id</code>를 매번 적던 것이 <code>JOIN ug.grid</code>로 끝난다. Hibernate가 엔티티 정의를 보고 조인 조건을 채운다. LEFT JOIN은 그대로다. 바다처럼 어느 동에도 안 속하는 격자를 지도에서 떨어뜨리지 않기 위한 규칙이다.</p>
+	</div>
+
+	<div class="query">
+		<h3>findOccupiedPage <span class="role">· 위와 같은데 정렬해서 첫 페이지만</span></h3>
+		<div class="pair">
+			<div><span class="tag tag-before">전 · native</span>
+<pre><code>… (위와 같은 FROM · WHERE)
+ORDER BY g.grid_y, g.grid_x
+LIMIT :limit
+
+-- 파라미터: int limit</code></pre></div>
+			<div><span class="tag tag-after">후 · JPQL</span>
+<pre><code>… (위와 같은 FROM · WHERE)
+ORDER BY g.gridY, g.gridX
+
+
+-- 파라미터: Limit limit  (Spring Data)</code></pre></div>
+		</div>
+		<p class="why">JPQL에는 <code>LIMIT</code> 문법이 없다. 대신 Spring Data의 <code>Limit</code> 타입을 파라미터로 받으면 상한이 걸린다. 그래서 호출부 세 곳(서비스 1, 테스트 2)이 <code>limit</code> 대신 <code>Limit.of(limit)</code>을 넘긴다. 실제 생성 SQL은 <code>fetch first ? rows only</code>인데 PostgreSQL에서 <code>LIMIT</code>과 같은 뜻이다.</p>
+	</div>
+
+	<div class="query">
+		<h3>summarizeOccupiedByRegion <span class="role">· 어떤 동 안의 내 점령 격자 수와 영상 수 합계</span></h3>
+		<div class="pair">
+			<div><span class="tag tag-before">전 · native</span>
+<pre><code>SELECT COUNT(*)::int AS "gridCount",
+       COALESCE(SUM(ug.video_count), 0) AS "videoCount"
+FROM user_grids ug
+JOIN grids g ON g.grid_id = ug.grid_id
+WHERE ug.user_id = :userId
+  AND g.region_code = :regionCode</code></pre></div>
+			<div><span class="tag tag-after">후 · JPQL</span>
+<pre><code>SELECT CAST(COUNT(ug) AS Integer) AS gridCount,
+       COALESCE(SUM(ug.videoCount), 0L) AS videoCount
+FROM UserGrid ug
+JOIN ug.grid g
+WHERE ug.id.userId = :userId
+  AND g.regionCode = :regionCode</code></pre></div>
+		</div>
+		<p class="why"><code>::int</code>는 PostgreSQL 전용 문법이라 표준 <code>CAST</code>로 바꿨다. <code>0L</code>은 SUM 결과가 Long이라 타입을 맞춘 것이다. 결과를 받는 인터페이스(<code>getGridCount()</code> Integer, <code>getVideoCount()</code> Long)를 안 건드리기 위해서다.</p>
+	</div>
+
+	<div class="query">
+		<h3>findRegionNames <span class="role">· 격자 여러 개의 행정동 이름을 한 번에</span></h3>
+		<div class="pair">
+			<div><span class="tag tag-before">전 · native</span>
+<pre><code>SELECT g.grid_id AS "gridId",
+       r.region_name AS "regionName"
+FROM grids g
+JOIN regions r ON r.region_code = g.region_code
+WHERE g.grid_id IN (:gridIds)</code></pre></div>
+			<div><span class="tag tag-after">후 · JPQL</span>
+<pre><code>SELECT g.gridId AS gridId,
+       r.regionName AS regionName
+FROM Grid g
+JOIN g.region r
+WHERE g.gridId IN :gridIds</code></pre></div>
+		</div>
+		<p class="why">여기는 일부러 INNER JOIN이다. 결과가 "격자 → 이름" 사전으로 쓰여서 동이 없는 격자는 아예 안 나오는 게 맞다(핫구역이 그렇게 쓴다). 그 의미도 그대로다. JPQL의 <code>IN :gridIds</code>는 괄호 없이 쓴다.</p>
+	</div>
+</section>
+
+<section>
+	<h2>3. 네이티브로 남긴 3건과 이유</h2>
+	<p>PostgreSQL 전용 기능을 쓰는 것은 JPQL로 옮길 수 없거나 옮기면 성능 계약이 깨질 수 있어 그대로 뒀다.</p>
+	<div class="kept">
+		<div><b>aggregateOccupiedInRange</b><span>행정 단위 집계. 문자열 자르기 <code>split_part</code>, 좌표 함수 <code>ST_Y</code>, 출력 서수 <code>GROUP BY 1</code>.</span></div>
+		<div><b>findOccupiedPageAfter</b><span>커서 이후 페이지. <code>(grid_y, grid_x) &gt; (:y, :x)</code> 행 값 비교가 인덱스 하나로 범위 스캔하는 계약(MSG-90). JPQL로 풀면 OR 두 개가 되고 같은 계획이 보장되지 않는다.</span></div>
+		<div><b>findOccupiedByIntersects</b><span>공간 조회. PostGIS <code>ST_Intersects</code>·<code>ST_MakeEnvelope</code>. 벤치마크 전용 경로.</span></div>
+	</div>
+	<div class="callout warn">"파생 쿼리와 연관관계 탐색만 쓰면 JPQL 문자열이 필요 없지 않나"도 있었다. 단정하지 않고 쟀다. 테스트 소스에만 실험용 리포지토리를 두고, 더미 데이터(격자 9만 · 점령 22,500 · 절반에 행정동 라벨)를 트랜잭션 안에 넣어 세 방식을 5회씩 돌린 중앙값이다. 끝나면 롤백된다.</div>
+	<div class="scroll">
+	<table>
+		<thead><tr><th>뷰포트</th><th>행</th><th>A · 현행 JPQL 프로젝션</th><th>B · 파생 쿼리 + 지연 로딩</th><th>C · 파생 쿼리 + EntityGraph</th></tr></thead>
+		<tbody>
+			<tr><td>10×10</td><td class="num">25</td><td>1문장 · 2.0ms</td><td>3문장 · 5.0ms</td><td>1문장 · 3.2ms</td></tr>
+			<tr><td>50×50</td><td class="num">625</td><td>1문장 · 7.6ms</td><td>9문장 · 16.1ms</td><td>1문장 · 10.7ms</td></tr>
+			<tr><td>100×100</td><td class="num">2,500</td><td>1문장 · 22.0ms</td><td>27문장 · 47.4ms</td><td>1문장 · 27.9ms</td></tr>
+			<tr><td>200×200</td><td class="num">10,000</td><td>1문장 · 65.9ms</td><td>102문장 · 116.0ms</td><td>1문장 · 90.1ms</td></tr>
+		</tbody>
+	</table>
+	</div>
+	<p class="why">B의 "N+1"은 배치 크기 100 설정 덕에 <code>1 + N/100 + 1</code> 문장으로 묶인다. 2,500칸에서 27문장·약 2배, 1만 칸에서 102문장·약 1.8배다. 장애급은 아니지만 행 수에 비례해 늘어난다. C는 문장이 1개로 돌아오지만 행마다 엔티티 2개(격자·점령)를 메모리에 올려 A보다 30~40% 느리다. 어느 크기에서도 B·C가 A를 이기는 구간은 없었다. JPQL 문자열을 없애는 값과 이 비용을 저울질하는 건 팀의 몫이다. 벤치마크: <code>GridViewportFetchBenchmark</code> (<code>GRID_BENCHMARK=true</code>, 규모는 <code>GRID_BENCH_BLOCK</code>).</p>
+</section>
+
+<section>
+	<h2>4. 정말 같은지 어떻게 확인했나</h2>
+	<p>"테스트 통과"만으로는 부족하다. 리팩터링의 약속은 DB에 가는 SQL이 같다는 것이라, 실제로 나간 SQL과 DB가 고른 실행 계획까지 전후로 대조했다.</p>
+	<figure>
+		<svg viewBox="0 0 860 150" role="img" aria-label="검증은 다섯 단계다. 변경 전 테스트와 SQL 캡처로 기준선을 잡고, 코드를 바꾸고, 테스트를 다시 돌리고, DB 로그로 실제 SQL을 전후 대조하고, 격자 4만 건을 넣은 트랜잭션 안에서 실행 계획을 전후 비교한 뒤 롤백한다." xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Apple SD Gothic Neo', sans-serif" font-size="12" color="currentColor">
+			<defs><marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+			<g>
+				<rect x="10" y="40" width="150" height="64" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+				<text x="85" y="63" text-anchor="middle" font-weight="700">기준선</text>
+				<text x="85" y="82" text-anchor="middle" font-size="11" fill="#5b6673">테스트 green + SQL 캡처</text>
+				<text x="85" y="96" text-anchor="middle" font-size="11" fill="#5b6673">(변경 전)</text>
+			</g>
+			<line x1="160" y1="72" x2="182" y2="72" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr2)"/>
+			<g>
+				<rect x="184" y="40" width="130" height="64" rx="8" fill="none" stroke="#2d6cdf" stroke-width="1.6"/>
+				<text x="249" y="63" text-anchor="middle" font-weight="700" fill="#2d6cdf">코드 변경</text>
+				<text x="249" y="82" text-anchor="middle" font-size="11" fill="#5b6673">연관 2 + 쿼리 5</text>
+			</g>
+			<line x1="314" y1="72" x2="336" y2="72" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr2)"/>
+			<g>
+				<rect x="338" y="40" width="150" height="64" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+				<text x="413" y="63" text-anchor="middle" font-weight="700">테스트 재실행</text>
+				<text x="413" y="82" text-anchor="middle" font-size="11" fill="#5b6673">전체 3,059건</text>
+				<text x="413" y="96" text-anchor="middle" font-size="11" fill="#5b6673">실패 0</text>
+			</g>
+			<line x1="488" y1="72" x2="510" y2="72" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr2)"/>
+			<g>
+				<rect x="512" y="40" width="150" height="64" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+				<text x="587" y="63" text-anchor="middle" font-weight="700">실제 SQL 대조</text>
+				<text x="587" y="82" text-anchor="middle" font-size="11" fill="#5b6673">DB 로그로 캡처</text>
+				<text x="587" y="96" text-anchor="middle" font-size="11" fill="#5b6673">조인·조건·정렬 동일</text>
+			</g>
+			<line x1="662" y1="72" x2="684" y2="72" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr2)"/>
+			<g>
+				<rect x="686" y="40" width="164" height="64" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+				<text x="768" y="63" text-anchor="middle" font-weight="700">실행 계획 비교</text>
+				<text x="768" y="82" text-anchor="middle" font-size="11" fill="#5b6673">격자 4만·점령 1만 시드</text>
+				<text x="768" y="96" text-anchor="middle" font-size="11" fill="#5b6673">EXPLAIN 후 ROLLBACK</text>
+			</g>
+			<text x="768" y="128" text-anchor="middle" font-size="11" fill="#5b6673">DB에 남는 것 없음 (잔여 0행 확인)</text>
+		</svg>
+		<figcaption>기준선을 먼저 잡아 두었기 때문에 "바꾸고 나서 통과했다"가 아니라 "바꾸기 전과 후가 같다"를 말할 수 있다.</figcaption>
+	</figure>
+
+	<h3>실행 계획 전후 (로컬 · 격자 40,000 · 점령 10,000 · 뷰포트 100×100 셀)</h3>
+	<div class="scroll">
+	<table>
+		<thead><tr><th>쿼리</th><th>DB가 고른 계획</th><th>전 (ms)</th><th>후 (ms)</th><th>판정</th></tr></thead>
+		<tbody>
+			<tr><td>findOccupiedInRange</td><td>Hash Join → regions Index Scan(Memoize)</td><td class="num">6.5</td><td class="num">5.3</td><td>같은 노드·같은 비용</td></tr>
+			<tr><td>findOccupiedPage (501건)</td><td><code>uq_grids_yx</code> Index Scan → Nested Loop → Limit</td><td class="num">2.2</td><td class="num">2.2</td><td>같음 · 인덱스 정렬 유지</td></tr>
+			<tr><td>findRegionNames (IN 50)</td><td><code>grids_pkey</code> Index Scan ×50 → regions Memoize</td><td class="num">1.06</td><td class="num">0.13</td><td>같음 (후는 캐시 적중)</td></tr>
+			<tr><td>summarizeOccupiedByRegion</td><td><code>idx_grids_region_code</code> Index Scan + Hash → Aggregate</td><td class="num">6.1</td><td class="num">5.4</td><td>같음</td></tr>
+			<tr><td>findVideoCount</td><td><code>idx_user_grids_grid</code> Index Scan</td><td class="num">0.02</td><td class="num">0.02</td><td>같음</td></tr>
+		</tbody>
+	</table>
+	</div>
+	<p class="why">시간 차이는 같은 계획을 두 번 돌린 캐시 효과다. 판정 기준은 시간이 아니라 "DB가 같은 계획을 골랐는가"다. 행 수가 적어 뷰포트 조회의 grids 쪽이 Seq Scan인 것은 전후 공통이고, dev 실데이터(격자 14만 행)에서는 인덱스 범위 스캔이 기대된다.</p>
+	<div class="callout ok">Codex 리뷰 1라운드 결함 없음. 584(가독성 정리)가 먼저 머지돼 그 위로 다시 얹은 뒤에도 전체 3,059건 통과.</div>
+</section>
+
+<section>
+	<h2>5. 부하 아래에서는 어떤가 — 실제 요청·실제 SQL·서버 지표</h2>
+	<p>앱 안에서 잰 벤치마크는 "요청 하나"의 비용이다. 진짜 질문은 동시 사용자가 때릴 때 커넥션 풀과 응답 시간이 어떻게 되느냐라서, 실제 엔드포인트(<code>GET /api/grids</code>, 첫 페이지)에 같은 부하를 세 방식으로 넣고 세 층을 같이 봤다. 방식은 앱 재기동으로만 바꿨고(임시 속성 <code>fillmap.grid.viewport-fetch</code>), 코드·데이터·부하는 같다.</p>
+	<ul>
+		<li><b>데이터</b>: 로컬 DB에 격자 9만 건(서울 30km×30km 블록, 실제 행정동 4,431개 경계로 라벨)·벤치 사용자 점령 22,500건을 커밋해 넣고 <code>VACUUM ANALYZE</code>. 측정 후 삭제.</li>
+		<li><b>부하</b>: k6, 50×50 뷰포트 50 req/s 60초 → 100×100 뷰포트 30 req/s 60초. 요청당 약 650칸·2,560칸.</li>
+		<li><b>관측</b>: 앱 actuator(HTTP p95·HikariCP) + postgres-exporter(DB tuples/s)를 Prometheus가 5초마다 수집. DB 로그로 요청 하나의 실제 SQL도 잡았다.</li>
+	</ul>
+	<figure>
+<svg viewBox="0 0 860 300" role="img" aria-label="세 방식의 부하 구간별 /api/grids p95 응답 시간. projection·lazy·graph 각각 50×50 뷰포트 50 req/s 60초, 100×100 뷰포트 30 req/s 60초. 세 방식이 같은 크기 구간에서 거의 같은 높이다." xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Apple SD Gothic Neo', sans-serif" font-size="11" color="currentColor">
+<rect x="141.8" y="28" width="84.4" height="228" fill="#2d6cdf" opacity="0.08"/>
+<text x="184.1" y="18" text-anchor="middle" font-size="11" fill="#2d6cdf" font-weight="700">projection 50×50</text>
+<rect x="226.3" y="28" width="85.8" height="228" fill="#2d6cdf" opacity="0.08"/>
+<text x="269.2" y="18" text-anchor="middle" font-size="11" fill="#2d6cdf" font-weight="700">projection 100×100</text>
+<rect x="357.1" y="28" width="84.4" height="228" fill="#b4690e" opacity="0.08"/>
+<text x="399.3" y="18" text-anchor="middle" font-size="11" fill="#b4690e" font-weight="700">lazy 50×50</text>
+<rect x="441.6" y="28" width="85.8" height="228" fill="#b4690e" opacity="0.08"/>
+<text x="484.5" y="18" text-anchor="middle" font-size="11" fill="#b4690e" font-weight="700">lazy 100×100</text>
+<rect x="620.3" y="28" width="84.4" height="228" fill="#1e7e4e" opacity="0.08"/>
+<text x="662.5" y="18" text-anchor="middle" font-size="11" fill="#1e7e4e" font-weight="700">graph 50×50</text>
+<rect x="704.7" y="28" width="85.8" height="228" fill="#1e7e4e" opacity="0.08"/>
+<text x="747.6" y="18" text-anchor="middle" font-size="11" fill="#1e7e4e" font-weight="700">graph 100×100</text>
+<line x1="56" x2="844" y1="256.0" y2="256.0" stroke="currentColor" opacity="0.15"/>
+<text x="50" y="260.0" text-anchor="end" fill="#5b6673">0ms</text>
+<line x1="56" x2="844" y1="199.0" y2="199.0" stroke="currentColor" opacity="0.15"/>
+<text x="50" y="203.0" text-anchor="end" fill="#5b6673">20ms</text>
+<line x1="56" x2="844" y1="142.0" y2="142.0" stroke="currentColor" opacity="0.15"/>
+<text x="50" y="146.0" text-anchor="end" fill="#5b6673">40ms</text>
+<line x1="56" x2="844" y1="85.0" y2="85.0" stroke="currentColor" opacity="0.15"/>
+<text x="50" y="89.0" text-anchor="end" fill="#5b6673">60ms</text>
+<line x1="56" x2="844" y1="28.0" y2="28.0" stroke="currentColor" opacity="0.15"/>
+<text x="50" y="32.0" text-anchor="end" fill="#5b6673">80ms</text>
+<text x="56.0" y="272" text-anchor="middle" fill="#5b6673">0분</text>
+<text x="140.4" y="272" text-anchor="middle" fill="#5b6673">1분</text>
+<text x="224.9" y="272" text-anchor="middle" fill="#5b6673">2분</text>
+<text x="309.3" y="272" text-anchor="middle" fill="#5b6673">3분</text>
+<text x="393.7" y="272" text-anchor="middle" fill="#5b6673">4분</text>
+<text x="478.1" y="272" text-anchor="middle" fill="#5b6673">5분</text>
+<text x="562.6" y="272" text-anchor="middle" fill="#5b6673">6분</text>
+<text x="647.0" y="272" text-anchor="middle" fill="#5b6673">7분</text>
+<text x="731.4" y="272" text-anchor="middle" fill="#5b6673">8분</text>
+<text x="815.9" y="272" text-anchor="middle" fill="#5b6673">9분</text>
+<text x="56" y="292" fill="#5b6673">앱 측정 p95 (actuator http_server_requests, 15초 창), 구간 사이 공백 = 앱 재기동</text>
+<polyline points="56.0,243.4 63.0,242.6 70.1,242.5 77.1,242.8 84.1,28.0 91.2,28.0 105.2,74.1 112.3,105.6 119.3,114.5 147.5,125.2 154.5,144.9 161.5,160.8 168.6,187.2 175.6,187.7 182.6,187.7 189.7,187.8 196.7,187.7 203.8,187.3 210.8,187.2 217.8,187.2 224.9,187.3 231.9,121.0 238.9,70.4 246.0,62.0 253.0,62.8 260.0,61.0 267.1,65.0 274.1,64.5 281.1,58.7 288.2,59.2 295.2,54.3 302.2,55.7 309.3,62.8 316.3,58.8 323.4,56.0 372.6,186.7 379.6,186.8 386.7,187.7 393.7,188.0 400.8,187.2 407.8,187.1 414.8,187.9 421.9,187.8 428.9,187.0 435.9,186.7 443.0,187.2 450.0,117.4 457.0,76.0 464.1,68.3 471.1,62.4 478.1,61.0 485.2,61.4 492.2,61.4 499.2,67.2 506.3,72.8 513.3,68.3 520.4,67.7 527.4,64.1 534.4,62.1 541.5,69.6 576.6,45.8 583.7,45.8 632.9,199.0 640.0,198.3 647.0,207.0 654.0,205.1 661.1,206.8 668.1,197.4 675.1,192.9 682.2,192.5 689.2,193.9 696.2,192.8 703.3,192.0 710.3,134.4 717.4,117.9 724.4,116.4 731.4,116.8 738.5,117.1 745.5,117.1 752.5,116.8 759.6,116.8 766.6,117.1 773.6,117.1 780.7,117.1 787.7,117.1 794.8,117.1 801.8,117.1" fill="none" stroke="#1b1f24" stroke-width="2" stroke-linejoin="round" style="stroke: currentColor"/>
+</svg>
+
+		<figcaption>여섯 구간의 앱 측정 p95. 같은 크기의 구간끼리 비교하면 세 방식이 거의 같은 높이다. lazy가 요청당 53문장을 보내는데도 p95가 안 오른 것이 이 그림의 핵심이다.</figcaption>
+	</figure>
+	<div class="scroll">
+	<table>
+		<thead><tr><th>방식 · 뷰포트</th><th>요청당 DB 문장</th><th>k6 p50</th><th>k6 p95</th><th>k6 p99</th><th>앱 p95 중앙값</th><th>Hikari active 최대</th><th>DB tuples/s 중앙값</th></tr></thead>
+		<tbody>
+			<tr><td>projection · 50×50</td><td class="num">2</td><td class="num">15.2ms</td><td class="num">18.1ms</td><td class="num">20.9ms</td><td class="num">24.1ms</td><td class="num">1</td><td class="num">21만</td></tr>
+			<tr><td>lazy · 50×50</td><td class="num">약 16</td><td class="num">15.4ms</td><td class="num">19.6ms</td><td class="num">22.5ms</td><td class="num">24.2ms</td><td class="num">1</td><td class="num">20만</td></tr>
+			<tr><td>graph · 50×50</td><td class="num">2</td><td class="num">12.9ms</td><td class="num">16.5ms</td><td class="num">18.0ms</td><td class="num">21.8ms</td><td class="num">1</td><td class="num">25만</td></tr>
+			<tr><td>projection · 100×100</td><td class="num">2</td><td class="num">46.1ms</td><td class="num">52.9ms</td><td class="num">58.1ms</td><td class="num">68.4ms</td><td class="num">2</td><td class="num">51만</td></tr>
+			<tr><td>lazy · 100×100</td><td class="num">53</td><td class="num">47.1ms</td><td class="num">53.4ms</td><td class="num">60.0ms</td><td class="num">66.2ms</td><td class="num">2</td><td class="num">47만</td></tr>
+			<tr><td>graph · 100×100</td><td class="num">2</td><td class="num">35.5ms</td><td class="num">42.0ms</td><td class="num">44.1ms</td><td class="num">48.8ms</td><td class="num">1</td><td class="num">57만</td></tr>
+		</tbody>
+	</table>
+	</div>
+	<p class="why">"요청당 DB 문장"은 DB 로그로 요청 하나를 잡아 센 값이다(zones 1문장 포함). lazy 100×100은 점령 1 + 격자 배치 26 + 행정동 배치 25 + zones 1 = 53. 실패율은 전 구간 0%, 커넥션 대기(pending)도 0이었다.</p>
+	<div class="callout warn"><b>읽는 법.</b> 벤치마크에서 2배 차이 났던 lazy가 부하 아래에서는 projection과 같다. 추가 문장 51개가 전부 PK 조회(각 0.1~0.5ms)이고 DB가 같은 머신이라 왕복 비용이 거의 0이기 때문이다. 즉 이 레포의 "N+1"은 <b>문장 수 문제가 아니라 왕복 지연 문제</b>다. DB가 다른 호스트(RDS, 왕복 1ms 안팎)면 51문장 × 1ms가 그대로 얹힌다. 그 조건은 아직 안 쟀다. graph가 가장 빠른 것도 이 환경에서만 확실한 사실이고, 앱 안 벤치와 순서가 뒤집힌 이유(JIT·응답 직렬화 비중)는 추가 반복 없이는 추측이다.</div>
+	<p class="why">재현: <code>load-test/k6/viewport-fetch-benchmark.js</code>, 관측 스택 <code>monitoring/docker-compose.yml</code>. Grafana(익명 뷰어)는 Explore 권한이 없어 관리자 로그인 뒤 같은 PromQL(<code>histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri="/api/grids"}[15s])) by (le))</code>)로 보면 된다.</p>
+</section>
+
+<section>
+	<h2>6. 더 빠르게 할 수 있나 — 인덱스 설계 네 가지를 재 봤다</h2>
+	<p>커버링 인덱스, 드라이빙 테이블, 정렬 회피, 불필요한 조인 제거를 하나씩 적용해 쟀다. 앞선 실측의 시드는 사용자 한 명이 점령을 전부 갖는 비현실적 분포라 조인 방향 판단이 왜곡됐다. 여기서는 사용자 200명이 성글게 점령한 상태로 다시 만들었다. 격자 9만, 일반 사용자 224칸 보유(뷰포트에서 24건 반환), 헤비 사용자 5,199칸(576건).</p>
+	<div class="scroll">
+	<table>
+		<thead><tr><th>쿼리 · 사용자</th><th>현행</th><th>+ 커버링 인덱스</th><th>+ 비정규화 인덱스</th></tr></thead>
+		<tbody>
+			<tr><td>범위 조회 · 일반</td><td class="num">0.438ms · 937버퍼</td><td class="num">0.362ms · 714</td><td class="num"><b>0.044ms · 22</b></td></tr>
+			<tr><td>범위 조회 · 헤비</td><td class="num">3.112ms · 959</td><td class="num">2.686ms · 308</td><td class="num"><b>0.268ms · 35</b></td></tr>
+			<tr><td>첫 페이지 · 일반</td><td class="num">0.382ms · 937</td><td class="num">0.381ms · 714</td><td class="num"><b>0.060ms · 22</b></td></tr>
+			<tr><td>첫 페이지 · 헤비</td><td class="num">2.205ms · 5,410</td><td class="num">2.596ms · 4,483</td><td class="num"><b>0.087ms · 81</b></td></tr>
+		</tbody>
+	</table>
+	</div>
+	<ul>
+		<li><b>커버링 인덱스</b> (<code>INCLUDE</code>로 조회 컬럼을 인덱스에 담기): 버퍼는 25~70% 줄지만 시간은 10~15%다. PostgreSQL의 인덱스 전용 스캔은 가시성 맵에 기대서 <code>VACUUM</code>이 늦으면 힙을 다시 읽는다. 인덱스 두 개 9.6MB를 쓸 값어치는 애매하다.</li>
+		<li><b>드라이빙 테이블</b>: 손댈 것이 없다. 일반 사용자는 점령 목록에서 출발하고(224행 훑어 24건), 헤비 사용자는 격자 범위에서 출발하도록 플래너가 알아서 뒤집는다.</li>
+		<li><b>행정동 조인 제거</b>(앱이 이름 사전을 들고 있다고 가정): 0.409 대 0.394ms로 <b>차이 없음</b>. 이미 기본키 조회 + 결과 재사용이라 공짜다. 캐시를 넣으면 정합성 부담만 는다. 기각.</li>
+		<li><b>정렬 회피</b>가 진짜 문제다. 첫 페이지는 점령 목록이 격자 id(문자열) 순서라 좌표 정렬이 인덱스로 안 나온다. 헤비 사용자가 101건을 채우려고 격자 1,736개를 훑어 5,410버퍼를 쓴다.</li>
+	</ul>
+	<div class="callout"><b>근본 원인 한 줄.</b> 격자 id는 <code>"{y}_{x}"</code>라 좌표를 이미 담고 있는데 문자열이라 범위 조건에 못 쓴다. 그래서 "내 격자를 전부 꺼내 좌표를 보고 화면 밖을 버리는" 모양이 된다. 점령 테이블에 좌표를 비정규화하고 <code>(사용자, y, x)</code> 인덱스를 걸면 그 24건만 읽고 정렬도 공짜가 된다 — 범위 조회 10배, 첫 페이지 25배, 버퍼 40~60배.</div>
+	<p class="why"><b>그래서 하느냐 — 안 한다.</b> 배수는 진짜지만 절약분은 0.4ms이고 이 API의 요청 시간은 24~68ms다. 쿼리는 요청의 2% 미만이라 0으로 만들어도 체감이 없다. 게다가 전날 부하 실측에서 DB 문장 2개와 53개의 p95가 같았다 — 왕복 51번이 못 움직인 지표를 0.4ms가 움직일 수 없고, 비정규화는 왕복 횟수를 줄이지도 못한다(지금도 1문장, 바꿔도 1문장). 결정적으로 비용이 성능이 아니라 정합성이다. 격자의 행정동 라벨은 가변이라(이미 두 번 정책이 바뀌었다) 복제하면 동기화 누락이 곧 화면의 잘못된 동 이름이 된다. 정렬 문제는 구조적 차이라 인정하지만, 아프려면 한 사용자가 한 화면에 수천 칸을 점령해야 하고 그런 사용자는 없다. 다시 꺼낼 조건은 상위 사용자의 점령 수가 수천을 넘을 때이고, 그때도 좌표 두 개만 복제하고 행정동은 조인을 유지하는 절반안으로 간다(미실측).</p>
+</section>
+
+<section>
+	<h2>7. 다음</h2>
+	<ul>
+		<li><b>파생 쿼리로 바로 가는 12건.</b> <code>NotificationRepository</code> COUNT 4건, <code>UserBadgeRepository</code> COUNT 2건, <code>VideoRepository</code> EXISTS 2건 등. 연관관계 없이 <code>@Query</code>를 지우고 <code>countBy…</code>·<code>existsBy…</code>·<code>findById</code>로 바꾸기만 하면 된다.</li>
+		<li><b>조인 프로젝션 나머지.</b> <code>UserGridRepository</code> 3건, <code>VideoRepository</code> 9건은 이번과 같은 방식(연관 + JPQL). <code>Video.grid</code>·<code>Video.user</code> 연관이 필요하다.</li>
+		<li><b>커서 이후 페이지의 JPQL 전환</b>은 OR 전개의 실행 계획을 실측한 뒤에만 판단한다.</li>
+	</ul>
+	<p class="why">결정 기록 D-1~D-6, 생성 SQL 전문, 실행 계획 원본 요약은 <code>docs/spec/MSG-585.md</code> 작업 로그에 있다. 감사 보고서 분류표는 <code>docs/audit/2026-09-08-backend-audit.md</code> §3.1.</p>
+</section>
+</main>

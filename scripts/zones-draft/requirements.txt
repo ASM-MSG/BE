@@ -1,0 +1,4 @@
+# convert-zones.py 의존성 (재수집 재현용 — 검증·후보 생성은 표준 라이브러리만 사용)
+# 설치: pip install -r requirements.txt
+pyshp==3.1.6
+pyproj==3.6.1

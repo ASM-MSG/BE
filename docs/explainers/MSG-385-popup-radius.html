@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>팝업 판정 반경 40m, 9×9를 좁힌 과정</title>
+<style>
+	:root {
+		--bg: #f5f2eb;
+		--paper: #fffdf8;
+		--ink: #17221f;
+		--muted: #5d6a65;
+		--line: #d8ded9;
+		--green: #126a52;
+		--green-soft: #dcefe7;
+		--blue: #235e83;
+		--blue-soft: #e1eef6;
+		--amber: #8b5a16;
+		--amber-soft: #f7ead3;
+		--red: #973b34;
+		--red-soft: #f7e1df;
+		--code: #10201b;
+		--code-ink: #eaf5ef;
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--ink);
+		font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+		line-height: 1.72;
+	}
+	main { width: min(1120px, calc(100% - 32px)); margin: 32px auto 72px; }
+	header, section, footer {
+		background: var(--paper);
+		border: 1px solid var(--line);
+		border-radius: 18px;
+		box-shadow: 0 10px 30px rgba(29, 48, 41, 0.06);
+	}
+	header { padding: 42px 48px 36px; }
+	section { margin-top: 22px; padding: 36px 42px; }
+	footer { margin-top: 22px; padding: 22px 32px; color: var(--muted); font-size: 14px; }
+	h1 { max-width: 780px; margin: 0 0 14px; font-size: clamp(34px, 5vw, 56px); line-height: 1.08; letter-spacing: -0.04em; }
+	h2 { margin: 0 0 18px; font-size: 28px; line-height: 1.25; letter-spacing: -0.025em; }
+	h3 { margin: 28px 0 10px; font-size: 20px; }
+	p, ul, ol, dl { max-width: 72ch; }
+	p { margin: 10px 0 16px; }
+	li { margin: 6px 0; }
+	.lead { font-size: 19px; color: #33443e; }
+	.kicker { margin: 0 0 10px; color: var(--green); font-size: 13px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+	.meta { display: grid; grid-template-columns: 120px 1fr; gap: 6px 16px; margin: 28px 0 0; }
+	.meta dt { color: var(--muted); font-weight: 700; }
+	.meta dd { margin: 0; }
+	.summary {
+		margin-top: 26px;
+		padding: 18px 20px;
+		border-left: 5px solid var(--green);
+		background: var(--green-soft);
+		border-radius: 4px 12px 12px 4px;
+		font-size: 18px;
+		font-weight: 700;
+		max-width: 72ch;
+	}
+	.callout { padding: 14px 18px; border-radius: 4px 12px 12px 4px; margin: 18px 0; max-width: 72ch; }
+	.callout.blue { border-left: 5px solid var(--blue); background: var(--blue-soft); }
+	.callout.amber { border-left: 5px solid var(--amber); background: var(--amber-soft); }
+	.callout.red { border-left: 5px solid var(--red); background: var(--red-soft); }
+	code, pre { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+	code { background: #ece8de; padding: 1px 6px; border-radius: 6px; font-size: 0.92em; }
+	pre {
+		background: var(--code);
+		color: var(--code-ink);
+		padding: 18px 20px;
+		border-radius: 12px;
+		overflow-x: auto;
+		font-size: 14px;
+		line-height: 1.6;
+		max-width: 860px;
+	}
+	pre code { background: none; padding: 0; color: inherit; }
+	table { border-collapse: collapse; margin: 16px 0; min-width: 420px; }
+	th, td { border: 1px solid var(--line); padding: 8px 14px; text-align: right; }
+	th:first-child, td:first-child { text-align: left; }
+	th { background: #efece3; }
+	.pick td { background: var(--green-soft); font-weight: 700; }
+	.figure { margin: 22px 0; padding: 20px; background: #faf8f1; border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+	.figure figcaption { margin-top: 10px; color: var(--muted); font-size: 14px; max-width: 80ch; }
+	.figrow { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+	.vs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 900px; }
+	.vs > div { padding: 16px 18px; border-radius: 12px; border: 1px solid var(--line); background: #faf8f1; }
+	.vs h4 { margin: 0 0 8px; font-size: 16px; }
+	.vs .no h4 { color: var(--red); }
+	.vs .yes h4 { color: var(--green); }
+	@media (max-width: 720px) { .vs { grid-template-columns: 1fr; } }
+	svg text { font-family: -apple-system, "Noto Sans KR", sans-serif; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+	<p class="kicker">FillMap · MSG-385 · 2026-08-15</p>
+	<h1>팝업 판정 반경 40m,<br>9×9를 좁힌 과정</h1>
+	<p class="lead">팝업스토어는 가게 하나, 좌표로는 점 하나다. 그런데 방문 인정 범위는 축제와 같은
+	9×9 격자, 곧 사방 450m였다. 옆 블록 카페에서 영상을 올려도 "그 팝업에 갔다"는 스탬프가 나왔다.
+	이 문서는 그 범위를 반경 40m로 좁히며 했던 고민과 실제 수정 내용을 남긴다.</p>
+	<p class="summary">판정 격자를 81칸에서 1~4칸으로 좁혔다. 걸침 판정은 원이 아니라 축 독립 40m
+	(한 변 80m 정사각형)로 했고, 이미 적재된 225건은 시더 재실행의 차등 교체로 같은 규칙이 됐다.
+	dev 실측으로 판정 격자 행이 약 1만 8천에서 722로 줄었고 스탬프는 한 건도 건드리지 않았다.</p>
+	<dl class="meta">
+		<dt>티켓</dt><dd>MSG-385 팝업 방문 인정 범위를 반경 40m로 좁히기</dd>
+		<dt>PR</dt><dd>#183 (구현) · #184 (재산출 실측 기록)</dd>
+		<dt>정본</dt><dd><code>docs/spec/MSG-385.md</code> · PRD <code>docs/prd/mission-map-explore.md</code> §8</dd>
+		<dt>변경 파일</dt><dd>구현 2 + 테스트 3 (마이그레이션·API·에러코드 0)</dd>
+	</dl>
+</header>
+
+<section>
+	<h2>1. 왜 40m인가</h2>
+	<p>칸 수를 고정하지 않고 반경으로 정한 이유부터. 팝업 좌표는 격자 안 어디에나 떨어진다.
+	가운데면 자기 칸 하나로 충분하지만, 경계에 붙어 있으면 옆 칸에 서 있는 사람도 사실상 가게 앞이다.
+	반경으로 정의하면 위치에 따라 1칸, 2칸, 4칸이 자연스럽게 나온다.</p>
+	<p>반경 값은 실제 팝업 600곳의 좌표로 분포를 계산해 골랐다.</p>
+	<table>
+		<thead><tr><th>반경</th><th>1칸</th><th>2칸</th><th>4칸</th></tr></thead>
+		<tbody>
+			<tr><td>25m</td><td>22%</td><td>57%</td><td>21%</td></tr>
+			<tr><td>30m</td><td>15%</td><td>51%</td><td>35%</td></tr>
+			<tr class="pick"><td>40m</td><td>3%</td><td>31%</td><td>66%</td></tr>
+			<tr><td>50m</td><td>0%</td><td>0%</td><td>100%</td></tr>
+		</tbody>
+	</table>
+	<p>기준은 도심 GPS 오차가 10~30m라는 사실이다. 반경을 30m 아래로 내리면 1칸짜리 팝업이 15%를
+	넘는데, 그 팝업들은 가게 안에 서 있어도 위치가 한 번 튀면 인정이 안 된다. 40m는 그 오차를 견디는
+	최소값이다. 축제는 행사장이 실제로 넓으므로 9×9를 그대로 둔다.</p>
+</section>
+
+<section>
+	<h2>2. 첫 번째 고민, 원인가 정사각형인가</h2>
+	<p>"반경 40m 안에 걸치는 격자"를 구현하는 방법이 둘 있었다. 유클리드 원판과 격자의 정확한
+	교차를 계산하거나, 축마다 따로 40m를 재는 것(체비쇼프 거리, 기하로는 한 변 80m 정사각형)이다.
+	축 독립 쪽을 골랐고 근거는 셋이다.</p>
+
+	<figure class="figure">
+		<div class="figrow">
+			<svg width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="셀 가운데 점은 1칸">
+				<g stroke="#b9c2bc" stroke-width="1" fill="none">
+					<path d="M20 20H220M20 120H220M20 220H220M20 20V220M120 20V220M220 20V220"/>
+				</g>
+				<rect x="70" y="70" width="100" height="100" fill="#dcefe7" stroke="#126a52" stroke-width="2" opacity="0.85"/>
+				<rect x="20" y="20" width="100" height="100" fill="#126a52" opacity="0.14"/>
+				<circle cx="70" cy="70" r="5" fill="#126a52"/>
+				<text x="120" y="205" font-size="14" text-anchor="middle" fill="#33443e">가운데 → 1칸</text>
+			</svg>
+			<svg width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="경계에 걸치면 2칸">
+				<g stroke="#b9c2bc" stroke-width="1" fill="none">
+					<path d="M20 20H220M20 120H220M20 220H220M20 20V220M120 20V220M220 20V220"/>
+				</g>
+				<rect x="60" y="20" width="100" height="100" fill="#e1eef6" stroke="#235e83" stroke-width="2" opacity="0.9"/>
+				<rect x="20" y="20" width="200" height="100" fill="#235e83" opacity="0.14"/>
+				<circle cx="110" cy="70" r="5" fill="#235e83"/>
+				<text x="120" y="205" font-size="14" text-anchor="middle" fill="#33443e">경계 근처 → 2칸 (1×2)</text>
+			</svg>
+			<svg width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="모서리에 걸치면 4칸">
+				<g stroke="#b9c2bc" stroke-width="1" fill="none">
+					<path d="M20 20H220M20 120H220M20 220H220M20 20V220M120 20V220M220 20V220"/>
+				</g>
+				<rect x="65" y="65" width="100" height="100" fill="#f7ead3" stroke="#8b5a16" stroke-width="2" opacity="0.9"/>
+				<rect x="20" y="20" width="200" height="200" fill="#8b5a16" opacity="0.12"/>
+				<circle cx="115" cy="115" r="5" fill="#8b5a16"/>
+				<text x="120" y="215" font-size="14" text-anchor="middle" fill="#33443e">모서리 근처 → 4칸 (2×2)</text>
+			</svg>
+		</div>
+		<figcaption>점을 중심으로 한 색칠된 작은 사각형이 사방 40m(한 변 80m)다. 셀 한 변이 100m라
+		이 사각형은 이웃 한 칸을 넘지 못하고, 걸치는 칸은 항상 1, 2, 4칸 중 하나다.</figcaption>
+	</figure>
+
+	<h3>근거 1. 승인된 실측이 이 규칙의 산출이다</h3>
+	<p>위 분포표(3%, 31%, 66%)는 축 독립 규칙으로 계산한 값이다. 셀 안 위치를 균등 분포로 보면 이
+	규칙의 이론 분포가 1칸 4%, 2칸 32%, 4칸 64%로 실측과 맞는다. 원판 교차로 구현하면 모서리 셀만
+	빠지는 L자 3칸이 약 14% 생기고 4칸이 약 50%로 떨어져, 40m를 고르는 데 쓴 근거 수치와 구현이
+	서로 어긋난다.</p>
+
+	<h3>근거 2. L자 3칸은 40m를 고른 이유를 스스로 무너뜨린다</h3>
+	<p>원판 교차에서 빠지는 모서리 셀의 최근접점은 팝업에서 40~57m다. 위치 오차가 10~30m라면 가게
+	안 사용자의 좌표가 대각선 방향으로 그 셀에 찍힐 수 있고, 그 업로드는 인정을 못 받는다. 반경을
+	30m 아래로 안 내린 이유(위치 튐 방어)가 모서리 방향에서만 무효가 되는 셈이다.</p>
+
+	<h3>근거 3. 산출이 항상 직사각형이라 화면 계약과 정확히 맞는다</h3>
+	<p>팝업의 렌더 형상 <code>BoxShape</code>는 격자 집합을 감싸는 경계 사각형이다. 1, 2, 4칸은
+	전부 직사각형이라 경계 사각형이 곧 판정 집합과 일치한다. L자 3칸이 생기면 미션 선택 시 그려지는
+	판정 범위가 실제로는 판정하지 않는 셀 하나를 포함해 화면이 거짓말을 하게 된다.</p>
+
+	<p>수식은 두 줄이다. EPSG:5179 미터 좌표 v(x 또는 y), 셀 한 변 L = 100, 반경 r = 40일 때:</p>
+	<pre><code>minIdx = floor((v - r) / L)
+maxIdx = ceil((v + r) / L) - 1     // 정확히 닿기만 하면 제외 (반열림 정합)</code></pre>
+	<p>격자 셀은 <code>[n·100, (n+1)·100)</code> 반열림 구간이고 이 산출의 정사각형은 열린 집합이다.
+	40m가 셀 경계에 정확히 닿기만 하면 그 셀은 걸친 것이 아니라 제외되며, <code>ceil - 1</code>이
+	그 제외를 수식으로 만든다. 이 계산은 <code>GridEncoder.radiusRange</code>로 순수 추가했다.
+	좌표를 셀로 옮기는 5179 변환과 양자화가 그 클래스의 비공개 내부라, 시더가 자체 변환을 드는 안은
+	변환 객체 스레드 안전 근거까지 복제하게 돼 기각했다.</p>
+</section>
+
+<section>
+	<h2>3. 두 번째 고민, 이미 적재된 227건을 어떻게 바꾸나</h2>
+	<p>신규 적재만 바꾸면 기존 팝업은 영원히 81칸으로 남는다. 처음엔 "시더 재실행 vs Flyway
+	마이그레이션"의 선택인 줄 알았는데, 코드를 열어 보니 전제가 틀려 있었다. 시더의 dedupe 경로는
+	이미 아는 팝업을 만나면 메타데이터만 갱신하고 격자를 아예 건드리지 않는다. 재실행만으로는 아무
+	일도 일어나지 않는다. 실제 선택지는 <strong>"갱신 경로에 격자 재산출을 넣는다 vs
+	마이그레이션"</strong>이었다.</p>
+
+	<div class="vs">
+		<div class="no">
+			<h4>기각 · Flyway 마이그레이션</h4>
+			<p>재산출에 필요한 원좌표가 DB에 없다. <code>missions</code>에 좌표 컬럼이 없고, 격자
+			블록에서 복원할 수 있는 건 근사 중심 셀뿐이다. 1, 2, 4칸을 가르는 정보(좌표가 셀 안 어디에
+			떨어졌나)는 양자화에서 이미 소실됐다. 셀 중심을 대입하면 사방 50m &gt; 40m라 전량이 1칸이
+			되는 오답이 나온다.</p>
+		</div>
+		<div class="yes">
+			<h4>채택 · 시더 갱신 경로의 차등 교체</h4>
+			<p>좌표는 소스 스냅샷(<code>popups.jsonl</code>)에만 있고, 그걸 읽는 코드가 시더다.
+			산출 규칙도 Java 한 곳에 남는다. dedupe 경로에 <code>regrid</code>를 넣어, 기존 격자와
+			새 산출의 차집합만큼만 지우고 넣는다.</p>
+		</div>
+	</div>
+
+	<h3>통삭제가 아니라 차집합인 이유</h3>
+	<p>"다 지우고 다시 넣기"가 더 단순해 보이지만 JPA에서는 함정이 있다. 새 집합은 구 81칸 블록과
+	거의 언제나 겹치므로, 같은 PK <code>(mission_id, grid_id)</code>를 지웠다가 다시 넣게 된다.
+	Hibernate의 쓰기 지연은 한 flush 안에서 INSERT를 DELETE보다 먼저 내보내서 이 코드는 PK 충돌로
+	터진다. 차집합 교체는 삭제 집합과 삽입 집합의 PK가 구성상 겹치지 않아 이 함정이 원천적으로 없고,
+	두 집합이 다 비면 그 자체로 무변경이라 멱등이 따로 필요 없다.</p>
+	<pre><code>// 유지 = 기존 ∩ 산출,  삭제 = 기존 − 산출,  삽입 = 산출 − 기존
+private boolean regrid(Mission mission, List&lt;String&gt; desiredGridIds, List&lt;MissionGrid&gt; currentGrids) {
+	Set&lt;String&gt; desired = Set.copyOf(desiredGridIds);
+	Set&lt;String&gt; current = currentGrids.stream().map(MissionGrid::getGridId).collect(Collectors.toSet());
+	List&lt;MissionGrid&gt; removals = currentGrids.stream()
+		.filter(grid -&gt; !desired.contains(grid.getGridId())).toList();
+	List&lt;MissionGrid&gt; additions = desired.stream().filter(gridId -&gt; !current.contains(gridId))
+		.map(gridId -&gt; new MissionGrid(mission.getId(), gridId)).toList();
+	if (removals.isEmpty() &amp;&amp; additions.isEmpty()) {
+		return false;
+	}
+	missionGridRepository.deleteAll(removals);   // bulk JPQL 금지 — 더티 체킹 유실 방지
+	missionGridRepository.saveAll(additions);
+	return true;
+}</code></pre>
+	<p>덤으로 잠복 결함 하나가 닫혔다. 지금까지는 팝가에서 좌표가 수정된 팝업도 격자가 옛 자리
+	그대로였는데, 차등 교체는 그 경우도 같은 경로로 옮겨 심는다. 그리고 이 시그니처(산출 목록을
+	인자로)는 스펙 초안의 <code>PopupRecord</code> 인자와 다른데, 다음 절의 축소가 같은 경로를
+	재사용하려면 이 형태여야 해서 스펙 쪽을 정정했다.</p>
+	<p class="callout blue">스탬프는 어떤 경로로도 건드리지 않는다. <code>user_missions</code>는
+	<code>missions.id</code>만 참조하고 격자를 참조하지 않아, 격자를 전부 갈아치워도 이미 받은
+	스탬프에 닿는 경로 자체가 없다. 범위 축소는 앞으로의 판정에만 적용된다는 비회수 원칙 그대로다.</p>
+</section>
+
+<section>
+	<h2>4. 세 번째 고민, 스냅샷에서 사라진 팝업</h2>
+	<p>차등 교체는 스냅샷에 있는 팝업만 지나간다. 팝가에서 내려가 스냅샷에서 사라졌지만 DB에는
+	미종료로 남은 팝업은 40m 참값을 계산할 수 없다. 그대로 두면 그 팝업들은 시작 시각이 오면 900m
+	판정으로 활성화된다. "다음 주기에 좁혀진다"는 보장도 없다. 내려간 팝업은 영영 안 돌아올 수 있다.</p>
+	<p>처분은 <strong>센트로이드 셀 1칸으로 축소</strong>다. 격자 인덱스의 축별 평균을 반올림한
+	셀이 집합 안에 있으면 그 셀, 없으면 체비쇼프 거리 최근접 셀(동률이면 y, x 오름차순)이다. 사방
+	450m 과대 판정이 최대 한 칸 어긋날 수 있는 1칸 근사로 줄어드는 것이라 수용했고, 미션을 통째로
+	종료 처리하는 안은 사용자가 진행 중일 수 있어 기각했다.</p>
+
+	<h3>"81칸이면 축소 대상"이 아닌 이유, 실데이터가 반증했다</h3>
+	<p>처음엔 "정확히 81칸인 행"을 레거시로 판정하고 블록의 min + 4로 중심을 복원하려 했다. 로컬
+	DB를 실제로 세어 보니 팝업 227건 중 온전한 9×9 정사각형은 168건뿐이었다. V28(EPSG:5179 전환)이
+	구 셀들을 개별 재사상하며 중복을 병합해서, 78~80칸짜리 13건과 81칸이지만 블록 폭이 8칸이 아닌
+	46건이 남아 있었다. 81칸 가드는 그 46건을 오통과시키고 min + 4는 깨진 블록에서 엉뚱한 셀을
+	집는다. 반면 <strong>칸 수 &gt; 4</strong> 하나는 레거시 블록(78~81칸)과 새 규칙의 유효
+	집합(1~4칸)을 실측상 정확히 가른다.</p>
+
+	<h3>완전성 가드, 잘린 스냅샷이 전량을 오축소하지 않게</h3>
+	<p class="callout amber">축소의 트리거가 "스냅샷에 없음"이라는 부재 신호라는 게 위험했다. 크롤이나
+	복사가 중간에 끊긴 부분 스냅샷이 문법상 유효한 1행이라도 남기면, 빠진 미종료 팝업 전부가 의도적
+	제외로 오판돼 일괄 축소된다. 그래서 스냅샷 유효 레코드 수가 DB 미종료 적재분의 절반
+	미만이면(<code>records × 2 &lt; notEnded</code>) 축소 단계를 통째로 건너뛰고 경고만 남긴다.
+	가드가 잘못 발동해도 축소가 다음 주기로 미뤄질 뿐이지만, 없을 때의 피해는 미종료 전량의
+	오축소다.</p>
+
+	<h3>UTC 함정, 9시간 이르게 죽는 팝업</h3>
+	<p><code>missions</code>의 시각은 UTC naive로 저장되는데, 이 시더의 기본 시계는 종료 필터의
+	KST 달력 판정 때문에 <code>Clock.system(KST)</code>다. 그 시계의 벽시계로 <code>end_at</code>을
+	비교하면 9시간 이르게 종료로 오판해, 앞으로 9시간 안에 끝나는 팝업이 축소 대상에서 잘못 빠진다.
+	그래서 미종료 판정만 <code>LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)</code>로
+	비교한다. 테스트는 <code>end_at = now + 5시간</code>인 행을 프로덕션 기본 시계 그대로 심어서,
+	벽시계 구현이었다면 실패하는 판별력 있는 구조로 짰다.</p>
+
+	<h3>테스트 격리, 가드가 로컬에서만 오발동하는 비대칭</h3>
+	<p>완전성 가드는 DB 전체의 미종료 팝업 수를 센다. 공유 로컬 DB에는 실데이터 195건이 있어서,
+	작은 테스트 스냅샷을 쓰면 가드가 발동해 축소 경로가 로컬에서만 스킵된다(CI의 빈 DB에서는 통과).
+	가드의 분모와 축소 후보가 나오는 우주를 <code>notEndedPopups()</code> 한 메서드로 모으고,
+	테스트 서브클래스가 <code>super</code>를 먼저 통과시킨 뒤 자기 픽스처로 스코프만 좁히게 했다.
+	super를 먼저 부르는 순서가 핵심이다. 통째로 대체했다면 방금 만든 UTC 판정이 테스트에서
+	우회됐을 것이다.</p>
+</section>
+
+<section>
+	<h2>5. 결과, dev 실측</h2>
+	<p>머지 후 dev에서 시더를 1회 기동했다.</p>
+	<table>
+		<thead><tr><th>항목</th><th>값</th></tr></thead>
+		<tbody>
+			<tr><td>격자 재산출 (regridded)</td><td>225건 (활성 전량)</td></tr>
+			<tr><td>센트로이드 축소 (shrunk)</td><td>0건</td></tr>
+			<tr><td>완전성 가드</td><td>미발동 (스냅샷 2,804행 ≫ 미종료 225건)</td></tr>
+			<tr><td>판정 격자 행 수</td><td>약 18,000 → <strong>722</strong></td></tr>
+			<tr><td>칸 수 분포</td><td>1칸 1.8% · 2칸 36.9% · 4칸 61.3%</td></tr>
+			<tr><td>레거시 블록 잔존 (칸 수 &gt; 4)</td><td>0건</td></tr>
+			<tr><td>0.5도 강남역 POPUP 목록</td><td>169건, 변화 없음</td></tr>
+		</tbody>
+	</table>
+	<p>분포가 PRD 예측(3%, 31%, 66%)과 부합한다. 축소가 0건인 것도 예상대로다. 이번 스냅샷이
+	미종료 적재분을 전부 담고 있어 모든 팝업이 차등 교체를 지나갔다. 강남역 0.5도 뷰포트 건수가
+	그대로인 것은 뷰포트가 약 55km라 미션 사각형이 450m에서 100~200m로 줄어도 가장자리 효과에
+	그치기 때문이다. 화면에서 체감되는 변화는 목록이 아니라 <strong>미션을 선택했을 때 그려지는
+	판정 범위</strong>가 눈에 띄게 작아지는 것이다.</p>
+	<p>검증은 세 겹이었다. 팀 리뷰 3회(위반 0, <code>FestivalMissionSeeder</code>는 blob 해시
+	대조로 무수정 확인), Codex 교차 리뷰 1라운드 수렴, 전체 회귀 1,781 테스트 통과. 스펙 단계에서
+	Codex 4라운드가 미리 잡아 둔 결함(잘린 스냅샷 일괄 축소, 미래 시작 팝업 누락, KST 9시간
+	오판)이 전부 구현과 테스트에 반영됐다.</p>
+</section>
+
+<footer>
+	<p>정본: <code>docs/spec/MSG-385.md</code> (설계 결정 D1~D6, 작업 로그의 실측 SQL 포함) ·
+	요구사항 FR-MISSION-10 (<code>docs/srs.md</code>) · 구현 PR #183 · 실측 기록 PR #184.
+	이 문서는 설명용 요약이라, 수치나 규칙이 스펙과 다르면 스펙이 이긴다.</p>
+</footer>
+
+</main>
+</body>
+</html>

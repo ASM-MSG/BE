@@ -1,0 +1,92 @@
+name: Claude PR Review
+
+# PR 열림 -> Claude 자동 코드 리뷰.
+# 인증은 Anthropic API 키가 아니라 Claude Pro/Max 구독 OAuth 토큰을 쓴다.
+# API 크레딧과 구독은 별개 과금이라, 구독 토큰을 쓰면 추가 과금이 없다.
+# 토큰은 각자 로컬에서 `claude setup-token` 으로 발급한다.
+#
+# 토큰은 PR "작성자" 기준으로 분기한다 — 각자 자기 구독 한도를 쓰게 하려는 것.
+# github.actor 는 푸시한 사람이라 PR 작성자와 다를 수 있어 쓰지 않는다.
+# Settings > Secrets 에 아래 2개 등록 필요:
+#   CLAUDE_CODE_OAUTH_TOKEN_SS0MAE / CLAUDE_CODE_OAUTH_TOKEN_S13121312
+# 등록 안 됐거나 만료되면 빈 문자열이 되어 SS0MAE 토큰으로 폴백된다 (CI가 죽는 것보다 낫다).
+#
+# synchronize 제외: 이 액션에는 CodeRabbit 같은 incremental 리뷰 개념이 없어
+# push 마다 PR 전체를 처음부터 재리뷰한다 (커밋 수가 아니라 push 횟수 기준).
+# 리뷰 -> 수정 push -> 재리뷰 루프가 돌면 한도 소모가 빠르게 쌓인다.
+# 수정분을 다시 보게 하려면 PR을 draft 로 내렸다 ready 로 올린다.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  # 액션이 OIDC 토큰을 GitHub 토큰으로 교환한다. 이 권한이 없으면
+  # ACTIONS_ID_TOKEN_REQUEST_URL 이 주입되지 않아 인증 단계에서 죽는다.
+  id-token: write
+
+jobs:
+  review:
+    # 공개 레포라 외부인도 포크 PR을 열 수 있다. 포크 PR에는 시크릿이 전달되지 않아
+    # 토큰이 빈 문자열이 되고 401로 실패한다. 아예 돌지 않게 막는다.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      # claude-code-action은 @v1 이 움직이는 태그라 어느 날 갱신되며 체크아웃을 전제하는
+      # 단계(untrusted 파일 복원)가 생겼다. 체크아웃 없이 돌리면 "not a git repository"로 죽는다.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      # 병렬 브랜치 경합 검사(마이그레이션 번호·developCode 대역)에 develop 대조가 필요한데,
+      # checkout은 PR head ref만 가져온다. 리뷰어가 git으로 대조할 수 있게 ref를 미리 받아둔다.
+      - run: git fetch origin develop:refs/remotes/origin/develop
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ github.event.pull_request.user.login == 's13121312'
+            && secrets.CLAUDE_CODE_OAUTH_TOKEN_S13121312
+            || secrets.CLAUDE_CODE_OAUTH_TOKEN_SS0MAE }}
+          prompt: |
+            이 PR을 리뷰해줘. 한국어로 답변할 것.
+
+            전제: 이 레포의 PR은 로컬에서 컨벤션 리뷰와 Codex 교차 리뷰를 거친 뒤 올라온다.
+            같은 검사를 반복하지 말고, 머지 직전 시점에만 보이는 것을 우선한다.
+
+            우선순위 (위가 더 중요):
+            1. 병렬 브랜치 경합 — origin/develop 과 대조한다: 마이그레이션 번호 선점
+               (src/main/resources/db/migration 최신 번호), developCode 대역 충돌
+               (.claude/rules/response-pattern.md 대역표 갱신 선행 여부), Owner A/B 계약
+               인터페이스 시그니처 변경. 이 레포에서 실제 사고가 세 번 난 지점이다.
+            2. 스펙 대비 구현 — diff 의 티켓 번호로 docs/spec/MSG-{번호}.md 를 읽고, 스펙에 없는
+               동작·스펙과 다른 동작·테스트 시나리오 누락을 본다.
+            3. 실행해야 보이는 결함 — 트랜잭션 경계, 동시성·경합, 시간대(UTC 저장/KST 판정),
+               실패·재시도 경로, 인가·소유 검증 누락, N+1.
+            4. PR 본문의 주장 검증 — "무변경"·"멱등" 같은 주장이 diff 와 실제로 일치하는지.
+
+            컨벤션·네이밍·스타일은 명백한 이탈(공통 응답 패턴 위반, 도메인 경계 침범)만
+            지적한다 — 나머지는 로컬 리뷰가 이미 봤다.
+
+            출력 방식:
+            - 발견마다 P1(머지 보류감)/P2(수정 권장)/P3(참고) 라벨을 붙인다.
+            - 라인을 특정할 수 있는 발견은 mcp__github_inline_comment__create_inline_comment 로
+              그 파일 그 라인에 직접 남긴다. 무엇이 문제인지와 어떻게 고치면 되는지를 인라인에 쓴다.
+            - 추적 코멘트에는 확인한 범위와 발견 목록(P라벨 · `파일:라인` · 한 줄 요약)만 쓴다.
+              인라인에 쓴 설명을 그대로 옮겨 적지 않는다 — 같은 글을 두 번 읽게 만들지 말 것.
+            - 라인을 짚을 수 없는 발견(설계 전반·스펙 대비 누락·문서 부재)만 추적 코멘트에 본문으로 쓴다.
+            - 발견이 없으면 인라인 코멘트 없이, "잘된 점" 나열 없이 무엇을 확인했는지 3줄 이내로 끝낸다.
+            - 코드로 확인하지 못하고 추정한 것은 추정이라고 밝힌다.
+          # max-turns: 파일 읽기 하나가 턴 하나고, 인라인 코멘트 한 건도 턴 하나다.
+          # 50 → 70 (MSG-316): 인라인 전환으로 지적 건수만큼 턴이 더 든다. 무제한은 폭주 방지로 금지.
+          # allowedTools: Bash 는 기본 차단이라 develop 대조용 읽기 전용 git 명령만 연다.
+          # 인라인 코멘트 도구는 **명시해야 열린다** — 이게 없으면 봇이 라인을 짚어놓고도 추적
+          # 코멘트 하나에 전부 몰아 쓰는 수밖에 없다(MSG-316 이전 상태, FE 레포는 처음부터 열어 둠).
+          claude_args: |
+            --max-turns 70
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(git ls-tree:*)"
+          # true 필수: 커스텀 prompt 모드에서 요약을 PR에 남기는 통로다.
+          # 액션이 추적 코멘트를 만들고 Claude에게 그 코멘트 업데이트 도구를 열어준다.
+          # false면 요약이 로그에만 남는다 — Bash(gh pr comment)는 기본 차단이라 Claude가
+          # 직접 코멘트를 달 수도 없다 (permission_denials 9건으로 확인).
+          # 인라인 코멘트는 이것과 별개 통로다 (위 allowedTools 참조).
+          track_progress: true

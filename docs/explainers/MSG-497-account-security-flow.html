@@ -1,0 +1,132 @@
+<title>MSG-497 계정 보안 흐름</title>
+<style>
+:root{
+	--bg:#f6f9f8; --surface:#ffffff; --ink:#16211e; --sub:#5a6b66; --line:#dde7e4;
+	--accent:#0e8a7d; --accent-soft:#e3f2ef; --warn:#a8730f; --warn-soft:#f7eeda;
+	--brick:#b0442e; --brick-soft:#f6e7e2; --ok:#2e7d43; --ok-soft:#e5f2e8;
+	--grid-line:rgba(14,138,125,.07); --code-bg:#f0f5f3;
+}
+@media (prefers-color-scheme: dark){
+	:root:not([data-theme="light"]){
+		--bg:#0f1514; --surface:#161d1b; --ink:#e6eeeb; --sub:#93a5a0; --line:#26312e;
+		--accent:#34b4a4; --accent-soft:#15302c; --warn:#d8a54a; --warn-soft:#2c2413;
+		--brick:#d97b64; --brick-soft:#2e1c17; --ok:#5fbf7a; --ok-soft:#17281c;
+		--grid-line:rgba(52,180,164,.08); --code-bg:#1b2422;
+	}
+}
+:root[data-theme="dark"]{
+	--bg:#0f1514; --surface:#161d1b; --ink:#e6eeeb; --sub:#93a5a0; --line:#26312e;
+	--accent:#34b4a4; --accent-soft:#15302c; --warn:#d8a54a; --warn-soft:#2c2413;
+	--brick:#d97b64; --brick-soft:#2e1c17; --ok:#5fbf7a; --ok-soft:#17281c;
+	--grid-line:rgba(52,180,164,.08); --code-bg:#1b2422;
+}
+*{box-sizing:border-box}
+body{
+	margin:0; color:var(--ink); background:var(--bg);
+	font:15px/1.7 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI","Malgun Gothic",sans-serif;
+	background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
+	background-size:100px 100px;
+}
+.wrap{max-width:920px;margin:0 auto;padding:40px 20px 64px}
+.eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.08em;color:var(--accent);text-transform:uppercase}
+h1{font-size:26px;line-height:1.3;margin:6px 0 6px;text-wrap:balance;font-weight:750}
+.lede{color:var(--sub);font-size:14px;margin:0 0 8px}
+h2{font-size:17px;margin:38px 0 12px;display:flex;align-items:center;gap:10px}
+h2 .no{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:2px 8px}
+h2::after{content:"";flex:1;height:1px;background:var(--line)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:12px 0}
+p{margin:8px 0}
+ul{margin:8px 0;padding-left:20px} li{margin:5px 0}
+code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--code-bg);padding:1px 5px;border-radius:4px}
+pre{margin:10px 0;background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:13px 15px;overflow-x:auto;font:12.5px/1.65 ui-monospace,Menlo,monospace}
+pre code{background:none;padding:0}
+.why{border-left:3px solid var(--accent);padding:2px 0 2px 12px;color:var(--sub);font-size:13.5px;margin:10px 0}
+.danger{background:var(--brick-soft);color:var(--brick);border-radius:6px;padding:1px 7px;font-size:12px;font-weight:650}
+.safe{background:var(--ok-soft);color:var(--ok);border-radius:6px;padding:1px 7px;font-size:12px;font-weight:650}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--sub);font-weight:650}
+.scroll{overflow-x:auto}
+.steps{counter-reset:s;list-style:none;padding:0;margin:10px 0}
+.steps li{counter-increment:s;position:relative;padding:10px 12px 10px 46px;border:1px solid var(--line);border-radius:8px;margin:8px 0;background:var(--surface)}
+.steps li::before{content:counter(s);position:absolute;left:12px;top:10px;width:24px;height:24px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font:650 13px/24px ui-monospace,Menlo,monospace;text-align:center}
+.steps li b{display:block}
+.steps li span{font-size:13px;color:var(--sub)}
+footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--sub)}
+.mermaid{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;overflow-x:auto}
+</style>
+
+<div class="wrap">
+<div class="eyebrow">FillMap BE · Explainer · MSG-497</div>
+<h1>비밀번호 재설정이 장애 중에도 안전한 이유</h1>
+<p class="lede">행사 운영자 계정 보안(MSG-497)에서 알아둬야 할 흐름 4개와 쿼리 1개. 각 단계의 위치가 장애 시나리오 하나씩을 막는 자리다 — Codex 리뷰 7라운드(스펙 4 + 구현 3)가 이 순서를 만들었다.</p>
+
+<h2><span class="no">1</span>reset 확정의 순서 계약</h2>
+<div class="card">
+<pre class="mermaid">sequenceDiagram
+    autonumber
+    participant C as 사용자(링크 클릭)
+    participant S as PasswordService
+    participant R as Redis
+    participant DB as PostgreSQL
+    C->>S: POST /api/auth/password/reset (토큰+새 비밀번호)
+    S->>R: ① consume(토큰) — Lua getAndDelete 선점
+    Note over S,R: 실패(무효/만료/재사용) = 전부 같은 2443
+    S->>DB: ② TX 시작: 해시 저장 + mustChange 해제
+    S->>R: ③ TX 안: 무효화 기록 set (blacklist:user, TTL 2주)
+    Note over S,R: ③ 실패 → TX 롤백 + 토큰 조건부 복원(fail-closed)
+    S->>DB: ④ 커밋
+    S-->>R: ⑤ best-effort: 기록 한 번 더 갱신 + 세션 전량 삭제
+    Note over S,R: ⑤ 실패해도 200 — 기록 2주가 옛 리프레시를 막는다
+    S->>C: 200 성공</pre>
+<ol class="steps">
+	<li><b>선점이 맨 앞</b><span>같은 토큰 동시 요청 둘 중 하나만 통과(원자적 getAndDelete). 이후 실패하면 catch에서 <b>조건부 복원</b> — 그 사이 재요청으로 새 링크가 발급됐으면 복원하지 않는다(무조건 복원이면 방금 메일로 간 새 링크를 죽인다).</span></li>
+	<li><b>무효화 기록이 커밋 전</b><span>커밋 뒤에 찍으면 Redis 장애 순간 "비밀번호는 바뀌었는데 옛 토큰 전부 생존"이 된다. 커밋 전이면 Redis 장애 = 롤백 + 링크 복원 = 비밀번호 불변. <span class="safe">fail-closed</span> 반대 경합(기록 성공 후 커밋 실패)은 세션만 끊기고 비밀번호는 유지 — 보안 구멍이 아니라 재로그인 불편.</span></li>
+	<li><b>커밋 후 기록을 한 번 더</b><span>첫 기록과 커밋 사이 수 ms에 구 비밀번호 로그인이 끼면 그 토큰의 iat가 첫 기록보다 늦어 살아남는다. 두 번째 기록이 경계를 커밋 시점까지 민다. 이것까지 실패하는 이중 장애 시에만 그 창의 토큰이 최대 1시간 생존(수용, 스펙 결정 기록 6).</span></li>
+	<li><b>세션 삭제는 best-effort</b><span>deleteAll이 실패해도 200. 무효화 기록이 리프레시 수명(2주)만큼 살아 있어 옛 리프레시의 재발급이 전부 거부된다. 여기서 500을 내면 "비밀번호는 바뀌었는데 재시도는 불가"한 거짓 실패가 된다.</span></li>
+</ol>
+</div>
+
+<h2><span class="no">2</span>액세스 토큰 무효화 — iat 비교와 "저장 후 검사"</h2>
+<div class="card">
+<p>액세스 토큰은 stateless라 회수가 안 된다. 대신 <code>blacklist:user:{userId}</code>에 무효화 시각 하나를 두고 파싱 때 토큰 iat와 비교한다.</p>
+<ul>
+	<li><b>같은 초는 거부</b> (<code>iat &lt;= 무효화 초</code>) — JWT iat가 초 단위라 같은 초를 열어두면 그 1초가 구멍이다. 재설정 흐름에 자동 로그인이 없어 정상 재로그인이 같은 초에 걸릴 일은 사실상 없고, 걸려도 재시도로 풀린다. <span class="safe">fail-closed</span></li>
+	<li><b>검사 스코프는 ORG·ADMIN 토큰만</b> — reset 발송 대상 자체가 ORG·ADMIN LOCAL 계정으로 축소돼 있어(FR-22가 행사 운영자 요구), 재설정했는데 검사 밖인 토큰이 구조적으로 없다. 전 사용자 검사(매 요청 Redis GET 추가)를 피한 이유.</li>
+	<li><b>재발급(reissue)은 회전 save를 먼저, 검사를 나중에</b> — 순서가 반대면 "검사 통과 → reset의 deleteAll → 회전 save" 인터리빙으로 세션이 부활한다. 저장 후 검사면: save가 deleteAll보다 앞이면 deleteAll이 지우고, 뒤면 더 앞선 무효화 기록이 반드시 보인다. 어느 쪽이든 잡힌다.</li>
+</ul>
+<div class="why">기록 TTL이 액세스 수명(1h)이 아니라 리프레시 수명(2주)인 이유 — deleteAll이 부분 실패했을 때 살아남은 리프레시가 기록 만료 후 부활하는 구멍을 막는다(구현 Codex 리뷰가 적발한 P1).</div>
+</div>
+
+<h2><span class="no">3</span>알아야 할 쿼리 — 부분 유니크 UPSERT</h2>
+<div class="card scroll">
+<p>아이디(공식 이메일) 변경 요청 접수. "마지막 요청이 유효"(오타 정정 재요청 허용) 정책을 문장 하나로 원자화한다.</p>
+<pre><code>INSERT INTO org_email_change_requests (user_id, requested_email, status, created_at)
+VALUES (:userId, :email, 'PENDING', :now)
+ON CONFLICT (user_id) WHERE status = 'PENDING'
+DO UPDATE SET requested_email = EXCLUDED.requested_email, created_at = EXCLUDED.created_at</code></pre>
+<ul>
+	<li><code>ON CONFLICT (user_id) WHERE status = 'PENDING'</code> — 충돌 대상이 <b>부분 유니크 인덱스</b>라 추론 절에 인덱스와 같은 WHERE를 적어야 PostgreSQL이 인덱스를 특정한다.</li>
+	<li>"조회 후 INSERT" 두 문장이면 동시 요청 둘이 부분 유니크 위반 500 <span class="danger">race</span> — 그래서 native로 갔다(PG 전용 기능이라 컨벤션 허용 대상, <code>OrgEmailChangeRequestRepository.upsertPending</code>).</li>
+	<li>처리된(APPROVED 등) 과거 행은 부분 인덱스 밖이라 이력으로 쌓인다 — 사용자당 PENDING만 1건 강제.</li>
+</ul>
+<p class="lede">재설정 토큰의 Redis Lua 3종(save/consume/revoke)도 같은 목적의 원자화다. 포인트 하나만: consume의 역방향 키 삭제는 <b>compare-and-delete</b>(소비한 그 해시일 때만) — 아니면 동시 재요청으로 발급된 새 링크의 포인터를 지워 "폐기 불가 링크"가 남는다. 실패 복원(restore)도 같은 이유로 조건부다.</p>
+</div>
+
+<h2><span class="no">4</span>운영 함정 — 기동이 일부러 실패한다</h2>
+<div class="card scroll">
+<table>
+<tr><th>상황</th><th>결과</th><th>이유</th></tr>
+<tr><td>prod에서 <code>MAIL_ENABLED</code> 누락/false</td><td><b>기동 실패</b> (MailSender 빈 0개, DI 불충족)</td><td>LoggingMailSender는 <code>@Profile("!prod")</code> — 재설정 링크 전문이 운영 로그로 새는 걸 구조로 차단. 로그 폴백으로 조용히 뜨지 않는다</td></tr>
+<tr><td>prod에서 enabled인데 <code>MAIL_RESET_LINK_BASE_URL</code> 빈 값</td><td><b>기동 실패</b> (SesMailSender 생성자 검증)</td><td>공통 yml의 로컬 기본값을 상속해 localhost 링크가 발송되는 사고 차단</td></tr>
+</table>
+<p><b>배포 전 체크리스트</b>: fillmap.kr 도메인 SES 검증 · 샌드박스 해제 · IAM <code>ses:SendEmail</code> · <code>MAIL_ENABLED=true</code> · <code>MAIL_RESET_LINK_BASE_URL</code> 주입.</p>
+<p><b>contact@fillmap.kr의 위치</b>: <code>fillmap.mail.from</code>의 기본값(<code>${MAIL_FROM:contact@fillmap.kr}</code>) — 재설정 링크 메일의 <b>발신 주소</b>다. 수신은 행사 운영자 계정의 공식 이메일. MSG-499(계정 발급·초기 비밀번호 발송)가 같은 유틸과 발신 주소를 재사용한다.</p>
+<div class="why">후속 티켓 규칙(MSG-496에서 확정): catch-all이 <code>hasAnyRole("USER","ADMIN")</code>라 ORG가 쓸 새 경로는 SecurityConfig 명시 등록 필수 — 누락은 403으로 드러난다(fail-closed). <code>/api/org/**</code>에 등록하면 mustChange 게이트 인터셉터도 자동으로 걸린다.</div>
+</div>
+
+<footer>
+정본: <code>docs/spec/MSG-497.md</code>(결정 기록 6건·작업 로그) · PRD <code>docs/prd/event-submission.md</code> · 코드 <code>PasswordService</code>·<code>RedisPasswordResetTokenStore</code>·<code>OrgEmailChangeRequestRepository</code><br>
+검증: 신규 테스트 76건(가드 비공허성 실측 — 수정을 되돌리면 실제 FAILED), 전체 스위트 2,728건 green (2026-08-28)
+</footer>
+</div>

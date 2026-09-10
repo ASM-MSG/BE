@@ -1,0 +1,149 @@
+package com.msg.fillmap.video.controller;
+
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import com.msg.fillmap.auth.jwt.TokenProvider;
+import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.user.entity.UserRole;
+import com.msg.fillmap.video.dto.VideoPlaybackResponseDto;
+import com.msg.fillmap.video.exception.VideoErrorCode;
+import com.msg.fillmap.video.service.VideoService;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+@DisplayName("VideoController 단건 재생 조회")
+class VideoPlaybackControllerTest {
+
+	private static final long USER_ID = 42L;
+	private static final long VIDEO_ID = 1042L;
+	private static final String URL = "/api/videos/{videoId}";
+
+	@Autowired
+	private MockMvc mockMvc;
+
+	@Autowired
+	private TokenProvider tokenProvider;
+
+	@MockitoBean
+	private VideoService videoService;
+
+	private String bearer() {
+		return "Bearer " + tokenProvider.issueAccessToken(USER_ID, UserRole.USER);
+	}
+
+	// 검증: FR-VIDEO-12
+	@Test
+	@DisplayName("단건 조회는 200과 재생메타를 반환한다")
+	void 단건_조회는_200과_재생메타를_반환한다() throws Exception {
+		given(videoService.getVideoPlayback(anyLong(), anyLong())).willReturn(new VideoPlaybackResponseDto(
+			VIDEO_ID, "https://bucket.s3/play.mp4?X-Amz-Signature=abc",
+			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
+			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
+			"서면", "I-9", "서울특별시 강남구 역삼1동", null, "busan.vlog", 501L));
+
+		mockMvc.perform(get(URL, VIDEO_ID)
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.developCode").value(200))
+			.andExpect(jsonPath("$.data.videoId").value(1042))
+			.andExpect(jsonPath("$.data.playbackUrl").value("https://bucket.s3/play.mp4?X-Amz-Signature=abc"))
+			.andExpect(jsonPath("$.data.processingStatus").value("READY"))
+			.andExpect(jsonPath("$.data.status").value("ACTIVE"))
+			.andExpect(jsonPath("$.data.viewCount").value(37))
+			.andExpect(jsonPath("$.data.expiresInSec").value(600))
+			.andExpect(jsonPath("$.data.zoneName").value("서면"))
+			.andExpect(jsonPath("$.data.zoneCell").value("I-9"))
+			.andExpect(jsonPath("$.data.regionName").value("서울특별시 강남구 역삼1동"))
+			.andExpect(jsonPath("$.data.nickname").value("busan.vlog"))
+			// 검증: FR-MOD-18, AC-569-12 — 작성자 식별자가 닉네임과 함께 실린다(차단 대상 지정용)
+			.andExpect(jsonPath("$.data.userId").value(501));
+	}
+
+	// 검증: FR-MEDIA-10
+	@Test
+	@DisplayName("단건 조회 응답에 highlights 배열이 실린다")
+	void 단건_조회_응답에_highlights_배열이_실린다() throws Exception {
+		// record 컴포넌트 추가가 Jackson 직렬화까지 이어지는지 — [[시작초, 끝초], ...] 중첩 배열 형태를 통합 레벨에서 본다 (MSG-350).
+		given(videoService.getVideoPlayback(anyLong(), anyLong())).willReturn(new VideoPlaybackResponseDto(
+			VIDEO_ID, "https://bucket.s3/play.mp4?X-Amz-Signature=abc",
+			"https://bucket.s3/thumb.jpg?X-Amz-Signature=def", "19422_9582", (short) 12,
+			"READY", "PUBLIC", "ACTIVE", 37L, LocalDateTime.of(2026, 7, 20, 18, 3, 11), 600L,
+			"서면", "I-9", "서울특별시 강남구 역삼1동",
+			List.of(List.of(0.0, 4.25), List.of(12.0, 18.5), List.of(20.0, 27.5)), "busan.vlog", 501L));
+
+		mockMvc.perform(get(URL, VIDEO_ID)
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data.highlights.length()").value(3))
+			.andExpect(jsonPath("$.data.highlights[0][0]").value(0.0))
+			.andExpect(jsonPath("$.data.highlights[0][1]").value(4.25))
+			.andExpect(jsonPath("$.data.highlights[2][1]").value(27.5));
+	}
+
+	@Test
+	@DisplayName("타인 비공개 영상 조회는 403이다")
+	void 타인_비공개_영상_조회는_403이다() throws Exception {
+		given(videoService.getVideoPlayback(anyLong(), anyLong()))
+			.willThrow(new ApiException(VideoErrorCode.VIDEO_FORBIDDEN));
+
+		mockMvc.perform(get(URL, VIDEO_ID)
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isForbidden());
+	}
+
+	@Test
+	@DisplayName("없는 영상 조회는 404다")
+	void 없는_영상_조회는_404다() throws Exception {
+		given(videoService.getVideoPlayback(anyLong(), anyLong()))
+			.willThrow(new ApiException(VideoErrorCode.VIDEO_NOT_FOUND));
+
+		mockMvc.perform(get(URL, VIDEO_ID)
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isNotFound());
+	}
+
+	// 검증: FR-VIDEO-12
+	@Test
+	@DisplayName("인증없이 호출해도 200이고 서비스에 userId가 null로 전달된다")
+	void 인증없이_호출해도_200이고_서비스에_userId가_null로_전달된다() throws Exception {
+		// MSG-491 로 비로그인 재생이 열렸다(기존 401 계약 대체). 공개범위 판정은 서비스가 하고,
+		// 컨트롤러가 지켜야 할 것은 익명을 null 로 넘기는 것 하나다 — principal.userId() 를 그대로
+		// 부르면 401 이 아니라 NPE 500 이 된다.
+		mockMvc.perform(get(URL, VIDEO_ID))
+			.andExpect(status().isOk());
+
+		then(videoService).should().getVideoPlayback(null, VIDEO_ID);
+	}
+
+	// 검증: FR-VIDEO-14
+	@Test
+	@DisplayName("HEAD 요청은 조회수 증가 없이 200을 반환한다")
+	void HEAD_요청은_조회수_증가_없이_200을_반환한다() throws Exception {
+		// 명시 HEAD 매핑이 GET 폴백을 가로채 서비스를 안 탄다 → view_count 부작용 없음(Codex R2).
+		mockMvc.perform(head(URL, VIDEO_ID)
+				.header(HttpHeaders.AUTHORIZATION, bearer()))
+			.andExpect(status().isOk());
+
+		verify(videoService, never()).getVideoPlayback(anyLong(), anyLong());
+	}
+}

@@ -25,6 +25,7 @@ bin/
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
+/src/main/resources/application-local.yml
 
 ### NetBeans ###
 /nbproject/private/
@@ -35,3 +36,33 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### 행정동 경계 GeoJSON (MSG-154) — 수십 MB, 커밋하지 않고 scripts/download-region-geojson.sh 로 확보 ###
+/data/region/*.geojson
+
+### 미션 시드 스냅샷 (MSG-224·225·235·384) — 레포 밖 수집 산출물을 복사해 쓰는 자리다.
+### 축제 918행처럼 크고 수집 시점마다 달라져 커밋 대상이 아니다. 원본은 ~/fillmap-data/ 에 있다. ###
+/data/mission/*.jsonl
+/data/mission/*.json
+.DS_Store
+
+### FCM 서비스 계정 키 (MSG-179 D9) — 레포 커밋 절대 금지, FCM_CREDENTIALS_PATH 로 경로만 주입 ###
+*firebase-adminsdk*.json
+
+### 파이썬 캐시 (load-test 분석 스크립트) ###
+__pycache__/
+
+### 관측 스택 시크릿 (MSG-344) — Slack webhook·Grafana 비밀번호. .env.example 복사 후 서버에서만 채운다 ###
+/monitoring/prod/.env
+
+### OMC 런타임 상태 (세션 id·타임스탬프가 실행마다 바뀐다 — 버전 관리 대상 아님)
+.omc/state/
+.omc/logs/
+
+### 스킬 호출 로그 (MSG-529) — PostToolUse hook이 세션마다 쌓는 런타임 기록
+.claude/logs/
+.omc/notepad.md
+.omc/project-memory.json
+
+### MSG-538 시드 이미지 — 업로드용 로컬 산출물 (객체는 S3, 출처·라이선스는 CREDITS.json)
+event-images/*.jpg

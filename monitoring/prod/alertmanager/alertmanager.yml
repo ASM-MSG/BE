@@ -1,0 +1,20 @@
+# MSG-344 알림 라우팅 — Slack incoming webhook (2026-08-11 확정 채널).
+# __SLACK_WEBHOOK_URL__ 은 자리표시자다. 실제 URL 은 레포에 넣지 않고 docker-compose 가 기동 시
+# SLACK_WEBHOOK_URL 환경변수로 치환한다 (Alertmanager 자체는 env 확장을 지원하지 않아서).
+# 보낼 채널은 webhook 발급 시 Slack 쪽에서 정해진다 (#dev-monitoring 예정).
+route:
+  receiver: slack
+  group_by: [alertname]
+  group_wait: 30s        # 같은 알림 묶음 대기 — scrape 15s + for 1m 과 합쳐도 도착 목표 5분 안쪽
+  group_interval: 5m
+  repeat_interval: 4h    # 미해결 알림 재통지 주기 — 밤새 도배를 막는 수준으로만
+
+receivers:
+  - name: slack
+    slack_configs:
+      - api_url: __SLACK_WEBHOOK_URL__
+        send_resolved: true
+        title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+        text: >-
+          {{ range .Alerts }}{{ .Annotations.summary }} — {{ .Annotations.description }}
+          {{ end }}

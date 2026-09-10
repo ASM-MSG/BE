@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>미션 핀 행정 단위 클러스터링 — MSG-437 동작 흐름</title>
+<style>
+	:root {
+		--bg: #ffffff;
+		--bg-soft: #f6f7f9;
+		--bg-code: #f2f4f7;
+		--fg: #1b1f24;
+		--fg-soft: #5b6673;
+		--line: #dfe3e8;
+		--accent: #2d6cdf;
+		--accent-soft: #eaf1fd;
+		--warn: #b4690e;
+		--warn-soft: #fdf3e3;
+		--danger: #c0392b;
+		--danger-soft: #fdeeec;
+		--ok: #1e7e4e;
+		--ok-soft: #e8f6ee;
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; padding: 32px 16px 80px;
+		font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+		background: var(--bg); color: var(--fg); line-height: 1.65;
+	}
+	main { max-width: 860px; margin: 0 auto; }
+	h1 { font-size: 1.6rem; margin: 0 0 4px; }
+	h2 { font-size: 1.2rem; margin: 44px 0 12px; padding-top: 20px; border-top: 1px solid var(--line); }
+	h3 { font-size: 1.02rem; margin: 24px 0 8px; }
+	p { margin: 10px 0; }
+	.sub { color: var(--fg-soft); font-size: .92rem; margin-bottom: 24px; }
+	.tldr {
+		background: var(--accent-soft); border-left: 4px solid var(--accent);
+		padding: 14px 18px; border-radius: 6px; margin: 20px 0;
+	}
+	.warnbox {
+		background: var(--warn-soft); border-left: 4px solid var(--warn);
+		padding: 12px 16px; border-radius: 6px; margin: 16px 0;
+	}
+	.okbox {
+		background: var(--ok-soft); border-left: 4px solid var(--ok);
+		padding: 12px 16px; border-radius: 6px; margin: 16px 0;
+	}
+	code {
+		background: var(--bg-code); padding: 1px 6px; border-radius: 4px;
+		font-family: "SF Mono", Menlo, Consolas, monospace; font-size: .86em;
+	}
+	pre {
+		background: var(--bg-code); border: 1px solid var(--line); border-radius: 8px;
+		padding: 14px 16px; overflow-x: auto; font-size: .82rem; line-height: 1.55;
+	}
+	pre code { background: none; padding: 0; }
+	table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: .9rem; }
+	th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
+	th { background: var(--bg-soft); }
+	.flow {
+		background: var(--bg-soft); border: 1px solid var(--line); border-radius: 8px;
+		padding: 16px 20px; margin: 14px 0; font-family: "SF Mono", Menlo, monospace;
+		font-size: .8rem; line-height: 1.7; overflow-x: auto; white-space: pre;
+	}
+	.pill {
+		display: inline-block; padding: 1px 10px; border-radius: 999px;
+		font-size: .78rem; font-weight: 600; vertical-align: 1px;
+	}
+	.pill.b { background: var(--accent-soft); color: var(--accent); }
+	.pill.w { background: var(--warn-soft); color: var(--warn); }
+	.pill.g { background: var(--ok-soft); color: var(--ok); }
+	small.path { color: var(--fg-soft); font-family: Menlo, monospace; font-size: .78rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>미션 핀 행정 단위 클러스터링</h1>
+<p class="sub">MSG-437 · 2026-08-20 · PR #193(본체) + #194(부트 웜업) · Owner B (mission 도메인)</p>
+
+<div class="tldr">
+	지도를 축소하면 팝업스토어·지역축제 미션 핀이 도감 격자와 같은 방식으로
+	<b>행정 단위(동 → 구 → 시) 이름 마커</b>("해운대구 12")로 묶인다.
+	서버는 미션마다 행정동 코드를 <b>1시간 전역 스냅숏에 미리 붙여 두고</b>,
+	집계 요청은 <b>쿼리 0번</b>의 메모리 산술로 응답한다.
+	새 컬럼·마이그레이션·Redis 전부 없음. 콜드 첫 요청 1.51초는 부트 웜업으로 사용자 노출에서 제거했다.
+</div>
+
+<h2>1. 왜 만들었나</h2>
+<p>
+	기존 결정은 "묶기는 화면(FE) 몫, 팝업·축제는 500m 거리 기준"이었다. 이걸 번복한 이유가 둘이다.
+</p>
+<table>
+	<tr><th>문제</th><th>내용</th></tr>
+	<tr>
+		<td>이름이 없다</td>
+		<td>거리 기반 묶음은 "핀 3개" 이상을 말하지 못한다. 행정 단위로 묶으면 "해운대구 12"처럼
+		지역 이름이 붙어 축소 화면에서도 정보가 된다. 도감이 H3(육각형 격자)를 기각하고 행정 단위를
+		택한 것과 같은 논리다.</td>
+	</tr>
+	<tr>
+		<td>시 축척에선 재료 자체가 안 온다</td>
+		<td>개별 미션 조회(<code>GET /api/missions/active</code>)는 뷰포트 한 변 0.5도 상한이 있어(초과 시 12401)
+		시 단위 축척에서는 조회가 성립하지 않는다. FE가 묶고 싶어도 묶을 개별 데이터를 받을 수 없다.
+		넓은 축척용 집계는 서버 몫일 수밖에 없다.</td>
+	</tr>
+</table>
+<p>
+	묶는 <b>기준</b>(행정동 코드 접두 자르기, 이름 토큰)은 도감 집계(MSG-356)와 완전히 같고,
+	<b>실행 방식</b>만 다르다. 도감은 사용자마다 달라 매 요청 SQL로 묶고, 미션은 전 사용자 동일이라
+	이미 있던 전역 캐시 위에서 산술로 묶는다. 코스는 이번 변경과 무관하다(1km 화면 묶음 유지).
+</p>
+
+<h2>2. 전체 그림 — 경로가 둘이다</h2>
+<div class="flow">경로 A. 스냅숏 재계산 (DB를 타는 유일한 곳)
+  기동 직후 웜업 1회  +  이후 1시간 TTL 만료 시
+  ┌──────────────────────────────────────────────────────┐
+  │ findActive (활성 미션 전량 로드, 기존 쿼리)              │
+  │   → EVENT·POPUP 미션마다 귀속점 계산                    │
+  │   → resolveByPoint (ST_Covers 점 판정) ← 메모이즈 미스만 │
+  │   → CachedMission에 행정동 코드·이름·귀속점 탑재         │
+  │   → volatile 필드에 스냅숏 발행                          │
+  └──────────────────────────────────────────────────────┘
+
+경로 B. 집계 요청 (쿼리 0번)
+  GET /api/missions/aggregation?type=POPUP&unit=SIGUNGU&bbox…
+  ┌──────────────────────────────────────────────────────┐
+  │ 검증 6단계 → 스냅숏에서 type 필터                       │
+  │   → 귀속점이 bbox 안인 미션 선별                        │
+  │   → 코드 접두 자르기(동10·구5·시2)로 그룹핑              │
+  │   → 이름 토큰·평균 좌표·count·missionIds 조립           │
+  └──────────────────────────────────────────────────────┘</div>
+
+<h2>3. 경로 A — 귀속 판정과 메모이즈</h2>
+<p>
+	미션의 <b>귀속점</b>은 판정 격자 사각형의 중앙 셀 중심 위경도다(<code>GridEncoder.center</code>).
+	축제(9×9)가 두 동에 걸쳐도 중심이 속한 동 하나로만 센다 — 이중 계상하면 묶음 합계가
+	미션 수와 어긋난다. 그 점 하나를 기존 역지오코딩 계약에 묻는다.
+</p>
+<p><small class="path">region/repository/RegionRepository.findContainingRegion (기존 쿼리 재사용, 건당 ~1.2ms)</small></p>
+<pre><code>SELECT region_code, region_name, parent_code
+FROM regions
+WHERE ST_Covers(boundary_geom, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography)
+ORDER BY region_code
+LIMIT 1</code></pre>
+<p>
+	<code>ST_Covers</code>는 GIST 인덱스를 타는 점-폴리곤 포함 판정이고(<code>ST_Contains</code>는
+	캐스트 때문에 인덱스 우회), <code>ORDER BY … LIMIT 1</code>은 경계선 위 좌표의 다중 매칭을
+	결정적으로 단일화한다. 도감 수집률·역지오코딩 API가 쓰는 판정과 물리적으로 같아서
+	<b>두 화면의 지역 이름이 어긋날 수 없다</b>.
+</p>
+<h3>메모이즈 — 쿼리는 사실상 첫 한 번뿐</h3>
+<p>
+	판정 결과는 (미션 id, 판정 사각형)을 키로 <b>재계산 세대 간 재사용</b>한다. 사각형이 안 바뀐
+	미션은 다시 묻지 않으므로, 활성 전량(~205건)의 판정 쿼리가 도는 건 프로세스 기동 후
+	첫 계산뿐이고 이후 TTL 갱신은 신규·변경 미션 몇 건이다.
+</p>
+<h3>실패 분류 — 무귀속과 장애를 가른다</h3>
+<table>
+	<tr><th>상황</th><th>처리</th></tr>
+	<tr><td>빈 결과 (바다 등 어떤 동에도 안 속함)<br>서비스 범위 밖 좌표 (6400)</td>
+		<td><span class="pill g">무귀속 수용</span> 그 미션만 regionCode null, warn 로그.
+		데이터 성질의 실패라 다시 물어도 같다.</td></tr>
+	<tr><td>DB 연결 장애 같은 인프라 예외</td>
+		<td><span class="pill w">전파 → 재계산 실패</span> 스냅숏 미발행(기존 세대 보존).
+		일괄 흡수하면 장애 한 번에 전 미션이 무귀속으로 뭉개진 캐시가 1시간 산다.
+		공유 스냅숏이라 이 실패는 COURSE 목록 조회까지 함께 실패시키는데 이는 의도다
+		(캐시를 가르면 목록과 집계가 다른 세대를 본다).</td></tr>
+</table>
+
+<h2>4. 경로 B — API 계약</h2>
+<p><code>GET /api/missions/aggregation</code> · 전 파라미터 필수 · principal 미수신(응답이 사용자 무관이어야 전역 캐시가 성립)</p>
+<table>
+	<tr><th>파라미터</th><th>값</th></tr>
+	<tr><td><code>type</code></td><td>EVENT · POPUP만 (COURSE는 12402 — 코스는 화면이 묶는다)</td></tr>
+	<tr><td><code>unit</code></td><td>DONG · SIGUNGU · SIDO (무효 시 <b>12405 신설</b>)</td></tr>
+	<tr><td><code>swLat swLng neLat neLng</code></td><td>bbox. 단위별 상한 동 1° / 구 4° / 시 10° (도감 집계와 동일, 초과 12401)</td></tr>
+</table>
+<p>검증 우선순위(복합 오류 시 앞선 코드): bbox 누락 12400 → type 12402 → unit 12405 → 정의역·NaN 12400 → 뒤집힘 12400 → span 상한 12401</p>
+<h3>dev 실측 응답 (2026-08-20, 전국 SIDO·POPUP)</h3>
+<pre><code>[ {"regionCode":"11","name":"서울특별시","lat":…,"lng":…,"count":128,"missionIds":[…128개]},
+  {"regionCode":"26","name":"부산광역시","count":11, …},
+  … 7개 시도 …
+  {"regionCode":null,"name":null,"count":1, …} ]   ← 무귀속(제주 애월 해안 팝업), 항상 마지막</code></pre>
+<p>
+	부산 bbox를 SIGUNGU로 물으면 동구 1 + 부산진구 6 + 해운대구 3 + 수영구 1 = 11로
+	상위 단위 합계와 정확히 일치한다(접두 자르기라 산술적으로 보장).
+</p>
+<h3>묶음 선택 = 줌인 후 교집합</h3>
+<p>
+	<code>missionIds</code>만으로는 카드를 못 그린다(카드 재료는 개별 조회 응답에 있다).
+	제품 계약: 묶음 마커 선택은 다음 세부 단위로의 <b>줌인</b>이고, 개별 조회가 성립하는
+	축척에 들어온 뒤 그 결과와 missionIds의 <b>교집합</b>으로 목록이 좁혀진다.
+	세대가 어긋나 사라진 id는 교집합에서 자연 탈락하므로 유령 카드가 없다.
+</p>
+
+<h2>5. 부트 웜업 (PR #194)</h2>
+<p>
+	dev 실측에서 <b>콜드 첫 요청 1.51초, 웜 12ms</b>. 차이는 활성 205건의 귀속 판정이다.
+	재시작당 한 번뿐인 비용이라, 첫 사용자에게 물리는 대신 기동 직후로 옮겼다.
+</p>
+<pre><code>@EventListener(ApplicationReadyEvent.class)
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+public void warmUpSnapshot() {
+	try {
+		log.info("미션 스냅숏 부트 웜업 완료: 활성 미션 {}건 (MSG-437)", snapshot().size());
+	} catch (RuntimeException e) {
+		log.warn("미션 스냅숏 부트 웜업에 실패해 첫 조회 요청이 재계산합니다 (MSG-437)", e);
+	}
+}</code></pre>
+<ul>
+	<li><b>시점</b>: <code>ApplicationReadyEvent</code>는 시더(ApplicationRunner)들 이후 발화 — 시딩 켠 기동에서도 방금 적재분이 스냅숏에 들어온다.</li>
+	<li><b>실패해도 기동 유지</b>: 웜업은 최적화지 기동 조건이 아니다. 예외는 warn만 남기고 삼키고, 첫 요청이 재시도한다.</li>
+	<li><b>새 계산 경로 없음</b>: 기존 <code>snapshot()</code>을 그대로 부른다. 더블체크 락·메모이즈가 동일 적용.</li>
+</ul>
+<div class="warnbox">
+	<b>NOT_SUPPORTED가 붙은 이유 (Codex 리뷰 P1)</b> — 이 클래스엔 클래스 레벨
+	<code>@Transactional(readOnly = true)</code>가 있다. 그대로 두면 프록시가 리스너 진입 시점에
+	트랜잭션(=DB 커넥션)을 여는데, 하필 이 방어가 겨냥한 "기동 시 DB 장애"에서 그 열기가
+	<code>CannotCreateTransactionException</code>으로 실패한다 — 메서드 안 try에 닿기 전이라
+	예외가 리스너 밖으로 나가 <b>기동이 죽는다</b>. NOT_SUPPORTED는 이 메서드만 트랜잭션 밖에
+	두라는 선언이라 그 경로 자체가 사라진다. 지우면 결함이 조용히 되살아나므로 테스트가
+	어노테이션 존재를 리플렉션으로 잠근다.
+</div>
+
+<h2>6. 실측 요약 (dev, 2026-08-20)</h2>
+<table>
+	<tr><th>항목</th><th>결과</th></tr>
+	<tr><td>콜드 첫 요청 (웜업 전)</td><td>1.51초 — 300ms 목표 초과 → 웜업 채택 근거</td></tr>
+	<tr><td>웜 요청</td><td>12~13ms</td></tr>
+	<tr><td>귀속 판정 쿼리</td><td>건당 ~1.2ms (GIST 점 프로브), 활성 205건</td></tr>
+	<tr><td>기능 정합</td><td>SIDO 팝업 158 합계 = 활성 전량, 부산 SIGUNGU 드릴다운 합 = SIDO 부산 11 일치,
+		무귀속 폴백 1건 동작, 에러 12401·12402·12405 계약대로</td></tr>
+	<tr><td>배포 후 확인법</td><td>기동 로그 <code>미션 스냅숏 부트 웜업 완료: 활성 미션 N건</code> +
+		첫 집계 요청이 ~12ms</td></tr>
+</table>
+
+<h2>7. 알아두면 좋은 것</h2>
+<ul>
+	<li><b>저장 위치</b>: DB·Redis 아님. JVM 메모리의 volatile 스냅숏 하나(단일 인스턴스 전제).
+		재시작하면 사라지고 웜업이 다시 만든다.</li>
+	<li><b>기각한 대안</b>: missions에 region_code 컬럼 신설(레거시 팝업 원좌표 소실·백필·TourAPI 전환 경합),
+		요청 시 SQL GROUP BY(캐시 전제와 어긋남), Redis(수백 건 읽기 전용에 과함).
+		근거 전문은 ADR — 컨플 cf-40042497, LLM-WIKI <code>04-decisions/ADR 미션 핀 클러스터링 스냅숏 메모리 집계.md</code>.</li>
+	<li><b>승격 지점</b>: 활성 미션이 수천 건 규모가 되면 귀속 판정을 unnest 배치 쿼리로,
+		missionIds 응답 계약(페이징)도 그때 재논의.</li>
+	<li><b>남은 레인</b>: 마커 렌더링·축척 전환은 FE·모바일 몫 (SRS FR-MISSION-20 진행 중).
+		모바일(MSG-428)은 부산 MVP라 시 단위 보류 중 — 도입 시 정합 확인.</li>
+	<li><b>정본 문서</b>: 스펙 <code>docs/spec/MSG-437.md</code> (D1~D6 + 작업 로그),
+		PRD <code>docs/prd/mission-map-explore.md</code> §8.</li>
+</ul>
+
+</main>
+</body>
+</html>
