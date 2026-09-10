@@ -130,6 +130,25 @@ class RouteCandidateCollectorTest {
 		assertThat(candidates.getFirst().kind()).isEqualTo(Kind.EVENT);
 	}
 
+	// 검증: FR-EVENT-01, AC-586-07
+	@Test
+	@DisplayName("업로드 유예 회차는 경로 후보에서 빠진다 — 칩 조회가 유예도 주지만 갈 곳은 아니다")
+	void 업로드_유예_회차는_경로_후보에서_빠진다() {
+		String 안격자 = GridEncoder.encode(35.15, 129.05);
+		// 칩 조회는 MSG-586부터 종료된(유예) 회차도 준다 — 기간 필터는 통과하므로 상태로만 갈린다.
+		EventOccurrenceChipResponseDto 유예_행사 = new EventOccurrenceChipResponseDto(
+			2L, "끝난 행사", "부산", NOW.minusDays(10), NOW.minusDays(1), "UPLOAD_GRACE");
+		given(eventQueryService.getOccurrencesInViewport(뷰포트))
+			.willReturn(List.of(진행중_행사(1L, "진행 중 행사"), 유예_행사));
+		given(eventQueryService.getLocationsBulk(List.of(1L, 2L))).willReturn(Map.of(
+			1L, List.of(new LocationPoint("진행 중 위치", 안격자)),
+			2L, List.of(new LocationPoint("끝난 위치", 안격자))));
+
+		List<RouteCandidate> candidates = collector.collect(뷰포트, 빈해석);
+
+		assertThat(candidates).extracting(RouteCandidate::name).containsExactly("진행 중 행사");
+	}
+
 	// 검증: FR-ROUTE-03, NFR-SEC-08
 	@Test
 	@DisplayName("해석 결과의 장소 이름은 후보가 되지 않는다 — 관심사는 검색어 재료, 힌트는 순서 재료일 뿐")
