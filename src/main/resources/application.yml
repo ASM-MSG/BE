@@ -76,6 +76,14 @@ oauth:
     # client-id(카카오 REST API 키) 는 application-local.yml (로컬) / KAKAO_CLIENT_ID 환경변수 (운영) 로 주입한다.
     # 네이티브 앱 키 — 앱(네이티브 SDK) 경로 ID Token 의 aud (MSG-452). APK 에 포함되는 공개 식별자라 여기 둔다.
     app-client-id: 73558381b47d1b7c53b551a7596c56cf
+  # 애플 로그인 (MSG-594). 공개 고정값 5개 — team-id·key-id·signing-key·token-encryption-key 는
+  # 프로파일 yml 이 APPLE_* 환경변수로 받는다(비어 있으면 첫 호출에서 실패, 부팅은 통과 — D-10).
+  apple:
+    issuer: https://appleid.apple.com
+    jwk-set-uri: https://appleid.apple.com/auth/keys
+    token-uri: https://appleid.apple.com/auth/token
+    revoke-uri: https://appleid.apple.com/auth/revoke
+    bundle-id: kr.fillmap.app    # ID 토큰 aud 이자 토큰 API 의 client_id (D-6, dev·prod 단일값)
 
 # 장소 검색 — 카카오 로컬 키워드 검색 프록시 (MSG-251). rest-api-key 는 OAuth 로그인과 같은 "필맵" 카카오 앱의
 # REST API 키라 oauth.kakao.client-id 를 프로퍼티 레벨로 참조한다 — 신규 시크릿·env 0 (§D5, 키 로테이션 시 검색도 함께 영향).
