@@ -67,7 +67,7 @@ class OidcLoginServiceTest {
 		@Test
 		@DisplayName("성공: 기존에 연동된 유저면 재가입 없이 액세스와 리프레시를 발급한다 (MSG-135)")
 		void 소셜_로그인도_리프레시를_발급한다() {
-			given(kakaoVerifier.verify("id-token")).willReturn(info);
+			given(kakaoVerifier.verify("id-token", null)).willReturn(info);
 			User existing = User.createOAuthUser(AuthProvider.KAKAO, info.oid(), info.email(), info.nickname());
 			ReflectionTestUtils.setField(existing, "id", 10L);
 			given(userRepository.findByProviderAndOid(AuthProvider.KAKAO, info.oid())).willReturn(Optional.of(existing));
@@ -85,7 +85,7 @@ class OidcLoginServiceTest {
 		@Test
 		@DisplayName("성공: 카카오 로그인 응답에는 USER 역할이 실린다 — 소셜 가입자는 항상 일반 사용자 (MSG-496)")
 		void 카카오_로그인_응답에는_USER_역할이_실린다() {
-			given(kakaoVerifier.verify("id-token")).willReturn(info);
+			given(kakaoVerifier.verify("id-token", null)).willReturn(info);
 			User existing = User.createOAuthUser(AuthProvider.KAKAO, info.oid(), info.email(), info.nickname());
 			ReflectionTestUtils.setField(existing, "id", 11L);
 			given(userRepository.findByProviderAndOid(AuthProvider.KAKAO, info.oid())).willReturn(Optional.of(existing));
@@ -101,7 +101,7 @@ class OidcLoginServiceTest {
 		@Test
 		@DisplayName("성공: 처음 로그인하는 유저면 자동 가입 후 토큰을 발급한다")
 		void login_newUser() {
-			given(kakaoVerifier.verify("id-token")).willReturn(info);
+			given(kakaoVerifier.verify("id-token", null)).willReturn(info);
 			User winner = User.createOAuthUser(AuthProvider.KAKAO, info.oid(), info.email(), info.nickname());
 			ReflectionTestUtils.setField(winner, "id", 20L);
 			// 첫 조회는 부재, 삽입 후 재조회는 방금 들어간 행 — 가입 경로가 두 번 조회한다
@@ -126,7 +126,7 @@ class OidcLoginServiceTest {
 		@DisplayName("성공: email 클레임이 없으면(null) 중복 검사 없이 email null 로 가입된다 (MSG-310)")
 		void login_newUser_withoutEmail() {
 			OidcUserInfo emailless = new OidcUserInfo("kakao-oid-2", null, "카카오유저");
-			given(kakaoVerifier.verify("id-token")).willReturn(emailless);
+			given(kakaoVerifier.verify("id-token", null)).willReturn(emailless);
 			User winner = User.createOAuthUser(AuthProvider.KAKAO, emailless.oid(), null, emailless.nickname());
 			ReflectionTestUtils.setField(winner, "id", 30L);
 			given(userRepository.findByProviderAndOid(AuthProvider.KAKAO, emailless.oid()))
@@ -148,7 +148,7 @@ class OidcLoginServiceTest {
 		@Test
 		@DisplayName("성공: 동시 첫 로그인 경합에서 삽입이 무효돼도(0행) 승자 행으로 토큰을 발급한다 (Codex)")
 		void login_concurrentFirstLogin_recoversWinner() {
-			given(kakaoVerifier.verify("id-token")).willReturn(info);
+			given(kakaoVerifier.verify("id-token", null)).willReturn(info);
 			User winner = User.createOAuthUser(AuthProvider.KAKAO, info.oid(), info.email(), info.nickname());
 			ReflectionTestUtils.setField(winner, "id", 40L);
 			given(userRepository.findByProviderAndOid(AuthProvider.KAKAO, info.oid()))
@@ -168,7 +168,7 @@ class OidcLoginServiceTest {
 		@Test
 		@DisplayName("실패: 삽입이 email 충돌로 무효되고 oid 재조회도 비면 EMAIL_ALREADY_EXISTS 다 (Codex)")
 		void login_concurrentEmailConflict() {
-			given(kakaoVerifier.verify("id-token")).willReturn(info);
+			given(kakaoVerifier.verify("id-token", null)).willReturn(info);
 			given(userRepository.findByProviderAndOid(AuthProvider.KAKAO, info.oid()))
 				.willReturn(Optional.empty(), Optional.empty());
 			given(userRepository.existsByEmail(info.email())).willReturn(false);
@@ -189,7 +189,7 @@ class OidcLoginServiceTest {
 		@Test
 		@DisplayName("실패: 이미 다른 방식으로 가입된 이메일이면 EMAIL_ALREADY_EXISTS ApiException 을 던지고 삽입을 호출하지 않는다")
 		void login_emailConflict() {
-			given(kakaoVerifier.verify("id-token")).willReturn(info);
+			given(kakaoVerifier.verify("id-token", null)).willReturn(info);
 			given(userRepository.findByProviderAndOid(AuthProvider.KAKAO, info.oid())).willReturn(Optional.empty());
 			given(userRepository.existsByEmail(info.email())).willReturn(true);
 
@@ -215,7 +215,7 @@ class OidcLoginServiceTest {
 					assertThat(api.getErrorCode()).isEqualTo(AuthErrorCode.UNSUPPORTED_PROVIDER);
 				});
 
-			verify(kakaoVerifier, never()).verify(any());
+			verify(kakaoVerifier, never()).verify(any(), any());
 			verify(refreshTokenService, never()).issue(any(), any());
 		}
 	}

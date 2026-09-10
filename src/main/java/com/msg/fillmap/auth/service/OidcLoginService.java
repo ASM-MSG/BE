@@ -47,7 +47,8 @@ public class OidcLoginService {
 			throw new ApiException(AuthErrorCode.UNSUPPORTED_PROVIDER);
 		}
 
-		OidcUserInfo info = verifier.verify(idToken);
+		// nonce 는 M4(DTO 오버로드)에서 요청값이 들어온다 — 지금 이 경로는 카카오뿐이라 대조 생략(null)
+		OidcUserInfo info = verifier.verify(idToken, null);
 		return issueForOidcUser(provider, info, deviceId);
 	}
 

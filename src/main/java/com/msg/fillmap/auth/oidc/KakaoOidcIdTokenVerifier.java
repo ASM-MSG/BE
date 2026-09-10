@@ -24,8 +24,12 @@ public class KakaoOidcIdTokenVerifier implements OidcIdTokenVerifier {
 		return AuthProvider.KAKAO;
 	}
 
+	/**
+	 * nonce 는 받기만 하고 쓰지 않는다 — 모바일 카카오 경로는 nonce 를 도입하지 않았고(MSG-594 PRD 미해결 4,
+	 * 별도 판단), 웹 카카오 경로의 nonce 는 KakaoAuthCodeExchanger 가 교환 직후 쿠키값으로 이미 대조한다(MSG-345).
+	 */
 	@Override
-	public OidcUserInfo verify(String idToken) {
+	public OidcUserInfo verify(String idToken, String nonce) {
 		try {
 			Jwt jwt = kakaoJwtDecoder.decode(idToken);
 			return new OidcUserInfo(jwt.getSubject(), jwt.getClaimAsString("email"), jwt.getClaimAsString("nickname"));
