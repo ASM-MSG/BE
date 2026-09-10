@@ -108,6 +108,13 @@ jobs:
       - name: Build & Test
         run: ./gradlew build
 
+      # Dockerfile 이 깨진 채 develop 에 들어가면 cd-dev 의 build-image 에서야 터진다 — PR 에서 미리 빌드만 해 본다.
+      # push 는 없다 (ECR 은 cd-dev.yml 만). 위 build 가 만든 build/libs 의 boot jar 를 그대로 담는다. (MSG-589)
+      # develop/main push 에서는 건너뛴다 — 그 push 는 cd-dev 가 어차피 진짜 빌드를 하므로 두 번 빌드할 이유가 없다.
+      - name: Docker 이미지 빌드 검사
+        if: github.event_name == 'pull_request'
+        run: docker build -t fillmap:ci .
+
       # 커버리지 측정은 위 build의 test가 JaCoCo로 수행(finalizedBy jacocoTestReport).
       # 이 스텝은 그 XML을 읽어 PR에 전체 % + 변경 파일별 % 코멘트만 단다. (MSG-249)
       # 포크발 PR·Dependabot PR 은 GITHUB_TOKEN 이 읽기 전용이라 코멘트 쓰기가 실패한다 —

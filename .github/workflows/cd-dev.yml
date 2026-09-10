@@ -1,22 +1,34 @@
 name: CD (dev)
 
-# develop 브랜치 push -> dev 환경 자동 배포.
-# EC2(MSG-51) 준비 전까지는 repo variable DEPLOY_ENABLED 로 비활성(skip) 상태.
-# 준비되면 Settings > Variables 에 DEPLOY_ENABLED=true, 아래 secrets 등록:
-#   DEV_EC2_HOST / DEV_EC2_USER / DEV_EC2_SSH_KEY
-#   AI_EC2_HOST / AI_EC2_USER / AI_EC2_SSH_KEY
-# dev 앱은 EC2에서 systemd 서비스 fillmap-dev (profile=dev, DB 5432 컨테이너)로 상시 구동.
-# 인코딩 워커는 AI EC2에서 fillmap-encoding-worker (profile=dev,encoding-worker)로 구동.
-# DB 접속·시크릿은 각 EC2의 서비스 .env 에 있고, CD는 jar 교체 + 재시작만 한다.
+# develop 브랜치 push -> dev 환경 자동 배포 (MSG-589 부터 도커 이미지).
+#
+#   build-image  : jar 빌드 -> Dockerfile 로 이미지 -> ECR fillmap 에 sha-<7>·develop 태그로 push.
+#                  인증은 GitHub OIDC -> IAM 역할 fillmap-ecr-push (저장된 AWS 키 없음, docs 잡과 같은 방식).
+#   deploy-dev   : dev EC2 가 그 sha 태그를 pull 해 compose 로 교체 (api 서비스). Flyway 는 여기서 돈다.
+#   deploy-worker: AI EC2 의 인코딩 워커도 같은 이미지 (worker 서비스). api 뒤에 돈다 — 워커는 Flyway 를 끄고
+#                  스키마를 validate 만 하므로 api 가 마이그레이션을 끝낸 뒤 떠야 한다 (MSG-494 §9.2).
+#   docs         : dev 앱의 /v3/api-docs 스냅샷 -> docs.fillmap.kr (MSG-568).
+#
+# prod 는 이 sha 이미지를 다시 빌드하지 않고 태그만 옮겨 쓴다 (cd-prod.yml, 후속). 롤백 = 이전 sha 로 compose up.
+# 서버의 env 파일·바인드 마운트 파일·nginx 는 그대로다. ECR pull 자격은 EC2 인스턴스 역할(FillMapEc2DevRole,
+# AmazonEC2ContainerRegistryPullOnly) -> amazon-ecr-credential-helper 가 IMDS 로 얻는다. CD 는 헬퍼를 멱등 설치한다.
+# repo variable DEPLOY_ENABLED=true 와 secrets DEV_EC2_* / AI_EC2_* 는 종전 그대로.
 on:
   push:
     branches: [ develop ]
 
+env:
+  IMAGE: 951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap
+
 jobs:
-  deploy-dev:
+  build-image:
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
-    environment: dev
+    permissions:
+      id-token: write   # OIDC 토큰 발급 (aws-actions/configure-aws-credentials)
+      contents: read
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -27,126 +39,172 @@ jobs:
           java-version: '21'
           cache: gradle
 
+      # jar 는 gradle 캐시가 있는 러너에서 만들고 Dockerfile 은 담기만 한다 (Dockerfile 주석 참조)
       - name: Build bootJar
         run: ./gradlew bootJar -x test
 
-      - name: Upload jar to dev EC2
+      - name: Image tag
+        id: meta
+        run: echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::951142447485:role/fillmap-ecr-push
+          aws-region: ap-northeast-2
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      # 레이어 캐시를 GitHub Actions 캐시에 둔다. 없으면 러너가 매번 새것이라 apt(ffmpeg) 레이어 ~300MB 가 빌드마다
+      # 다른 digest 로 다시 push 되고 두 EC2 가 통째로 다시 pull 한다 — "코드만 바뀌면 수 MB" 는 캐시가 있을 때만 참이다.
+      # provenance: false — attestation 매니페스트가 ECR 에 untagged 로 따로 잡혀 라이프사이클·목록을 어지럽힌다.
+      - name: Build & push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE }}:develop
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+  deploy-dev:
+    needs: build-image
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      TAG: ${{ needs.build-image.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload compose file to dev EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEV_EC2_HOST }}
           username: ${{ secrets.DEV_EC2_USER }}
           key: ${{ secrets.DEV_EC2_SSH_KEY }}
-          source: build/libs/fillmap-0.0.1-SNAPSHOT.jar
+          source: docker-compose.app.yml
           target: /home/${{ secrets.DEV_EC2_USER }}
-          strip_components: 2
 
-      - name: Restart dev service
+      - name: Deploy api container
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEV_EC2_HOST }}
           username: ${{ secrets.DEV_EC2_USER }}
           key: ${{ secrets.DEV_EC2_SSH_KEY }}
+          envs: IMAGE,TAG
           script: |
             set -e
             cd /home/${{ secrets.DEV_EC2_USER }}
-            # ffmpeg 는 인코딩·선분석 probe 의 런타임 의존인데, 설치가 문서 한 줄(docs/spec/MSG-65.md D3
-            # "인프라 담당이 1회 실행")뿐이라 인스턴스 교체 때 유실됐다. 사람 기억 대신 매 배포가
-            # 보장한다 — 설치돼 있으면 0.1초 통과, 새 인스턴스면 다음 배포가 알아서 복구 (멱등).
-            command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
-            mv -f fillmap-0.0.1-SNAPSHOT.jar app.jar
-            sudo systemctl restart fillmap-dev
+            # ECR 자격 헬퍼 — 설치돼 있으면 통과, 새 인스턴스면 다음 배포가 알아서 복구 (ffmpeg 때와 같은 멱등 패턴).
+            # config.json 은 덮어쓰지 않고 이 레지스트리 항목만 credHelpers 에 합친다 — 전역 credsStore 로 덮으면
+            # 이 호스트의 다른 docker login(예: Docker Hub 한도 해제)이 조용히 지워진다 (코드 리뷰).
+            command -v docker-credential-ecr-login >/dev/null \
+              || (sudo apt-get update -qq && sudo apt-get install -y -qq amazon-ecr-credential-helper)
+            python3 - <<'PY'
+            import json, os
+            p = os.path.expanduser('~/.docker/config.json'); os.makedirs(os.path.dirname(p), exist_ok=True)
+            try: c = json.load(open(p))
+            except Exception: c = {}
+            c.setdefault('credHelpers', {})['951142447485.dkr.ecr.ap-northeast-2.amazonaws.com'] = 'ecr-login'
+            json.dump(c, open(p, 'w'), indent=2)
+            PY
+            # 이미지를 먼저 받는다 — ECR 인증·네트워크·디스크로 pull 이 실패해도 돌고 있는 서비스는 그대로다 (Codex 리뷰).
+            docker compose -f docker-compose.app.yml pull -q api
+            # 구 jar 방식 systemd 유닛이 살아 있으면 8080 을 두 프로세스가 다툰다. mask — disable 만 하면 런북의
+            # `systemctl start/restart` 가 옛 app.jar 를 컨테이너 옆에 다시 띄운다 (코드 리뷰). 첫 전환 뒤엔 no-op.
+            # 되돌리려면 컨테이너를 내리고 `systemctl unmask fillmap-dev && systemctl enable --now fillmap-dev`.
+            sudo systemctl mask --now fillmap-dev 2>/dev/null || true
+            # --wait: healthy 가 될 때까지 기다리고 아니면 non-zero (기동 ~15초 + healthcheck start_period 30초).
+            docker compose -f docker-compose.app.yml up -d --wait --wait-timeout 180 api \
+              || { echo "::error::api 컨테이너가 180초 안에 healthy 가 되지 않았다"; docker logs --tail 50 fillmap-api 2>&1 || true; exit 1; }
+            # healthy 만으로는 부족하다. network_mode: host 라 컨테이너 안 localhost 가 호스트와 같아서 다른 프로세스가
+            # 8080 을 물고 있어도 healthcheck 가 통과한다 — 방금 push 한 이미지이고, 재시작 0회이고, 8080 리스너 PID 가
+            # 이 컨테이너의 프로세스일 때만 성공 (jar 시절 "리스너 PID = MainPID" 검사(MSG-382)의 컨테이너판).
+            running=$(docker inspect -f '{{.Config.Image}}' fillmap-api)
+            restarts=$(docker inspect -f '{{.RestartCount}}' fillmap-api)
+            cpid=$(docker inspect -f '{{.State.Pid}}' fillmap-api)
+            listen=$(sudo ss -ltnpH 'sport = :8080' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
+            if [ "$running" = "$IMAGE:$TAG" ] && [ "$restarts" = "0" ] && [ -n "$cpid" ] && [ "$listen" = "$cpid" ]; then
+              echo "기동 확인 — healthy, image=$running, 8080 리스너(pid=$listen) = 컨테이너 PID"
+            else
+              echo "::error::healthy 지만 신원이 다르다 — 기대 image=$IMAGE:$TAG restarts=0 pid=$cpid / 실제 image=$running restarts=$restarts 8080 리스너 pid=[$listen]"
+              sudo ss -ltnp 'sport = :8080' || true
+              docker logs --tail 50 fillmap-api 2>&1 || true
+              exit 1
+            fi
+            # 정리는 이 이미지의 옛 sha 태그만 (최근 2개 유지 = 직전 sha 로 즉시 롤백). `prune -a` 는 같은 데몬의
+            # 다른 스택(postgres·redis·kafka, AI 박스의 관측 스택) 이미지까지 지운다 (코드 리뷰).
+            # 생성시각으로 명시 정렬하고 지금 배포한 태그는 목록에서 뺀다 — `docker images` 출력 순서에 기대면 방금 뜬
+            # 이미지를 지우려다 rmi 가 실패해 헬스는 통과했는데 잡만 빨간불이 된다 (PR 자동 리뷰). 직전 sha 1개만 남긴다.
+            # bash 전용 문법($'\t' 등)은 안 쓴다 — ssh-action 은 원격 기본 셸로 실행해 dash 로 떨어질 수 있다.
+            docker images "$IMAGE" --format '{{.CreatedAt}} {{.Tag}}' | grep ' sha-' | sort -r | awk '{print $NF}' \
+              | grep -vx "$TAG" | tail -n +2 | xargs -r -I{} docker rmi "$IMAGE:{}" >/dev/null
+            docker image prune -f >/dev/null
 
-      # systemctl restart 는 기동을 '지시'하고 즉시 0 을 반환한다 — 앱이 직후 죽어도 위 step 은 성공이다.
-      # 실제로 2026-07-14~15 dev 가 32시간 크래시 루프였는데 CD 는 계속 초록불이었다 (MSG-129).
-      - name: Health check dev service
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEV_EC2_HOST }}
-          username: ${{ secrets.DEV_EC2_USER }}
-          key: ${{ secrets.DEV_EC2_SSH_KEY }}
-          script: |
-            # 성공은 HTTP 200 하나뿐이다 (cd-prod.yml 과 같은 기준). /actuator/health 는 SecurityConfig
-            # 에서 permitAll 이라 정상 기동이면 200 이고, DB·Redis 가 죽으면 503 이다. 4xx 를 성공으로
-            # 치던 옛 판정은 actuator 도입(MSG-128) 전 "인증 요구 응답이 곧 기동 신호"이던 시절의 잔재라,
-            # actuator 노출·라우팅이 잘못되거나 다른 앱이 8080 을 물고 있어도 배포가 초록불이 됐다.
-            # 앱 기동에 ~14초 걸리므로 5초 간격으로 30회(약 150초) 기다린다.
-            # 연결 실패 시 curl 은 %{http_code} 로 000 을 '출력하고' non-zero 로 끝난다. 따라서
-            # `|| echo 000` 을 붙이면 000000 이 되어 어떤 조건에도 걸리지 않는다 — 실제 HTTP 코드만 통과시킨다.
-            for i in $(seq 1 30); do
-              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:8080/actuator/health || true)
-              if [ "$code" = "200" ]; then
-                # 200 만으로는 부족하다 (MSG-382) — 그 응답을 방금 재시작한 유닛이 줬는지는 별개 사실이다.
-                # 고아 프로세스나 다른 앱이 8080 을 물고 있으면 재시작이 실패해도 초록불이 된다.
-                # 8080 리스너의 PID 가 fillmap-dev 유닛의 MainPID 와 같을 때만 성공으로 친다.
-                # 리스너 PID 는 전부 모아 유일값으로 비교한다 — v4/v6 두 소켓이 각 행으로 나오고,
-                # 첫 행만 보면(head -1) 다른 프로세스가 섞여 있어도 우연히 통과할 수 있다 (Codex 리뷰).
-                main_pid=$(systemctl show -p MainPID --value fillmap-dev)
-                listen_pids=$(sudo ss -ltnpH 'sport = :8080' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
-                if [ -n "$main_pid" ] && [ "$main_pid" != "0" ] && [ "$listen_pids" = "$main_pid" ]; then
-                  echo "기동 확인 — HTTP 200, 8080 리스너(pid=$listen_pids) = fillmap-dev MainPID ($((i * 5))초)"
-                  exit 0
-                fi
-                echo "::error::200 응답을 재시작한 유닛이 아닌 프로세스가 줬다 — MainPID=$main_pid, 8080 리스너 pid=[$listen_pids]"
-                sudo ss -ltnp 'sport = :8080' || true
-                journalctl -u fillmap-dev -n 50 --no-pager
-                exit 1
-              fi
-              sleep 5
-            done
-            echo "::error::150초 내 기동 실패 — 아래 로그에서 원인 확인"
-            journalctl -u fillmap-dev -n 50 --no-pager
-            exit 1
+  deploy-worker:
+    needs: [ build-image, deploy-dev ]
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      TAG: ${{ needs.build-image.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Upload jar to encoding worker EC2
+      - name: Upload compose file to encoding worker EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.AI_EC2_HOST }}
           username: ${{ secrets.AI_EC2_USER }}
           key: ${{ secrets.AI_EC2_SSH_KEY }}
-          source: build/libs/fillmap-0.0.1-SNAPSHOT.jar
+          source: docker-compose.app.yml
           target: /home/${{ secrets.AI_EC2_USER }}/encoding-worker
-          strip_components: 2
 
-      - name: Restart encoding worker service
+      # AI EC2 는 ubuntu 가 docker 그룹이 아니라 sudo 로 돈다 — 자격 헬퍼 설정도 root 의 /root/.docker 에 둔다.
+      - name: Deploy worker container
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.AI_EC2_HOST }}
           username: ${{ secrets.AI_EC2_USER }}
           key: ${{ secrets.AI_EC2_SSH_KEY }}
+          envs: IMAGE,TAG
           script: |
             set -e
             cd /home/${{ secrets.AI_EC2_USER }}/encoding-worker
-            command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
-            mv -f fillmap-0.0.1-SNAPSHOT.jar app.jar
-            sudo systemctl restart fillmap-encoding-worker
-
-      - name: Health check encoding worker service
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.AI_EC2_HOST }}
-          username: ${{ secrets.AI_EC2_USER }}
-          key: ${{ secrets.AI_EC2_SSH_KEY }}
-          script: |
-            deadline_start=$(date +%s)
-            while [ $(( $(date +%s) - deadline_start )) -lt 150 ]; do
-              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:8081/actuator/health || true)
-              if [ "$code" = "200" ]; then
-                main_pid=$(systemctl show -p MainPID --value fillmap-encoding-worker)
-                listen_pids=$(sudo ss -ltnpH 'sport = :8081' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
-                if [ -n "$main_pid" ] && [ "$main_pid" != "0" ] && [ "$listen_pids" = "$main_pid" ]; then
-                  echo "기동 확인 — health HTTP 200, 8081 리스너(pid=$listen_pids) = fillmap-encoding-worker MainPID ($(( $(date +%s) - deadline_start ))초)"
-                  exit 0
-                fi
-                echo "::error::200 응답을 재시작한 워커가 아닌 프로세스가 줬다 — MainPID=$main_pid, 8081 리스너 pid=[$listen_pids]"
-                sudo ss -ltnp 'sport = :8081' || true
-                journalctl -u fillmap-encoding-worker -n 50 --no-pager
-                exit 1
-              fi
-              sleep 5
-            done
-            echo "::error::150초 내 워커 health 200 실패 (마지막 코드: $code) — 아래 로그에서 원인 확인"
-            journalctl -u fillmap-encoding-worker -n 50 --no-pager
-            exit 1
+            command -v docker-credential-ecr-login >/dev/null \
+              || (sudo apt-get update -qq && sudo apt-get install -y -qq amazon-ecr-credential-helper)
+            sudo python3 - <<'PY'
+            import json, os
+            p = '/root/.docker/config.json'; os.makedirs(os.path.dirname(p), exist_ok=True)
+            try: c = json.load(open(p))
+            except Exception: c = {}
+            c.setdefault('credHelpers', {})['951142447485.dkr.ecr.ap-northeast-2.amazonaws.com'] = 'ecr-login'
+            json.dump(c, open(p, 'w'), indent=2)
+            PY
+            sudo TAG="$TAG" docker compose -f docker-compose.app.yml pull -q worker   # pull 먼저 (api 와 같은 이유)
+            sudo systemctl mask --now fillmap-encoding-worker 2>/dev/null || true
+            sudo TAG="$TAG" docker compose -f docker-compose.app.yml up -d --wait --wait-timeout 180 worker \
+              || { echo "::error::worker 컨테이너가 180초 안에 healthy 가 되지 않았다"; sudo docker logs --tail 50 fillmap-encoding-worker 2>&1 || true; exit 1; }
+            running=$(sudo docker inspect -f '{{.Config.Image}}' fillmap-encoding-worker)
+            restarts=$(sudo docker inspect -f '{{.RestartCount}}' fillmap-encoding-worker)
+            cpid=$(sudo docker inspect -f '{{.State.Pid}}' fillmap-encoding-worker)
+            listen=$(sudo ss -ltnpH 'sport = :8081' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
+            if [ "$running" = "$IMAGE:$TAG" ] && [ "$restarts" = "0" ] && [ -n "$cpid" ] && [ "$listen" = "$cpid" ]; then
+              echo "기동 확인 — healthy, image=$running, 8081 리스너(pid=$listen) = 컨테이너 PID"
+            else
+              echo "::error::healthy 지만 신원이 다르다 — 기대 image=$IMAGE:$TAG restarts=0 pid=$cpid / 실제 image=$running restarts=$restarts 8081 리스너 pid=[$listen]"
+              sudo ss -ltnp 'sport = :8081' || true
+              sudo docker logs --tail 50 fillmap-encoding-worker 2>&1 || true
+              exit 1
+            fi
+            sudo docker images "$IMAGE" --format '{{.CreatedAt}} {{.Tag}}' | grep ' sha-' | sort -r | awk '{print $NF}' \
+              | grep -vx "$TAG" | tail -n +2 | xargs -r -I{} sudo docker rmi "$IMAGE:{}" >/dev/null
+            sudo docker image prune -f >/dev/null
 
   # API 문서 사이트 (MSG-568). dev 배포가 끝난 뒤 그 앱의 /v3/api-docs 를 받아 docs.fillmap.kr 에 올린다 —
   # 문서는 언제나 "지금 dev 에 떠 있는 코드"다. 스펙 URL 은 nginx basic auth 뒤라 DOCS_BASIC_AUTH 로 받고,

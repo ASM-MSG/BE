@@ -1,0 +1,68 @@
+# 앱 컨테이너 (MSG-589). dev EC2 는 api, AI EC2 는 worker 만 띄운다. DB·Redis·Kafka 는 docker-compose.server.yml.
+# CD 가 이 파일을 서버 홈에 복사하고 아래 명령으로 교체한다. 롤백은 TAG 를 이전 sha 로 바꿔 같은 명령.
+#
+#   TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait api      # dev EC2
+#   sudo TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait worker   # AI EC2 (ubuntu 가 docker 그룹이 아님)
+#
+# network_mode: host — 앱이 localhost 로 가리키는 postgres·redis·kafka·AI 서버를 기존 env 파일 그대로 쓴다.
+# 포트 매핑도 없어 nginx(→8080)·Prometheus(→8080/8081) 타깃이 그대로다.
+# 프로파일·관리 포트는 compose 가 아니라 env 파일이 정한다 (SPRING_PROFILES_ACTIVE, HEALTH_PORT) — 이 파일의
+# ${...} 는 실행 셸에서만 풀리고 env_file 값은 못 본다. 그래서 prod 도 env 파일만 다르게 두면 같은 파일을 쓴다.
+
+# 프로젝트 이름을 고정한다. 없으면 실행 디렉터리 이름(ubuntu)이 되어 docker-compose.server.yml 과 같은 프로젝트로
+# 묶이고, 한쪽의 `--remove-orphans` 가 다른 쪽 컨테이너(DB·Kafka 또는 api)를 지운다 (코드 리뷰).
+name: fillmap-app
+
+x-image: &image "${IMAGE:-951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap}:${TAG:?TAG 필수, 예 sha-abc1234}"
+
+x-healthcheck: &healthcheck
+  # curl -f 는 3xx 도 성공이라 HTTP 코드 200 정확 일치로 본다. 포트는 컨테이너 env(HEALTH_PORT, 없으면 8080).
+  # start_period 30s + retries 6 × 10s ≈ 90s 뒤에는 unhealthy 가 실제로 보고된다 (CD 의 --wait-timeout 180 안).
+  test: [ "CMD-SHELL", "test \"$$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://localhost:$${HEALTH_PORT:-8080}/actuator/health)\" = 200" ]
+  interval: 10s
+  timeout: 3s
+  retries: 6
+  start_period: 30s
+
+# env 파일은 systemd EnvironmentFile 을 그대로 쓴다. compose 기본 파서(dotenv)는 값 안의 `$` 를 치환하고 ` #` 뒤를
+# 주석으로 잘라 시크릿이 조용히 바뀐다 — raw 로 읽어 systemd 와 같은 글자 그대로 넘긴다 (코드 리뷰, compose ≥ 2.30).
+services:
+  api:
+    image: *image
+    container_name: fillmap-api
+    network_mode: host
+    env_file:
+      - path: /home/ubuntu/fillmap-dev.env
+        format: raw
+    volumes:
+      # env 파일의 CLOUDFRONT_PRIVATE_KEY_PATH·FCM_CREDENTIALS_PATH 가 가리키는 두 파일. 컨테이너 안 경로를 호스트와
+      # 같게 둬서 env 값을 바꾸지 않는다. create_host_path: false — 파일이 없으면 docker 가 그 자리에 root 디렉터리를
+      # 만들어 놓고 앱이 "키를 읽을 수 없다"로 죽는 대신, 기동 자체가 실패해 원인이 바로 보인다 (코드 리뷰).
+      - type: bind
+        source: /home/ubuntu/fillmap-cloudfront-private-key.pem
+        target: /home/ubuntu/fillmap-cloudfront-private-key.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /home/ubuntu/fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json
+        target: /home/ubuntu/fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json
+        read_only: true
+        bind:
+          create_host_path: false
+    restart: unless-stopped
+    healthcheck: *healthcheck
+
+  worker:
+    image: *image
+    container_name: fillmap-encoding-worker
+    network_mode: host
+    # worker.env 가 SPRING_PROFILES_ACTIVE(dev,encoding-worker) 와 HEALTH_PORT=8081 을 갖는다
+    env_file:
+      - path: /home/ubuntu/encoding-worker/worker.env
+        format: raw
+    environment:
+      # 구 systemd 유닛의 ExecStart JVM 옵션 그대로 (t3.small 위에서 AI 컨테이너·관측 스택과 동거)
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -XX:MaxMetaspaceSize=192m
+    restart: unless-stopped
+    healthcheck: *healthcheck
