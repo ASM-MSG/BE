@@ -2,7 +2,7 @@ package com.msg.fillmap.grid.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -24,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Limit;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -395,7 +396,7 @@ class GridQueryServiceIntegrationTest {
 		assertThat(page.items()).extracting(OccupiedGridView::regionName).containsOnly(REGION_NAME);
 		// 항목 3개에 페이지 쿼리 1회뿐 — 항목당 단건 조회(N+1)도, 역지오코딩 왕복도 없다.
 		verify(gridRepository, times(1))
-			.findOccupiedPage(anyLong(), anyLong(), anyLong(), anyLong(), anyLong(), anyInt());
+			.findOccupiedPage(anyLong(), anyLong(), anyLong(), anyLong(), anyLong(), any(Limit.class));
 		verifyNoMoreInteractions(gridRepository);
 		verifyNoInteractions(regionQueryService);
 	}

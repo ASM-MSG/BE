@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import lombok.AccessLevel;
@@ -36,6 +39,14 @@ public class UserGrid {
 
 	@Column(name = "cover_video_id", nullable = true)
 	private Long coverVideoId;
+
+	/**
+	 * 복합키의 grid_id 컬럼을 그대로 쓰는 읽기 전용 연관 (MSG-585). 키는 UserGridId 가 소유하고 이 연관은
+	 * JPQL 조인(ug.grid)용이다 — user_grids 쓰기는 native upsert 라 insert·update 에서 뺀다.
+	 */
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "grid_id", insertable = false, updatable = false)
+	private Grid grid;
 
 	@Builder
 	private UserGrid(Long userId, String gridId, Long coverVideoId) {
