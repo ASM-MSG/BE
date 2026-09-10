@@ -38,14 +38,15 @@ docker compose up -d          # PostGIS 컨테이너(fillmap DB) 기동
 | `JWT_SECRET` | JWT 서명 키 (`application.yml` 주석 기준 운영 주입) |
 | `JWT_REFRESH_SECRET` | JWT 리프레시 토큰 서명 키 — 기본값 없음 (MSG-135) |
 | `KAKAO_CLIENT_ID` | 카카오 OIDC client-id |
-| `REDIS_HOST` / `REDIS_PORT` | EC2 redis-prod 접속 (포트 기본 `6380`) |
-| `REDIS_PASSWORD` | redis-prod requirepass — 기본값 없음, 미설정 시 기동 실패 (`ProdRequiredEnvValidator`, MSG-244 → MSG-260) |
+| `REDIS_HOST` / `REDIS_PORT` | ElastiCache 프라이머리 엔드포인트, 포트 기본 `6379` (MSG-595 — TLS 로 붙는다, `spring.data.redis.ssl.enabled: true`) |
+| `REDIS_PASSWORD` | ElastiCache AUTH 토큰 — 기본값 없음, 미설정 시 기동 실패 (`ProdRequiredEnvValidator`, MSG-244 → MSG-260) |
 | `S3_BUCKET_VIDEO` | prod 영상 S3 버킷 — 기본값 없음, 미설정 시 `AwsProperties @Pattern` 이 기동 실패시킴 |
 | `CLOUDFRONT_ENABLED` | 영상 CDN 사용 여부. 운영에서는 `true` |
 | `CLOUDFRONT_DOMAIN` | 영상 전용 도메인 `media.fillmap.kr` |
 | `CLOUDFRONT_KEY_PAIR_ID` | 운영 CloudFront 공개 키 ID `K16XTNUYLRC55E` |
 | `CLOUDFRONT_PRIVATE_KEY_PATH` | 운영 서명 개인 키 경로 `/home/ubuntu/fillmap-prod-cloudfront-private-key.pem` |
 | `SERVER_PORT` | 서버 포트 (기본 `8080`) |
+| `SPRING_PROFILES_ACTIVE` / `HEALTH_PORT` | 컨테이너 배포(MSG-595)에서 env 파일이 정한다: `prod` / `8081`(관리 포트, compose healthcheck) |
 
 - 카카오 엔드포인트 두 개(`oauth.kakao.token-uri` 인가 코드 교환, `oauth.kakao.authorize-uri` 로그인 진입점의
   302 목적지 — MSG-345)는 issuer·jwk-set-uri 와 같은 공개 고정값이라 공통 `application.yml`에 있다.
@@ -93,14 +94,14 @@ MSG-495 범위에 포함하지 않았다.
 | 구성 요소 | 값 |
 |---|---|
 | 이미지 | `951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap` — 태그 `sha-<커밋 7자리>`(불변, 롤백 단위) + `develop`(최신 포인터). 라이프사이클: untagged 1일 · `sha-*` 최근 20개 |
-| Dockerfile | 루트. jar 는 밖에서 만들고(`./gradlew bootJar -x test`) 이미지는 담기만 한다. temurin 21 JRE + 정적 ffmpeg/ffprobe(`mwader/static-ffmpeg` 태그+digest 고정, apt ffmpeg 는 amd64 에서 453MB 라 뺐다) + curl, layered jar, 비root(uid 1000 = 호스트 ubuntu). amd64 372MB |
-| push 자격 | GitHub OIDC → IAM 역할 `fillmap-ecr-push` (신뢰 `repo:ASM-MSG/BE:*`, 권한은 `fillmap` 리포지토리 push 뿐). 저장된 AWS 키 없음 |
+| Dockerfile | 루트. jar 는 밖에서 만들고(`./gradlew bootJar -x test`) 이미지는 담기만 한다. temurin 21 JRE + 정적 ffmpeg/ffprobe(`mwader/static-ffmpeg` 태그+digest 고정, apt ffmpeg 는 amd64 에서 453MB 라 뺐다) + curl, layered jar, 비root(uid 1000 = 호스트 ubuntu). 크기는 ECR 압축 355MB, 서버 비압축 1.13GB (apt ffmpeg 시절 409MB/1.37GB — "372MB" 는 로컬 오측이었다) |
+| push·승격 자격 | GitHub OIDC → IAM 역할 `fillmap-ecr-push` (신뢰 `repo:ASM-MSG/BE:*`). 인라인 정책 `FillMapEcrPush` = `GetAuthorizationToken` + `fillmap` 리포지토리 한정 `BatchCheckLayerAvailability`·`GetDownloadUrlForLayer`·`BatchGetImage`·`PutImage`·`InitiateLayerUpload`·`UploadLayerPart`·`CompleteLayerUpload`·`DescribeImages` — dev 의 push 와 prod 의 태그 승격(`DescribeImages`·`BatchGetImage`·`PutImage`)이 같은 정책으로 돈다 (2026-09-10 `simulate-principal-policy` 로 allowed 확인). 저장된 AWS 키 없음 |
 | pull 자격 | EC2 인스턴스 역할 `FillMapEc2DevRole` 의 `AmazonEC2ContainerRegistryPullOnly` → 서버의 `amazon-ecr-credential-helper`(`~/.docker/config.json` `credsStore: ecr-login`). CD 가 멱등 설치 |
 | 서버 compose | `docker-compose.app.yml` — CD 가 홈(dev: `~`, AI: `~/encoding-worker`)에 복사. `network_mode: host` 라 env 파일·nginx·Prometheus 타깃이 jar 시절 그대로. 프로파일과 헬스 포트는 env 파일이 정한다 (`SPRING_PROFILES_ACTIVE`, `HEALTH_PORT` — 워커 8081, 없으면 8080). env 는 `format: raw` 로 읽어 `$`·`#` 가 든 시크릿이 안 바뀐다 |
 | CD | `cd-dev.yml`: build-image → deploy-dev(api) → deploy-worker(worker) → docs. 워커가 api 뒤인 이유는 Flyway 를 api 만 돌리기 때문(워커는 validate 만). 성공 = `up --wait` 로 healthy **이고** `Config.Image` 가 방금 push 한 태그 **이고** 재시작 0회 **이고** 포트 리스너 PID 가 그 컨테이너 |
 | PR 검사 | `ci.yml` 이 `docker build` 만 해 본다(push 없음) — Dockerfile 이 깨진 채 develop 에 들어가는 것을 막는다 |
 
-**롤백**은 이전 sha 로 같은 명령이다. 서버에는 현재 이미지만 남기므로(dev 디스크 여유 3.4GB, 이미지 amd64 372MB)
+**롤백**은 이전 sha 로 같은 명령이다. 서버에는 현재 이미지만 남기므로(dev 디스크 여유 3.4GB, 이미지 비압축 1.13GB)
 이전 sha 는 ECR 에서 받는다. 같은 리전이라 30초 안팎이다
 (`aws ecr describe-images --repository-name fillmap` 으로 태그 확인):
 
@@ -131,6 +132,35 @@ sudo TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait worke
 
 **로컬에서 이미지 확인**: `./gradlew bootJar -x test && docker build -t fillmap .` 뒤 로컬 DB·Redis(`docker compose up -d`)에
 붙여 본다 — `docker run --rm -p 18080:8080 -e SPRING_PROFILES_ACTIVE=local -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/fillmap -e SPRING_DATA_REDIS_HOST=host.docker.internal fillmap` 후 `curl localhost:18080/actuator/health`.
+
+## 운영 배포 — 컨테이너 (MSG-595)
+
+`cd-prod.yml` 은 main push → `production` 환경 승인 → **dev 가 검증한 sha 이미지에 `prod` 태그만 붙여**(다시 빌드하지
+않는다) prod EC2 에 compose 로 올린다. HEAD 의 sha 이미지가 없으면 머지 커밋의 develop 쪽 부모(HEAD^2)를 보고, 둘 다
+없을 때만(squash 머지 등) 빌드 fallback 이 돈다. 서버 절차·신원 검사는 dev 와 같고 경로만 다르다.
+
+| 구성 요소 | 값 |
+|---|---|
+| 서버 홈 | `/home/ubuntu/fillmap-prod` — compose 파일은 CD 가 복사, 아래 셋은 사람이 놓는다 |
+| env 파일 | `fillmap-prod.env` (템플릿 `~/fillmap-aws-backup-personal/fillmap-prod.env.template`). `SPRING_PROFILES_ACTIVE=prod`·`HEALTH_PORT=8081` 포함 |
+| 바인드 마운트 | `fillmap-prod-cloudfront-private-key.pem`, `fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json` (같은 폴더) |
+| compose 변수 | `APP_ENV_FILE`·`CLOUDFRONT_KEY_FILE`·`FCM_FILE` — CD 가 넘긴다. 손으로 올릴 때도 같은 변수를 앞에 붙인다 |
+| Kafka | prod 박스에서 `docker compose -f docker-compose.kafka.yml up -d` (사람이 1회, CD 밖). server.yml 은 DB 비밀번호 검증이 파일 로드에 걸려 kafka 만 못 골라 쓴다 |
+| DB / Redis | RDS `fillmap-prod` / ElastiCache `fillmap-prod` (TLS + AUTH) — 3단계 스크립트 `prod-infra-setup.sh` 산출 |
+| 인프라 ID·비밀 | `~/fillmap-aws-backup-personal/soma-ids.env`(`PROD_*`), `soma-secrets.env`(`PROD_RDS_MASTER_PASSWORD`, `PROD_ELASTICACHE_AUTH_TOKEN`) |
+
+**첫 운영 배포 체크리스트** (순서대로):
+
+1. `prod-infra-setup.sh` 실행 → RDS·ElastiCache `available` 확인, EC2 EIP 확보.
+2. GitHub environment `production` 에 `PROD_EC2_HOST`(EIP)·`PROD_EC2_USER`(ubuntu)·`PROD_EC2_SSH_KEY` 등록.
+3. prod EC2: `~/fillmap-prod/` 에 env 파일·pem·FCM json 배치(600), `docker-compose.kafka.yml` 복사 후 up,
+   nginx 서버 블록(api.fillmap.kr·api-prod.fillmap.kr → 127.0.0.1:8080, `/actuator/` 차단, docs 경로 basic auth)과
+   certbot — DNS 가 아직 dev 를 가리키므로 HTTP-01 이 아니라 **DNS-01(route53 플러그인, 인스턴스 역할
+   `FillMapCertbotRoute53`)** 로 받는다. 그래서 전환 순간 HTTPS 공백이 없다.
+4. S3 prod 버킷 정책(위 "프로필 이미지" 절 3·5번)과 이벤트 이미지 저작자 표시 — **시더가 첫 기동에 돈다**.
+5. `monitoring/prod/prometheus/prometheus.yml` prod 타깃을 새 사설 IP 로, 보안그룹 8081 은 스크립트가 열었다.
+6. main 머지 → 승인 → CD. 통과하면 5단계: Route 53 `api.fillmap.kr` 을 prod EIP 로, dev nginx 에서 그 이름 제거,
+   카카오 콘솔·FE 는 이미 api-dev 를 쓰고 있어야 한다.
 
 ## 관리자 계정 승격 (MSG-195)
 
