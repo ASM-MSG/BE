@@ -37,6 +37,7 @@ import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
@@ -94,6 +95,9 @@ class EventInteractionLockTest {
 	private UserRepository userRepository;
 
 	@Autowired
+	private UserBlockQueryService userBlockQueryService;
+
+	@Autowired
 	private EntityManager em;
 
 	private EventTestFixtures fixtures;
@@ -113,7 +117,7 @@ class EventInteractionLockTest {
 
 	private EventVideoInteractionService service(LocalDateTime now) {
 		return new EventVideoInteractionServiceImpl(eventVideoRepository, commentRepository, helpfulRepository,
-			videoRepository, Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+			videoRepository, userBlockQueryService, Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 
 	/** 지정한 일정의 행사에 붙은 노출 영상 하나. */
@@ -233,7 +237,7 @@ class EventInteractionLockTest {
 		LocalDateTime 아카이브 = NOW.plusDays(EventOccurrence.UPLOAD_GRACE_DAYS + 1);
 
 		// 가드에 조회용 메서드가 아예 없는 것이 FR-14 의 구조적 보장이다.
-		assertThat(service(아카이브).getComments(video.getId(), null, 0).comments()).hasSize(1);
+		assertThat(service(아카이브).getComments(null, video.getId(), null, 0).comments()).hasSize(1);
 		EventVideoDetailReactions reactions = service(아카이브).getDetailReactions(video.getId(), userId);
 		assertThat(reactions.commentCount()).isEqualTo(1);
 		assertThat(reactions.helpfulCount()).isEqualTo(1);

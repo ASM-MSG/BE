@@ -10,7 +10,8 @@ import com.msg.fillmap.event.dto.EventVideoHelpfulResponseDto;
  * 행사 영상의 댓글과 도움돼요 (MSG-441). event 도메인 내부 계약이라 다른 도메인이 소비하지 않는다.
  * 모든 경로가 공유하는 규칙 둘:
  * ① 대상 영상은 MSG-440 상세와 <b>같은 술어</b>로만 열린다 — 행사 영상 연결이 있고 ACTIVE·PUBLIC·READY
- * 이며 소속 회차가 노출 상태여야 하고, 하나라도 어긋나면 소유자 본인에게도 13406 이다.
+ * 이며 소속 회차가 노출 상태여야 하고, 하나라도 어긋나면 소유자 본인에게도 13406 이다. 요청자가 작성자와
+ * 차단 관계(어느 방향이든)여도 같은 13406 이다(MSG-569 D-7 — 댓글 목록·작성·수정·삭제·도움돼요 추가·취소 전부).
  * ② 변경 경로 다섯은 영상을 연 직후 잠금 가드를 부르고 조회 경로는 부르지 않는다 — 아카이브된 행사에서
  * 대화는 닫히지만 기록은 계속 보여야 한다(FR-14). 잠금 시점은 종료가 아니라 아카이브 전환(종료 + 30일)
  * 이라 유예 기간에는 반응이 열려 있다 (2026-08-21 번복).
@@ -38,14 +39,16 @@ public interface EventVideoInteractionService {
 	/**
 	 * 댓글 목록 (API 6). cursor 는 직전 응답의 nextCursor(opaque) 다 — null 이면 첫 페이지, 무효거나 다른
 	 * 영상에서 발급된 것이면 13402 다. size 는 [1, 50] 밖이면 클램프한다(0 이하·미지정은 기본 20).
-	 * 아카이브된 행사에서도 조회되고, 댓글이 없으면 빈 페이지다.
+	 * 아카이브된 행사에서도 조회되고, 댓글이 없으면 빈 페이지다. viewerId 는 비로그인이면 null 이다(MSG-569) —
+	 * 영상 작성자와 차단 관계면 상세와 같은 13406 이고, 차단 관계인 작성자의 댓글은 쿼리 안에서 빠진다.
 	 */
-	EventVideoCommentPageResponseDto getComments(long videoId, String cursor, int size);
+	EventVideoCommentPageResponseDto getComments(Long viewerId, long videoId, String cursor, int size);
 
 	/**
 	 * 영상 상세의 반응 재료 (API 7). 상세({@link EventVideoService#getVideoDetail})가 노출 판정을 이미
 	 * 마친 뒤 부르는 읽기 전용 진입점이라 여기서 술어를 다시 걸지 않는다 — 같은 요청에서 같은 영상을 두 번
 	 * 여는 왕복을 늘리지 않기 위해서다. userId 는 비로그인이면 null 이고, 이때 helpfulByMe 는 false 다.
+	 * 품기는 댓글 첫 페이지는 같은 userId 를 viewer 로 걸러(MSG-569) 둘째 페이지와 같은 집합을 본다.
 	 */
 	EventVideoDetailReactions getDetailReactions(long videoId, Long userId);
 

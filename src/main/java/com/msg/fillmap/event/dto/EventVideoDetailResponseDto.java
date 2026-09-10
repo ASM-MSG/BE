@@ -16,7 +16,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 	requiredProperties = {"videoId", "occurrenceId", "occurrenceStatus", "locationId", "locationName",
 		"representativeGridId", "zoneName", "zoneCell", "regionName", "playbackUrl", "durationSec",
 		"recordedAt", "createdAt", "uploaderNickname", "interactionLocked", "helpfulCount", "helpfulByMe",
-		"commentCount", "comments"})
+		"commentCount", "comments", "uploaderId"})
 public record EventVideoDetailResponseDto(
 	@Schema(description = "영상 ID", example = "1042")
 	Long videoId,
@@ -77,6 +77,9 @@ public record EventVideoDetailResponseDto(
 	long commentCount,
 
 	@Schema(description = "댓글 첫 페이지 (오래된 순 20건)")
-	EventVideoCommentPageResponseDto comments
+	EventVideoCommentPageResponseDto comments,
+	@Schema(description = "작성자 사용자 ID (videos.user_id). 차단(POST /api/users/{userId}/block)의 경로 값",
+		example = "42")
+	Long uploaderId
 ) {
 }

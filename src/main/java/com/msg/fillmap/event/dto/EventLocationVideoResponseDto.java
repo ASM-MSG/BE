@@ -12,7 +12,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * 싣지 않는다(상세에만 있다). 반응이 하나도 없는 영상은 0 이다.
  */
 @Schema(description = "위치별 영상 피드 항목",
-	requiredProperties = {"videoId", "thumbnailUrl", "durationSec", "createdAt", "helpfulCount", "commentCount"})
+	requiredProperties = {"videoId", "thumbnailUrl", "durationSec", "createdAt", "helpfulCount", "commentCount",
+		"uploaderId"})
 public record EventLocationVideoResponseDto(
 	@Schema(description = "영상 ID — 상세 진입 키", example = "1042")
 	Long videoId,
@@ -30,6 +31,9 @@ public record EventLocationVideoResponseDto(
 	long helpfulCount,
 
 	@Schema(description = "댓글 수", example = "3")
-	long commentCount
+	long commentCount,
+	@Schema(description = "작성자 사용자 ID (videos.user_id). 차단(POST /api/users/{userId}/block)의 경로 값",
+		example = "42")
+	Long uploaderId
 ) {
 }

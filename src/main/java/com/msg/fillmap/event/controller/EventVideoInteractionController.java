@@ -132,15 +132,23 @@ public class EventVideoInteractionController {
 			+ "목록에서 받은 커서면 400 + developCode 13402 다. size 는 1~50 범위 밖이면 잘라서 적용하고 "
 			+ "생략하면 20 이다.\n\n"
 			+ "아카이브된 행사에서도 조회할 수 있고 댓글이 없으면 실패가 아니라 빈 페이지다. 비로그인으로도 "
-			+ "조회할 수 있다."
+			+ "조회할 수 있다. 로그인 요청이면 영상 작성자와 차단 관계(어느 방향이든)일 때 상세와 같은 404 + 13406 "
+			+ "이고, 차단 관계인 작성자의 댓글은 목록에서 빠진다(댓글 수는 그대로다)."
 	)
 	@GetMapping("/api/event-videos/{videoId}/comments")
 	public SuccessResponse<EventVideoCommentPageResponseDto> getComments(
+		@Parameter(hidden = true) @AuthenticationPrincipal AuthPrincipal principal,
 		@Parameter(description = "영상 id", example = "1042") @PathVariable long videoId,
 		@Parameter(description = "직전 응답의 nextCursor. 첫 페이지는 생략") @RequestParam(required = false) String cursor,
 		@Parameter(description = "페이지 크기 (1~50, 기본 20)", example = "20")
 		@RequestParam(required = false, defaultValue = "0") int size
 	) {
-		return SuccessResponse.of(eventVideoInteractionService.getComments(videoId, cursor, size));
+		return SuccessResponse.of(eventVideoInteractionService.getComments(userIdOrNull(principal), videoId, cursor,
+			size));
+	}
+
+	/** 비로그인 요청의 principal 은 null 이다 (MSG-491, EventVideoController 와 같은 형태). */
+	private Long userIdOrNull(AuthPrincipal principal) {
+		return principal == null ? null : principal.userId();
 	}
 }

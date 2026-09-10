@@ -41,6 +41,7 @@ import com.msg.fillmap.grid.GridEncoder.GridIndex;
 import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
+import com.msg.fillmap.user.service.UserBlockQueryService;
 import com.msg.fillmap.video.entity.Video;
 import com.msg.fillmap.video.entity.Visibility;
 import com.msg.fillmap.video.repository.VideoRepository;
@@ -94,6 +95,9 @@ class EventVideoHelpfulServiceTest {
 	private UserRepository userRepository;
 
 	@Autowired
+	private UserBlockQueryService userBlockQueryService;
+
+	@Autowired
 	private VideoService videoService;
 
 	@Autowired
@@ -124,7 +128,7 @@ class EventVideoHelpfulServiceTest {
 
 	private EventVideoInteractionService service() {
 		return new EventVideoInteractionServiceImpl(eventVideoRepository, commentRepository, helpfulRepository,
-			videoRepository, Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
+			videoRepository, userBlockQueryService, Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 	}
 
 	private EventLocation 위치(long dy) {
@@ -247,7 +251,7 @@ class EventVideoHelpfulServiceTest {
 			// 남은 행이 응답에 새는 경로가 없다 — 조회·변경이 전부 노출 술어에서 막힌다.
 			은닉됨(() -> 영상서비스().getVideoDetail(videoId, userId));
 			assertThat(피드영상수(location)).isZero();
-			은닉됨(() -> service().getComments(videoId, null, 0));
+			은닉됨(() -> service().getComments(null, videoId, null, 0));
 			은닉됨(() -> service().createComment(userId, videoId, "댓글"));
 			은닉됨(() -> service().addHelpful(userId, videoId));
 			은닉됨(() -> service().removeHelpful(userId, videoId));
@@ -255,14 +259,15 @@ class EventVideoHelpfulServiceTest {
 
 		private int 피드영상수(EventLocation location) {
 			return 영상서비스()
-				.getLocationVideos(location.getOccurrence().getId(), location.getId(), null, 0)
+				.getLocationVideos(null, location.getOccurrence().getId(), location.getId(), null, 0)
 				.videos()
 				.size();
 		}
 
 		private EventVideoService 영상서비스() {
 			return new EventVideoServiceImpl(occurrenceRepository, locationRepository, eventVideoRepository,
-				videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em, service(),
+				videoService, videoRepository, thumbnailUrlPresigner, zoneNameQueryService, em,
+				service(), userBlockQueryService,
 				Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC));
 		}
 

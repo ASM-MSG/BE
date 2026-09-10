@@ -26,6 +26,9 @@ public interface EventVideoCommentRepository extends JpaRepository<EventVideoCom
 	 * userId 를 연관으로 매핑하지 않은 도메인 결정의 귀결이고, 컨벤션이 정한 형태다(Report 선례).
 	 * 건수 제한은 Pageable 이 지고(JPQL 에 LIMIT 이 없다) 서비스가 size+1 lookahead 로 넘긴다 —
 	 * Pageable 에 Sort 를 실으면 ORDER BY 계약이 흔들리므로 정렬 없는 PageRequest 여야 한다.
+	 * 차단 절(MSG-569 D-4): viewerId(비로그인 null)가 있으면 어느 방향이든 차단 관계인 작성자의 댓글을
+	 * NOT EXISTS 로 뺀다 — 쿼리 안에서 걸러야 빠진 댓글이 페이지 크기를 소비하지 않는다. 댓글 수
+	 * (countByVideo_VideoId·countCommentsByVideoIds)에는 붙이지 않아 차단한 사용자에게만 수와 행 수가 어긋날 수 있다.
 	 */
 	@Query("""
 		SELECT new com.msg.fillmap.event.repository.EventVideoCommentRow(
@@ -33,9 +36,14 @@ public interface EventVideoCommentRepository extends JpaRepository<EventVideoCom
 		FROM EventVideoComment c, User u
 		WHERE u.id = c.userId
 		  AND c.video.videoId = :videoId
+		  AND (:viewerId IS NULL OR NOT EXISTS (
+		    SELECT 1 FROM UserBlock b
+		    WHERE (b.id.blockerId = :viewerId AND b.id.blockedId = c.userId)
+		       OR (b.id.blockerId = c.userId AND b.id.blockedId = :viewerId)))
 		ORDER BY c.id ASC
 		""")
-	List<EventVideoCommentRow> findPageByVideoId(@Param("videoId") Long videoId, Pageable pageable);
+	List<EventVideoCommentRow> findPageByVideoId(@Param("videoId") Long videoId, @Param("viewerId") Long viewerId,
+		Pageable pageable);
 
 	/** 다음 페이지 — 위와 같은 문장에 keyset 경계 하나를 더한 형태다(정렬 키가 유일해 조건도 하나다). */
 	@Query("""
@@ -44,11 +52,15 @@ public interface EventVideoCommentRepository extends JpaRepository<EventVideoCom
 		FROM EventVideoComment c, User u
 		WHERE u.id = c.userId
 		  AND c.video.videoId = :videoId
+		  AND (:viewerId IS NULL OR NOT EXISTS (
+		    SELECT 1 FROM UserBlock b
+		    WHERE (b.id.blockerId = :viewerId AND b.id.blockedId = c.userId)
+		       OR (b.id.blockerId = c.userId AND b.id.blockedId = :viewerId)))
 		  AND c.id > :cursorId
 		ORDER BY c.id ASC
 		""")
 	List<EventVideoCommentRow> findPageByVideoIdAfter(@Param("videoId") Long videoId,
-		@Param("cursorId") Long cursorId, Pageable pageable);
+		@Param("viewerId") Long viewerId, @Param("cursorId") Long cursorId, Pageable pageable);
 
 	/** 상세 단건의 댓글 수. */
 	long countByVideo_VideoId(Long videoId);
