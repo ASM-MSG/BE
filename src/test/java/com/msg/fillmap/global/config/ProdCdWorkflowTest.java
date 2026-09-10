@@ -50,6 +50,16 @@ class ProdCdWorkflowTest {
 			"sudo ss -ltnpH 'sport = :8081'",
 			"[ \"$listen\" = \"$cpid\" ]");
 
+		// 러너 IP 는 배포 동안만 22 번에 열고 결과와 무관하게 닫는다 (prod SG 는 22 번 전체 공개가 아니다)
+		int openSsh = workflow.indexOf("- name: Open SSH for this runner");
+		int closeSsh = workflow.indexOf("- name: Close SSH for this runner");
+		assertThat(openSsh).isGreaterThan(promote);
+		assertThat(openSsh).isLessThan(pull);
+		assertThat(closeSsh).isGreaterThan(up);
+		assertThat(workflow.substring(closeSsh)).contains("if: always()", "revoke-security-group-ingress");
+		// 이전 실행 잔재로 같은 규칙이 있어도 열기 스텝이 죽지 않는다 (죽으면 닫기까지 건너뛴다)
+		assertThat(workflow.substring(openSsh, closeSsh)).contains("InvalidPermission.Duplicate");
+
 		// jar 시절 형태로 되돌아가지 않는다
 		assertThat(workflow).doesNotContain("Upload jar", "systemctl restart fillmap-prod", "app.jar");
 	}

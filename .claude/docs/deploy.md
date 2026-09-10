@@ -142,6 +142,7 @@ sudo TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait worke
 | 구성 요소 | 값 |
 |---|---|
 | 서버 홈 | `/home/ubuntu/fillmap-prod` — compose 파일은 CD 가 복사, 아래 셋은 사람이 놓는다 |
+| SSH 접근 | 보안그룹 `fillmap-prod-sg` 의 22 번은 개발자 IP 만. CD 는 실행마다 러너 공인 IP 를 넣었다가(`Open SSH for this runner`) 끝에 뺀다(`if: always()`). 규칙 설명이 `github-actions-run-<run_id>` 라 남아 있으면 그 실행이 정리에 실패한 것 — 콘솔에서 지운다 |
 | env 파일 | `fillmap-prod.env` (템플릿 `~/fillmap-aws-backup-personal/fillmap-prod.env.template`). `SPRING_PROFILES_ACTIVE=prod`·`HEALTH_PORT=8081` 포함 |
 | 바인드 마운트 | `fillmap-prod-cloudfront-private-key.pem`, `fillmap-edd7d-firebase-adminsdk-fbsvc-6559aa06cc.json` (같은 폴더) |
 | compose 변수 | `APP_ENV_FILE`·`CLOUDFRONT_KEY_FILE`·`FCM_FILE` — CD 가 넘긴다. 손으로 올릴 때도 같은 변수를 앞에 붙인다 |
