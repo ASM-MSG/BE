@@ -140,6 +140,11 @@ sequenceDiagram
 변경되는 타입만 적는다. 상세 조회와 영역 영상 조회가 새로 생기고, 미션 목록 응답에 메타데이터가
 붙는다. 진행도는 상세에만 붙는다.
 
+> **2026-09-13 정정 (MSG-597).** 초판 다이어그램은 영상 수를 `MissionDetailResponseDto`에만 달아
+> 두었는데, FR-3이 목록 카드에도 영상 수를 요구하므로 다이어그램이 자기 문서의 요구사항과 어긋나
+> 있었다. 서버 구현이 다이어그램을 따라가 목록에서 영상 수가 빠졌고, 화면은 그 자리를 임시 값으로
+> 채운 채 배포됐다. 다이어그램을 FR-3에 맞춰 고친다. FR과 그 밖의 결정은 그대로다.
+
 ```mermaid
 classDiagram
     class MissionQueryService {
@@ -153,6 +158,7 @@ classDiagram
         +description 신규
         +placeName 신규
         +imageUrl 신규
+        +영상 수 신규
     }
     class MissionDetailResponseDto {
         <<신규>>
