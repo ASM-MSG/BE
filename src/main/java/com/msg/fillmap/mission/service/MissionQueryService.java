@@ -34,6 +34,20 @@ public interface MissionQueryService {
 	List<MissionResponseDto> getMissionsInViewport(ViewportBounds bounds, MissionType type);
 
 	/**
+	 * 지도 목록 카드용 뷰포트 조회 (MSG-597 D1). getMissionsInViewport 결과에 미션별 영상 수를 얹어 준다 —
+	 * 카드가 그리는 "영상 N"의 재료다. 영상 수는 스냅숏에 얼리지 않고 요청 시점에 배치 집계 한 번으로
+	 * 세므로(왕복 1회 고정, 미션 수만큼 늘지 않는다) 목록 카드와 미션 상세의 숫자가 갈리지 않는다.
+	 * 뷰포트 안에 그 종류 미션이 없으면 집계를 아예 부르지 않고 빈 목록이다.
+	 *
+	 * <p>영상 수도 사용자와 무관한 전역 값이라 목록의 전역성 계약(FR-MISSION-02)은 그대로다. 차단 관계는
+	 * 반영되지 않아 차단한 사용자에게는 카드 수가 실제로 열리는 목록 행 수보다 클 수 있다(D6, 의도된 계약).
+	 *
+	 * <p><b>경로 추천은 이 메서드를 부르지 않는다</b> — videoCount 를 읽지도 응답에 싣지도 않는데 집계
+	 * 왕복만 최대 3회 늘기 때문이다(D1 소비자 분리). 그쪽은 getMissionsInViewport 를 그대로 쓴다.
+	 */
+	List<MissionResponseDto> getMissionCardsInViewport(ViewportBounds bounds, MissionType type);
+
+	/**
 	 * 넓은 축척용 미션 행정 단위 집계 (MSG-437). 뷰포트 안 EVENT·POPUP 미션을 행정동 코드 접두(unit)로 묶어
 	 * 지역 이름·개수·대표 좌표·미션 id 목록으로 돌려준다. 목록과 같은 1시간 스냅숏 위 메모리 산술이라
 	 * 요청마다 DB 를 타지 않고, 응답에 사용자별 값이 없어 모든 사용자에게 같다(FR-MISSION-02).

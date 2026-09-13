@@ -16,13 +16,18 @@ import com.msg.fillmap.mission.entity.Mission;
  * (Jackson 기본 직렬화) 그 계약을 ResponseSchemaNullabilityTest 가 강제한다(MSG-319). 스펙이 노린 "필드를
  * 빼지 않고 null 로 내려 FE 분기를 하나로 유지한다"가 곧 required + nullable 이다.
  *
+ * MSG-597 이 videoCount 를 더한다(additive). 카드가 그리던 영상 수가 서버 값이 아니라 화면이 지어낸
+ * 해시였기 때문이다 — 목록과 상세가 같은 대상을 두고 다른 숫자를 말하지 않게 서버가 실측값을 내려준다.
+ * 값은 조회 시점 집계라 캐시 스냅숏 안의 DTO 에는 0 이 박혀 있고, 목록 카드 경로가 응답 직전에 채운다
+ * (MissionQueryServiceImpl.getMissionCardsInViewport).
+ *
  * 목록·상세로 나누지 않은 이유는 상세 전용 DTO 가 아직 없어서다 — 지금 나누면 상세 티켓이 들어올 때
  * 소비처가 두 번 바뀐다(§D8).
  */
 @Schema(description = "미션 하나 — 공통 필드 + 유형별 렌더 shape",
 	requiredProperties = {"missionId", "type", "title", "targetCount", "shape", "startAt", "endAt",
 		"description", "placeName", "sourceUrl", "operationTime", "imageUrl",
-		"distanceMeters", "durationMinutes", "difficulty"})
+		"distanceMeters", "durationMinutes", "difficulty", "videoCount"})
 public record MissionResponseDto(
 	@Schema(description = "미션 id (missions.id)", example = "12")
 	Long missionId,
@@ -74,7 +79,11 @@ public record MissionResponseDto(
 
 	@Schema(description = "코스 난이도 — 두루누비 등급 1(쉬움)·2(보통)·3(어려움). 코스가 아니면 없다",
 		nullable = true, example = "2")
-	Integer difficulty
+	Integer difficulty,
+
+	@Schema(description = "이 미션에 올라온 전역 공개 영상 수 — 미션 상세의 videoCount 와 같은 술어라 "
+		+ "두 화면의 숫자가 어긋나지 않는다. 영상이 없으면 0 (MSG-597)", example = "0")
+	long videoCount
 ) {
 
 	/**
@@ -97,6 +106,17 @@ public record MissionResponseDto(
 			mission.getImageUrl(),
 			mission.getDistanceMeters(),
 			mission.getDurationMinutes(),
-			mission.getDifficulty());
+			mission.getDifficulty(),
+			0L);
+	}
+
+	/**
+	 * 영상 수만 채운 복사본 (MSG-597 D5). 영상 수는 저장하지 않고 조회 시점에 세는 값이라 of() 는 0 으로
+	 * 만들고, 그 값을 아는 경로(목록 카드 조회·상세 조립)가 응답 직전에 이것으로 채운다.
+	 */
+	public MissionResponseDto withVideoCount(long videoCount) {
+		return new MissionResponseDto(missionId, type, title, targetCount, startAt, endAt, shape,
+			description, placeName, sourceUrl, operationTime, imageUrl,
+			distanceMeters, durationMinutes, difficulty, videoCount);
 	}
 }
