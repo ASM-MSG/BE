@@ -62,14 +62,16 @@ public interface EventLocationRepository extends JpaRepository<EventLocation, Lo
 	List<EventLocation> findByLocationKeyStartingWith(String locationKeyPrefix);
 
 	/**
-	 * 노출 중지 (MSG-500 D-3) — 접두로 잡히는 위치를 한 문장에 숨긴다. 엔티티 더티 체킹을 쓰지 않는 것은
+	 * 노출 중지 (MSG-500 D-3) — 접두로 잡히는 위치를 한 문장에 숨기고 <b>대표 격자를 비운다</b>. 비우는
+	 * 이유는 중지가 격자 클레임을 반납하기 때문이다(MSG-598): 칸 행이 사라지면 대표 격자 FK 가 가리킬
+	 * 대상이 없으므로 같은 문장에서 함께 NULL 이 되어야 한다. 엔티티 더티 체킹을 쓰지 않는 것은
 	 * {@code @DynamicUpdate} 부재로 전 컬럼 UPDATE 가 나가 같은 시각의 재시드 갱신을 되덮기 때문이다
 	 * (missions.hidden_at 과 같은 규칙). {@code hidden_at IS NULL} 술어가 재중지를 0행으로 만들어 첫 중지
 	 * 시각을 보존하고, clearAutomatically 는 뒤이은 노출 영역 재계산이 새 상태를 읽게 한다.
 	 */
 	@Modifying(clearAutomatically = true)
 	@Query("""
-		UPDATE EventLocation l SET l.hiddenAt = :now
+		UPDATE EventLocation l SET l.hiddenAt = :now, l.representativeGridId = NULL
 		WHERE l.locationKey LIKE CONCAT(:locationKeyPrefix, '%') AND l.hiddenAt IS NULL
 		""")
 	int hideByLocationKeyPrefix(@Param("locationKeyPrefix") String locationKeyPrefix,

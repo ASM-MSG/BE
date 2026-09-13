@@ -48,6 +48,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.event.EventTestFixtures;
 import com.msg.fillmap.event.entity.EventLocation;
+import com.msg.fillmap.event.entity.EventLocationGrid;
 import com.msg.fillmap.event.entity.EventLocationType;
 import com.msg.fillmap.event.entity.EventOccurrence;
 import com.msg.fillmap.event.repository.EventLocationGridRepository;
@@ -458,21 +459,25 @@ class AdminEventParticipationApprovalTest {
 			assertThat(저장된_회차().getScheduleRevision()).isEqualTo(기존_개정);
 		}
 
-		// 검증: FR-EVENT-18
+		// 검증: FR-EVENT-18 (MSG-598 — 중지가 자리를 비운다)
 		@Test
-		@DisplayName("중지된 참여형 위치의 격자는 남아 있어 같은 칸의 재승인이 13452 로 막힌다")
-		void 중지된_위치의_격자는_남아_회차_내_단일_귀속을_지킨다() throws Exception {
+		@DisplayName("중지하면 격자 클레임이 반납돼 같은 칸에 새 행사를 승인할 수 있다")
+		void 중지하면_격자가_반납돼_같은_칸의_재승인이_통과한다() throws Exception {
 			long first = 참여를_신청한다(0, 46);
 			승인한다(first).andExpect(status().isOk());
 			중지한다(first).andExpect(status().isOk());
 
+			// 숨긴 위치의 칸 행이 실제로 사라져야 한다 — 남으면 uq_event_grid_per_occ 가 그 자리를 막는다.
+			EventLocation hidden = 승인된_위치들(first).getFirst();
+			assertThat(locationGridRepository.findByIdEventLocationId(hidden.getId())).isEmpty();
+			assertThat(hidden.getRepresentativeGridId()).isNull();
+
 			long second = 참여를_신청한다(0, 46);
 
-			// 숨긴 위치의 격자도 uq_event_grid_per_occ 에 그대로 남아 있다 — 겹침 검사가 가시 격자만 보면
-			// 여기서 통과하고 커밋 시점 500 이 된다.
-			승인한다(second)
-				.andExpect(status().isConflict())
-				.andExpect(jsonPath("$.developCode").value(13452));
+			승인한다(second).andExpect(status().isOk());
+			assertThat(locationGridRepository.findByIdEventLocationId(승인된_위치들(second).getFirst().getId()))
+				.extracting(EventLocationGrid::getGridId)
+				.containsExactly(gridId(0, 46));
 		}
 	}
 }

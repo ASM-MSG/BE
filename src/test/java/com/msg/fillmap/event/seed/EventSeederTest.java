@@ -180,6 +180,10 @@ class EventSeederTest {
 			LocalDate.now(), LocalDate.now().plusDays(3), "현장 스탬프", null);
 		if (hiddenAt != null) {
 			ReflectionTestUtils.setField(location, "hiddenAt", hiddenAt);
+			// 중지된 위치는 대표 격자를 갖지 않는다 — chk_event_loc_rep_grid_visible 등식 (MSG-598).
+			// 칸 행은 그대로 심는다: 실제 중지는 칸까지 지우지만, 남아 있어도 영역을 넓히지 않는 것이
+			// 가시 격자 필터의 몫이라 여기서는 더 어려운 상태를 만들어 그 필터를 검증한다.
+			ReflectionTestUtils.setField(location, "representativeGridId", null);
 		}
 		locationRepository.save(location);
 		locationGridRepository.save(new EventLocationGrid(location.getId(), occurrence.getId(), gridId));
