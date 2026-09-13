@@ -61,7 +61,13 @@ public class EventLocation {
 	@Column(name = "display_order", nullable = false)
 	private Integer displayOrder;
 
-	@Column(name = "representative_grid_id", length = 20, nullable = false)
+	/**
+	 * 영상이 붙는 격자 하나. <b>노출 중인 위치에서는 항상 값이 있고</b>, 중지된 위치만 NULL 이다 —
+	 * 중지가 격자 클레임을 반납하므로 대표 격자가 가리킬 행이 남지 않는다 (V55, MSG-598). 불변식은
+	 * {@code chk_event_loc_rep_grid_visible} 가 DB 에서 지킨다. 조회 경로는 모두 숨긴 위치를 걸러
+	 * 내므로 응답 계약은 종전대로 non-null 이다.
+	 */
+	@Column(name = "representative_grid_id", length = 20)
 	private String representativeGridId;
 
 	/**

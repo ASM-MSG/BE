@@ -152,6 +152,10 @@ public class AdminApprovedEventService {
 	 * 기준으로 재계산한다. 승인이 넓힌 영역을 되돌리지 않으면 "노출 영역 = 위치 사각형들을 감싸는 범위"
 	 * 불변식이 깨지고, 숨긴 위치만 커버하던 뷰포트에서 부모 행사가 계속 노출된다.
 	 * <p>
+	 * <b>숨김과 함께 격자 클레임을 반납한다</b> (MSG-598). 칸 행을 남겨 두면 회차 내 격자 단일 귀속 제약
+	 * (uq_event_grid_per_occ)이 숨김 여부를 보지 않으므로 중지된 위치가 그 자리를 영구히 막아, 같은 곳에
+	 * 들어올 새 신청의 승인이 13452 로 거부된다. 반납한 영역의 기록은 신청 원본 사각형에 그대로 남는다.
+	 * <p>
 	 * <b>회차 잠금을 먼저 잡는 것이 계약이다</b> — 승인(D-9)과 같은 순서라야 두 경로가 동시에 돌아도
 	 * 데드락이 없다. 잠금 뒤에 위치를 숨기고, 벌크 UPDATE 가 영속성 컨텍스트를 비우므로 회차를 다시 읽어
 	 * 영역을 고친다(잠금은 트랜잭션 것이라 재조회에 추가 대기가 없다). 시각을 바꾸지 않으므로
@@ -164,8 +168,11 @@ public class AdminApprovedEventService {
 		Long occurrenceId = submission.getParentEventOccurrenceId();
 		occurrenceRepository.findWithLockById(occurrenceId)
 			.orElseThrow(() -> new ApiException(EventErrorCode.PARENT_EVENT_NOT_FOUND));
-		locationRepository.hideByLocationKeyPrefix(
-			"%s%s-".formatted(EventLocation.SUBMISSION_KEY_PREFIX, submission.getSubmissionNo()), now);
+		String locationKeyPrefix =
+			"%s%s-".formatted(EventLocation.SUBMISSION_KEY_PREFIX, submission.getSubmissionNo());
+		locationRepository.hideByLocationKeyPrefix(locationKeyPrefix, now);
+		// 숨긴 뒤에 지운다 — 반납 쿼리가 hidden_at 을 술어로 걸어 가시 위치의 영역을 보호하기 때문이다.
+		locationGridRepository.deleteByHiddenLocationKeyPrefix(locationKeyPrefix);
 
 		// 여기서는 <b>전</b> 가시 위치를 본다 — 시더의 접두 한정 조회를 쓰지 않는 것이 의도다. 시더는 시드
 		// 사각형을 바닥값으로 깔 수 있지만 런타임에는 그 값을 알 방법이 없어(시드 파일에만 있다), 참여 위치만

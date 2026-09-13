@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -36,12 +37,28 @@ public interface EventLocationGridRepository extends JpaRepository<EventLocation
 	List<EventLocation> findLocationsByGridId(@Param("gridId") String gridId);
 
 	/**
-	 * 회차의 전 격자 (MSG-500 D-9 겹침 사전 검사) — <b>숨긴 위치의 격자도 포함한다.</b>
-	 * uq_event_grid_per_occ 는 행이 있으면 걸리는 제약이라 숨김 여부를 보지 않기 때문이다. 가시 격자만
-	 * 세면 중지된 위치와 같은 칸을 새 승인이 집어 커밋 시점 500 이 된다.
+	 * 회차의 전 격자 (MSG-500 D-9 겹침 사전 검사) — 숨김 여부를 보지 않는 것이 의도다.
+	 * uq_event_grid_per_occ 는 행이 있으면 걸리는 제약이므로 사전 검사가 <b>제약과 같은 집합</b>을 봐야
+	 * 커밋 시점 500 대신 읽을 수 있는 13452 가 나간다. 중지된 위치의 행은 클레임 반납으로 애초에
+	 * 사라져 있어(MSG-598) 이 조회에 걸리지 않는다 — 술어로 거르지 않는 이유가 그것이다.
 	 */
 	@Query("SELECT g.id.gridId FROM EventLocationGrid g WHERE g.eventOccurrenceId = :occurrenceId")
 	List<String> findGridIdsByOccurrenceId(@Param("occurrenceId") Long occurrenceId);
+
+	/**
+	 * 격자 클레임 반납 (MSG-598) — 접두로 잡히는 위치의 칸 행을 지워 같은 회차의 새 승인이 그 자리를
+	 * 다시 쓸 수 있게 한다. {@code hidden_at IS NOT NULL} 을 함께 거는 것은 노출 중인 위치의 영역을
+	 * 실수로 날리지 않기 위한 안전장치다 — 호출 시점엔 접두의 전 위치가 이미 숨겨져 있으므로 판정을
+	 * 바꾸지 않고, 호출 순서가 어긋나는 날 손실을 막는다.
+	 */
+	@Modifying(clearAutomatically = true)
+	@Query("""
+		DELETE FROM EventLocationGrid g
+		WHERE g.id.eventLocationId IN (
+			SELECT l.id FROM EventLocation l
+			WHERE l.locationKey LIKE CONCAT(:locationKeyPrefix, '%') AND l.hiddenAt IS NOT NULL)
+		""")
+	int deleteByHiddenLocationKeyPrefix(@Param("locationKeyPrefix") String locationKeyPrefix);
 
 	/**
 	 * 회차의 <b>가시</b> 격자 (MSG-500 D-3 노출 영역 재계산) — 위 조회와 정확히 반대 용도다. 노출 영역은
