@@ -81,7 +81,7 @@ class MissionControllerTest {
 	private static MissionResponseDto withoutMetadata(long missionId, String type, String title, int targetCount,
 		MissionShape shape) {
 		return new MissionResponseDto(missionId, type, title, targetCount, null, null, shape,
-			null, null, null, null, null, null, null, null);
+			null, null, null, null, null, null, null, null, 0L);
 	}
 
 	// 검증: FR-MISSION-01
@@ -90,7 +90,7 @@ class MissionControllerTest {
 	void active_조회는_200과_미션_리스트를_반환한다() throws Exception {
 		MissionResponseDto dto = withoutMetadata(31L, "POPUP", "성수 팝업", 1,
 			new CellsShape(List.of(new Cell("19422_9582", 37.478, 127.027))));
-		given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.POPUP))).willReturn(List.of(dto));
+		given(missionQueryService.getMissionCardsInViewport(any(), eq(MissionType.POPUP))).willReturn(List.of(dto));
 
 		mockMvc.perform(activeRequest("POPUP")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -112,7 +112,7 @@ class MissionControllerTest {
 		String line = "{\"type\":\"LineString\",\"coordinates\":[[129.04,35.10],[129.05,35.11]]}";
 		MissionResponseDto dto = withoutMetadata(12L, "COURSE", "남파랑길 3코스", 3,
 			new PathShape(line, List.of(new Spot("16794_11404", 35.1005, 129.0415, 1, "광안리해수욕장"))));
-		given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.COURSE))).willReturn(List.of(dto));
+		given(missionQueryService.getMissionCardsInViewport(any(), eq(MissionType.COURSE))).willReturn(List.of(dto));
 
 		mockMvc.perform(activeRequest("COURSE")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -128,7 +128,7 @@ class MissionControllerTest {
 	@Test
 	@DisplayName("active가 없으면 200과 빈 배열이다")
 	void active가_없으면_200과_빈_배열이다() throws Exception {
-		given(missionQueryService.getMissionsInViewport(any(), any())).willReturn(List.of());
+		given(missionQueryService.getMissionCardsInViewport(any(), any())).willReturn(List.of());
 
 		mockMvc.perform(activeRequest("EVENT")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -145,8 +145,8 @@ class MissionControllerTest {
 			12L, "COURSE", "남파랑길 3코스", 3, null, null,
 			new PathShape(null, List.of(new Spot("16794_11404", 35.1005, 129.0415, 1, "광안리해수욕장"))),
 			"바다를 따라 걷는다\n전망대가 있다", "부산 영도구", "https://festival.example.kr",
-			"매일 11:00 ~ 20:00", "https://cdn.fillmap.kr/mission/12.webp", 14000, 330, 2);
-		given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.COURSE))).willReturn(List.of(dto));
+			"매일 11:00 ~ 20:00", "https://cdn.fillmap.kr/mission/12.webp", 14000, 330, 2, 0L);
+		given(missionQueryService.getMissionCardsInViewport(any(), eq(MissionType.COURSE))).willReturn(List.of(dto));
 
 		mockMvc.perform(activeRequest("COURSE")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -171,7 +171,7 @@ class MissionControllerTest {
 		// 값이 없다고 필드를 빼면 FE 가 "없는 필드"와 "빈 값"을 따로 분기해야 한다 (§API 명세).
 		MissionResponseDto dto = withoutMetadata(31L, "POPUP", "성수 팝업", 1,
 			new CellsShape(List.of(new Cell("19422_9582", 37.478, 127.027))));
-		given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.POPUP))).willReturn(List.of(dto));
+		given(missionQueryService.getMissionCardsInViewport(any(), eq(MissionType.POPUP))).willReturn(List.of(dto));
 
 		mockMvc.perform(activeRequest("POPUP")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
@@ -199,7 +199,7 @@ class MissionControllerTest {
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.developCode").value(12400));
 
-		then(missionQueryService).should(never()).getMissionsInViewport(any(), any());
+		then(missionQueryService).should(never()).getMissionCardsInViewport(any(), any());
 	}
 
 	@Test
@@ -210,7 +210,7 @@ class MissionControllerTest {
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.developCode").value(12402));
 
-		then(missionQueryService).should(never()).getMissionsInViewport(any(), any());
+		then(missionQueryService).should(never()).getMissionCardsInViewport(any(), any());
 	}
 
 	@Test
@@ -222,20 +222,20 @@ class MissionControllerTest {
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.developCode").value(12402));
 		}
-		then(missionQueryService).should(never()).getMissionsInViewport(any(), any());
+		then(missionQueryService).should(never()).getMissionCardsInViewport(any(), any());
 	}
 
 	@Test
 	@DisplayName("type은 대소문자를 가리지 않는다")
 	void type은_대소문자를_가리지_않는다() throws Exception {
-		given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.POPUP))).willReturn(List.of());
+		given(missionQueryService.getMissionCardsInViewport(any(), eq(MissionType.POPUP))).willReturn(List.of());
 
 		mockMvc.perform(activeRequest("popup")
 				.header(HttpHeaders.AUTHORIZATION, bearer()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.developCode").value(200));
 
-		then(missionQueryService).should().getMissionsInViewport(any(), eq(MissionType.POPUP));
+		then(missionQueryService).should().getMissionCardsInViewport(any(), eq(MissionType.POPUP));
 	}
 
 	@Test

@@ -24,14 +24,19 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import com.msg.fillmap.auth.jwt.TokenProvider;
 import com.msg.fillmap.hotzone.service.HotZoneService;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto.SpotStats;
 import com.msg.fillmap.mission.dto.MissionResponseDto;
+import com.msg.fillmap.mission.dto.MissionShape.Cell;
+import com.msg.fillmap.mission.dto.MissionShape.CellsShape;
 import com.msg.fillmap.mission.dto.MissionShape.PathShape;
 import com.msg.fillmap.mission.dto.MissionShape.Spot;
 import com.msg.fillmap.mission.service.MissionQueryService;
+import com.msg.fillmap.user.entity.UserRole;
 import com.msg.fillmap.video.dto.GridVideoPageResponseDto;
 import com.msg.fillmap.video.service.VideoService;
 
@@ -51,6 +56,9 @@ class MissionPublicAccessHttpTest {
 	@Autowired
 	private MockMvc mockMvc;
 
+	@Autowired
+	private TokenProvider tokenProvider;
+
 	@MockitoBean
 	private HotZoneService hotZoneService;
 
@@ -64,7 +72,7 @@ class MissionPublicAccessHttpTest {
 	private static MissionDetailResponseDto anonymousDetail() {
 		MissionResponseDto mission = new MissionResponseDto(MISSION_ID, "COURSE", "남파랑길 3코스", 3, null, null,
 			new PathShape(null, List.of(new Spot("38677_114635", 35.1, 129.0, 1, "광안리해수욕장"))),
-			null, null, null, null, null, null, null, null);
+			null, null, null, null, null, null, null, null, 19L);
 		return new MissionDetailResponseDto(mission, null, 19L,
 			List.of(new SpotStats("38677_114635", false, 9)));
 	}
@@ -74,7 +82,7 @@ class MissionPublicAccessHttpTest {
 	@DisplayName("무인증으로 핫구역과 미션 조회 5종이 200으로 성공한다")
 	void 무인증으로_핫구역과_미션_조회_5종이_200으로_성공한다() throws Exception {
 		given(hotZoneService.getHotZones(any())).willReturn(List.of());
-		given(missionQueryService.getMissionsInViewport(any(), any())).willReturn(List.of());
+		given(missionQueryService.getMissionCardsInViewport(any(), any())).willReturn(List.of());
 		given(missionQueryService.getMissionAggregates(any(), any(), any())).willReturn(List.of());
 		// isNull() — 익명이면 컨트롤러가 userId 로 null 을 넘겨야 이 스텁이 잡힌다.
 		given(missionQueryService.getMissionDetail(anyLong(), isNull())).willReturn(anonymousDetail());
@@ -98,6 +106,33 @@ class MissionPublicAccessHttpTest {
 			.andExpect(status().isOk());
 		mockMvc.perform(get("/api/missions/{missionId}", MISSION_ID)).andExpect(status().isOk());
 		mockMvc.perform(get("/api/missions/{missionId}/videos", MISSION_ID)).andExpect(status().isOk());
+	}
+
+	// 검증: FR-MISSION-02, FR-MISSION-14, AC-597-04
+	@Test
+	@DisplayName("비로그인 목록 응답의 videoCount가 로그인 응답과 같다 — 목록은 전역 값이다 (MSG-597)")
+	void 비로그인_목록_응답의_videoCount가_로그인_응답과_같다() throws Exception {
+		MissionResponseDto card = new MissionResponseDto(31L, "POPUP", "성수 팝업", 1, null, null,
+			new CellsShape(List.of(new Cell("19422_9582", 37.478, 127.027))),
+			null, null, null, null, null, null, null, null, 7L);
+		given(missionQueryService.getMissionCardsInViewport(any(), any())).willReturn(List.of(card));
+
+		// 영상 수도 사용자와 무관한 전역 값이라, 컨트롤러가 principal 을 받게 되면 여기서 갈린다.
+		mockMvc.perform(활성_목록_요청())
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data[0].videoCount").value(7));
+		mockMvc.perform(활성_목록_요청()
+				.header(HttpHeaders.AUTHORIZATION,
+					"Bearer " + tokenProvider.issueAccessToken(4120L, UserRole.USER)))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.data[0].videoCount").value(7));
+	}
+
+	private static MockHttpServletRequestBuilder 활성_목록_요청() {
+		return get("/api/missions/active")
+			.param("type", "POPUP")
+			.param("swLat", "37.50").param("swLng", "127.00")
+			.param("neLat", "37.55").param("neLng", "127.05");
 	}
 
 	// 검증: FR-MISSION-18

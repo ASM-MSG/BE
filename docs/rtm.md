@@ -7,7 +7,7 @@
 
 요약: FR 302건 중 테스트 연결 271건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
 
-AC 요약: 스펙 성공 기준 79건 중 테스트 연결 75건, 미커버 4건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
+AC 요약: 스펙 성공 기준 91건 중 테스트 연결 85건, 미커버 6건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -164,7 +164,7 @@ AC 요약: 스펙 성공 기준 79건 중 테스트 연결 75건, 미커버 4건
 | FR-STREAK-07 | 구현됨 | StreakRemindSchedulerTest |
 | FR-STREAK-08 | 구현됨 | CollectionControllerTest, UploadHistoryIntegrationTest, UserGridQueryServiceImplTest, UserGridRepositoryTest |
 | FR-MISSION-01 | 구현됨 | CourseSeedContractTest, MissionControllerTest, MissionPublicAccessHttpTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest |
-| FR-MISSION-02 | 구현됨 | MissionAggregationHttpTest, MissionControllerTest, MissionQueryServiceClockTest, MissionRepositoryTest, MissionValidationHttpTest, MissionViewportFilterTest |
+| FR-MISSION-02 | 구현됨 | MissionAggregationHttpTest, MissionControllerTest, MissionListVideoCountTest, MissionPublicAccessHttpTest, MissionQueryServiceClockTest, MissionRepositoryTest, MissionValidationHttpTest, MissionViewportFilterTest |
 | FR-MISSION-03 | 구현됨 | CourseSeedContractTest, MissionAwardQueryTest, MissionAwardServiceTest |
 | FR-MISSION-04 | 구현됨 | FestivalMissionSeederIntegrationTest, MissionAwardQueryTest, MissionAwardServiceTest, MissionProgressQueryTest, MissionRepositoryTest, MissionSchemaMigrationTest, PopupMissionSeederIntegrationTest, UserMissionRepositoryTest |
 | FR-MISSION-05 | 구현됨 | VideoMissionIntegrationTest |
@@ -176,7 +176,7 @@ AC 요약: 스펙 성공 기준 79건 중 테스트 연결 75건, 미커버 4건
 | FR-MISSION-11 | 구현됨 | CourseMissionSeederIntegrationTest, FestivalMissionSeederIntegrationTest, PopupMissionSeederIntegrationTest |
 | FR-MISSION-12 | 계획 | (없음) |
 | FR-MISSION-13 | 진행 중 | MissionViewportFilterTest |
-| FR-MISSION-14 | 진행 중 | MissionViewportFilterTest |
+| FR-MISSION-14 | 진행 중 | MissionDetailConsistencyTest, MissionDetailServiceTest, MissionListVideoCountTest, MissionPublicAccessHttpTest, MissionQueryServiceCacheTest, MissionViewportFilterTest |
 | FR-MISSION-15 | 계획 | (없음) |
 | FR-MISSION-20 | 진행 중 | MissionAggregationHttpTest, MissionAggregationIntegrationTest, MissionPublicAccessHttpTest, MissionRegionAnchorTest |
 | FR-MISSION-16 | 진행 중 | CourseMissionSeederIntegrationTest, CourseSeedReaderTest, FestivalJsonlReaderTest, FestivalMissionSeederIntegrationTest, MissionControllerTest, MissionDetailServiceTest, MissionPublicAccessHttpTest, MissionQueryServiceImplTest, MissionSchemaMigrationTest, PopupJsonlReaderTest, PopupMissionSeederIntegrationTest |
@@ -200,7 +200,7 @@ AC 요약: 스펙 성공 기준 79건 중 테스트 연결 75건, 미커버 4건
 | FR-EVENT-09 | 구현됨 | EventVideoCommentServiceTest, EventVideoHelpfulServiceTest, EventVideoPublicAccessHttpTest, EventVideoQueryServiceTest, EventVideoUploadServiceTest, EventVideoVisibilityIntegrationTest |
 | FR-EVENT-10 | 구현됨 | EventInteractionLockTest, EventLifecycleGuardTest, EventNotificationSubscriptionRepositoryTest, EventSeederScheduleChangeTest, EventVideoQueryServiceTest, EventVideoUploadConcurrencyTest, EventVideoUploadServiceTest |
 | FR-EVENT-11 | 구현됨 | EventViewerCacheFailureControllerTest, EventViewerControllerTest, EventViewerServiceImplTest |
-| FR-EVENT-12 | 구현됨 | MissionAwardQueryTest, MissionProgressQueryTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVisitedGridQueryTest |
+| FR-EVENT-12 | 구현됨 | MissionAwardQueryTest, MissionListVideoCountTest, MissionProgressQueryTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVisitedGridQueryTest |
 | FR-EVENT-13 | 구현됨 | EventSubmissionCommitBoundaryTest, EventSubmissionControllerTest, EventSubmissionImageStoreTest, EventSubmissionValidationTest |
 | FR-EVENT-14 | 구현됨 | EventSubmissionCommitBoundaryTest, EventSubmissionControllerTest |
 | FR-EVENT-15 | 구현됨 | AdminEventParticipationApprovalTest, AdminEventSubmissionControllerTest, AdminEventSubmissionReviewTest, EventParticipationApprovalConcurrencyTest, EventSeederTest, EventSubmissionApprovalConcurrencyTest, EventSubmissionImageStoreTest, EventSubmissionReviewSchemaTest, MissionQueryServiceCacheTest |
@@ -457,6 +457,18 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 | AC-594-13 | MSG-594 | UserAppleProviderPersistenceTest |
 | AC-594-14 | MSG-594 | (없음) |
 | AC-594-15 | MSG-594 | AppleOidcIdTokenVerifierTest, AppleTokenClientTest, OidcLoginServiceTest |
+| AC-597-01 | MSG-597 | MissionListVideoCountTest, MissionQueryServiceCacheTest |
+| AC-597-02 | MSG-597 | MissionListVideoCountTest |
+| AC-597-03 | MSG-597 | MissionDetailConsistencyTest |
+| AC-597-04 | MSG-597 | MissionPublicAccessHttpTest |
+| AC-597-05 | MSG-597 | MissionListVideoCountTest |
+| AC-597-06 | MSG-597 | (없음) |
+| AC-597-07 | MSG-597 | MissionListVideoCountTest |
+| AC-597-08 | MSG-597 | MissionListVideoCountTest |
+| AC-597-09 | MSG-597 | ResponseSchemaNullabilityTest |
+| AC-597-10 | MSG-597 | (없음) |
+| AC-597-11 | MSG-597 | MissionQueryServiceCacheTest, RouteCandidateCollectorTest |
+| AC-597-12 | MSG-597 | MissionDetailServiceTest |
 
 ## 미커버 AC (보고만 — 실패 아님)
 
@@ -464,6 +476,8 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 - AC-539-08 (MSG-539)
 - AC-569-16 (MSG-569)
 - AC-594-14 (MSG-594)
+- AC-597-06 (MSG-597)
+- AC-597-10 (MSG-597)
 
 ## 테스트에만 있고 스펙에 없는 AC (마커 오타 의심)
 

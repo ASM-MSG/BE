@@ -52,6 +52,7 @@ class ResponseSchemaNullabilityTest {
 	private static final String BASE_PACKAGE = "com.msg.fillmap";
 	private static final Pattern RESPONSE_DTO = Pattern.compile(".*ResponseDto");
 
+	// 검증: AC-597-09
 	@Test
 	@DisplayName("응답 DTO 의 모든 필드는 required 로 선언된다 (Jackson 이 null 키도 내보내므로)")
 	void 응답_DTO_필드는_전부_required_다() {

@@ -190,6 +190,24 @@ class MissionDetailServiceTest {
 			.isEqualTo(detail.videoCount());
 	}
 
+	// 검증: FR-MISSION-14, FR-MISSION-17, AC-597-12
+	@Test
+	@DisplayName("상세의 중첩 mission videoCount가 최상위 videoCount와 같다 (MSG-597 D5)")
+	void 상세의_중첩_mission_videoCount가_최상위_videoCount와_같다() {
+		// 영상이 있는 픽스처여야 한다 — 0 건이면 중첩 쪽이 스냅숏 기본값 0 으로 남아도 거짓 통과한다.
+		long mission = insertMission("EVENT", nowUtc().minusDays(1), nowUtc().plusDays(1), 1);
+		String gridId = seedGrid(0);
+		insertMissionGrid(mission, gridId, null);
+		insertVideo(userId, gridId, nowUtc(), "ACTIVE", "PUBLIC", "READY");
+		insertVideo(newUser(), gridId, nowUtc(), "ACTIVE", "PUBLIC", "READY");
+
+		MissionDetailResponseDto detail = missionQueryService.getMissionDetail(mission, userId);
+
+		assertThat(detail.videoCount()).isEqualTo(2);
+		// 상세가 이미 센 합계를 중첩 DTO 에도 같은 변수로 넣는다 — 두 자리가 구조적으로 어긋날 수 없다.
+		assertThat(detail.mission().videoCount()).isEqualTo(detail.videoCount());
+	}
+
 	// 검증: FR-MISSION-17
 	@Test
 	@DisplayName("코스가 아니면 스팟 조립을 하지 않는다 — spotStats는 null이 아니라 빈 배열")

@@ -162,7 +162,7 @@ class RouteRecommendServiceTest {
 	/** 상시(무기간) 축제 미션 — SteppingClock 어느 시점에도 활성이라 시각 픽스처가 필요 없다. */
 	private MissionResponseDto 상시_축제미션(long id, String title, String description, double lat, double lng) {
 		return new MissionResponseDto(id, MissionType.EVENT.name(), title, null, null, null, 박스(lat, lng),
-			description, null, null, null, null, null, null, null);
+			description, null, null, null, null, null, null, null, 0L);
 	}
 
 	private void parse는_관심사를_준다(String interest) {
@@ -782,7 +782,7 @@ class RouteRecommendServiceTest {
 				"{\"type\": \"LineString\", \"coordinates\": [[129.05, 35.16], [129.06, 35.17]]}", List.of());
 			given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.COURSE))).willReturn(List.of(
 				new MissionResponseDto(5L, MissionType.COURSE.name(), "남파랑길 3코스", null, null, null, path,
-					"부산 앞바다를 따라 걷는 길", null, null, null, null, 14000, 330, 2)));
+					"부산 앞바다를 따라 걷는 길", null, null, null, null, 14000, 330, 2, 0L)));
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(content().json("""
@@ -805,7 +805,7 @@ class RouteRecommendServiceTest {
 			given(missionQueryService.getMissionsInViewport(any(), eq(MissionType.EVENT))).willReturn(List.of(
 				new MissionResponseDto(7L, MissionType.EVENT.name(), "빛 조형물 주간", null,
 					LocalDateTime.of(2026, 5, 20, 0, 0), LocalDateTime.of(2026, 6, 10, 0, 0), 박스(35.15, 129.08),
-					"밤을 밝히는 조형물 소개", "해운대 해수욕장 특설무대", null, null, null, null, null, null)));
+					"밤을 밝히는 조형물 소개", "해운대 해수욕장 특설무대", null, null, null, null, null, null, 0L)));
 			parse는_빈해석을_준다();
 			server.expect(requestTo(EXPLAIN_URL))
 				.andExpect(content().json("""

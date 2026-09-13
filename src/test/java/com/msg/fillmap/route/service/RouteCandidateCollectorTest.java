@@ -1,9 +1,12 @@
 package com.msg.fillmap.route.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.Clock;
@@ -66,7 +69,7 @@ class RouteCandidateCollectorTest {
 	private MissionResponseDto 미션(long id, MissionType type, String title,
 		LocalDateTime startAt, LocalDateTime endAt, MissionShape shape) {
 		return new MissionResponseDto(id, type.name(), title, null, startAt, endAt, shape,
-			null, null, null, null, null, null, null, null);
+			null, null, null, null, null, null, null, null, 0L);
 	}
 
 	/** 주어진 점을 중심으로 한 작은 판정 사각형 — 링 중점이 그 점이라 대표 좌표가 그 셀 중심이 된다. */
@@ -244,7 +247,7 @@ class RouteCandidateCollectorTest {
 		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.EVENT)).willReturn(List.of(
 			new MissionResponseDto(1L, MissionType.EVENT.name(), "여름 문화 주간", null,
 				NOW.minusDays(3), NOW.plusDays(3), 박스(35.15, 129.08),
-				null, "송정해변 특설무대", null, null, null, null, null, null)));
+				null, "송정해변 특설무대", null, null, null, null, null, null, 0L)));
 		ParsedIntent 해석 = new ParsedIntent(null, null, List.of("해변"), List.of(), true);
 
 		List<RouteCandidate> candidates = collector.collect(뷰포트, 해석);
@@ -344,5 +347,20 @@ class RouteCandidateCollectorTest {
 		assertThat(candidates.getFirst().lat()).isEqualTo(35.16);
 		assertThat(candidates.getFirst().lng()).isEqualTo(129.05);
 		assertThat(candidates.getFirst().gridId()).isEqualTo(GridEncoder.encode(35.16, 129.05));
+	}
+
+	// 검증: FR-ROUTE-04, AC-597-11
+	@Test
+	@DisplayName("후보 수집은 목록 카드 메서드를 부르지 않는다 — 쓰지 않는 영상 수 집계를 얹지 않는다 (MSG-597 D1)")
+	void 후보_수집은_목록_카드_메서드를_부르지_않는다() {
+		given(missionQueryService.getMissionsInViewport(뷰포트, MissionType.EVENT))
+			.willReturn(List.of(진행중_축제(1L, "빛축제", 35.15, 129.08)));
+
+		collector.collect(뷰포트, 빈해석);
+
+		// 경로 추천은 videoCount 를 읽지도 응답에 싣지도 않는데, 카드 메서드를 부르면 종류마다 집계 왕복이
+		// 붙어 MSG-457 PRD 의 "외부 왕복을 추가하지 않는다" 기준과 부딪힌다.
+		then(missionQueryService).should(never()).getMissionCardsInViewport(any(), any());
+		then(missionQueryService).should(atLeastOnce()).getMissionsInViewport(any(), any());
 	}
 }
