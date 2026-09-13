@@ -57,7 +57,9 @@ public class MissionController {
 			+ "멈추고 확대 안내를 그린다.\n\n"
 			+ "보이는 범위에 그 종류 미션이 없으면 실패가 아니라 빈 배열이다(뷰포트가 너무 넓은 12401 과 다른 "
 			+ "상태). 한국 밖이지만 WGS84 정의역 안인 bbox 도 오류가 아니라 빈 배열이다. 응답에 사용자별 값은 "
-			+ "없다 — 진행도는 GET /api/missions/progress 로 따로 받는다."
+			+ "없다 — 진행도는 GET /api/missions/progress 로 따로 받는다.\n\n"
+			+ "videoCount 는 그 미션에 올라온 전역 공개 영상 수다. 미션 상세·격자 역조회의 videoCount 와 같은 "
+			+ "술어라 세 화면의 숫자가 어긋나지 않고, 영상이 하나도 없으면 키가 빠지는 것이 아니라 0 이다."
 	)
 	@GetMapping("/api/missions/active")
 	public SuccessResponse<List<MissionResponseDto>> getActiveMissionsInViewport(
@@ -74,7 +76,8 @@ public class MissionController {
 		@RequestParam(required = false) Double neLng
 	) {
 		ViewportBounds bounds = toBounds(swLat, swLng, neLat, neLng);
-		return SuccessResponse.of(missionQueryService.getMissionsInViewport(bounds, toType(type, LISTABLE_TYPES)));
+		return SuccessResponse.of(
+			missionQueryService.getMissionCardsInViewport(bounds, toType(type, LISTABLE_TYPES)));
 	}
 
 	@Operation(

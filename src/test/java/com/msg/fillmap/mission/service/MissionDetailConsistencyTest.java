@@ -2,6 +2,8 @@ package com.msg.fillmap.mission.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -17,11 +19,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
+import tools.jackson.databind.ObjectMapper;
+
 import com.msg.fillmap.grid.GridEncoder;
 import com.msg.fillmap.grid.GridEncoder.GridIndex;
+import com.msg.fillmap.grid.GridEncoder.GridPoint;
 import com.msg.fillmap.grid.GridFixtures;
+import com.msg.fillmap.grid.dto.ViewportBounds;
+import com.msg.fillmap.mission.config.MissionViewportProperties;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto;
 import com.msg.fillmap.mission.dto.MissionDetailResponseDto.SpotStats;
+import com.msg.fillmap.mission.entity.MissionType;
+import com.msg.fillmap.mission.repository.MissionGridRepository;
+import com.msg.fillmap.mission.repository.MissionRepository;
+import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
+import com.msg.fillmap.region.service.RegionQueryService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
@@ -55,6 +67,18 @@ class MissionDetailConsistencyTest {
 
 	@Autowired
 	private MissionQueryService missionQueryService;
+
+	@Autowired
+	private MissionRepository missionRepository;
+
+	@Autowired
+	private MissionGridRepository missionGridRepository;
+
+	@Autowired
+	private RegionQueryService regionQueryService;
+
+	@Autowired
+	private ObjectMapper objectMapper;
 
 	@Autowired
 	private VideoRepository videoRepository;
@@ -175,6 +199,89 @@ class MissionDetailConsistencyTest {
 		// 마지막 영상을 지운 스팟은 방문하지 않은 것으로 바뀌고(§도메인), 삭제 영상은 개수에서도 빠진다.
 		assertThat(visitedCount(detail)).isZero();
 		assertThat(detail.videoCount()).isZero();
+	}
+
+	// 검증: FR-MISSION-14, FR-MISSION-17, AC-597-03
+	@Test
+	@DisplayName("목록 videoCount와 상세 videoCount와 MSG390 후보 전체 건수가 모두 같다 (MSG-597)")
+	void 목록_videoCount와_상세_videoCount와_MSG390_후보_전체_건수가_모두_같다() {
+		// 목록 경로는 활성 미션만 담으므로 기간이 지금을 감싸야 한다.
+		long mission = insertMission("EVENT", nowUtc().minusDays(10), nowUtc().plusDays(10), 1);
+		String first = seedGrid(0);
+		String second = seedGrid(1);
+		insertMissionGrid(mission, first, null);
+		insertMissionGrid(mission, second, null);
+		for (int i = 0; i < 4; i++) {
+			insertVideo(userId, i % 2 == 0 ? first : second, nowUtc(), "ACTIVE", "PUBLIC", "READY");
+		}
+		insertVideo(userId, first, nowUtc(), "ACTIVE", "PRIVATE", "READY");              // 게이트 탈락
+		insertVideo(userId, second, nowUtc().minusDays(30), "ACTIVE", "PUBLIC", "READY"); // 기간 밖
+
+		long cardCount = 카드_영상_수(mission);
+		MissionDetailResponseDto detail = missionQueryService.getMissionDetail(mission, userId);
+		List<Video> candidates = allCandidates(mission);
+
+		// 0 건 픽스처면 셋 다 0 이라 거짓 통과한다 — 실제 후보가 있는 상태에서 대조한다.
+		assertThat(candidates).isNotEmpty();
+		assertThat(cardCount).isEqualTo(detail.videoCount());
+		assertThat(cardCount).isEqualTo(candidates.size());
+	}
+
+	// 검증: FR-MISSION-14, AC-597-03
+	@Test
+	@DisplayName("차단한 작성자의 영상만큼 카드 영상 수가 목록 행 수보다 크다 — 의도된 비대칭 (MSG-597 D6)")
+	void 차단한_작성자의_영상만큼_카드_영상_수가_목록_행_수보다_크다() {
+		// 위 정합 단언은 viewerId 에 null 을 넘겨(allCandidates) 차단 절이 통째로 단락되므로 이 비대칭이
+		// 드러나지 않는다. 여기서만 요청자를 실제로 실어 차단 축을 본다.
+		long mission = insertMission("EVENT", nowUtc().minusDays(10), nowUtc().plusDays(10), 1);
+		String grid = seedGrid(0);
+		insertMissionGrid(mission, grid, null);
+		long blockedAuthor = newUser();
+		insertBlock(userId, blockedAuthor);
+		insertVideo(userId, grid, nowUtc(), "ACTIVE", "PUBLIC", "READY");
+		insertVideo(blockedAuthor, grid, nowUtc(), "ACTIVE", "PUBLIC", "READY");
+
+		long cardCount = 카드_영상_수(mission);
+		em.flush();
+		em.clear();
+		int visibleRows = videoRepository.findMissionVideos(mission, userId, ALL_CANDIDATES).size();
+
+		// 개수 축(집계)에는 차단 절이 없고 목록 축에는 있다 — 결함이 아니라 못 박아 두는 계약이다.
+		// >= 로 쓰면 둘이 같아져도 통과해 어느 한쪽 술어가 바뀐 회귀를 놓친다.
+		assertThat(cardCount).isGreaterThan(visibleRows);
+		assertThat(cardCount - visibleRows).isEqualTo(1);
+	}
+
+	/** 목록 카드 경로의 영상 수 — 캐시 없는 인스턴스로 부른다(롤백되는 합성 미션을 전역 스냅숏에 남기지 않는다). */
+	private long 카드_영상_수(long missionId) {
+		em.flush();
+		em.clear();
+		MissionQueryService cacheFree = new MissionQueryServiceImpl(missionRepository, missionGridRepository,
+			videoRepository, objectMapper, new MissionViewportProperties(Map.of()), regionQueryService,
+			Clock.systemUTC(), Duration.ofHours(1).toMillis());
+		return cacheFree.getMissionCardsInViewport(합성_뷰포트(), MissionType.EVENT).stream()
+			.filter(card -> card.missionId() == missionId)
+			.findFirst()
+			.orElseThrow()
+			.videoCount();
+	}
+
+	/** 합성 격자 블록을 덮는 뷰포트 — 한국 밖 오프셋이라 시드 미션이 섞이지 않는다. */
+	private ViewportBounds 합성_뷰포트() {
+		GridPoint sw = GridFixtures.pointAt(baseY - 2 + 0.5, baseX - 2 + 0.5);
+		GridPoint ne = GridFixtures.pointAt(baseY + 5 + 0.5, baseX + 5 + 0.5);
+		return new ViewportBounds(sw.lat(), sw.lon(), ne.lat(), ne.lon());
+	}
+
+	private void insertBlock(long blockerId, long blockedId) {
+		em.createNativeQuery("""
+				INSERT INTO user_blocks (blocker_id, blocked_id, created_at)
+				VALUES (:blockerId, :blockedId, :createdAt)
+				""")
+			.setParameter("blockerId", blockerId)
+			.setParameter("blockedId", blockedId)
+			.setParameter("createdAt", nowUtc())
+			.executeUpdate();
 	}
 
 	private static long visitedCount(MissionDetailResponseDto detail) {

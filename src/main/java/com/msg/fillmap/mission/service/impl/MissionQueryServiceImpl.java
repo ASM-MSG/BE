@@ -207,6 +207,31 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	}
 
 	/**
+	 * 목록 카드 조회 (MSG-597 D1) — 뷰포트 목록 위에 미션별 영상 수를 얹는다. 집계는 스냅숏 안이 아니라
+	 * 여기, 즉 요청 시점에 한다: 스냅숏에 얼리면 방금 올라온 영상이 최대 1시간 카드에 안 잡혀 목록과 상세의
+	 * 숫자가 다시 갈리고, 그 갈림이 이 티켓이 고치러 온 결함이다. 왕복은 미션 수와 무관하게 1회 고정이며
+	 * (배치 집계) 비면 부르지 않는다 — {@code IN ()} 은 SQL 이 깨진다(getMissionsByGrid 와 같은 가드).
+	 *
+	 * <p>쿼리는 역조회와 같은 countVideosByMissionIds 를 그대로 쓴다(D2). 새 집계 쿼리를 만들면 목록·상세·
+	 * 역조회의 술어가 갈릴 다섯 번째 자리가 생긴다.
+	 */
+	@Override
+	public List<MissionResponseDto> getMissionCardsInViewport(ViewportBounds bounds, MissionType type) {
+		List<MissionResponseDto> missions = getMissionsInViewport(bounds, type);
+		if (missions.isEmpty()) {
+			return missions;
+		}
+		Map<Long, Long> videoCounts = videoRepository
+			.countVideosByMissionIds(missions.stream().map(MissionResponseDto::missionId).toList()).stream()
+			.collect(Collectors.toMap(
+				MissionTotalVideoCountProjection::getMissionId, MissionTotalVideoCountProjection::getVideoCount));
+		// 결과 행이 없는 미션은 영상이 0건이라는 뜻 — 0 채움은 서비스 몫이다(D3).
+		return missions.stream()
+			.map(mission -> mission.withVideoCount(videoCounts.getOrDefault(mission.missionId(), 0L)))
+			.toList();
+	}
+
+	/**
 	 * 행정 단위 집계 (MSG-437 D2) — 목록과 같은 스냅숏 위 산술이라 요청 경로에서 DB 를 타지 않는다.
 	 * type 필터 → 귀속점이 bbox 안(경계 포함, D3)인 미션 선별 → 행정동 코드 접두로 그룹핑 → 항목 조립.
 	 * 무귀속 미션은 제외가 아니라 키 null 인 한 그룹으로 모여 맨 뒤에 실린다(MSG-356 NULLS LAST 와 같다).
@@ -318,7 +343,10 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 				MissionVideoCountProjection::getGridId, MissionVideoCountProjection::getVideoCount));
 		long videoCount = videoCountByGrid.values().stream().mapToLong(Long::longValue).sum();
 
-		MissionResponseDto missionDto = MissionResponseDto.of(mission, buildShape(mission, grids));
+		// 중첩 DTO 에도 같은 변수로 채운다 (MSG-597 D5) — of() 가 만드는 값은 0 이라, 안 채우면 최상위
+		// videoCount 옆에서 mission.videoCount 만 0 인 응답이 나간다. 두 값이 한 계산에서 나와야 어긋나지 않는다.
+		MissionResponseDto missionDto =
+			MissionResponseDto.of(mission, buildShape(mission, grids)).withVideoCount(videoCount);
 		return new MissionDetailResponseDto(missionDto, progress, videoCount,
 			spotStats(mission, grids, visitedGridIds, videoCountByGrid));
 	}
@@ -500,6 +528,12 @@ public class MissionQueryServiceImpl implements MissionQueryService {
 	/**
 	 * 스냅샷 한 줄 — 응답 DTO 와 뷰포트 판정용 정수 사각형(MSG-398 D2), 행정 집계용 귀속(MSG-437 D1)을
 	 * 함께 들고 다닌다. anchor 는 집계 대상 유형(EVENT·POPUP)이면서 판정 사각형이 있는 미션에만 있다.
+	 *
+	 * <p><b>dto 의 videoCount 는 항상 0 이다</b> (MSG-597 D5). 영상 수는 조회 시점에 세는 값이라 스냅숏에
+	 * 넣지 않고 getMissionCardsInViewport 가 응답 직전에 채운다. 지금 이 0 이 응답으로 나가는 경로는 없다 —
+	 * 경로 추천이 받는 DTO 가 이 원본이지만 route 는 videoCount 를 읽지도 응답에 싣지도 않는다(D1).
+	 * 목록 카드 경로에서 이 dto 를 그대로 반환하거나 route 쪽에서 이 필드를 읽으면 전 카드가 조용히
+	 * 0 이 되는 회귀가 난다.
 	 */
 	private record CachedMission(MissionResponseDto dto, MissionType type, GridRange bounds, RegionAnchor anchor) {
 	}

@@ -3,6 +3,7 @@ package com.msg.fillmap.mission.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -39,6 +40,7 @@ import com.msg.fillmap.mission.repository.MissionGridRepository;
 import com.msg.fillmap.mission.repository.MissionRepository;
 import com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl;
 import com.msg.fillmap.region.service.RegionQueryService;
+import com.msg.fillmap.video.repository.MissionTotalVideoCountProjection;
 import com.msg.fillmap.video.repository.VideoRepository;
 
 /**
@@ -47,6 +49,11 @@ import com.msg.fillmap.video.repository.VideoRepository;
  * 검증한다. MSG-398 이 뷰포트 파라미터를 붙여도 스냅샷의 내용과 캐시 키는 바뀌지 않는다(D1) — 뷰포트가
  * 달라져도 재계산이 없는지, 재계산된 스냅샷에도 판정 사각형이 함께 들어오는지가 이 파일 몫이다.
  * shape 합성은 MissionQueryServiceImplTest 담당.
+ *
+ * <p>MSG-597 이 호출 축 하나를 더 얹는다. 스냅숏은 재사용하되 영상 수는 매 요청 다시 세고(D1), 경로
+ * 추천이 쓰는 getMissionsInViewport 에는 그 집계가 붙지 않는다(D1 소비자 분리). 리포지토리가 목이라
+ * 쿼리 수준에서 두 축이 갈린 것을 볼 수 있는 자리가 여기뿐이다 — route 테스트는 서비스 자체가 목이라
+ * 이 검증을 대신하지 못한다.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("MissionQueryServiceImpl 1h 전역 캐시")
@@ -230,5 +237,80 @@ class MissionQueryServiceCacheTest {
 		// 재계산된 스냅샷이 사각형을 잃으면 강남 뷰포트에서도 사라진다 — 부산에서는 빠지고 강남에서는 나와야 한다.
 		assertThat(outside).isEmpty();
 		assertThat(second).extracting(MissionResponseDto::missionId).containsExactly(5L);
+	}
+
+	/** 활성 미션 한 건이 있는 상태 — 빈 목록 가드에 걸리면 집계가 애초에 안 불려 호출 수 단언이 무의미해진다. */
+	private void 강남에_활성_미션_한_건() {
+		Mission mission = Mission.builder()
+			.type(MissionType.EVENT).title("영상 수 검증 축제").targetCount(1).build();
+		ReflectionTestUtils.setField(mission, "id", 5L); // 시더 밖 합성 엔티티라 id 를 직접 부여한다.
+		given(missionRepository.findActive(any())).willReturn(List.of(mission));
+		given(missionGridRepository.findByMissionIds(List.of(5L)))
+			.willReturn(List.of(new MissionGrid(5L, GridEncoder.encode(37.52, 127.02))));
+	}
+
+	private static MissionTotalVideoCountProjection 집계행(long missionId, long videoCount) {
+		return new MissionTotalVideoCountProjection() {
+
+			@Override
+			public Long getMissionId() {
+				return missionId;
+			}
+
+			@Override
+			public Long getVideoCount() {
+				return videoCount;
+			}
+		};
+	}
+
+	// 검증: FR-MISSION-14, AC-597-01
+	@Test
+	@DisplayName("TTL 안에 두 번 조회하면 스냅숏은 한 번 계산되고 영상 수는 두 번 센다 (MSG-597 D1)")
+	void TTL_안에_두_번_조회하면_스냅숏은_한_번_계산되고_영상_수는_두_번_센다() {
+		MutableClock clock = new MutableClock(Instant.ofEpochMilli(0));
+		MissionQueryService service = newService(clock);
+		강남에_활성_미션_한_건();
+
+		service.getMissionCardsInViewport(강남_뷰포트, MissionType.EVENT);
+		clock.set(Instant.ofEpochMilli(TTL_MILLIS - 1));
+		service.getMissionCardsInViewport(강남_뷰포트, MissionType.EVENT);
+
+		// 두 호출 축이 갈린다 — 스냅숏은 TTL 동안 재사용하고 영상 수만 매 요청 다시 센다.
+		verify(missionRepository, times(1)).findActive(any());
+		verify(videoRepository, times(2)).countVideosByMissionIds(any());
+	}
+
+	// 검증: FR-MISSION-14, AC-597-01
+	@Test
+	@DisplayName("TTL 안이라도 두 번째 응답은 새로 올라온 영상을 반영한다 — 집계를 스냅숏에 넣으면 깨진다")
+	void TTL_안이라도_두_번째_응답은_새로_올라온_영상을_반영한다() {
+		MutableClock clock = new MutableClock(Instant.ofEpochMilli(0));
+		MissionQueryService service = newService(clock);
+		강남에_활성_미션_한_건();
+		given(videoRepository.countVideosByMissionIds(any())).willReturn(List.of(집계행(5L, 1L)));
+
+		List<MissionResponseDto> first = service.getMissionCardsInViewport(강남_뷰포트, MissionType.EVENT);
+		// 스냅숏은 그대로 두고 영상만 한 건 더 올라온 상황.
+		given(videoRepository.countVideosByMissionIds(any())).willReturn(List.of(집계행(5L, 2L)));
+		clock.set(Instant.ofEpochMilli(TTL_MILLIS - 1));
+		List<MissionResponseDto> second = service.getMissionCardsInViewport(강남_뷰포트, MissionType.EVENT);
+
+		assertThat(first).singleElement().extracting(MissionResponseDto::videoCount).isEqualTo(1L);
+		assertThat(second).singleElement().extracting(MissionResponseDto::videoCount).isEqualTo(2L);
+	}
+
+	// 검증: FR-MISSION-14, AC-597-11
+	@Test
+	@DisplayName("기존 뷰포트 조회는 영상 수 집계를 부르지 않는다 — 경로 추천에 왕복을 얹지 않는다 (MSG-597 D1)")
+	void 기존_뷰포트_조회는_영상_수_집계를_부르지_않는다() {
+		MutableClock clock = new MutableClock(Instant.ofEpochMilli(0));
+		MissionQueryService service = newService(clock);
+		강남에_활성_미션_한_건();
+
+		service.getMissionsInViewport(강남_뷰포트, MissionType.EVENT);
+
+		// 소비자 분리를 쿼리 수준에서 고정하는 단언은 이것 하나다 — 집계를 공유 메서드로 되돌리면 깨진다.
+		verify(videoRepository, never()).countVideosByMissionIds(any());
 	}
 }
