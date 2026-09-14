@@ -1,0 +1,21 @@
+{
+  "label": "none-x4-r3",
+  "rate": 250,
+  "warmup": "30s",
+  "duration": "3m",
+  "reqs_all": 52480,
+  "reqs": 45001,
+  "achieved_rps": 214.28145800225798,
+  "failed_pct": 0,
+  "dropped": 0,
+  "empty_pct": 0,
+  "cells_per_req": 63.14508384146342,
+  "med_ms": 8.49,
+  "p95_ms": 17.361,
+  "p99_ms": 30.248,
+  "max_ms": 250.062,
+  "avg_ms": 9.454567854047673,
+  "all_med_ms": 8.587,
+  "all_p95_ms": 20.145049999999998,
+  "all_p99_ms": 97.68652999999968
+}

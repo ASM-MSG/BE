@@ -22,6 +22,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.msg.fillmap.global.exception.ApiException;
+import com.msg.fillmap.grid.cache.ViewportCache;
+import com.msg.fillmap.grid.cache.ViewportCacheProperties;
 import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
@@ -57,7 +59,11 @@ class GridCurrentRegionServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		gridQueryService = new GridQueryServiceImpl(gridRepository, zoneNameQueryService, regionQueryService);
+		// 캐시 없음 — 이 테스트는 캐시가 아니라 현재 행정동 판정을 본다.
+		ViewportCache noCache = new ViewportCache(new ViewportCacheProperties(ViewportCacheProperties.Mode.NONE,
+			java.time.Duration.ofSeconds(30), 64), null, new tools.jackson.databind.ObjectMapper(),
+			new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+		gridQueryService = new GridQueryServiceImpl(gridRepository, noCache, zoneNameQueryService, regionQueryService);
 	}
 
 	@Test

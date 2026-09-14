@@ -1,0 +1,21 @@
+{
+  "label": "redis-x4-r1",
+  "rate": 250,
+  "warmup": "30s",
+  "duration": "3m",
+  "reqs_all": 52501,
+  "reqs": 45000,
+  "achieved_rps": 214.24501691442984,
+  "failed_pct": 0,
+  "dropped": 0,
+  "empty_pct": 0,
+  "cells_per_req": 61.57410335041237,
+  "med_ms": 2.047,
+  "p95_ms": 23.52524999999999,
+  "p99_ms": 40.476119999999995,
+  "max_ms": 226.268,
+  "avg_ms": 5.901622666666697,
+  "all_med_ms": 2.35,
+  "all_p95_ms": 25.321,
+  "all_p99_ms": 64.855
+}

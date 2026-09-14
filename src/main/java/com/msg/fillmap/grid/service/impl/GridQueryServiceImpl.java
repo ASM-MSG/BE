@@ -1,6 +1,7 @@
 package com.msg.fillmap.grid.service.impl;
 
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,6 +23,7 @@ import com.msg.fillmap.grid.GridEncoder.GridRange;
 import com.msg.fillmap.grid.dto.RegionUnit;
 import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.grid.exception.GridErrorCode;
+import com.msg.fillmap.grid.cache.ViewportCache;
 import com.msg.fillmap.grid.repository.GridRepository;
 import com.msg.fillmap.grid.repository.OccupiedGridProjection;
 import com.msg.fillmap.grid.repository.RegionGridSummaryProjection;
@@ -64,6 +66,7 @@ public class GridQueryServiceImpl implements GridQueryService {
 	private static final double MAX_LONGITUDE_DEG = 180.0;
 
 	private final GridRepository gridRepository;
+	private final ViewportCache viewportCache;
 	private final ZoneNameQueryService zoneNameQueryService;
 	private final RegionQueryService regionQueryService;
 
@@ -153,7 +156,9 @@ public class GridQueryServiceImpl implements GridQueryService {
 			throw new ApiException(GridErrorCode.INVALID_PAGE_SIZE);
 		}
 		// lookahead(size + 1)로 다음 페이지 존재를 판정 — 빈 마지막 페이지를 만들지 않는다.
-		List<OccupiedGridProjection> rows = queryPage(userId, bounds, cursor, size + 1);
+		List<OccupiedGridProjection> rows = viewportCache.enabled()
+			? pageFromCache(userId, bounds, cursor, size + 1)
+			: queryPage(userId, bounds, cursor, size + 1);
 		boolean hasNext = rows.size() > size;
 		List<OccupiedGridProjection> pageRows = hasNext ? rows.subList(0, size) : rows;
 		String nextCursor = null;
@@ -205,7 +210,45 @@ public class GridQueryServiceImpl implements GridQueryService {
 			summary.getGridCount(), summary.getVideoCount());
 	}
 
+	/**
+	 * 캐시 경로 (부하 실험, ViewportCacheProperties.mode != NONE). 요청 범위를 블록으로 스냅해 블록 전체를
+	 * 캐시하고, 요청 범위·커서·lookahead 절단은 메모리에서 한다. 정렬 키(grid_y, grid_x)와 keyset 판정이
+	 * queryPage 와 같아 응답이 글자 단위로 동일하다.
+	 */
+	private List<OccupiedGridProjection> pageFromCache(long userId, ViewportBounds bounds, String cursor, int limit) {
+		GridRange range = GridEncoder.viewportRange(bounds);
+		GridRange block = viewportCache.snap(range);
+		GridCursor after = cursor == null ? null : decodeCursor(cursor);
+		List<ViewportCache.Cell> cells = viewportCache.get(userId, block, () -> loadBlock(userId, block));
+		return cells.stream()
+			.filter(c -> c.gridY() >= range.minGridY() && c.gridY() <= range.maxGridY()
+				&& c.gridX() >= range.minGridX() && c.gridX() <= range.maxGridX())
+			.filter(c -> after == null || c.gridY() > after.gridY()
+				|| (c.gridY() == after.gridY() && c.gridX() > after.gridX()))
+			.limit(limit)
+			.map(c -> (OccupiedGridProjection) new CachedCellProjection(c))
+			.toList();
+	}
+
+	/** 캐시 셀을 응답 변환(toViews)이 읽는 프로젝션 계약에 맞춘다. */
+	private record CachedCellProjection(ViewportCache.Cell c) implements OccupiedGridProjection {
+		@Override public String getGridId() { return c.gridId(); }
+		@Override public Integer getGridY() { return c.gridY(); }
+		@Override public Integer getGridX() { return c.gridX(); }
+		@Override public String getRegionName() { return c.regionName(); }
+	}
+
+	private List<ViewportCache.Cell> loadBlock(long userId, GridRange block) {
+		return gridRepository.findOccupiedInRange(
+				userId, block.minGridY(), block.maxGridY(), block.minGridX(), block.maxGridX())
+			.stream()
+			.map(p -> new ViewportCache.Cell(p.getGridId(), p.getGridY(), p.getGridX(), p.getRegionName()))
+			.sorted(Comparator.comparingInt(ViewportCache.Cell::gridY).thenComparingInt(ViewportCache.Cell::gridX))
+			.toList();
+	}
+
 	private List<OccupiedGridProjection> queryPage(long userId, ViewportBounds bounds, String cursor, int limit) {
+		viewportCache.recordDbLoad();
 		GridRange range = GridEncoder.viewportRange(bounds);
 		if (cursor == null) {
 			return gridRepository.findOccupiedPage(

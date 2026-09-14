@@ -1,0 +1,21 @@
+{
+  "label": "two-level-x1-r2",
+  "rate": 250,
+  "warmup": "30s",
+  "duration": "3m",
+  "reqs_all": 51921,
+  "reqs": 45001,
+  "achieved_rps": 214.2721640831962,
+  "failed_pct": 0,
+  "dropped": 0,
+  "empty_pct": 0,
+  "cells_per_req": 62.59041620924096,
+  "med_ms": 0.974,
+  "p95_ms": 19.452,
+  "p99_ms": 27.499,
+  "max_ms": 156.022,
+  "avg_ms": 4.18173509477569,
+  "all_med_ms": 1.017,
+  "all_p95_ms": 34.168,
+  "all_p99_ms": 3050.8545999999997
+}

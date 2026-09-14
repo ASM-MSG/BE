@@ -27,6 +27,8 @@ dependencies {
 
 	// --- Redis (리프레시 토큰 세션 · 액세스 토큰 블랙리스트, MSG-135) ---
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+	// --- 뷰포트 조회 인프로세스 캐시 (부하 실험, 버전은 Boot BOM) ---
+	implementation 'com.github.ben-manes.caffeine:caffeine'
 
 	// --- Observability (Actuator + Prometheus, MSG-128) ---
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
