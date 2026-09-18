@@ -1,0 +1,26 @@
+{
+  "platform": "macOS-27.0-arm64-arm-64bit",
+  "python": "3.9.18",
+  "git_head": "02c890424780d02c8fad4a924d41cc9e6bbf6c62",
+  "started_utc": "2026-09-17T03:25:00.444622+00:00",
+  "now": 1789614000,
+  "sql": "SELECT grid_id, count(*) AS score FROM signals\nWHERE occurred_at >= %s AND occurred_at < %s\nGROUP BY grid_id ORDER BY score DESC, grid_id COLLATE \"C\" DESC LIMIT 50",
+  "ensure_script": "if redis.call('EXISTS', KEYS[1]) == 0 then redis.call('ZUNIONSTORE', KEYS[1], #KEYS - 1, unpack(KEYS, 2)) redis.call('EXPIRE', KEYS[1], ARGV[1]) end return 1",
+  "increment_script": "redis.call('ZINCRBY', KEYS[1], 1, ARGV[1]) redis.call('EXPIRE', KEYS[1], ARGV[2]) return 1",
+  "source_sha256": {
+    "src/main/java/com/msg/fillmap/hotzone/service/HotZoneServiceImpl.java": "8da49761562b715964c8955f692b361ab8cdb036f6fb12f8fe93d4987985e092",
+    "src/main/java/com/msg/fillmap/hotzone/service/HotScoreCommandServiceImpl.java": "c62c77dc33e345db30ee43a3ce25bf9e38525f814b7fe621a014385f7d4fe88b"
+  },
+  "final_tool_sha256": "c3c6cea37f0733de94f42e35f20d5af44312ef223a9436fc24a564810fc223c8",
+  "containers": [
+    "/fillmap-hotzone-compare-pg sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777 cpu=1000000000 memory=1073741824",
+    "/fillmap-hotzone-compare-redis sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2 cpu=1000000000 memory=536870912"
+  ],
+  "host_hardware": [
+    "Apple M5",
+    "34359738368",
+    "10"
+  ],
+  "postgres_version": "postgres (PostgreSQL) 16.14",
+  "redis_version": "Redis server v=7.4.10 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=5642fd1cb14d7f56"
+}

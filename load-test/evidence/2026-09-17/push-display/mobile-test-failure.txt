@@ -1,0 +1,39 @@
+
+> mobile@1.0.0 test /Users/ssomae/seongmin/coding/fillmap-FE-push-dedupe/apps/mobile
+> vitest run
+
+
+ RUN  v4.1.10 /Users/ssomae/seongmin/coding/fillmap-FE-push-dedupe/apps/mobile
+
+ ❯ src/features/upload/model/location-label.parity.test.ts (3 tests | 1 failed) 84ms
+     × 응답 픽스처 전 조합에서 웹 formatUploadLocationLabel과 결과가 같다 (기준 20) 82ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/features/upload/model/location-label.parity.test.ts > 웹 원본 동등성 (기준 44) > 응답 픽스처 전 조합에서 웹 formatUploadLocationLabel과 결과가 같다 (기준 20)
+ReferenceError: sessionStorage is not defined
+ ❯ Object.peek ../web/src/shared/storage.ts:83:64
+     81|   },
+     82|   /** 읽기 — 부수효과 없음(oauthStateStorage.peek과 동일 규약). 해제는 clear가 맡는다 */
+     83|   peek: (): boolean => sessionStorage.getItem(UPLOAD_INTENT_KEY) !== n…
+       |                                                                ^
+     84|   /** 지목 좌표 읽기 — 좌표 없는 의도("1"·구형식)면 null. 부수효과 없음 */
+     85|   peekTarget: (): { lat: number; lng: number } | null => {
+ ❯ ../web/src/features/upload/model/upload-modal-store.ts:88:42
+ ❯ createStoreImpl ../../node_modules/.pnpm/zustand@5.0.14_@types+react@19.2.17_react@19.2.7_use-sync-external-store@1.6.0_react@19.2.7_/node_modules/zustand/esm/vanilla.mjs:19:32
+ ❯ createStore ../../node_modules/.pnpm/zustand@5.0.14_@types+react@19.2.17_react@19.2.7_use-sync-external-store@1.6.0_react@19.2.7_/node_modules/zustand/esm/vanilla.mjs:22:53
+ ❯ createImpl ../../node_modules/.pnpm/zustand@5.0.14_@types+react@19.2.17_react@19.2.7_use-sync-external-store@1.6.0_react@19.2.7_/node_modules/zustand/esm/react.mjs:15:15
+ ❯ create ../../node_modules/.pnpm/zustand@5.0.14_@types+react@19.2.17_react@19.2.7_use-sync-external-store@1.6.0_react@19.2.7_/node_modules/zustand/esm/react.mjs:20:48
+ ❯ ../web/src/features/upload/model/upload-modal-store.ts:82:36
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 209 passed (210)
+      Tests  1 failed | 1378 passed (1379)
+   Start at  11:47:34
+   Duration  3.90s (transform 4.83s, setup 0ms, import 6.33s, tests 6.80s, environment 13ms)
+
+/Users/ssomae/seongmin/coding/fillmap-FE-push-dedupe/apps/mobile:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  mobile@1.0.0 test: `vitest run`
+Exit status 1

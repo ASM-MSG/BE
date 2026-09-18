@@ -1,0 +1,16 @@
+[WebServer] (node:98358) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:98381) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 2 tests using 1 worker
+
+(node:98387) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/2] [chromium] › e2e/push-display-deduplication.manual.ts:66:1 › 실제 Firebase SDK 수신 경계에서 업무 ID를 보존한다
+[2/2] [chromium] › e2e/push-display-deduplication.manual.ts:103:1 › 브라우저의 실제 SDK와 전경 훅은 재전달 100회를 토스트 하나로 합친다
+  2 passed (2.0s)

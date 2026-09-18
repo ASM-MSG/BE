@@ -1,0 +1,5 @@
+EventFanoutBenchmark > benchmarkConcurrentHttpDuringFanout() FAILED
+java.util.concurrent.ExecutionException at EventFanoutBenchmark.java:335
+Caused by: java.net.http.HttpTimeoutException at EventFanoutBenchmark.java:318
+> Task :test FAILED
+BUILD FAILED in 2m 50s

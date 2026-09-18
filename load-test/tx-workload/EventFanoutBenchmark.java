@@ -53,7 +53,7 @@ import com.msg.fillmap.notification.service.NotificationCommandService;
  * 실행 전 root가 datasource를 별도 DB로 지정하고 모든 시더/AI/워커를 끕니다.
  * 출력 FANOUT_SAMPLE은 fixture 적재, 삭제, ANALYZE, 검증 SELECT 시간을 제외합니다.
  */
-@SpringBootTest(properties = {
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
 	"fillmap.notification.enabled=false",
 	"fillmap.event.lifecycle.poll-interval-ms=86400000",
 	"spring.jpa.properties.hibernate.generate_statistics=true",
@@ -62,11 +62,14 @@ import com.msg.fillmap.notification.service.NotificationCommandService;
 })
 class EventFanoutBenchmark {
 
-	private static final LocalDateTime START = LocalDateTime.of(2026, 10, 6, 1, 0);
+	private static final LocalDateTime START = LocalDateTime.now(ZoneOffset.UTC).withNano(0).minusMinutes(1);
 	private static final Clock CLOCK = Clock.fixed(START.plusMinutes(1).toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
 	private static final int[] SIZES = java.util.Arrays.stream(System.getenv()
 		.getOrDefault("BENCH_FANOUT_SIZES", "1000,10000,50000").split(","))
 		.mapToInt(Integer::parseInt).toArray();
+
+	@org.springframework.boot.test.web.server.LocalServerPort
+	private int port;
 
 	@Autowired
 	private JdbcTemplate jdbc;
@@ -109,9 +112,9 @@ class EventFanoutBenchmark {
 				ObservedTransactionManager observed = new ObservedTransactionManager(txManager);
 				EventNotificationScheduler scheduler = new EventNotificationScheduler(
 					occurrenceRepository, subscriptionRepository, seriesRepository,
-					notificationCommandService, observed, true, CLOCK);
+					benchmarkCommand(), observed, true, CLOCK);
 				String eventKey = "EVENT_START:" + tag + ":" + START.toEpochSecond(ZoneOffset.UTC);
-				if (size >= 50_000) {
+				if (size >= 50_000 && !Boolean.parseBoolean(System.getenv("BENCH_REPEAT_LARGE"))) {
 					// 기존 5만 명 단발 기준값과 비교하도록 반복 횟수를 유지합니다.
 					measure(scheduler, observed, stats, occurrenceId, eventKey, size, "LARGE_SINGLE", 1);
 					continue;
@@ -256,6 +259,196 @@ class EventFanoutBenchmark {
 				jdbc.update("DELETE FROM event_series WHERE series_key = ?", tag);
 			}
 			assertThat(stopped).as("워커가 남으면 fixture를 삭제하지 않고 실행을 실패시킵니다").isTrue();
+		}
+	}
+
+
+	/** 개선 전 70829e28의 recordStart 반복문을 그대로 재현하는 대조군입니다. */
+	private NotificationCommandService benchmarkCommand() {
+		if (!"legacy".equals(System.getenv("BENCH_IMPLEMENTATION"))) {
+			return notificationCommandService;
+		}
+		return new NotificationCommandService() {
+			@Override
+			public void record(Long userId, NotificationCategory category, String key, String title, String body) {
+				notificationCommandService.record(userId, category, key, title, body);
+			}
+
+			@Override
+			public void recordEventStart(long occurrenceId, LocalDateTime startsAt,
+				String key, String title, String body) {
+				for (var subscription : subscriptionRepository.findAllByIdEventOccurrenceId(occurrenceId)) {
+					if (!subscription.getCreatedAt().isAfter(startsAt)) {
+						notificationCommandService.record(subscription.getId().getUserId(),
+							NotificationCategory.EVENT, key, title, body);
+					}
+				}
+			}
+		};
+	}
+
+	/** 고정 10초 창의 실제 HTTP 혼합 부하. 두 클라이언트 closed-loop, think time 10ms입니다. */
+	@Test
+	void benchmarkConcurrentHttpDuringFanout() throws Exception {
+		schedules.getScheduledTasks().forEach(task -> task.cancel(false));
+		assertThat(jdbc.queryForObject("SELECT current_database()", String.class)).startsWith("fillmap_tx_bench_");
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM event_occurrences", Long.class)).isZero();
+		for (int repetition = 0; repetition < 4; repetition++) {
+			String tag = "mixed-" + UUID.randomUUID().toString().substring(0, 12);
+			String pattern = tag + "-%@example.invalid";
+			String key = "EVENT_START:" + tag + ":" + START.toEpochSecond(ZoneOffset.UTC);
+			ExecutorService workers = Executors.newFixedThreadPool(3);
+			try (var client = java.net.http.HttpClient.newHttpClient()) {
+				long occurrenceId = createFixture(tag, pattern, 10000);
+				var request = java.net.http.HttpRequest.newBuilder(java.net.URI.create(
+					"http://localhost:" + port + "/api/event-occurrences/" + occurrenceId))
+					.timeout(java.time.Duration.ofSeconds(30)).build();
+				var warmup = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+				assertThat(warmup.statusCode()).isEqualTo(200);
+				assertThat(warmup.body()).contains("감사 합성 행사");
+				CountDownLatch gate = new CountDownLatch(1);
+				List<Future<List<Double>>> readers = new ArrayList<>();
+				var errors = new java.util.concurrent.atomic.AtomicInteger();
+				for (int reader = 0; reader < 2; reader++) {
+					readers.add(workers.submit(() -> {
+						assertThat(gate.await(10, TimeUnit.SECONDS)).isTrue();
+						List<Double> times = new ArrayList<>();
+						long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+						while (System.nanoTime() < until) {
+							long start = System.nanoTime();
+							try {
+								var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+								if (response.statusCode() == 200 && response.body().contains("감사 합성 행사")) {
+									times.add((System.nanoTime() - start) / 1_000_000.0);
+								} else {
+									errors.incrementAndGet();
+								}
+							} catch (java.io.IOException failure) {
+								errors.incrementAndGet();
+								System.out.printf("MIXED_HTTP_ERROR type=%s elapsed_ms=%.3f%n",
+									failure.getClass().getSimpleName(), (System.nanoTime() - start) / 1_000_000.0);
+							}
+							Thread.sleep(10);
+						}
+						return times;
+					}));
+				}
+				var scheduler = new EventNotificationScheduler(occurrenceRepository, subscriptionRepository,
+					seriesRepository, benchmarkCommand(), txManager, true, CLOCK);
+				long start = System.nanoTime();
+				gate.countDown();
+				scheduler.tick();
+				double tickMs = (System.nanoTime() - start) / 1_000_000.0;
+				System.out.printf("MIXED_TICK repetition=%d elapsed_ms=%.3f%n", repetition, tickMs);
+				List<Double> times = new ArrayList<>();
+				for (var reader : readers) {
+					times.addAll(reader.get(45, TimeUnit.SECONDS));
+				}
+				times.sort(Double::compareTo);
+				assertThat(notificationCount(key)).isEqualTo(10000);
+				System.out.printf(Locale.ROOT,
+					"MIXED_SAMPLE implementation=%s repetition=%d tick_ms=%.3f requests=%d "
+						+ "errors=%d p50_ms=%.3f p95_ms=%.3f max_ms=%.3f%n",
+					System.getenv().getOrDefault("BENCH_IMPLEMENTATION", "bulk"), repetition, tickMs,
+					times.size() + errors.get(), errors.get(),
+					times.isEmpty() ? Double.NaN : times.get((int)Math.ceil(times.size() * .5) - 1),
+					times.isEmpty() ? Double.NaN : times.get((int)Math.ceil(times.size() * .95) - 1),
+					times.isEmpty() ? Double.NaN : times.getLast());
+			} finally {
+				workers.shutdownNow();
+				assertThat(workers.awaitTermination(40, TimeUnit.SECONDS)).isTrue();
+				jdbc.update("DELETE FROM users WHERE email LIKE ?", pattern);
+				jdbc.update("DELETE FROM event_occurrences WHERE occurrence_key = ?", tag);
+				jdbc.update("DELETE FROM event_series WHERE series_key = ?", tag);
+			}
+		}
+	}
+
+	/** 고정 유입률 시험. 완료를 기다려 다음 요청을 늦추지 않고 예정 시각부터 지연을 계산합니다. */
+	@Test
+	void benchmarkFixedArrivalHttpDuringFanout() throws Exception {
+		schedules.getScheduledTasks().forEach(task -> task.cancel(false));
+		assertThat(jdbc.queryForObject("SELECT current_database()", String.class))
+			.isEqualTo("fillmap_tx_bench_20260917");
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM event_occurrences", Long.class)).isZero();
+		int rate = Integer.parseInt(System.getenv().getOrDefault("BENCH_HTTP_RATE", "200"));
+		assertThat(rate).isBetween(1, 500);
+		int count = rate * 10;
+		for (int repetition = 0; repetition < 4; repetition++) {
+			String tag = "arrival-" + UUID.randomUUID().toString().substring(0, 12);
+			String pattern = tag + "-%@example.invalid";
+			String key = "EVENT_START:" + tag + ":" + START.toEpochSecond(ZoneOffset.UTC);
+			ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
+			try (var client = java.net.http.HttpClient.newHttpClient()) {
+				long occurrenceId = createFixture(tag, pattern, 10000);
+				var request = java.net.http.HttpRequest.newBuilder(java.net.URI.create(
+					"http://localhost:" + port + "/api/event-occurrences/" + occurrenceId))
+					.timeout(java.time.Duration.ofSeconds(30)).build();
+				for (int warmup = 0; warmup < 30; warmup++) {
+					var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+					assertThat(response.statusCode()).isEqualTo(200);
+					assertThat(response.body()).contains("감사 합성 행사");
+				}
+				long epoch = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+				var errors = new java.util.concurrent.atomic.AtomicInteger();
+				List<Future<double[]>> readers = new ArrayList<>();
+				for (int i = 0; i < count; i++) {
+					long due = epoch + i * TimeUnit.SECONDS.toNanos(1) / rate;
+					readers.add(workers.submit(() -> {
+						awaitNanos(due);
+						long sent = System.nanoTime();
+						try {
+							var response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+							if (response.statusCode() != 200 || !response.body().contains("감사 합성 행사")) {
+								errors.incrementAndGet();
+							}
+						} catch (java.io.IOException failure) {
+							errors.incrementAndGet();
+						}
+						return new double[] {(System.nanoTime() - due) / 1_000_000.0,
+							(sent - due) / 1_000_000.0};
+					}));
+				}
+				awaitNanos(epoch);
+				long start = System.nanoTime();
+				new EventNotificationScheduler(occurrenceRepository, subscriptionRepository,
+					seriesRepository, benchmarkCommand(), txManager, true, CLOCK).tick();
+				double tickMs = (System.nanoTime() - start) / 1_000_000.0;
+				List<Double> times = new ArrayList<>();
+				List<Double> dispatch = new ArrayList<>();
+				for (var reader : readers) {
+					var sample = reader.get(45, TimeUnit.SECONDS);
+					times.add(sample[0]);
+					dispatch.add(sample[1]);
+				}
+				times.sort(Double::compareTo);
+				dispatch.sort(Double::compareTo);
+				assertThat(notificationCount(key)).isEqualTo(10000);
+				assertThat(times).hasSize(count);
+				System.out.printf(Locale.ROOT,
+					"ARRIVAL_SAMPLE implementation=%s rate=%d repetition=%d tick_ms=%.3f requests=%d "
+						+ "errors=%d p50_ms=%.3f p95_ms=%.3f p99_ms=%.3f max_ms=%.3f dispatch_p95_ms=%.3f%n",
+					System.getenv().getOrDefault("BENCH_IMPLEMENTATION", "bulk"), rate, repetition, tickMs,
+					count, errors.get(), times.get((int)Math.ceil(count * .5) - 1),
+					times.get((int)Math.ceil(count * .95) - 1), times.get((int)Math.ceil(count * .99) - 1),
+					times.getLast(), dispatch.get((int)Math.ceil(count * .95) - 1));
+			} finally {
+				workers.shutdownNow();
+				assertThat(workers.awaitTermination(40, TimeUnit.SECONDS)).isTrue();
+				jdbc.update("DELETE FROM users WHERE email LIKE ?", pattern);
+				jdbc.update("DELETE FROM event_occurrences WHERE occurrence_key = ?", tag);
+				jdbc.update("DELETE FROM event_series WHERE series_key = ?", tag);
+			}
+		}
+	}
+
+	private static void awaitNanos(long due) throws InterruptedException {
+		long remaining;
+		while ((remaining = due - System.nanoTime()) > 0) {
+			LockSupport.parkNanos(remaining);
+			if (Thread.interrupted()) {
+				throw new InterruptedException();
+			}
 		}
 	}
 

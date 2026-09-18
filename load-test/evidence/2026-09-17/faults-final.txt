@@ -1,0 +1,4 @@
+FAULT_RESULT boundary=broker_unreachable pending=100 recovered=100 deliveries=100 recovery_ms=2457.805
+FAULT_RESULT boundary=kafka_then_db records=2 deliveries=1 final=SENT
+FAULT_RESULT boundary=send_then_db deliveries=2 rows=1 final=SENT terminal_replay=0
+BUILD SUCCESSFUL in 37s

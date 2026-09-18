@@ -1,0 +1,12 @@
+{
+  "scheduled_requests_verified": 49830,
+  "redis_accuracy_cases_verified": 27,
+  "cached_rebuilds_per_round": 1,
+  "summary_raw_consistency": "passed",
+  "median_without_successes": "passed",
+  "hotzone_service_source_hashes_unchanged": true,
+  "report_numbers_checked": true,
+  "korean_style_scan": "0 matches",
+  "footnote_definitions": 6,
+  "benchmark_containers": "stopped"
+}

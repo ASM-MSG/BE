@@ -1,0 +1,28 @@
+FANOUT_FIXTURE tag=mixed-1ca0780e-988 subscribers=10000 occurrence_id=28
+FANOUT_FIXTURE tag=mixed-e9402e24-78b subscribers=10000 occurrence_id=29
+FANOUT_FIXTURE tag=mixed-d2513f80-494 subscribers=10000 occurrence_id=30
+FANOUT_FIXTURE tag=mixed-f801499f-fba subscribers=10000 occurrence_id=31
+FANOUT_ENV database=fillmap_tx_bench_20260917 jvm=21.0.2 max_heap_bytes=2147483648 processors=10
+FANOUT_FIXTURE tag=txfan-b5cf0cc24ebc subscribers=1000 occurrence_id=32
+FANOUT_BEGIN size=1000 mode=WARMUP_FRESH repetition=0
+FANOUT_SAMPLE size=1000 mode=WARMUP_FRESH repetition=0 tick_ms=299.325 hibernate_prepares=1005 tx_count=2 first_tx_envelope_ms=297.584 second_tx_envelope_ms=1.662 pool_usage_available=true pool_returns=2 pool_usage_total_ms=299.000 pool_usage_mean_ms=149.500 notifications=1000
+FANOUT_BEGIN size=1000 mode=FRESH repetition=1
+FANOUT_SAMPLE size=1000 mode=FRESH repetition=1 tick_ms=267.504 hibernate_prepares=1005 tx_count=2 first_tx_envelope_ms=265.210 second_tx_envelope_ms=2.274 pool_usage_available=true pool_returns=2 pool_usage_total_ms=267.000 pool_usage_mean_ms=133.500 notifications=1000
+FANOUT_BEGIN size=1000 mode=FRESH repetition=2
+FANOUT_SAMPLE size=1000 mode=FRESH repetition=2 tick_ms=283.633 hibernate_prepares=1005 tx_count=2 first_tx_envelope_ms=281.923 second_tx_envelope_ms=1.693 pool_usage_available=true pool_returns=2 pool_usage_total_ms=284.000 pool_usage_mean_ms=142.000 notifications=1000
+FANOUT_BEGIN size=1000 mode=FRESH repetition=3
+FANOUT_SAMPLE size=1000 mode=FRESH repetition=3 tick_ms=252.396 hibernate_prepares=1005 tx_count=2 first_tx_envelope_ms=251.103 second_tx_envelope_ms=1.267 pool_usage_available=true pool_returns=2 pool_usage_total_ms=253.000 pool_usage_mean_ms=126.500 notifications=1000
+FANOUT_BEGIN size=1000 mode=DEDUPE repetition=1
+FANOUT_SAMPLE size=1000 mode=DEDUPE repetition=1 tick_ms=227.323 hibernate_prepares=1005 tx_count=2 first_tx_envelope_ms=225.968 second_tx_envelope_ms=1.339 pool_usage_available=true pool_returns=2 pool_usage_total_ms=227.000 pool_usage_mean_ms=113.500 notifications=1000
+FANOUT_FIXTURE tag=txfan-8fbf34098121 subscribers=10000 occurrence_id=33
+FANOUT_BEGIN size=10000 mode=WARMUP_FRESH repetition=0
+FANOUT_SAMPLE size=10000 mode=WARMUP_FRESH repetition=0 tick_ms=12258.154 hibernate_prepares=10005 tx_count=2 first_tx_envelope_ms=12255.607 second_tx_envelope_ms=2.528 pool_usage_available=true pool_returns=2 pool_usage_total_ms=12258.000 pool_usage_mean_ms=6129.000 notifications=10000
+FANOUT_BEGIN size=10000 mode=FRESH repetition=1
+FANOUT_SAMPLE size=10000 mode=FRESH repetition=1 tick_ms=12404.008 hibernate_prepares=10005 tx_count=2 first_tx_envelope_ms=12401.042 second_tx_envelope_ms=2.945 pool_usage_available=true pool_returns=2 pool_usage_total_ms=12404.000 pool_usage_mean_ms=6202.000 notifications=10000
+FANOUT_BEGIN size=10000 mode=FRESH repetition=2
+FANOUT_SAMPLE size=10000 mode=FRESH repetition=2 tick_ms=13211.520 hibernate_prepares=10005 tx_count=2 first_tx_envelope_ms=13208.697 second_tx_envelope_ms=2.802 pool_usage_available=true pool_returns=2 pool_usage_total_ms=13211.000 pool_usage_mean_ms=6605.500 notifications=10000
+FANOUT_BEGIN size=10000 mode=FRESH repetition=3
+FANOUT_SAMPLE size=10000 mode=FRESH repetition=3 tick_ms=12537.884 hibernate_prepares=10005 tx_count=2 first_tx_envelope_ms=12535.739 second_tx_envelope_ms=2.114 pool_usage_available=true pool_returns=2 pool_usage_total_ms=12537.000 pool_usage_mean_ms=6268.500 notifications=10000
+FANOUT_BEGIN size=10000 mode=DEDUPE repetition=1
+FANOUT_SAMPLE size=10000 mode=DEDUPE repetition=1 tick_ms=11414.269 hibernate_prepares=10005 tx_count=2 first_tx_envelope_ms=11412.621 second_tx_envelope_ms=1.634 pool_usage_available=true pool_returns=2 pool_usage_total_ms=11413.000 pool_usage_mean_ms=5706.500 notifications=10000
+BUILD SUCCESSFUL in 2m 29s

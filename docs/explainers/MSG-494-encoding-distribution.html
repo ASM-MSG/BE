@@ -1,0 +1,696 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>영상 인코딩 분산과 워커 회수 (MSG-494)</title>
+<style>
+	:root {
+		--bg: #ffffff;
+		--bg-soft: #f6f7f9;
+		--bg-code: #f2f4f7;
+		--fg: #1b1f24;
+		--fg-soft: #5b6673;
+		--line: #dfe3e8;
+		--accent: #2d6cdf;
+		--accent-soft: #eaf1fd;
+		--warn: #b4690e;
+		--warn-soft: #fdf3e3;
+		--danger: #c0392b;
+		--danger-soft: #fdeeec;
+		--ok: #1f7a4d;
+		--ok-soft: #e9f6ef;
+		--mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #0f1216;
+			--bg-soft: #161a20;
+			--bg-code: #1a1f26;
+			--fg: #e6e9ed;
+			--fg-soft: #9aa4b2;
+			--line: #2a313a;
+			--accent: #6ea8ff;
+			--accent-soft: #16233a;
+			--warn: #e0a44a;
+			--warn-soft: #2a2113;
+			--danger: #f0796b;
+			--danger-soft: #2d1917;
+			--ok: #5fc38d;
+			--ok-soft: #12251b;
+		}
+	}
+
+	:root[data-theme="dark"] {
+		--bg: #0f1216;
+		--bg-soft: #161a20;
+		--bg-code: #1a1f26;
+		--fg: #e6e9ed;
+		--fg-soft: #9aa4b2;
+		--line: #2a313a;
+		--accent: #6ea8ff;
+		--accent-soft: #16233a;
+		--warn: #e0a44a;
+		--warn-soft: #2a2113;
+		--danger: #f0796b;
+		--danger-soft: #2d1917;
+		--ok: #5fc38d;
+		--ok-soft: #12251b;
+	}
+
+	:root[data-theme="light"] {
+		--bg: #ffffff;
+		--bg-soft: #f6f7f9;
+		--bg-code: #f2f4f7;
+		--fg: #1b1f24;
+		--fg-soft: #5b6673;
+		--line: #dfe3e8;
+		--accent: #2d6cdf;
+		--accent-soft: #eaf1fd;
+		--warn: #b4690e;
+		--warn-soft: #fdf3e3;
+		--danger: #c0392b;
+		--danger-soft: #fdeeec;
+		--ok: #1f7a4d;
+		--ok-soft: #e9f6ef;
+	}
+
+	* { box-sizing: border-box; }
+
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--fg);
+		font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard",
+			"Malgun Gothic", sans-serif;
+		overflow-wrap: break-word;
+	}
+
+	.wrap {
+		display: grid;
+		grid-template-columns: 240px minmax(0, 1fr);
+		gap: 48px;
+		max-width: 1180px;
+		margin: 0 auto;
+		padding: 40px 24px 96px;
+		align-items: start;
+	}
+
+	@media (max-width: 900px) {
+		.wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+		nav.toc { position: static !important; }
+	}
+
+	nav.toc {
+		position: sticky;
+		top: 24px;
+		font-size: 14px;
+		border-left: 2px solid var(--line);
+		padding-left: 16px;
+	}
+	nav.toc p {
+		margin: 0 0 10px;
+		font-weight: 700;
+		font-size: 12px;
+		letter-spacing: .08em;
+		color: var(--fg-soft);
+		text-transform: uppercase;
+	}
+	nav.toc a {
+		display: block;
+		padding: 4px 0;
+		color: var(--fg-soft);
+		text-decoration: none;
+	}
+	nav.toc a:hover { color: var(--accent); }
+	nav.toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	nav.toc .sub2 { padding-left: 10px; font-size: 13px; }
+	nav.toc .rel { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+	header.title { margin-bottom: 8px; }
+	h1 { font-size: 30px; line-height: 1.3; margin: 0 0 8px; letter-spacing: -.02em; text-wrap: balance; }
+	.sub { color: var(--fg-soft); margin: 0 0 4px; }
+
+	h2 {
+		font-size: 22px;
+		margin: 56px 0 12px;
+		padding-top: 20px;
+		border-top: 1px solid var(--line);
+		letter-spacing: -.01em;
+		scroll-margin-top: 20px;
+	}
+	h3 { font-size: 17px; margin: 28px 0 8px; scroll-margin-top: 20px; }
+	p { margin: 0 0 14px; }
+	ul, ol { margin: 0 0 14px; padding-left: 20px; }
+	li { margin-bottom: 6px; }
+	a { color: var(--accent); }
+
+	code {
+		font-family: var(--mono);
+		font-size: .88em;
+		background: var(--bg-code);
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		padding: 1px 5px;
+	}
+	pre {
+		background: var(--bg-code);
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		padding: 14px 16px;
+		overflow-x: auto;
+		margin: 0 0 16px;
+	}
+	pre code { background: none; border: 0; padding: 0; font-size: 13px; line-height: 1.6; }
+
+	.badge {
+		display: inline-block;
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: .04em;
+		padding: 2px 7px;
+		border-radius: 999px;
+		vertical-align: middle;
+		border: 1px solid transparent;
+		white-space: nowrap;
+	}
+	.badge.new { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+	.badge.done { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+	.badge.bad { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+
+	.note {
+		border: 1px solid var(--line);
+		border-left: 4px solid var(--accent);
+		background: var(--accent-soft);
+		border-radius: 0 8px 8px 0;
+		padding: 12px 16px;
+		margin: 0 0 18px;
+	}
+	.note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+	.note.danger { border-left-color: var(--danger); background: var(--danger-soft); }
+	.note.ok { border-left-color: var(--ok); background: var(--ok-soft); }
+	.note > :last-child { margin-bottom: 0; }
+	.note strong { display: block; margin-bottom: 4px; }
+
+	table { border-collapse: collapse; width: 100%; margin: 0 0 18px; font-size: 14px; }
+	th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+	th { background: var(--bg-soft); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+	.scroll-x { overflow-x: auto; margin: 0 0 18px; }
+	.scroll-x table { margin: 0; min-width: 560px; }
+	td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+	/* --- 지표 스트립 --- */
+	.metrics {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 12px;
+		margin: 24px 0 8px;
+	}
+	@media (max-width: 520px) { .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+	.metric {
+		border: 1px solid var(--line);
+		background: var(--bg-soft);
+		border-radius: 8px;
+		padding: 12px 14px;
+	}
+	.metric b {
+		display: block;
+		font-size: 26px;
+		line-height: 1.2;
+		letter-spacing: -.02em;
+		font-variant-numeric: tabular-nums;
+	}
+	.metric span { display: block; font-size: 12.5px; color: var(--fg-soft); margin-top: 2px; }
+
+	/* --- 파이프라인 도해 --- */
+	.diagram { overflow-x: auto; margin: 0 0 20px; }
+	.diagram svg { display: block; min-width: 720px; font-family: inherit; }
+	.diagram text { fill: var(--fg); }
+	.diagram text.soft { fill: var(--fg-soft); }
+	.diagram rect.box { fill: var(--bg-soft); stroke: var(--line); }
+	.diagram rect.hl { fill: var(--accent-soft); stroke: var(--accent); }
+	.diagram path, .diagram line { stroke: var(--fg-soft); fill: none; }
+	.diagram path.recover { stroke: var(--warn); stroke-dasharray: 5 4; }
+	.diagram text.recover { fill: var(--warn); }
+
+	/* --- 결함 카드 --- */
+	.case {
+		border: 1px solid var(--line);
+		border-left: 4px solid var(--fg-soft);
+		border-radius: 0 8px 8px 0;
+		padding: 14px 16px 4px;
+		margin: 0 0 16px;
+		background: var(--bg-soft);
+	}
+	.case.high { border-left-color: var(--danger); }
+	.case.mid { border-left-color: var(--warn); }
+	.case h4 {
+		margin: 0 0 10px;
+		font-size: 16px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		align-items: baseline;
+	}
+	.case h4 .src {
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: .03em;
+		color: var(--fg-soft);
+		border: 1px solid var(--line);
+		background: var(--bg);
+		border-radius: 999px;
+		padding: 1px 8px;
+	}
+	.case dl { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 4px 12px; margin: 0 0 12px; }
+	.case dt {
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: .04em;
+		color: var(--fg-soft);
+		padding-top: 3px;
+	}
+	.case dd { margin: 0; font-size: 15px; }
+	.case dd:last-of-type { color: var(--fg); }
+	.case dt.fix { color: var(--ok); }
+	@media (max-width: 560px) {
+		.case dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+		.case dt { padding-top: 8px; }
+	}
+
+	.foot { color: var(--fg-soft); font-size: 13px; margin-top: 56px; border-top: 1px solid var(--line); padding-top: 16px; }
+	@media print {
+		:root, :root[data-theme="dark"] {
+			--bg: #ffffff;
+			--bg-soft: #f6f7f9;
+			--bg-code: #f2f4f7;
+			--fg: #1b1f24;
+			--fg-soft: #5b6673;
+			--line: #dfe3e8;
+			--accent: #2d6cdf;
+			--accent-soft: #eaf1fd;
+			--warn: #b4690e;
+			--warn-soft: #fdf3e3;
+			--danger: #c0392b;
+			--danger-soft: #fdeeec;
+			--ok: #1f7a4d;
+			--ok-soft: #e9f6ef;
+		}
+		body { font-size: 10.5pt; line-height: 1.55; }
+		.wrap {
+			display: block;
+			max-width: none;
+			padding: 0;
+		}
+		nav.toc {
+			position: static;
+			border-left: none;
+			padding-left: 0;
+			margin-bottom: 24px;
+			column-count: 2;
+			column-gap: 32px;
+		}
+		nav.toc a { break-inside: avoid; }
+		h2 { break-before: page; break-after: avoid; }
+		h1 + p + h2, header + h2 { break-before: auto; }
+		h3, h4 { break-after: avoid; }
+		.case, .box, .metric, table, pre, .diagram, .note { break-inside: avoid; }
+		.scroll-x { overflow: visible; }
+		table { font-size: 9pt; }
+		pre { white-space: pre-wrap; font-size: 8.5pt; }
+		a { color: inherit; text-decoration: none; }
+		.diagram svg { max-width: 100%; height: auto; }
+	}
+
+	/* --- 차트 (dataviz 기준 팔레트, 라이트·다크 각각 검증) --- */
+	:root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; }
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; }
+	}
+	:root[data-theme="dark"] { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; }
+	.chart { overflow-x: auto; margin: 0 0 6px; }
+	.chart svg { display: block; min-width: 640px; width: 100%; height: auto; font-family: inherit; }
+	.chart text { fill: var(--fg); font-size: 12px; }
+	.chart text.soft { fill: var(--fg-soft); }
+	.chart text.grp { font-weight: 700; font-size: 13px; }
+	.chart text.val { font-variant-numeric: tabular-nums; fill: var(--fg-soft); }
+	.chart line.grid { stroke: var(--line); stroke-width: 1; }
+	.chart line.ref { stroke: var(--warn); stroke-width: 1; }
+	.chart text.ref { fill: var(--warn); font-size: 11px; }
+	.chart .s1 { fill: var(--series-1); } .chart .s2 { fill: var(--series-2); } .chart .s3 { fill: var(--series-3); }
+	.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--fg-soft); margin: 0 0 12px; }
+	.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+	.legend .s1 { background: var(--series-1); } .legend .s2 { background: var(--series-2); } .legend .s3 { background: var(--series-3); }
+	.caption { font-size: 13px; color: var(--fg-soft); margin: 0 0 20px; }
+	.metrics.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.note.quiet { border-left-color: var(--fg-soft); background: var(--bg-soft); }
+	@media print { .chart svg { min-width: 0; } }
+</style>
+</head>
+<body>
+<script>
+/* 가로 막대: 그룹 제목 → 막대(두께 16, 끝 4px 라운드, 기준선 쪽은 각짐), 값은 막대 끝에 직접 표기 */
+function hbars(el, groups, opt) {
+	var W = 760, L = 96, R = 84, bh = 16, gap = 4, gg = 16, y = 12, out = [];
+	var pw = W - L - R, x = function (v) { return L + v / opt.max * pw; };
+	opt.ticks.forEach(function (t) {
+		out.push('<line class="grid" x1="' + x(t) + '" y1="8" x2="' + x(t) + '" y2="__H__"/>');
+	});
+	groups.forEach(function (g) {
+		out.push('<text class="grp" x="0" y="' + (y + 11) + '">' + g.label + '</text>');
+		y += 20;
+		g.bars.forEach(function (b) {
+			var w = Math.max(x(b.v) - L, 6);
+			out.push('<g><title>' + g.label + ' / ' + b.label + ': ' + opt.fmt(b.v) + '</title>' +
+				'<path class="s' + b.s + '" d="M' + L + ' ' + y + ' h' + (w - 4) + ' a4 4 0 0 1 4 4 v' + (bh - 8) +
+				' a4 4 0 0 1 -4 4 h-' + (w - 4) + ' z"/>' +
+				'<text class="soft" x="' + (L - 8) + '" y="' + (y + bh / 2 + 4) + '" text-anchor="end">' + b.label + '</text>' +
+				'<text class="val" x="' + (L + w + 6) + '" y="' + (y + bh / 2 + 4) + '">' + opt.fmt(b.v) + '</text></g>');
+			y += bh + gap;
+		});
+		y += gg;
+	});
+	var ay = y - gg + 6;
+	out.push('<line class="grid" x1="' + L + '" y1="' + ay + '" x2="' + (W - R) + '" y2="' + ay + '"/>');
+	opt.ticks.forEach(function (t) {
+		out.push('<text class="soft" x="' + x(t) + '" y="' + (ay + 16) + '" text-anchor="middle">' + opt.tick(t) + '</text>');
+	});
+	if (opt.ref) {
+		out.push('<line class="ref" x1="' + x(opt.ref.v) + '" y1="8" x2="' + x(opt.ref.v) + '" y2="' + ay + '"/>');
+		out.push('<text class="ref" x="' + (x(opt.ref.v) + 5) + '" y="16">' + opt.ref.label + '</text>');
+	}
+	var H = ay + 26;
+	el.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+	el.innerHTML = out.join('').split('__H__').join(ay);
+}
+</script>
+<div class="wrap">
+
+<nav class="toc">
+	<p>목차</p>
+	<a href="#summary">요약</a>
+	<a href="#problem">고친 문제</a>
+	<a href="#design">설계</a>
+	<a class="sub2" href="#design-queue">왜 DB 테이블인가</a>
+	<a class="sub2" href="#design-jar">같은 JAR, 다른 프로필</a>
+	<a class="sub2" href="#design-claim">선점 토큰과 임대</a>
+	<a class="sub2" href="#design-guard">늦은 결과 차단</a>
+	<a href="#flow">흐름 도해</a>
+	<a href="#sql">핵심 SQL</a>
+	<a href="#failure">장애별 처리</a>
+	<a href="#numbers">실측</a>
+	<a href="#cases">고쳐 온 것</a>
+	<a href="#caveat">말할 때 주의</a>
+	<a href="#glossary">용어</a>
+	<div class="rel">
+		<a href="./notification-system.html">알림 시스템 해설</a>
+		<a href="./hotzone-load-test.html">핫구역 부하 실측</a>
+	</div>
+</nav>
+
+<main>
+<header class="title">
+	<h1>영상 인코딩 분산과 워커 회수</h1>
+	<p class="sub">서버 메모리에 살던 비동기 작업을 DB로 옮기고, 두 서버가 나눠 처리하며, 워커가 죽으면 다른 서버가 작업을 가져가게 한 기록. MSG-494, 2026-08-27 dev 실측.</p>
+</header>
+
+<h2 id="summary">요약</h2>
+<p>업로드 확정 트랜잭션에 인코딩 작업 행을 함께 저장하고, BE EC2와 AI EC2에서 도는 같은 JAR이 <code>FOR UPDATE SKIP LOCKED</code>로 작업을 한 건씩 가져간다. 선점할 때 받은 토큰과 임대 시각이 종결 UPDATE의 조건이라, 죽은 워커의 늦은 결과는 0행으로 끝나고 롤백된다. 별도 큐 서버도, 로드 밸런서도 없다.</p>
+<div class="metrics six">
+	<div class="metric"><b>9 / 9</b><span>3회 × 3편 모두 READY, 유실 0건</span></div>
+	<div class="metric"><b>25.683초</b><span>확정 뒤 READY까지 최댓값 (목표 30초)</span></div>
+	<div class="metric"><b>0건</b><span>중복 알림 · 미완료 작업</span></div>
+	<div class="metric"><b>be 5 · ai 4</b><span>9건의 처리 노드 분포</span></div>
+	<div class="metric"><b>17.764초</b><span>SIGTERM 뒤 다른 노드가 이어받아 READY</span></div>
+	<div class="metric"><b>1.836ms</b><span>선점 쿼리 실행 시간 (작업 행 21건)</span></div>
+</div>
+<p class="caption">인코딩 입력은 10.08초, 15.08초, 19.10초 MP4 세 편이고 3회 모두 같은 SHA-256을 썼다.</p>
+
+<h2 id="problem">고친 문제</h2>
+<p>이전 인코딩은 스프링의 <code>@Async</code> 실행기, 즉 프로세스 메모리 안의 큐였다. 여기엔 두 가지 약점이 있다.</p>
+<ul>
+	<li><strong>프로세스가 내려가면 대기 작업이 사라진다.</strong> 배포나 재시작 한 번에 업로드는 끝났는데 인코딩은 영영 안 도는 영상이 생길 수 있다. 영상 커밋과 작업 등록이 같은 트랜잭션도 아니어서, 영상만 남고 작업이 빠지는 창도 있었다.</li>
+	<li><strong>다른 서버가 도와줄 수 없다.</strong> 큐가 메모리에 있으니 AI EC2가 놀고 있어도 BE EC2의 작업을 가져갈 방법이 없다.</li>
+</ul>
+<p>수치로 보면, 2026-08-27 dev에서 10초에서 20초짜리 MP4 세 편을 연속 업로드했을 때 READY까지 9.4초, 15.8초, 30.4초가 걸렸다. 한 서버에서 FFmpeg 두 개를 병렬로 돌려 봐도 순차 20.38초 대 병렬 19.60초라 스레드를 늘려서는 처리량이 늘지 않았다. t3.small 한 대의 CPU가 병목이었고, 답은 "다른 서버도 쓰자"였다.</p>
+<div class="scroll-x"><table>
+	<thead><tr><th>노드</th><th>당시 역할</th><th class="num">가용 메모리</th><th>참고</th></tr></thead>
+	<tbody>
+		<tr><td>BE EC2</td><td>API, PostgreSQL, Redis, Kafka, FFmpeg</td><td class="num">566MiB</td><td>Spring Boot RSS 563MiB, swap 459MiB 사용</td></tr>
+		<tr><td>AI EC2</td><td>FastAPI, Prometheus, Grafana, Alertmanager</td><td class="num">1,150MiB</td><td>FastAPI RSS 238MiB, swap 135MiB 사용</td></tr>
+	</tbody>
+</table></div>
+
+<h2 id="design">설계</h2>
+
+<h3 id="design-queue">왜 DB 테이블인가</h3>
+<p>작업 대기열을 어디에 둘지가 첫 결정이었다. 기준은 하나다. <strong>영상 저장과 작업 등록을 한 트랜잭션에 넣을 수 있는가.</strong> 그게 안 되면 둘 사이의 유실 창을 닫으려고 outbox와 릴레이가 또 필요해진다.</p>
+<div class="scroll-x"><table>
+	<thead><tr><th>후보</th><th>판정</th><th>이유</th></tr></thead>
+	<tbody>
+		<tr><td>PostgreSQL 작업 테이블</td><td><span class="badge done">채택</span></td><td>이미 쓰는 저장소이고 영상과 작업을 한 트랜잭션으로 묶인다. <code>SKIP LOCKED</code>로 두 소비자가 서로 기다리지 않고 다른 행을 가져간다</td></tr>
+		<tr><td>Kafka</td><td><span class="badge bad">기각</span></td><td>DB 커밋과 발행 사이 유실 창을 닫으려면 outbox와 relay가 추가로 필요하다. dev 브로커의 외부 노드 접속 설정도 새로 열어야 한다</td></tr>
+		<tr><td>SQS</td><td><span class="badge bad">기각</span></td><td>관리형 큐 자체는 적합하지만 DB와 한 트랜잭션이 안 돼 outbox가 다시 필요하고, 새 비용과 인프라가 생긴다</td></tr>
+		<tr><td>Redis</td><td><span class="badge bad">기각</span></td><td>dev Redis는 BE 호스트의 단일 컨테이너라 인코딩 정본을 맡길 내구성 근거가 없다</td></tr>
+		<tr><td>AI FastAPI 내부 인코딩 API</td><td><span class="badge bad">기각</span></td><td>push 조정자와 별도 요청 계약이 필요하고, 두 노드가 같은 변환 코드를 재사용하지 못한다</td></tr>
+	</tbody>
+</table></div>
+<p>PostgreSQL 문서는 <code>SKIP LOCKED</code>가 일반 조회에는 맞지 않지만 여러 소비자가 큐 형태의 테이블을 나눠 처리할 때 잠금 경합을 피하는 용도라고 명시한다. 이 작업의 대기 행이 바로 그 용도다.</p>
+
+<h3 id="design-jar">같은 JAR, 다른 프로필</h3>
+<p>워커 애플리케이션을 따로 만들지 않았다. AI EC2에 같은 <code>app.jar</code>을 <code>dev,encoding-worker</code> 프로필로 8081 포트에 띄운다. 이 프로필은 인코딩에 필요 없는 것을 전부 끈다. 행사 스케줄러, 블러 폴러, 알림 릴레이와 스케줄러, 시더, Flyway. Redis도 쓰지 않고 DB 커넥션 풀은 최대 2개다. JVM은 <code>-Xmx384m</code>으로 시작한다. 보안그룹에 8081 인바운드를 열지 않아 EC2 밖에서는 접근할 수 없다.</p>
+<p>노드마다 인코딩 작업은 한 번에 <strong>한 건</strong>만 소유한다. 폴러가 1초마다 빈 슬롯을 확인하고, 비어 있으면 한 건을 선점해 스레드 1개짜리 실행기에 넘긴다. CPU를 읽어 작업을 반대 노드로 밀어 주는 분기는 없다. <strong>빈 노드가 다음 행을 먼저 가져가는 경쟁 자체가 분배다.</strong></p>
+
+<h3 id="design-claim">선점 토큰과 임대</h3>
+<p>선점하면 <code>claim_token</code>을 새 UUID로 바꾸고 <code>claimed_by</code>, <code>lease_until</code>, <code>attempt_count</code>를 기록한다. 임대는 35분이다. FFmpeg 호출별 상한 10분 × 3(ffprobe, encode, thumbnail)에 S3 입출력 여유 5분을 더한 값이고, 정상 처리 속도를 정하는 값이 아니라 <strong>프로세스가 강제 종료됐을 때만 쓰는 최후 회수선</strong>이다.</p>
+<p>정상 종료는 임대를 기다리지 않는다. <code>ContextClosedEvent</code>를 받으면 새 선점을 막고 현재 claim을 즉시 PENDING으로 되돌린다. 통제된 종료는 처리 실패가 아니므로 <code>attempt_count</code>를 하나 줄여 다음 노드가 같은 시도 번호로 시작한다. SIGKILL이나 EC2 장애처럼 종료 훅을 못 탄 경우에만 35분 임대가 동작한다.</p>
+
+<h3 id="design-guard">늦은 결과 차단</h3>
+<p>영상 상태를 쓰는 모든 인코딩 경로는 종결 UPDATE의 WHERE 절에서 네 가지를 확인한다.</p>
+<pre><code>job.id          = claim.jobId
+job.status      = PROCESSING
+job.claim_token = claim.claimToken
+job.lease_until &gt; 현재 UTC 시각</code></pre>
+<p>READY와 FAILED 종결은 업로더 행과 영상 행을 잠그고 알림 outbox를 INSERT한 뒤, 작업 COMPLETED UPDATE를 <strong>트랜잭션의 마지막 문장</strong>으로 실행한다. 0행이면 <code>ClaimLostException</code>을 던져 앞선 영상 전이와 알림 INSERT까지 전부 롤백한다. 임대가 만료된 뒤 다른 노드가 재선점해 토큰이 바뀌었다면, 옛 워커가 아무리 늦게 결과를 들고 와도 부분 반영이 없다.</p>
+<div class="note">
+	<strong>메시지를 정확히 한 번 전달한다고 가정하지 않는다</strong>
+	재전달은 허용하되 상태 변경이 한 번의 결과로 수렴하게 한다. 토큰 가드는 "이 노드가 아직 권한이 있나"를, 원본 키 가드는 "영상 교체나 삭제로 현재 시도가 바뀌었나"를 확인한다. 알림은 event key로 중복을 막는다. 셋이 함께 멱등을 만든다.
+</div>
+
+<h2 id="flow">흐름 도해</h2>
+<div class="diagram">
+<svg viewBox="0 0 940 330" role="img" aria-label="인코딩 분산 도해: BE API가 영상과 작업을 한 트랜잭션으로 저장하면 BE 워커와 AI 워커가 SKIP LOCKED로 경쟁 선점해 S3와 주고받고, 토큰과 임대를 확인한 조건부 UPDATE로 종결한다. 임대 만료 시 다른 노드가 재선점한다.">
+	<defs>
+		<marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker>
+	</defs>
+	<!-- API -->
+	<rect class="box" x="20" y="70" width="150" height="60" rx="8"/>
+	<text x="95" y="96" text-anchor="middle" font-weight="700">BE API</text>
+	<text class="soft" x="95" y="116" text-anchor="middle" font-size="12">업로드 확정 · 교체</text>
+	<!-- DB -->
+	<rect class="hl" x="270" y="50" width="220" height="100" rx="8"/>
+	<text x="380" y="78" text-anchor="middle" font-weight="700">PostgreSQL</text>
+	<text x="380" y="100" text-anchor="middle" font-size="12">video_encoding_jobs</text>
+	<text class="soft" x="380" y="120" text-anchor="middle" font-size="12">PENDING → PROCESSING → COMPLETED</text>
+	<text class="soft" x="380" y="138" text-anchor="middle" font-size="12">claim_token · lease_until · attempt_count</text>
+	<!-- workers -->
+	<rect class="box" x="590" y="20" width="180" height="56" rx="8"/>
+	<text x="680" y="44" text-anchor="middle" font-weight="700">BE 워커</text>
+	<text class="soft" x="680" y="64" text-anchor="middle" font-size="12">fillmap-dev · FFmpeg 1개</text>
+	<rect class="box" x="590" y="124" width="180" height="56" rx="8"/>
+	<text x="680" y="148" text-anchor="middle" font-weight="700">AI EC2 워커</text>
+	<text class="soft" x="680" y="168" text-anchor="middle" font-size="12">encoding-worker :8081 · FFmpeg 1개</text>
+	<!-- S3 -->
+	<rect class="box" x="830" y="70" width="90" height="60" rx="8"/>
+	<text x="875" y="96" text-anchor="middle" font-weight="700">S3</text>
+	<text class="soft" x="875" y="116" text-anchor="middle" font-size="12">원본 · 산출물</text>
+	<!-- arrows -->
+	<path d="M170 100 H270" marker-end="url(#ar)"/>
+	<text class="soft" x="220" y="90" text-anchor="middle" font-size="11">영상 + 작업</text>
+	<text class="soft" x="220" y="118" text-anchor="middle" font-size="11">한 트랜잭션</text>
+	<path d="M490 80 C540 80 540 48 590 48" marker-end="url(#ar)"/>
+	<path d="M490 120 C540 120 540 152 590 152" marker-end="url(#ar)"/>
+	<text class="soft" x="540" y="104" text-anchor="middle" font-size="11">SKIP LOCKED</text>
+	<text class="soft" x="540" y="118" text-anchor="middle" font-size="11">LIMIT 1 · 1초 폴</text>
+	<path d="M770 48 C800 48 800 88 830 88" marker-end="url(#ar)"/>
+	<path d="M770 152 C800 152 800 112 830 112" marker-end="url(#ar)"/>
+	<text class="soft" x="800" y="150" text-anchor="middle" font-size="10">원본 ↓ 산출물 ↑</text>
+	<!-- 종결 return -->
+	<path d="M680 180 V222 H380 V150" marker-end="url(#ar)"/>
+	<text x="530" y="240" text-anchor="middle" font-size="12">종결: token + 임대 확인 조건부 UPDATE, 0행이면 전체 롤백</text>
+	<!-- recovery -->
+	<path class="recover" d="M600 190 C560 230 480 262 380 262 V150" marker-end="url(#ar)"/>
+	<text class="recover" x="330" y="290" font-size="12">SIGTERM: 즉시 PENDING 반납 · SIGKILL: 35분 임대 만료 뒤 다른 노드가 재선점</text>
+	<text class="recover" x="330" y="308" font-size="12">세 번째 시도 중 중단: DEAD → 다음 폴러가 영상 FAILED를 기록</text>
+</svg>
+</div>
+<p>재시도는 다음 상태 전이를 따른다. 재처리 상한은 코드와 DB CHECK 제약 양쪽에서 3회다.</p>
+<pre><code>PENDING -&gt; PROCESSING -&gt; COMPLETED
+                    \-&gt; PENDING       처리 오류, 남은 시도 있음 (5초 뒤)
+                    \-&gt; DEAD          마지막 시도 중 프로세스 중단
+DEAD -&gt; DEAD(completed_at 기록)        영상 FAILED와 같은 트랜잭션</code></pre>
+
+<h2 id="sql">핵심 SQL</h2>
+<p>선점은 정렬이 고정된 한 행만 UPDATE하고 <code>RETURNING</code>으로 claim을 만든다. PENDING과 임대가 끝난 PROCESSING을 한 문장의 OR로 잡는다. 두 부분 인덱스를 <code>BitmapOr</code>로 합칠 수 있어서다.</p>
+<pre><code>WITH clock AS (
+    SELECT statement_timestamp() AT TIME ZONE 'utc' AS now_utc
+), candidate AS (
+    SELECT j.id
+    FROM video_encoding_jobs j
+    CROSS JOIN clock c
+    WHERE (j.status = 'PENDING'    AND j.available_at &lt;= c.now_utc AND j.attempt_count &lt; 3)
+       OR (j.status = 'PROCESSING' AND j.lease_until  &lt;= c.now_utc AND j.attempt_count &lt; 3)
+    ORDER BY j.available_at, j.id
+    FOR UPDATE OF j SKIP LOCKED
+    LIMIT 1
+)
+UPDATE video_encoding_jobs j
+SET status = 'PROCESSING',
+    attempt_count = j.attempt_count + 1,
+    claim_token = :claimToken,
+    claimed_by = :nodeId,
+    lease_until = c.now_utc + make_interval(secs =&gt; :leaseSeconds)
+FROM candidate, clock c
+WHERE j.id = candidate.id
+RETURNING j.id, j.video_id, j.original_s3_key, j.claim_token, j.attempt_count, j.enqueued_at;</code></pre>
+<p>현재 시각은 전부 <code>statement_timestamp() AT TIME ZONE 'utc'</code>다. <code>CURRENT_TIMESTAMP</code>는 timestamptz라 KST 세션에서 naive 컬럼과 비교하면 9시간 어긋난다.</p>
+<p>정상 종료 때의 반납은 토큰과 살아 있는 임대를 확인하고, 시도 횟수를 하나 돌려준다.</p>
+<pre><code>UPDATE video_encoding_jobs
+SET status = 'PENDING',
+    attempt_count = attempt_count - 1,
+    claim_token = NULL, claimed_by = NULL, lease_until = NULL,
+    available_at = statement_timestamp() AT TIME ZONE 'utc'
+WHERE id = :jobId
+  AND status = 'PROCESSING'
+  AND claim_token = :claimToken
+  AND attempt_count &gt; 0
+  AND lease_until &gt; (statement_timestamp() AT TIME ZONE 'utc');</code></pre>
+<p>잠금 순서는 <code>users → videos → video_encoding_jobs</code>로 고정했다. 회원 탈퇴 CASCADE와 같은 순서라 교차 대기가 생기지 않는다. 선점은 작업 행만 잠그고 바로 커밋하므로 FFmpeg가 도는 동안 DB 락이나 트랜잭션을 들고 있지 않는다.</p>
+
+<h2 id="failure">장애별 처리</h2>
+<div class="scroll-x"><table>
+	<thead><tr><th>상황</th><th>처리</th></tr></thead>
+	<tbody>
+		<tr><td>길이 31초 초과, 깨진 미디어</td><td>재시도하지 않고 영상 FAILED, 작업 COMPLETED</td></tr>
+		<tr><td>S3, 임시 파일, FFmpeg 실행 환경, DB 오류</td><td>1회와 2회는 5초 뒤 PENDING, 3회 실패는 영상 FAILED, 작업 COMPLETED</td></tr>
+		<tr><td>SIGTERM, systemd restart</td><td>종료 훅이 즉시 PENDING으로 반납하고 다른 노드가 선점</td></tr>
+		<tr><td>SIGKILL, OOM, EC2 강제 중단</td><td>임대가 끝난 PROCESSING을 다른 노드가 다시 선점</td></tr>
+		<tr><td>세 번째 시도 중 프로세스 중단</td><td>임대 만료 뒤 DEAD로 바꾸고, 다음 폴러가 영상 FAILED와 <code>completed_at</code>을 한 트랜잭션으로 기록</td></tr>
+		<tr><td>영상 교체, 삭제, 이미 종결</td><td>작업 COMPLETED, 영상과 S3 현재 키는 건드리지 않음. FFmpeg는 실행하지 않음</td></tr>
+	</tbody>
+</table></div>
+<p>재시도할 때 산출물 키는 시도별 결정적 키를 그대로 쓴다. 앞선 시도가 S3 업로드 뒤 DB 기록 전에 죽어도 다음 시도가 같은 키를 덮어쓰므로 고아 파일이 늘지 않는다.</p>
+
+<h2 id="numbers">실측</h2>
+<p>2026-08-27 dev. 세 편을 병렬로 확정하고 확정 응답 시각부터 READY까지를 500ms 간격으로 조회했다. 한 회차의 세 편이 끝난 뒤 다음 회차를 시작해 3회 반복했다.</p>
+<div class="legend"><span><i class="s1"></i>BE 노드가 처리</span><span><i class="s2"></i>AI 노드가 처리</span></div>
+<div class="chart"><svg id="c-base" role="img" aria-label="회차별 세 편의 확정 뒤 READY까지 시간. 아홉 편 모두 30초 목표 안이고 최댓값은 25.683초다."></svg></div>
+<p class="caption">막대 순서는 작업 로그의 기록 순서이고 파일 길이 순이 아니다. 노드마다 한 번에 한 건이라 같은 노드에 두 편이 몰리면 뒤 편은 앞 편이 끝나기를 기다린 시간이 포함된다. 1회차 BE의 25.683초가 그 경우다.</p>
+<div class="scroll-x"><table>
+	<thead><tr><th>회차</th><th class="num">영상 ①</th><th class="num">영상 ②</th><th class="num">영상 ③</th><th>노드</th></tr></thead>
+	<tbody>
+		<tr><td>1회차</td><td class="num">25,683ms</td><td class="num">13,573ms</td><td class="num">19,851ms</td><td>be, be, ai</td></tr>
+		<tr><td>2회차</td><td class="num">11,386ms</td><td class="num">13,125ms</td><td class="num">25,467ms</td><td>ai, be, ai</td></tr>
+		<tr><td>3회차</td><td class="num">22,480ms</td><td class="num">11,838ms</td><td class="num">12,783ms</td><td>be, be, ai</td></tr>
+	</tbody>
+</table></div>
+<p>아홉 편이 모두 READY와 COMPLETED로 끝났고 작업 유실, 중복 알림, 종료 뒤 미완료 작업은 0건이다. 자원은 처리 전후 순간값이다.</p>
+<div class="scroll-x"><table>
+	<thead><tr><th>노드</th><th class="num">가용 메모리</th><th class="num">RSS</th><th class="num">swap</th></tr></thead>
+	<tbody>
+		<tr><td>BE</td><td class="num">544 → 452MiB</td><td class="num">543,068 → 630,848KiB</td><td class="num">422.2 → 421.3MiB</td></tr>
+		<tr><td>AI</td><td class="num">740 → 671MiB</td><td class="num">468,264 → 544,408KiB</td><td class="num">125.3 → 138.2MiB</td></tr>
+	</tbody>
+</table></div>
+<p class="caption">CPU는 처리 전후 유휴 순간값만 저장돼 처리 중 최고값으로 읽지 않는다.</p>
+
+<h3>장애 실험</h3>
+<div class="scroll-x"><table>
+	<thead><tr><th>실험</th><th>결과</th></tr></thead>
+	<tbody>
+		<tr><td>정상 종료 (SIGTERM)</td><td>19초 영상이 BE에서 AI로 같은 회차 안에 넘어가 <strong>17,764ms</strong>에 READY. 종료된 BE의 늦은 실패 결과는 claim token 불일치로 버려졌다</td></tr>
+		<tr><td>강제 종료 (SIGKILL, 시험 임대 1분)</td><td>AI 1회차 강제 종료 뒤 BE 2회차가 회수해 <strong>76,337ms</strong>에 READY, 알림 1건</td></tr>
+		<tr><td>실패 상한 (시험 임대 10초)</td><td>19초 입력에 임대가 정상 인코딩보다 짧아 3회 모두 만료, DEAD와 FAILED로 종결. 세 번째 시도 종결과 실패 알림 1건을 확인했고, 오판을 막으려고 시험 임대를 1분으로 올렸다</td></tr>
+		<tr><td>블러 경합</td><td>FastAPI 블러가 PROCESSING인 동안 새 인코딩 두 건이 BE와 AI에서 한 건씩 PROCESSING. 기존 블러 영상 58,281ms, 새 영상 114,774ms와 189,634ms에 READY, 알림은 영상마다 1건</td></tr>
+		<tr><td>선점 쿼리 EXPLAIN</td><td>작업 행 21건에서 PENDING 후보 1.836ms, 만료 PROCESSING 후보 0.454ms. 작은 테이블이라 Seq Scan을 골랐고 디스크 읽기는 없었다</td></tr>
+	</tbody>
+</table></div>
+<p>시험이 끝난 뒤 두 노드의 임대는 기본값 35분으로 복구했다.</p>
+
+<h2 id="cases">고쳐 온 것</h2>
+<p>구현 한 번에 끝나지 않았다. dev에서 실제로 프로세스를 죽여 보고 나서야 드러난 것들이다.</p>
+
+<div class="case high">
+	<h4>반납이 실행기가 멈춘 뒤에 호출됐다 <span class="src">dev SIGTERM 실험</span></h4>
+	<dl>
+		<dt>증상</dt><dd>처음엔 <code>@PreDestroy</code>에서 claim을 반납했는데, 스프링이 실행기를 먼저 내리고 나서 훅이 돌아 반납이 늦었다. 그사이 systemd가 FFmpeg에 SIGTERM을 보내면 exit 255가 파일 오류로 분류돼 실패 경로를 탔다.</dd>
+		<dt class="fix">수정</dt><dd>반납 시점을 <code>ContextClosedEvent</code>로 앞당겼다. 그 뒤 19초 영상이 BE에서 AI로 넘어가 17,764ms에 READY가 됐고, 종료된 BE의 늦은 실패 결과는 토큰 불일치로 버려졌다.</dd>
+	</dl>
+</div>
+
+<div class="case mid">
+	<h4>종료 직전에 진행 중이던 선점과 경합했다 <span class="src">후속 리뷰</span></h4>
+	<dl>
+		<dt>증상</dt><dd>종료 이벤트가 새 선점을 막아도, 이미 DB에 나가 있던 선점이 이벤트 뒤에 돌아오면 그 claim은 반납 대상에 없었다.</dd>
+		<dt class="fix">수정</dt><dd><code>activeClaim</code> 등록 직후 종료 상태를 다시 확인해 실행 전에 반납한다. latch 테스트로 고정했다.</dd>
+	</dl>
+</div>
+
+<div class="case mid">
+	<h4>첫 반납이 실패하면 fallback이 무력화됐다 <span class="src">후속 리뷰</span></h4>
+	<dl>
+		<dt>증상</dt><dd>반납 UPDATE 전에 참조를 비워, DB 반납이 실패하면 <code>@PreDestroy</code>의 재시도가 잡을 claim이 없었다.</dd>
+		<dt class="fix">수정</dt><dd>반납 성공 뒤에만 참조를 비운다. 예외 주입 테스트로 고정했다.</dd>
+	</dl>
+</div>
+
+<div class="case">
+	<h4>시험 임대가 정상 처리보다 짧아 회수를 오판할 뻔했다 <span class="src">측정 설계</span></h4>
+	<dl>
+		<dt>증상</dt><dd>SIGKILL 회수를 빨리 보려고 임대를 10초로 두자 19초 영상이 임대 안에 못 끝나 세 번 다 만료돼 DEAD가 됐다. 회수가 아니라 실패 상한 실험이 돼 버렸다.</dd>
+		<dt class="fix">수정</dt><dd>시험 임대를 1분으로 올려 회수 실험과 실패 상한 실험을 갈랐다. 이 결과가 아래 "말할 때 주의"의 76초다.</dd>
+	</dl>
+</div>
+
+<h2 id="caveat">말할 때 주의</h2>
+<div class="note warn">
+	<strong>"모든 영상 30초 이내"라고 쓰면 안 된다</strong>
+	9편 모두 30초 안은 <strong>블러 없는 기본 부하</strong>의 결과다. 블러 한 건과 인코딩 두 건을 겹치면 최대 189.634초가 걸렸다. 정확한 문장은 "블러 없는 기본 부하에서 9편 모두 30초 이내, 최댓값 25.683초"다.
+</div>
+<div class="note warn">
+	<strong>76.337초는 시험 임대 1분의 결과다</strong>
+	기본 임대는 35분이다. 실제 SIGKILL이나 EC2 중단이면 회수까지 최대 35분이 걸릴 수 있다. heartbeat로 임대를 갱신하는 구조는 넣지 않았다. 정상 처리가 수십 초라 35분의 절반을 넘는 표본이 아직 없어서다. 그런 표본이 생기면 임대 갱신을 추가한다는 조건을 스펙에 적어 뒀다.
+</div>
+<div class="note quiet">
+	<strong>알림 outbox와 무엇이 다른가</strong>
+	"DB 트랜잭션에 함께 기록하고 멱등 키로 중복을 막는다"는 원리는 알림 outbox와 같다. 다른 것은 <strong>작업을 여러 노드가 나눠 갖는다</strong>는 점, 그리고 <strong>실행 중에 워커가 죽는 장애</strong>와 <strong>재처리의 소유권</strong>을 토큰과 임대로 푼다는 점이다. 이 셋을 중심에 두고 말하면 outbox와 별개의 역량이 된다. 한 줄로는 "유실 없는 구조"다.
+</div>
+
+<h2 id="glossary">용어</h2>
+<div class="scroll-x"><table>
+	<thead><tr><th>용어</th><th>이 문서에서의 뜻</th></tr></thead>
+	<tbody>
+		<tr><td><code>FOR UPDATE SKIP LOCKED</code></td><td>다른 트랜잭션이 잠근 행은 기다리지 않고 건너뛰는 PostgreSQL 행 잠금 옵션. 여러 소비자가 큐 테이블을 나눠 처리하는 용도로 공식 문서가 명시한다</td></tr>
+		<tr><td>선점 (claim)</td><td>작업 한 건을 "내가 처리한다"고 DB에 표시하는 일. 토큰, 처리 노드, 임대 만료 시각, 시도 횟수를 함께 기록한다</td></tr>
+		<tr><td>임대 (lease)</td><td>선점이 유효한 기한. 이 시각이 지나면 다른 노드가 같은 작업을 다시 선점할 수 있다. 정상 처리의 속도가 아니라 강제 종료 때의 최후 회수선이다</td></tr>
+		<tr><td>claim token</td><td>선점마다 새로 발급되는 UUID. 종결 UPDATE의 조건이라 재선점으로 토큰이 바뀌면 옛 워커의 결과는 0행으로 끝난다</td></tr>
+		<tr><td>멱등</td><td>같은 작업이 여러 번 전달돼도 최종 상태와 외부 효과가 한 번 처리한 것과 같은 성질. 토큰, 원본 키, 영상 처리 상태, 알림 event key가 함께 만든다</td></tr>
+		<tr><td>SIGTERM / SIGKILL</td><td>프로세스 종료 신호. SIGTERM은 프로세스가 받아서 정리할 기회가 있고(종료 훅이 돈다), SIGKILL은 즉시 죽어 정리할 기회가 없다</td></tr>
+		<tr><td><code>ContextClosedEvent</code></td><td>스프링 컨테이너가 닫히기 시작할 때 발행하는 이벤트. 빈이 파괴되기 전이라 실행기가 살아 있을 때 반납할 수 있다</td></tr>
+	</tbody>
+</table></div>
+
+<p class="foot">출처: <code>docs/spec/MSG-494.md</code> 결정 D1~D7, 12.6 dev 실측, 2026-08-27 작업 로그. 원본 SHA-256과 스크립트는 <code>load-test/measure-msg494.sh</code>. 이 문서는 2026-09-05에 정리했다.</p>
+</main>
+</div>
+<script>
+hbars(document.getElementById('c-base'), [
+	{ label: '1회차', bars: [ { label: '영상 ①', v: 25683, s: 1 }, { label: '영상 ②', v: 13573, s: 1 }, { label: '영상 ③', v: 19851, s: 2 } ] },
+	{ label: '2회차', bars: [ { label: '영상 ①', v: 11386, s: 2 }, { label: '영상 ②', v: 13125, s: 1 }, { label: '영상 ③', v: 25467, s: 2 } ] },
+	{ label: '3회차', bars: [ { label: '영상 ①', v: 22480, s: 1 }, { label: '영상 ②', v: 11838, s: 1 }, { label: '영상 ③', v: 12783, s: 2 } ] }
+], { max: 32000, ticks: [0, 10000, 20000, 30000], tick: function (t) { return t / 1000 + '초'; },
+	fmt: function (v) { return (v / 1000).toFixed(3) + '초'; }, ref: { v: 30000, label: '목표 30초' } });
+</script>
+</body>
+</html>

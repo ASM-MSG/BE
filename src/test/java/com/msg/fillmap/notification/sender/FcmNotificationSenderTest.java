@@ -42,7 +42,7 @@ class FcmNotificationSenderTest {
 	// 검증: FR-NOTI-05
 	@Test
 	@DisplayName("501개 토큰은 500 단위 2회 호출로 나뉘고 successCount·invalidTokens 가 합산된다")
-	void 오백_초과_토큰은_500_단위로_나눠_호출하고_결과를_합산한다() throws FirebaseMessagingException {
+	void 오백_초과_토큰은_500_단위로_나눠_호출하고_결과를_합산한다() throws Exception {
 		List<String> tokens = IntStream.range(0, 501).mapToObj(i -> "t" + i).toList();
 
 		SendResponse ok = mock(SendResponse.class);
@@ -64,9 +64,19 @@ class FcmNotificationSenderTest {
 			.willReturn(firstChunk)
 			.willReturn(secondChunk);
 
-		SendResult result = sender.send(tokens, "제목", "본문");
+		SendResult result = sender.send(42L, tokens, "제목", "본문");
 
-		then(firebaseMessaging).should(times(2)).sendEachForMulticast(any());
+		var captured = org.mockito.ArgumentCaptor.forClass(com.google.firebase.messaging.MulticastMessage.class);
+		then(firebaseMessaging).should(times(2)).sendEachForMulticast(captured.capture());
+		for (var multicast : captured.getAllValues()) {
+			// Admin SDK가 직렬화할 실제 payload를 검사합니다. 별도 DTO를 흉내 내지 않습니다.
+			List<com.google.firebase.messaging.Message> messages =
+				org.springframework.test.util.ReflectionTestUtils.invokeMethod(multicast, "getMessageList");
+			assertThat(messages).isNotEmpty();
+			var json = com.google.api.client.json.gson.GsonFactory.getDefaultInstance().toString(messages.getFirst());
+			assertThat(json).contains("\"notificationId\":\"42\"", "fillmap-notification-42",
+				"\"renotify\":false", "제목", "본문");
+		}
 		assertThat(result.successCount()).isEqualTo(500);
 		// 두 번째 청크의 응답 인덱스 0 = 전역 501번째 토큰 — 청크 오프셋 매핑이 맞아야 t500 이 나온다.
 		assertThat(result.invalidTokens()).containsExactly("t500");

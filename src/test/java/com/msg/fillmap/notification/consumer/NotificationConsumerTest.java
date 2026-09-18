@@ -133,7 +133,7 @@ class NotificationConsumerTest {
 		tx.executeWithoutResult(status -> me = userRepository.save(
 			User.createLocalUser("consumer-" + System.nanoTime() + "@example.com", "hash", "컨슈머테스터")).getId());
 		given(notificationPreferenceService.isEnabled(anyLong(), any())).willReturn(true);
-		given(notificationSender.send(anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
 			.willReturn(new SendResult(1, List.of()));
 	}
 
@@ -155,7 +155,7 @@ class NotificationConsumerTest {
 
 		awaitStatus(id, "SENT");
 		assertThat(sentAtOf(id)).isNotNull();
-		then(notificationSender).should().send(eq(List.of(token)), eq("발송제목"), eq("본문"));
+		then(notificationSender).should().send(eq(id), eq(List.of(token)), eq("발송제목"), eq("본문"));
 	}
 
 	// 검증: FR-NOTI-03
@@ -173,7 +173,7 @@ class NotificationConsumerTest {
 		awaitStatus(fresh, "SENT");   // 같은 파티션 — fresh 처리 완료 = already 소비도 끝났다
 		assertThat(statusOf(already)).isEqualTo("SENT");
 		assertThat(retryCountOf(already)).isZero();   // 종결 판정이 retry_count 증가보다 앞선다
-		then(notificationSender).should(never()).send(anyList(), eq("A제목"), anyString());
+		then(notificationSender).should(never()).send(anyLong(), anyList(), eq("A제목"), anyString());
 	}
 
 	// 검증: FR-NOTI-06
@@ -327,7 +327,7 @@ class NotificationConsumerTest {
 	void UNREGISTERED_토큰은_push_tokens에서_삭제된다() throws Exception {
 		String alive = registerToken("ok-" + System.nanoTime());
 		String dead = registerToken("dead-" + System.nanoTime());
-		given(notificationSender.send(anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
 			.willReturn(new SendResult(1, List.of(dead)));
 		long id = newNotification(NotificationCategory.BADGE, "제목");
 
@@ -343,7 +343,7 @@ class NotificationConsumerTest {
 	void 일부_토큰만_성공해도_SENT다() throws Exception {
 		String first = registerToken("ok1-" + System.nanoTime());
 		String second = registerToken("ok2-" + System.nanoTime());
-		given(notificationSender.send(anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
 			.willReturn(new SendResult(1, List.of()));   // 2개 중 1개만 성공, 무효 아님(순단)
 		long id = newNotification(NotificationCategory.BADGE, "제목");
 
@@ -359,7 +359,7 @@ class NotificationConsumerTest {
 	@DisplayName("전부 실패가 상한을 넘으면 DEAD 로 격리되고 last_error 가 남는다 — FR-4")
 	void 전부_실패가_상한을_넘으면_DEAD로_격리되고_last_error가_남는다() throws Exception {
 		registerToken("ok-" + System.nanoTime());
-		given(notificationSender.send(anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
 			.willThrow(new IllegalStateException("FCM 다운"));
 		long id = newNotification(NotificationCategory.BADGE, "제목");
 
@@ -389,7 +389,7 @@ class NotificationConsumerTest {
 	@DisplayName("재시도 횟수가 retry_count 에 남는다 — 몇 번 만에 성공했는지 (D4)")
 	void 재시도_횟수가_retry_count에_남는다() throws Exception {
 		registerToken("ok-" + System.nanoTime());
-		given(notificationSender.send(anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
 			.willThrow(new IllegalStateException("1차 실패"))
 			.willThrow(new IllegalStateException("2차 실패"))
 			.willReturn(new SendResult(1, List.of()));
@@ -451,7 +451,7 @@ class NotificationConsumerTest {
 		double before = outcomeCount("sent", "none");
 		registerToken("ok-" + System.nanoTime());
 		long vanished = newNotification(NotificationCategory.BADGE, "탈퇴중");
-		given(notificationSender.send(anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
 			.willAnswer(invocation -> {
 				deleteRow(vanished);   // FCM 발송 중 탈퇴 CASCADE 로 행이 지워지는 창 재현
 				return new SendResult(1, List.of());
@@ -471,7 +471,7 @@ class NotificationConsumerTest {
 	void 재시도_상한_소진은_dead를_증가시킨다() throws Exception {
 		double before = outcomeCount("dead", "none");
 		registerToken("ok-" + System.nanoTime());
-		given(notificationSender.send(anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
 			.willThrow(new IllegalStateException("FCM 다운"));
 		long id = newNotification(NotificationCategory.BADGE, "제목");
 

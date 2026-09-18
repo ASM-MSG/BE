@@ -1,0 +1,405 @@
+{
+  "mode": "redis_cache",
+  "round": 1,
+  "duration_s": 33,
+  "rate": 100,
+  "offered": 3300,
+  "errors": {},
+  "latency": {
+    "n": 3300,
+    "p50_ms": 4.326834000011104,
+    "p95_ms": 6.661124999993717,
+    "p99_ms": 7.354125000006206
+  },
+  "service": {
+    "n": 3300,
+    "p50_ms": 1.8560419999857913,
+    "p95_ms": 2.5675410000189913,
+    "p99_ms": 3.1083749999822885
+  },
+  "expiry_29_32s": {
+    "n": 300,
+    "p50_ms": 4.628749999994852,
+    "p95_ms": 6.709833999991588,
+    "p99_ms": 12.923291999982212
+  },
+  "pg_cpu_seconds": 0.087245,
+  "redis_cpu_seconds": 0.9307860000000021,
+  "redis_command_calls": {
+    "cmdstat_scan": 0,
+    "cmdstat_set": 0,
+    "cmdstat_client|setinfo": 6,
+    "cmdstat_get": 0,
+    "cmdstat_del": 0,
+    "cmdstat_zincrby": 0,
+    "cmdstat_zadd": 0,
+    "cmdstat_expire": 1,
+    "cmdstat_exists": 3300,
+    "cmdstat_eval": 3300,
+    "cmdstat_info": 3,
+    "cmdstat_zunionstore": 1,
+    "cmdstat_memory|usage": 0,
+    "cmdstat_zrevrange": 3300
+  },
+  "resources_before": {
+    "postgres_cpu": {
+      "usage_usec": "52788876",
+      "user_usec": "49819079",
+      "system_usec": "2969797",
+      "nice_usec": "0",
+      "nr_periods": "845",
+      "nr_throttled": "412",
+      "throttled_usec": "345018331",
+      "nr_bursts": "0",
+      "burst_usec": "0"
+    },
+    "redis_cpu": {
+      "used_cpu_sys": 0.638466,
+      "used_cpu_user": 18.714622,
+      "used_cpu_sys_children": 0.000724,
+      "used_cpu_user_children": 0.000451,
+      "used_cpu_sys_main_thread": 0.638424,
+      "used_cpu_user_main_thread": 18.713619
+    },
+    "redis_memory": {
+      "used_memory": 16170480,
+      "used_memory_human": "15.42M",
+      "used_memory_rss": 23068672,
+      "used_memory_rss_human": "22.00M",
+      "used_memory_peak": 17141232,
+      "used_memory_peak_human": "16.35M",
+      "used_memory_peak_perc": "94.34%",
+      "used_memory_overhead": 1023696,
+      "used_memory_startup": 981184,
+      "used_memory_dataset": 15146784,
+      "used_memory_dataset_perc": "99.72%",
+      "allocator_allocated": 18499736,
+      "allocator_active": 27852800,
+      "allocator_resident": 30670848,
+      "allocator_muzzy": 0,
+      "total_system_memory": 16820461568,
+      "total_system_memory_human": "15.67G",
+      "used_memory_lua": 34816,
+      "used_memory_vm_eval": 34816,
+      "used_memory_lua_human": "34.00K",
+      "used_memory_scripts_eval": 560,
+      "number_of_cached_scripts": 2,
+      "number_of_functions": 0,
+      "number_of_libraries": 0,
+      "used_memory_vm_functions": 33792,
+      "used_memory_vm_total": 68608,
+      "used_memory_vm_total_human": "67.00K",
+      "used_memory_functions": 192,
+      "used_memory_scripts": 752,
+      "used_memory_scripts_human": "752B",
+      "maxmemory": 0,
+      "maxmemory_human": "0B",
+      "maxmemory_policy": "noeviction",
+      "allocator_frag_ratio": 1.37,
+      "allocator_frag_bytes": 6116392,
+      "allocator_rss_ratio": 1.1,
+      "allocator_rss_bytes": 2818048,
+      "rss_overhead_ratio": 0.75,
+      "rss_overhead_bytes": -7602176,
+      "mem_fragmentation_ratio": 1.43,
+      "mem_fragmentation_bytes": 6898392,
+      "mem_not_counted_for_evict": 0,
+      "mem_replication_backlog": 0,
+      "mem_total_replication_buffers": 0,
+      "mem_clients_slaves": 0,
+      "mem_clients_normal": 39688,
+      "mem_cluster_links": 0,
+      "mem_aof_buffer": 0,
+      "mem_allocator": "jemalloc-5.3.0",
+      "mem_overhead_db_hashtable_rehashing": 0,
+      "active_defrag_running": 0,
+      "lazyfree_pending_objects": 0,
+      "lazyfreed_objects": 0
+    },
+    "redis_commands": {
+      "cmdstat_scan": {
+        "calls": 5,
+        "usec": 30,
+        "usec_per_call": 6.0,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_set": {
+        "calls": 8,
+        "usec": 66,
+        "usec_per_call": 8.25,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_client|setinfo": {
+        "calls": 66,
+        "usec": 88,
+        "usec_per_call": 1.33,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_get": {
+        "calls": 3408,
+        "usec": 20728,
+        "usec_per_call": 6.08,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_del": {
+        "calls": 7,
+        "usec": 2786,
+        "usec_per_call": 398.0,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_zincrby": {
+        "calls": 1000,
+        "usec": 999,
+        "usec_per_call": 1.0,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_zadd": {
+        "calls": 39,
+        "usec": 45883,
+        "usec_per_call": 1176.49,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_expire": {
+        "calls": 1048,
+        "usec": 420,
+        "usec_per_call": 0.4,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_exists": {
+        "calls": 3500,
+        "usec": 18511,
+        "usec_per_call": 5.29,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_eval": {
+        "calls": 4500,
+        "usec": 186085,
+        "usec_per_call": 41.35,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_info": {
+        "calls": 26,
+        "usec": 651,
+        "usec_per_call": 25.04,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_zunionstore": {
+        "calls": 3505,
+        "usec": 16171412,
+        "usec_per_call": 4613.81,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_memory|usage": {
+        "calls": 66,
+        "usec": 66,
+        "usec_per_call": 1.0,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_zrevrange": {
+        "calls": 6996,
+        "usec": 87588,
+        "usec_per_call": 12.52,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      }
+    },
+    "sql_calls": [
+      405,
+      418
+    ]
+  },
+  "resources_after": {
+    "postgres_cpu": {
+      "usage_usec": "52876121",
+      "user_usec": "49852840",
+      "system_usec": "3023281",
+      "nice_usec": "0",
+      "nr_periods": "933",
+      "nr_throttled": "412",
+      "throttled_usec": "345018331",
+      "nr_bursts": "0",
+      "burst_usec": "0"
+    },
+    "redis_cpu": {
+      "used_cpu_sys": 0.908431,
+      "used_cpu_user": 19.375443,
+      "used_cpu_sys_children": 0.000724,
+      "used_cpu_user_children": 0.000451,
+      "used_cpu_sys_main_thread": 0.908374,
+      "used_cpu_user_main_thread": 19.374231
+    },
+    "redis_memory": {
+      "used_memory": 16157464,
+      "used_memory_human": "15.41M",
+      "used_memory_rss": 22982656,
+      "used_memory_rss_human": "21.92M",
+      "used_memory_peak": 17141232,
+      "used_memory_peak_human": "16.35M",
+      "used_memory_peak_perc": "94.26%",
+      "used_memory_overhead": 988376,
+      "used_memory_startup": 981184,
+      "used_memory_dataset": 15169088,
+      "used_memory_dataset_perc": "99.95%",
+      "allocator_allocated": 18531896,
+      "allocator_active": 27656192,
+      "allocator_resident": 30474240,
+      "allocator_muzzy": 0,
+      "total_system_memory": 16820461568,
+      "total_system_memory_human": "15.67G",
+      "used_memory_lua": 34816,
+      "used_memory_vm_eval": 34816,
+      "used_memory_lua_human": "34.00K",
+      "used_memory_scripts_eval": 560,
+      "number_of_cached_scripts": 2,
+      "number_of_functions": 0,
+      "number_of_libraries": 0,
+      "used_memory_vm_functions": 33792,
+      "used_memory_vm_total": 68608,
+      "used_memory_vm_total_human": "67.00K",
+      "used_memory_functions": 192,
+      "used_memory_scripts": 752,
+      "used_memory_scripts_human": "752B",
+      "maxmemory": 0,
+      "maxmemory_human": "0B",
+      "maxmemory_policy": "noeviction",
+      "allocator_frag_ratio": 1.36,
+      "allocator_frag_bytes": 5887624,
+      "allocator_rss_ratio": 1.1,
+      "allocator_rss_bytes": 2818048,
+      "rss_overhead_ratio": 0.75,
+      "rss_overhead_bytes": -7491584,
+      "mem_fragmentation_ratio": 1.42,
+      "mem_fragmentation_bytes": 6845864,
+      "mem_not_counted_for_evict": 0,
+      "mem_replication_backlog": 0,
+      "mem_total_replication_buffers": 0,
+      "mem_clients_slaves": 0,
+      "mem_clients_normal": 4368,
+      "mem_cluster_links": 0,
+      "mem_aof_buffer": 0,
+      "mem_allocator": "jemalloc-5.3.0",
+      "mem_overhead_db_hashtable_rehashing": 0,
+      "active_defrag_running": 0,
+      "lazyfree_pending_objects": 0,
+      "lazyfreed_objects": 0
+    },
+    "redis_commands": {
+      "cmdstat_scan": {
+        "calls": 5,
+        "usec": 30,
+        "usec_per_call": 6.0,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_set": {
+        "calls": 8,
+        "usec": 66,
+        "usec_per_call": 8.25,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_client|setinfo": {
+        "calls": 72,
+        "usec": 94,
+        "usec_per_call": 1.31,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_get": {
+        "calls": 3408,
+        "usec": 20728,
+        "usec_per_call": 6.08,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_del": {
+        "calls": 7,
+        "usec": 2786,
+        "usec_per_call": 398.0,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_zincrby": {
+        "calls": 1000,
+        "usec": 999,
+        "usec_per_call": 1.0,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_zadd": {
+        "calls": 39,
+        "usec": 45883,
+        "usec_per_call": 1176.49,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_expire": {
+        "calls": 1049,
+        "usec": 424,
+        "usec_per_call": 0.4,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_exists": {
+        "calls": 6800,
+        "usec": 38156,
+        "usec_per_call": 5.61,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_eval": {
+        "calls": 7800,
+        "usec": 341749,
+        "usec_per_call": 43.81,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_info": {
+        "calls": 29,
+        "usec": 738,
+        "usec_per_call": 25.45,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_zunionstore": {
+        "calls": 3506,
+        "usec": 16192900,
+        "usec_per_call": 4618.62,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_memory|usage": {
+        "calls": 66,
+        "usec": 66,
+        "usec_per_call": 1.0,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      },
+      "cmdstat_zrevrange": {
+        "calls": 10296,
+        "usec": 160980,
+        "usec_per_call": 15.64,
+        "rejected_calls": 0,
+        "failed_calls": 0
+      }
+    },
+    "sql_calls": [
+      405,
+      418
+    ]
+  },
+  "raw": "load-redis_cache-1.jsonl.gz"
+}

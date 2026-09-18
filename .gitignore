@@ -66,3 +66,9 @@ __pycache__/
 
 ### MSG-538 시드 이미지 — 업로드용 로컬 산출물 (객체는 S3, 출처·라이선스는 CREDITS.json)
 event-images/*.jpg
+
+### Claude Code 워크트리·개인 산출물 (2026-09-18)
+.claude/worktrees/
+Claude outputs/
+output/
+tmp/

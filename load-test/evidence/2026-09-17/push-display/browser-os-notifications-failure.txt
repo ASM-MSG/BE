@@ -1,0 +1,46 @@
+[WebServer] (node:94376) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:94402) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 1 test using 1 worker
+
+(node:94408) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/1] [chromium] › e2e/push-display-deduplication.spec.ts:5:1 › Chromium 알림 목록은 같은 tag 100회를 한 건으로 유지한다
+  1) [chromium] › e2e/push-display-deduplication.spec.ts:5:1 › Chromium 알림 목록은 같은 tag 100회를 한 건으로 유지한다 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "fillmap-notification-42",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 5000ms exceeded while waiting on the predicate
+
+      44 |         .sort();
+      45 |     });
+    > 46 |   await expect.poll(tags).toEqual(["fillmap-notification-42"]);
+         |                           ^
+      47 |   await page.evaluate(async () => {
+      48 |     const registration = (await navigator.serviceWorker.getRegistration())!;
+      49 |     await registration.showNotification("같은 본문", {
+        at /Users/ssomae/seongmin/coding/fillmap-FE-push-dedupe/apps/web/e2e/push-display-deduplication.spec.ts:46:27
+
+    Error Context: test-results/push-display-deduplication-13b6e-목록은-같은-tag-100회를-한-건으로-유지한다-chromium/error-context.md
+
+
+  1 failed
+    [chromium] › e2e/push-display-deduplication.spec.ts:5:1 › Chromium 알림 목록은 같은 tag 100회를 한 건으로 유지한다 
+undefined
+/Users/ssomae/seongmin/coding/fillmap-FE-push-dedupe/apps/web:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: playwright test e2e/push-display-deduplication.spec.ts --grep Chromium 알림 --reporter=line --headed

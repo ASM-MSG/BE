@@ -1,0 +1,17 @@
+
+> web@0.0.0 test /Users/ssomae/seongmin/coding/fillmap-FE-push-dedupe/apps/web
+> vitest run
+
+
+ RUN  v4.1.10 /Users/ssomae/seongmin/coding/fillmap-FE-push-dedupe/apps/web
+
+Not implemented: HTMLMediaElement's play() method
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+
+ Test Files  310 passed (310)
+      Tests  2577 passed (2577)
+   Start at  11:46:57
+   Duration  35.54s (transform 8.65s, setup 30.18s, import 31.42s, tests 81.96s, environment 141.24s)
+
