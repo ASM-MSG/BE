@@ -1,0 +1,30 @@
+[
+  {
+    "name": "NotificationConsumer — 멱등·필터·발송·재시도 (EmbeddedKafka + 실 PostGIS)",
+    "tests": "23",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "com.msg.fillmap.notification.NotificationCrashWindowTest",
+    "tests": "3",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "NotificationRelay — PENDING 발행·PUBLISHED 전이 (EmbeddedKafka + 실 PostGIS)",
+    "tests": "5",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0"
+  },
+  {
+    "name": "FcmNotificationSender — 500 청크 분할·결과 합산",
+    "tests": "1",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0"
+  }
+]

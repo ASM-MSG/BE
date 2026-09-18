@@ -1,0 +1,13 @@
+allprojects {
+    plugins.withId('java') {
+        sourceSets.test.java.srcDir(rootProject.file('load-test/tx-workload'))
+        tasks.withType(Test).configureEach {
+            environment 'SPRING_DATASOURCE_URL', 'jdbc:postgresql://localhost:5432/fillmap_tx_bench_20260917'
+            environment 'SPRING_DATA_REDIS_DATABASE', '14'
+            environment 'LOGGING_LEVEL_ORG_HIBERNATE', 'ERROR'
+            environment 'LOGGING_LEVEL_COM_MSG_FILLMAP', 'ERROR'
+            environment 'SPRING_JPA_SHOW_SQL', 'false'
+            testLogging.showStandardStreams = true
+        }
+    }
+}

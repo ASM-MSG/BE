@@ -1,0 +1,192 @@
+{
+  "fixture": "OSM waterway geometry; synthetic 20 segments, 11 entries/exits, 70m/min, 2min stops",
+  "cases": [
+    {
+      "origin": 0,
+      "budget": 30,
+      "entry": 0,
+      "exit": 2,
+      "direction": 1,
+      "segments": [
+        0,
+        1
+      ],
+      "score": 3,
+      "minutes": 19.79807956355711,
+      "entryMinutes": 2,
+      "exitMinutes": 2
+    },
+    {
+      "origin": 0,
+      "budget": 60,
+      "entry": 0,
+      "exit": 6,
+      "direction": 1,
+      "segments": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "score": 13,
+      "minutes": 51.394238690692646,
+      "entryMinutes": 2,
+      "exitMinutes": 2
+    },
+    {
+      "origin": 0,
+      "budget": 120,
+      "entry": 0,
+      "exit": 14,
+      "direction": 1,
+      "segments": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "score": 33,
+      "minutes": 114.58655694487028,
+      "entryMinutes": 2,
+      "exitMinutes": 2
+    },
+    {
+      "origin": 12,
+      "budget": 30,
+      "entry": 12,
+      "exit": 10,
+      "direction": -1,
+      "segments": [
+        11,
+        10
+      ],
+      "score": 7,
+      "minutes": 19.798079563582604,
+      "entryMinutes": 2,
+      "exitMinutes": 2
+    },
+    {
+      "origin": 12,
+      "budget": 60,
+      "entry": 12,
+      "exit": 6,
+      "direction": -1,
+      "segments": [
+        11,
+        10,
+        9,
+        8,
+        7,
+        6
+      ],
+      "score": 17,
+      "minutes": 51.3942386906732,
+      "entryMinutes": 2,
+      "exitMinutes": 2
+    },
+    {
+      "origin": 12,
+      "budget": 120,
+      "entry": 12,
+      "exit": 0,
+      "direction": -1,
+      "segments": [
+        11,
+        10,
+        9,
+        8,
+        7,
+        6,
+        5,
+        4,
+        3,
+        2,
+        1,
+        0
+      ],
+      "score": 30,
+      "minutes": 98.78847738136585,
+      "entryMinutes": 2,
+      "exitMinutes": 2
+    }
+  ],
+  "closedSegment": {
+    "entry": 0,
+    "exit": 4,
+    "direction": 1,
+    "segments": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "score": 10,
+    "minutes": 35.59615912712508,
+    "entryMinutes": 2,
+    "exitMinutes": 2
+  },
+  "unknownAccessibility": {
+    "entry": 0,
+    "exit": 4,
+    "direction": 1,
+    "segments": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "score": 10,
+    "minutes": 35.59615912712508,
+    "entryMinutes": 2,
+    "exitMinutes": 2
+  },
+  "spotOffsets": [
+    {
+      "fraction": 0.1,
+      "offsetM": 825.8655694487672,
+      "distanceM": 0.0000038669143386115945
+    },
+    {
+      "fraction": 0.35,
+      "offsetM": 2890.5294930724817,
+      "distanceM": 0.000002143671638349872
+    },
+    {
+      "fraction": 0.7,
+      "offsetM": 5781.058986140131,
+      "distanceM": 0.000028709091201141456
+    }
+  ],
+  "checks": {
+    "sixBudgets": true,
+    "continuity": true,
+    "closedCannotJump": true,
+    "unknownAccessibilityDenied": true,
+    "noExitReturnsNone": true,
+    "sparseExits30minImpossible": true,
+    "entryTimeCounted": true,
+    "invalidInputRejected": true,
+    "spotOffset": true,
+    "gpsDebounceFixtures": true
+  },
+  "timing": {
+    "node": "v22.23.1",
+    "samples": 1000,
+    "p50_ms": 0.0034580000000019595,
+    "p95_ms": 0.027082999999997526,
+    "max_ms": 0.11191699999999827,
+    "scope": "in-process function, no HTTP/DB/AI/map provider, not API p95"
+  }
+}

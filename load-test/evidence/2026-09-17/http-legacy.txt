@@ -1,0 +1,9 @@
+MIXED_TICK repetition=0 elapsed_ms=12339.136
+MIXED_SAMPLE implementation=legacy repetition=0 tick_ms=12339.136 requests=1336 errors=0 p50_ms=2.667 p95_ms=4.946 max_ms=27.847
+MIXED_TICK repetition=1 elapsed_ms=12449.219
+MIXED_SAMPLE implementation=legacy repetition=1 tick_ms=12449.219 requests=1413 errors=0 p50_ms=2.054 p95_ms=3.674 max_ms=22.358
+MIXED_TICK repetition=2 elapsed_ms=13464.728
+MIXED_SAMPLE implementation=legacy repetition=2 tick_ms=13464.728 requests=1427 errors=0 p50_ms=1.911 p95_ms=3.840 max_ms=28.056
+MIXED_TICK repetition=3 elapsed_ms=12224.303
+MIXED_SAMPLE implementation=legacy repetition=3 tick_ms=12224.303 requests=1455 errors=0 p50_ms=1.626 p95_ms=2.978 max_ms=32.386
+BUILD SUCCESSFUL in 1m 18s

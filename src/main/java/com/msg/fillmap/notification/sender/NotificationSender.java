@@ -9,7 +9,7 @@ import java.util.List;
 public interface NotificationSender {
 
 	/** 토큰들로 발송. 성공 수와 무효 토큰(FR-5 삭제 대상) 목록을 돌려준다. 전송 실패는 예외. */
-	SendResult send(List<String> tokens, String title, String body);
+	SendResult send(long notificationId, List<String> tokens, String title, String body);
 
 	record SendResult(int successCount, List<String> invalidTokens) {
 	}

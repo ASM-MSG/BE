@@ -1,0 +1,86 @@
+[
+  {
+    "mode": "redis",
+    "rate": 100,
+    "rounds": 3,
+    "offered": 9900,
+    "success": 9900,
+    "errors": {},
+    "p95_ms": 10.768124999998463,
+    "p99_ms": 14.248875000006933,
+    "expiry_p99_ms": 53.72633299998597,
+    "pg_cpu_seconds": 0.0482,
+    "redis_cpu_seconds": 15.854893000000002
+  },
+  {
+    "mode": "redis_cache",
+    "rate": 100,
+    "rounds": 3,
+    "offered": 9900,
+    "success": 9900,
+    "errors": {},
+    "p95_ms": 6.671457999971153,
+    "p99_ms": 7.354125000006206,
+    "expiry_p99_ms": 7.868542000011303,
+    "pg_cpu_seconds": 0.082356,
+    "redis_cpu_seconds": 0.9296620000000003
+  },
+  {
+    "mode": "sql",
+    "rate": 10,
+    "rounds": 1,
+    "offered": 330,
+    "success": 330,
+    "errors": {},
+    "p95_ms": 64.00204200000204,
+    "p99_ms": 65.66637499999928,
+    "expiry_p99_ms": 83.6789170000003,
+    "pg_cpu_seconds": 17.748259,
+    "redis_cpu_seconds": 0.06481599999999976
+  },
+  {
+    "mode": "sql",
+    "rate": 100,
+    "rounds": 3,
+    "offered": 9900,
+    "success": 27,
+    "errors": {
+      "dropped_capacity": 9088,
+      "QueryCanceled": 785
+    },
+    "p95_ms": 4389.051334000002,
+    "p99_ms": 4389.051334000002,
+    "expiry_p99_ms": 4079.1090840000024,
+    "pg_cpu_seconds": 36.820956,
+    "redis_cpu_seconds": 0.19795199999999347
+  },
+  {
+    "mode": "sql_cache",
+    "rate": 100,
+    "rounds": 3,
+    "offered": 9900,
+    "success": 9629,
+    "errors": {
+      "dropped_capacity": 236,
+      "QueryCanceled": 35
+    },
+    "p95_ms": 5.745624999974552,
+    "p99_ms": 10.986083000034341,
+    "expiry_p99_ms": 1876.515875000024,
+    "pg_cpu_seconds": 3.042422,
+    "redis_cpu_seconds": 0.5126429999999998
+  },
+  {
+    "mode": "sql_cache_lock",
+    "rate": 100,
+    "rounds": 3,
+    "offered": 9900,
+    "success": 9900,
+    "errors": {},
+    "p95_ms": 5.692416999998784,
+    "p99_ms": 6.58687500001065,
+    "expiry_p99_ms": 179.4966669999951,
+    "pg_cpu_seconds": 0.346686,
+    "redis_cpu_seconds": 0.5320689999999975
+  }
+]

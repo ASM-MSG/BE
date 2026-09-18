@@ -1,0 +1,14 @@
+seed + correctness + micro passed: 100000
+Traceback (most recent call last):
+  File "/Users/ssomae/seongmin/coding/FillMap/load-test/hotzone-comparison.py", line 323, in <module>
+    main()
+  File "/Users/ssomae/seongmin/coding/FillMap/load-test/hotzone-comparison.py", line 306, in main
+    data = seed(conn, r, count, grids)
+  File "/Users/ssomae/seongmin/coding/FillMap/load-test/hotzone-comparison.py", line 97, in seed
+    aligned[grid] += 1
+  File "/Users/ssomae/.pyenv/versions/3.9.18/lib/python3.9/contextlib.py", line 126, in __exit__
+    next(self.gen)
+  File "/tmp/fillmap-hotzone-bench-venv/lib/python3.9/site-packages/psycopg/cursor.py", line 266, in copy
+    raise ex.with_traceback(None)
+psycopg.errors.QueryCanceled: canceling statement due to statement timeout
+CONTEXT:  COPY signals, line 864834: "864833	g000006133	2026-09-16 20:32:18+00:00"

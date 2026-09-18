@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="referrer" content="strict-origin-when-cross-origin">
+	<title>청계천 경계 실험 | FillMap</title>
+	<link rel="icon" href="data:,">
+	<link rel="stylesheet" href="./vendor/leaflet.css">
+	<style>
+		:root { --ink: #203641; --muted: #61727d; --blue: #275de0; --teal: #007f83; --line: #e2e8ee; }
+		* { box-sizing: border-box; }
+		body { margin: 0; color: var(--ink); background: #fff; font-family: "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+		button, input, a { -webkit-tap-highlight-color: transparent; }
+		button, input { font: inherit; }
+		button { cursor: pointer; }
+		button:disabled { cursor: wait; opacity: .45; }
+		button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid #e88c18; outline-offset: 4px; }
+		a { color: var(--blue); text-underline-offset: 3px; }
+		.topbar { height: 68px; padding: 0 30px; display: flex; align-items: center; gap: 18px; border-bottom: 1px solid var(--line); }
+		.brand { display: flex; gap: 10px; align-items: center; font-size: 22px; font-weight: 800; letter-spacing: -.8px; }
+		.topbar .divider { width: 1px; height: 18px; background: var(--line); }
+		.topbar .context { color: var(--muted); font-size: 14px; }
+		.badge { margin-left: auto; background: #edf5f5; color: #176466; padding: 7px 11px; border-radius: 5px; font-size: 12px; }
+		main { height: calc(100dvh - 68px); min-height: 640px; display: grid; grid-template-columns: 326px 1fr; }
+		aside { padding: 30px 26px 20px; overflow: auto; border-right: 1px solid var(--line); }
+		h1 { font-size: 31px; line-height: 1.32; margin: 0 0 12px; letter-spacing: -1.4px; font-weight: 750; }
+		.intro { color: var(--muted); font-size: 14px; line-height: 1.75; margin: 0 0 22px; }
+		.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-bottom: 23px; border-bottom: 1px solid var(--line); }
+		.metrics span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+		.metrics strong { font-size: 21px; font-weight: 650; font-variant-numeric: tabular-nums; }
+		section.controls { padding-top: 23px; }
+		.width-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; font-weight: 650; }
+		.width-label output { font-size: 22px; color: var(--blue); font-variant-numeric: tabular-nums; }
+		input[type="range"] { width: 100%; accent-color: var(--blue); margin: 20px 0 8px; cursor: ew-resize; }
+		.range-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
+		.width-note { font-size: 12px; color: var(--muted); margin: 12px 0 18px; }
+		.presets { display: flex; gap: 7px; margin-bottom: 24px; }
+		.presets button { flex: 1; padding: 8px 0; border: 1px solid var(--line); border-radius: 5px; background: #fff; font-size: 13px; color: var(--ink); }
+		.presets button[aria-pressed="true"] { background: #edf2ff; border-color: var(--blue); color: var(--blue); }
+		.layer-row { display: flex; align-items: center; gap: 10px; font-size: 13px; margin: 16px 0; cursor: pointer; }
+		.layer-row input { width: 17px; height: 17px; accent-color: var(--blue); margin: 0; }
+		.swatch { width: 22px; height: 0; border-top: 2px dashed var(--teal); margin-left: auto; }
+		.swatch.grid { width: 16px; height: 16px; border: 1px solid #8697a6; background: linear-gradient(90deg, transparent 45%, #a4afbd 45%, #a4afbd 52%, transparent 52%), linear-gradient(transparent 45%, #a4afbd 45%, #a4afbd 52%, transparent 52%); }
+		.source { margin-top: 24px; color: var(--muted); font-size: 11px; line-height: 1.75; }
+		.source summary { color: var(--ink); cursor: pointer; font-size: 12px; }
+		.source p { margin: 8px 0; }
+		.limit-note { margin: 14px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+		.map-shell { min-width: 0; position: relative; isolation: isolate; background: #e9eff2; }
+		#map { width: 100%; height: 100%; min-height: 440px; }
+		.view-switch { position: absolute; z-index: 600; top: 20px; left: 20px; display: flex; gap: 3px; background: #fff; border-radius: 7px; padding: 5px; box-shadow: 0 2px 12px #2036411a; }
+		.view-switch button { background: transparent; border: 0; padding: 10px 13px; border-radius: 4px; color: var(--muted); font-size: 13px; }
+		.view-switch button[aria-pressed="true"] { color: var(--ink); background: #edf1f5; font-weight: 650; }
+		.map-note { position: absolute; z-index: 600; left: 20px; bottom: 40px; max-width: calc(100% - 100px); background: white; padding: 14px 17px; border-radius: 7px; box-shadow: 0 2px 12px #2036411a; font-size: 12px; }
+		.legend { display: flex; gap: 8px; align-items: center; font-weight: 650; }
+		.legend i { width: 18px; height: 12px; background: #275de030; border: 2px solid var(--blue); border-radius: 2px; }
+		#point-status { margin: 8px 0 0; color: var(--muted); line-height: 1.5; }
+		.point-actions { margin-top: 8px; display: flex; gap: 12px; }
+		.point-actions button { border: 0; padding: 0; background: none; color: var(--blue); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+		#load-status { position: absolute; z-index: 650; top: 78px; left: 20px; right: 20px; width: fit-content; max-width: calc(100% - 40px); background: #fff; padding: 12px 16px; border-radius: 6px; font-size: 13px; line-height: 1.5; }
+		#load-status[hidden] { display: none; }
+		.leaflet-container { font: inherit; }
+		.leaflet-control-attribution { font-size: 10px; }
+		.leaflet-tooltip.place-label { border: 0; background: #fffffff2; box-shadow: 0 1px 5px #20364125; padding: 5px 8px; font-size: 11px; font-weight: 650; color: var(--ink); }
+		.leaflet-tooltip.place-label:before { display: none; }
+		.leaflet-control-zoom a { color: var(--ink); }
+		@media (max-width: 760px) {
+			.topbar { height: 56px; padding: 0 18px; gap: 12px; }
+			.topbar .context { font-size: 12px; }
+			.badge { display: none; }
+			main { height: auto; min-height: 0; display: flex; flex-direction: column; }
+			aside { order: 2; padding: 20px; border: 0; overflow: visible; }
+			h1 { font-size: 26px; }
+			h1 br { display: none; }
+			.intro { margin-bottom: 14px; }
+			.metrics { padding-bottom: 14px; }
+			section.controls { padding-top: 16px; }
+			.presets { margin-bottom: 15px; }
+			.source { margin-top: 15px; }
+			.map-shell { order: 1; height: 65dvh; min-height: 470px; }
+			.view-switch { left: 12px; top: 12px; }
+			.view-switch button { padding: 9px 11px; }
+			.map-note { left: 12px; padding: 12px; bottom: 42px; }
+		}
+	</style>
+</head>
+<body>
+	<header class="topbar">
+		<div class="brand">
+			<svg width="26" height="28" viewBox="0 0 26 28" fill="none" aria-hidden="true">
+				<path d="M2 4L10 1L17 4L24 1V24L17 27L10 24L2 27V4Z" fill="#275de0"/>
+				<path d="M7 20C20 18 4 10 19 8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+			</svg>FillMap
+		</div>
+		<span class="divider"></span><span class="context">청계천 경계 실험</span>
+		<span class="badge">공개 지도 좌표로 확인하는 PoC</span>
+	</header>
+	<main>
+		<aside aria-label="경계 설정">
+			<h1>구불구불한 청계천,<br> 경계도 그대로.</h1>
+			<p class="intro">청계천의 흐름을 따라 영역을 그립니다.<br>폭을 바꾸고, 굽은 구간을 확대해 보세요.</p>
+			<div class="metrics">
+				<div><span>중심선 길이</span><strong id="length">불러오는 중</strong></div>
+				<div><span>표시 면적</span><strong id="area">불러오는 중</strong></div>
+			</div>
+			<section class="controls" aria-label="경계 폭과 지도 표시">
+				<label class="width-label" for="width">중심선에서 한쪽 폭 <output id="width-value" for="width">20 m</output></label>
+				<input id="width" type="range" min="5" max="80" step="5" value="20" disabled aria-describedby="width-note">
+				<div class="range-ends"><span>좁게 5 m</span><span>넓게 80 m</span></div>
+				<p class="width-note" id="width-note">왼쪽 20 m + 오른쪽 20 m = 전체 폭 40 m</p>
+				<div class="presets" aria-label="폭 바로 선택">
+					<button type="button" data-width="10" aria-pressed="false" disabled>10 m</button>
+					<button type="button" data-width="20" aria-pressed="true" disabled>20 m</button>
+					<button type="button" data-width="40" aria-pressed="false" disabled>40 m</button>
+					<button type="button" data-width="80" aria-pressed="false" disabled>80 m</button>
+				</div>
+				<label class="layer-row"><input type="checkbox" id="centerline" checked disabled>원본 중심선<span class="swatch" aria-hidden="true"></span></label>
+				<label class="layer-row"><input type="checkbox" id="grid" disabled>FillMap 100 m 격자와 비교<span class="swatch grid" aria-hidden="true"></span></label>
+			</section>
+			<details class="source">
+				<summary>데이터 출처와 경계의 의미</summary>
+				<p>OSM의 청계천 <b>수로 중심선</b>에서 일정한 폭으로 만든 실험 경계입니다. 공식 하천 경계나 산책로 경계는 아닙니다.</p>
+				<p id="source-detail"></p>
+				<p><a href="https://www.openstreetmap.org/way/368276771" target="_blank" rel="noreferrer">상류 원본</a> / <a href="https://www.openstreetmap.org/way/769631455" target="_blank" rel="noreferrer">하류 원본</a><br>© OpenStreetMap contributors. <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">ODbL</a></p>
+			</details>
+			<p class="limit-note">이 화면의 영역은 실험용입니다.<br>공식 하천·산책로 경계는 아닙니다.</p>
+		</aside>
+		<div class="map-shell">
+			<div id="map" role="region" aria-label="청계천 지도. 방향키로 이동하고 더하기와 빼기로 확대하거나 축소합니다."></div>
+			<nav class="view-switch" aria-label="지도 구간 선택">
+				<button type="button" data-view="all" aria-pressed="true" disabled>전체 구간</button>
+				<button type="button" data-view="curve" aria-pressed="false" disabled>굽은 구간</button>
+				<button type="button" data-view="start" aria-pressed="false" disabled>청계광장</button>
+			</nav>
+			<div id="load-status" role="status">청계천 좌표를 불러오고 있습니다.</div>
+			<div class="map-note">
+				<div class="legend"><i aria-hidden="true"></i><span>중심선 기준 실험 경계</span></div>
+				<p id="point-status" role="status">지도에서 한 지점을 눌러 경계 안팎을 확인하세요.</p>
+				<div class="point-actions">
+					<button type="button" id="check-center" disabled>지도 중심 확인</button>
+					<button type="button" id="clear-point" hidden>선택 지우기</button>
+				</div>
+			</div>
+		</div>
+	</main>
+	<script src="./vendor/leaflet.js"></script>
+	<script src="./vendor/turf.min.js"></script>
+	<script type="module">
+		import {boundaryFor} from './geometry.mjs';
+
+		const $ = (id) => document.getElementById(id);
+		const status = $('load-status');
+		try {
+			if (!window.L || !window.turf) throw new Error('지도 파일을 불러오지 못했습니다.');
+			const response = await fetch('./centerline.geojson');
+			if (!response.ok) throw new Error('청계천 좌표 파일을 불러오지 못했습니다.');
+			const centerline = await response.json();
+			const gridResponse = await fetch('./grid.geojson');
+			if (!gridResponse.ok) throw new Error('비교 격자 파일을 불러오지 못했습니다.');
+			const grid = await gridResponse.json();
+			const map = L.map('map', {zoomControl: false, minZoom: 12, maxZoom: 19, zoomSnap: .5})
+				.setView([37.567, 127.015], 14);
+			L.control.zoom({position: 'topright', zoomInTitle: '확대', zoomOutTitle: '축소'}).addTo(map);
+			L.control.scale({imperial: false, position: 'bottomleft'}).addTo(map);
+			L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+				maxZoom: 19,
+				attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+			}).on('tileerror', () => {
+				status.textContent = '배경 지도를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침하세요. 경계 조절은 가능합니다.';
+				status.hidden = false;
+			}).addTo(map);
+			map.createPane('grid'); map.getPane('grid').style.zIndex = 350;
+			const gridLayer = L.geoJSON(grid, {
+				pane: 'grid', style: {color: '#708396', weight: 1, opacity: .4}, interactive: false
+			});
+			const boundaryLayer = L.geoJSON(null, {
+				style: {color: '#275de0', weight: 2, fillColor: '#4e80ee', fillOpacity: .24},
+				interactive: false
+			}).addTo(map);
+			const lineLayer = L.geoJSON(centerline, {
+				style: {color: '#007f83', weight: 2, dashArray: '4 5'}, interactive: false
+			}).addTo(map);
+			const coordinates = centerline.geometry.coordinates;
+			const start = coordinates[0], end = coordinates.at(-1);
+			for (const [point, label] of [[start, '청계광장'], [end, '중랑천 합류부']]) {
+				L.circleMarker([point[1], point[0]], {radius: 5, color: '#fff', weight: 2, fillColor: '#275de0', fillOpacity: 1})
+					.bindTooltip(label, {permanent: true, direction: 'top', offset: [0, -8], className: 'place-label'}).addTo(map);
+			}
+			$('length').textContent = `${turf.length(centerline).toFixed(2)} km`;
+			$('source-detail').textContent = `원본 좌표 ${coordinates.length}개. OSM 기준 ${centerline.properties.osm_base.slice(0, 10)}.`;
+			let boundary, selectedPoint, selectedMarker;
+			function checkPoint(latlng) {
+				selectedPoint = latlng;
+				const inside = turf.booleanPointInPolygon([latlng.lng, latlng.lat], boundary);
+				if (selectedMarker) map.removeLayer(selectedMarker);
+				selectedMarker = L.circleMarker(latlng, {
+					radius: 7, color: '#fff', weight: 3, fillColor: inside ? '#275de0' : '#a3532a', fillOpacity: 1,
+					interactive: false
+				}).addTo(map);
+				$('point-status').textContent = `선택 지점은 경계 ${inside ? '안' : '밖'}입니다. (${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)})`;
+				$('clear-point').hidden = false;
+			}
+			function updateBoundary() {
+				const radius = Number($('width').value);
+				boundary = boundaryFor(centerline, radius, turf);
+				boundaryLayer.clearLayers().addData(boundary);
+				lineLayer.bringToFront();
+				$('width-value').textContent = `${radius} m`;
+				$('width-note').textContent = `왼쪽 ${radius} m + 오른쪽 ${radius} m = 전체 폭 ${radius * 2} m`;
+				$('area').textContent = `${(turf.area(boundary) / 10000).toFixed(1)} ha`;
+				document.querySelectorAll('[data-width]').forEach((button) => {
+					button.setAttribute('aria-pressed', String(Number(button.dataset.width) === radius));
+				});
+				if (selectedPoint) checkPoint(selectedPoint);
+			}
+			$('width').addEventListener('input', updateBoundary);
+			document.querySelectorAll('[data-width]').forEach((button) => {
+				button.addEventListener('click', () => { $('width').value = button.dataset.width; updateBoundary(); });
+			});
+			$('centerline').addEventListener('change', () => {
+				if ($('centerline').checked) lineLayer.addTo(map); else map.removeLayer(lineLayer);
+			});
+			$('grid').addEventListener('change', () => {
+				if ($('grid').checked) gridLayer.addTo(map); else map.removeLayer(gridLayer);
+			});
+			map.on('click', (event) => checkPoint(event.latlng));
+			$('check-center').addEventListener('click', () => checkPoint(map.getCenter()));
+			$('clear-point').addEventListener('click', () => {
+				if (selectedMarker) map.removeLayer(selectedMarker);
+				selectedPoint = selectedMarker = undefined;
+				$('point-status').textContent = '지도에서 한 지점을 눌러 경계 안팎을 확인하세요.';
+				$('clear-point').hidden = true;
+			});
+			document.querySelectorAll('[data-view]').forEach((button) => {
+				button.addEventListener('click', () => {
+					document.querySelectorAll('[data-view]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+					if (button.dataset.view === 'all') map.fitBounds(lineLayer.getBounds(), {padding: [65, 90], animate: false});
+					if (button.dataset.view === 'curve') map.setView([37.5714, 127.0355], 16.5, {animate: false});
+					if (button.dataset.view === 'start') map.setView([37.5695, 126.9808], 17, {animate: false});
+				});
+			});
+			updateBoundary();
+			map.fitBounds(lineLayer.getBounds(), {padding: [65, 90], animate: false});
+			document.querySelectorAll('[disabled]').forEach((element) => { element.disabled = false; });
+			status.hidden = true;
+			new ResizeObserver(() => map.invalidateSize()).observe($('map'));
+		} catch (error) {
+			status.textContent = `${error.message} 로컬 서버로 실행한 뒤 새로고침하세요.`;
+			status.hidden = false;
+			console.error(error);
+		}
+	</script>
+</body>
+</html>

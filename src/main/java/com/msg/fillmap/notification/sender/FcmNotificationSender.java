@@ -16,6 +16,8 @@ import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.Notification;
 import com.google.firebase.messaging.SendResponse;
+import com.google.firebase.messaging.WebpushConfig;
+import com.google.firebase.messaging.WebpushNotification;
 
 /**
  * FCM 발송 구현 (MSG-179 D9). sendEachForMulticast 는 토큰 500개 하드 리밋(초과 시 요청 자체 거부 →
@@ -34,14 +36,14 @@ public class FcmNotificationSender implements NotificationSender {
 	private final FirebaseMessaging firebaseMessaging;
 
 	@Override
-	public SendResult send(List<String> tokens, String title, String body) {
+	public SendResult send(long notificationId, List<String> tokens, String title, String body) {
 		int successCount = 0;
 		List<String> invalidTokens = new ArrayList<>();
 		IllegalStateException firstBatchFailure = null;
 		for (int from = 0; from < tokens.size(); from += MULTICAST_LIMIT) {
 			List<String> chunk = tokens.subList(from, Math.min(from + MULTICAST_LIMIT, tokens.size()));
 			try {
-				BatchResponse response = firebaseMessaging.sendEachForMulticast(buildMessage(chunk, title, body));
+				BatchResponse response = firebaseMessaging.sendEachForMulticast(buildMessage(notificationId, chunk, title, body));
 				successCount += response.getSuccessCount();
 				collectInvalidTokens(response, chunk, invalidTokens);
 			} catch (FirebaseMessagingException e) {
@@ -58,9 +60,13 @@ public class FcmNotificationSender implements NotificationSender {
 		return new SendResult(successCount, invalidTokens);
 	}
 
-	private MulticastMessage buildMessage(List<String> chunk, String title, String body) {
+	private MulticastMessage buildMessage(long notificationId, List<String> chunk, String title, String body) {
 		return MulticastMessage.builder()
 			.addAllTokens(chunk)
+			.putData("notificationId", Long.toString(notificationId))
+			.setWebpushConfig(WebpushConfig.builder().setNotification(WebpushNotification.builder()
+				.setTag("fillmap-notification-" + notificationId).setRenotify(false)
+				.setIcon("/favicon.png").build()).build())
 			.setNotification(Notification.builder().setTitle(title).setBody(body).build())
 			.build();
 	}

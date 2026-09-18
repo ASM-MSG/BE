@@ -1,0 +1,9 @@
+    FANOUT_FIXTURE tag=arrival-d485951a-204 subscribers=10000 occurrence_id=74
+    ARRIVAL_SAMPLE implementation=bulk rate=200 repetition=0 tick_ms=282.371 requests=2000 errors=0 p50_ms=3.899 p95_ms=5.334 p99_ms=30.507 max_ms=51.717 dispatch_p95_ms=1.268
+    FANOUT_FIXTURE tag=arrival-74f43979-c16 subscribers=10000 occurrence_id=75
+    ARRIVAL_SAMPLE implementation=bulk rate=200 repetition=1 tick_ms=197.721 requests=2000 errors=0 p50_ms=3.279 p95_ms=4.132 p99_ms=4.821 max_ms=27.717 dispatch_p95_ms=1.242
+    FANOUT_FIXTURE tag=arrival-b960abd5-213 subscribers=10000 occurrence_id=76
+    ARRIVAL_SAMPLE implementation=bulk rate=200 repetition=2 tick_ms=221.282 requests=2000 errors=0 p50_ms=3.217 p95_ms=4.145 p99_ms=6.421 max_ms=33.949 dispatch_p95_ms=1.233
+    FANOUT_FIXTURE tag=arrival-73ba9336-07d subscribers=10000 occurrence_id=77
+    ARRIVAL_SAMPLE implementation=bulk rate=200 repetition=3 tick_ms=211.929 requests=2000 errors=0 p50_ms=3.192 p95_ms=4.479 p99_ms=5.658 max_ms=41.136 dispatch_p95_ms=1.260
+BUILD SUCCESSFUL in 1m 8s

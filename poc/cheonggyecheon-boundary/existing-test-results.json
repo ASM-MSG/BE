@@ -1,0 +1,95 @@
+{
+  "command": "./gradlew test --tests '*EventSubmissionValidationTest' --tests '*EventLifecycleGuardTest' --tests '*RouteOrderPlannerTest'",
+  "suites": [
+    {
+      "file": "TEST-com.msg.fillmap.route.service.RouteOrderPlannerTest.xml",
+      "name": "RouteOrderPlanner — 방문 순서 배열 (결정적 규칙)",
+      "tests": "7",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-com.msg.fillmap.event.submission.service.EventSubmissionValidationTest$Area.xml",
+      "name": "영역 검증과 81칸 상한",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-com.msg.fillmap.event.submission.service.EventSubmissionValidationTest$Representative.xml",
+      "name": "대표 격자 서버 계산",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-com.msg.fillmap.route.service.RouteOrderPlannerTest$WalkBudgetTrim.xml",
+      "name": "도보 예산 절단 (MSG-515) — 보정 총 이동 거리 상한 10km",
+      "tests": "8",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-com.msg.fillmap.event.service.EventLifecycleGuardTest$Interaction.xml",
+      "name": "댓글·도움돼요",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-com.msg.fillmap.event.submission.service.EventSubmissionValidationTest$SubmissionNo.xml",
+      "name": "신청 번호",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-com.msg.fillmap.event.submission.service.EventSubmissionValidationTest$Participation.xml",
+      "name": "이벤트 참여형 (MSG-502)",
+      "tests": "15",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-com.msg.fillmap.event.service.EventLifecycleGuardTest$Upload.xml",
+      "name": "업로드",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-com.msg.fillmap.event.service.EventLifecycleGuardTest.xml",
+      "name": "EventLifecycleGuard 상태별 차단 규칙",
+      "tests": "1",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-com.msg.fillmap.event.submission.service.EventSubmissionValidationTest$Image.xml",
+      "name": "대표 이미지",
+      "tests": "2",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    {
+      "file": "TEST-com.msg.fillmap.event.submission.service.EventSubmissionValidationTest$Period.xml",
+      "name": "기간과 유형별 항목",
+      "tests": "5",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  ],
+  "tests": 56,
+  "failures": 0
+}

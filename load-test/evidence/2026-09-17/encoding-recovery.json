@@ -1,0 +1,108 @@
+{
+  "run": "20260917T014651",
+  "faults": [
+    {
+      "mode": "TERM",
+      "target_before": {
+        "id": 240852,
+        "processing_status": "UPLOADED",
+        "status": "PROCESSING",
+        "claimed_by": "ai",
+        "attempt_count": 1,
+        "job_total_ms": null
+      },
+      "immediate": {
+        "id": 240852,
+        "processing_status": "ENCODING",
+        "status": "PENDING",
+        "claimed_by": null,
+        "attempt_count": 0,
+        "job_total_ms": null
+      },
+      "rows": [
+        {
+          "id": 240853,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 14390.147
+        },
+        {
+          "id": 240854,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 29223.434
+        },
+        {
+          "id": 240852,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 45412.406
+        }
+      ],
+      "recovery_ms": 45106.211542
+    },
+    {
+      "mode": "KILL",
+      "target_before": {
+        "id": 240856,
+        "processing_status": "ENCODING",
+        "status": "PROCESSING",
+        "claimed_by": "ai",
+        "attempt_count": 1,
+        "job_total_ms": null
+      },
+      "immediate": {
+        "id": 240856,
+        "processing_status": "ENCODING",
+        "status": "PROCESSING",
+        "claimed_by": "ai",
+        "attempt_count": 1,
+        "job_total_ms": null
+      },
+      "rows": [
+        {
+          "id": 240855,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 15273.494
+        },
+        {
+          "id": 240857,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 45685.583
+        },
+        {
+          "id": 240856,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 2,
+          "job_total_ms": 30340.032
+        }
+      ],
+      "recovery_ms": 42997.24866699999
+    }
+  ],
+  "ids": [
+    240854,
+    240852,
+    240853,
+    240857,
+    240856,
+    240855
+  ],
+  "lease_note": "KILL: own test row lease forced expired after crash; not production recovery SLA",
+  "worker_restored": true,
+  "test_account_deleted": true
+}

@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudFront 재생 경로와 반복 재생 실측 (MSG-67)</title>
+<style>
+	:root {
+		--bg: #ffffff;
+		--bg-soft: #f6f7f9;
+		--bg-code: #f2f4f7;
+		--fg: #1b1f24;
+		--fg-soft: #5b6673;
+		--line: #dfe3e8;
+		--accent: #2d6cdf;
+		--accent-soft: #eaf1fd;
+		--warn: #b4690e;
+		--warn-soft: #fdf3e3;
+		--danger: #c0392b;
+		--danger-soft: #fdeeec;
+		--ok: #1f7a4d;
+		--ok-soft: #e9f6ef;
+		--mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #0f1216;
+			--bg-soft: #161a20;
+			--bg-code: #1a1f26;
+			--fg: #e6e9ed;
+			--fg-soft: #9aa4b2;
+			--line: #2a313a;
+			--accent: #6ea8ff;
+			--accent-soft: #16233a;
+			--warn: #e0a44a;
+			--warn-soft: #2a2113;
+			--danger: #f0796b;
+			--danger-soft: #2d1917;
+			--ok: #5fc38d;
+			--ok-soft: #12251b;
+		}
+	}
+
+	:root[data-theme="dark"] {
+		--bg: #0f1216;
+		--bg-soft: #161a20;
+		--bg-code: #1a1f26;
+		--fg: #e6e9ed;
+		--fg-soft: #9aa4b2;
+		--line: #2a313a;
+		--accent: #6ea8ff;
+		--accent-soft: #16233a;
+		--warn: #e0a44a;
+		--warn-soft: #2a2113;
+		--danger: #f0796b;
+		--danger-soft: #2d1917;
+		--ok: #5fc38d;
+		--ok-soft: #12251b;
+	}
+
+	:root[data-theme="light"] {
+		--bg: #ffffff;
+		--bg-soft: #f6f7f9;
+		--bg-code: #f2f4f7;
+		--fg: #1b1f24;
+		--fg-soft: #5b6673;
+		--line: #dfe3e8;
+		--accent: #2d6cdf;
+		--accent-soft: #eaf1fd;
+		--warn: #b4690e;
+		--warn-soft: #fdf3e3;
+		--danger: #c0392b;
+		--danger-soft: #fdeeec;
+		--ok: #1f7a4d;
+		--ok-soft: #e9f6ef;
+	}
+
+	* { box-sizing: border-box; }
+
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--fg);
+		font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard",
+			"Malgun Gothic", sans-serif;
+		overflow-wrap: break-word;
+	}
+
+	.wrap {
+		display: grid;
+		grid-template-columns: 240px minmax(0, 1fr);
+		gap: 48px;
+		max-width: 1180px;
+		margin: 0 auto;
+		padding: 40px 24px 96px;
+		align-items: start;
+	}
+
+	@media (max-width: 900px) {
+		.wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+		nav.toc { position: static !important; }
+	}
+
+	nav.toc {
+		position: sticky;
+		top: 24px;
+		font-size: 14px;
+		border-left: 2px solid var(--line);
+		padding-left: 16px;
+	}
+	nav.toc p {
+		margin: 0 0 10px;
+		font-weight: 700;
+		font-size: 12px;
+		letter-spacing: .08em;
+		color: var(--fg-soft);
+		text-transform: uppercase;
+	}
+	nav.toc a {
+		display: block;
+		padding: 4px 0;
+		color: var(--fg-soft);
+		text-decoration: none;
+	}
+	nav.toc a:hover { color: var(--accent); }
+	nav.toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+	nav.toc .sub2 { padding-left: 10px; font-size: 13px; }
+	nav.toc .rel { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+
+	header.title { margin-bottom: 8px; }
+	h1 { font-size: 30px; line-height: 1.3; margin: 0 0 8px; letter-spacing: -.02em; text-wrap: balance; }
+	.sub { color: var(--fg-soft); margin: 0 0 4px; }
+
+	h2 {
+		font-size: 22px;
+		margin: 56px 0 12px;
+		padding-top: 20px;
+		border-top: 1px solid var(--line);
+		letter-spacing: -.01em;
+		scroll-margin-top: 20px;
+	}
+	h3 { font-size: 17px; margin: 28px 0 8px; scroll-margin-top: 20px; }
+	p { margin: 0 0 14px; }
+	ul, ol { margin: 0 0 14px; padding-left: 20px; }
+	li { margin-bottom: 6px; }
+	a { color: var(--accent); }
+
+	code {
+		font-family: var(--mono);
+		font-size: .88em;
+		background: var(--bg-code);
+		border: 1px solid var(--line);
+		border-radius: 4px;
+		padding: 1px 5px;
+	}
+	pre {
+		background: var(--bg-code);
+		border: 1px solid var(--line);
+		border-radius: 8px;
+		padding: 14px 16px;
+		overflow-x: auto;
+		margin: 0 0 16px;
+	}
+	pre code { background: none; border: 0; padding: 0; font-size: 13px; line-height: 1.6; }
+
+	.badge {
+		display: inline-block;
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: .04em;
+		padding: 2px 7px;
+		border-radius: 999px;
+		vertical-align: middle;
+		border: 1px solid transparent;
+		white-space: nowrap;
+	}
+	.badge.new { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+	.badge.done { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+	.badge.bad { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+
+	.note {
+		border: 1px solid var(--line);
+		border-left: 4px solid var(--accent);
+		background: var(--accent-soft);
+		border-radius: 0 8px 8px 0;
+		padding: 12px 16px;
+		margin: 0 0 18px;
+	}
+	.note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+	.note.danger { border-left-color: var(--danger); background: var(--danger-soft); }
+	.note.ok { border-left-color: var(--ok); background: var(--ok-soft); }
+	.note > :last-child { margin-bottom: 0; }
+	.note strong { display: block; margin-bottom: 4px; }
+
+	table { border-collapse: collapse; width: 100%; margin: 0 0 18px; font-size: 14px; }
+	th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+	th { background: var(--bg-soft); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+	.scroll-x { overflow-x: auto; margin: 0 0 18px; }
+	.scroll-x table { margin: 0; min-width: 560px; }
+	td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+	/* --- 지표 스트립 --- */
+	.metrics {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 12px;
+		margin: 24px 0 8px;
+	}
+	@media (max-width: 520px) { .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+	.metric {
+		border: 1px solid var(--line);
+		background: var(--bg-soft);
+		border-radius: 8px;
+		padding: 12px 14px;
+	}
+	.metric b {
+		display: block;
+		font-size: 26px;
+		line-height: 1.2;
+		letter-spacing: -.02em;
+		font-variant-numeric: tabular-nums;
+	}
+	.metric span { display: block; font-size: 12.5px; color: var(--fg-soft); margin-top: 2px; }
+
+	/* --- 파이프라인 도해 --- */
+	.diagram { overflow-x: auto; margin: 0 0 20px; }
+	.diagram svg { display: block; min-width: 720px; font-family: inherit; }
+	.diagram text { fill: var(--fg); }
+	.diagram text.soft { fill: var(--fg-soft); }
+	.diagram rect.box { fill: var(--bg-soft); stroke: var(--line); }
+	.diagram rect.hl { fill: var(--accent-soft); stroke: var(--accent); }
+	.diagram path, .diagram line { stroke: var(--fg-soft); fill: none; }
+	.diagram path.recover { stroke: var(--warn); stroke-dasharray: 5 4; }
+	.diagram text.recover { fill: var(--warn); }
+
+	/* --- 결함 카드 --- */
+	.case {
+		border: 1px solid var(--line);
+		border-left: 4px solid var(--fg-soft);
+		border-radius: 0 8px 8px 0;
+		padding: 14px 16px 4px;
+		margin: 0 0 16px;
+		background: var(--bg-soft);
+	}
+	.case.high { border-left-color: var(--danger); }
+	.case.mid { border-left-color: var(--warn); }
+	.case h4 {
+		margin: 0 0 10px;
+		font-size: 16px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		align-items: baseline;
+	}
+	.case h4 .src {
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: .03em;
+		color: var(--fg-soft);
+		border: 1px solid var(--line);
+		background: var(--bg);
+		border-radius: 999px;
+		padding: 1px 8px;
+	}
+	.case dl { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 4px 12px; margin: 0 0 12px; }
+	.case dt {
+		font-size: 12px;
+		font-weight: 700;
+		letter-spacing: .04em;
+		color: var(--fg-soft);
+		padding-top: 3px;
+	}
+	.case dd { margin: 0; font-size: 15px; }
+	.case dd:last-of-type { color: var(--fg); }
+	.case dt.fix { color: var(--ok); }
+	@media (max-width: 560px) {
+		.case dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+		.case dt { padding-top: 8px; }
+	}
+
+	.foot { color: var(--fg-soft); font-size: 13px; margin-top: 56px; border-top: 1px solid var(--line); padding-top: 16px; }
+	@media print {
+		:root, :root[data-theme="dark"] {
+			--bg: #ffffff;
+			--bg-soft: #f6f7f9;
+			--bg-code: #f2f4f7;
+			--fg: #1b1f24;
+			--fg-soft: #5b6673;
+			--line: #dfe3e8;
+			--accent: #2d6cdf;
+			--accent-soft: #eaf1fd;
+			--warn: #b4690e;
+			--warn-soft: #fdf3e3;
+			--danger: #c0392b;
+			--danger-soft: #fdeeec;
+			--ok: #1f7a4d;
+			--ok-soft: #e9f6ef;
+		}
+		body { font-size: 10.5pt; line-height: 1.55; }
+		.wrap {
+			display: block;
+			max-width: none;
+			padding: 0;
+		}
+		nav.toc {
+			position: static;
+			border-left: none;
+			padding-left: 0;
+			margin-bottom: 24px;
+			column-count: 2;
+			column-gap: 32px;
+		}
+		nav.toc a { break-inside: avoid; }
+		h2 { break-before: page; break-after: avoid; }
+		h1 + p + h2, header + h2 { break-before: auto; }
+		h3, h4 { break-after: avoid; }
+		.case, .box, .metric, table, pre, .diagram, .note { break-inside: avoid; }
+		.scroll-x { overflow: visible; }
+		table { font-size: 9pt; }
+		pre { white-space: pre-wrap; font-size: 8.5pt; }
+		a { color: inherit; text-decoration: none; }
+		.diagram svg { max-width: 100%; height: auto; }
+	}
+
+	/* --- 차트 (dataviz 기준 팔레트, 라이트·다크 각각 검증) --- */
+	:root { --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; }
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; }
+	}
+	:root[data-theme="dark"] { --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; }
+	.chart { overflow-x: auto; margin: 0 0 6px; }
+	.chart svg { display: block; min-width: 640px; width: 100%; height: auto; font-family: inherit; }
+	.chart text { fill: var(--fg); font-size: 12px; }
+	.chart text.soft { fill: var(--fg-soft); }
+	.chart text.grp { font-weight: 700; font-size: 13px; }
+	.chart text.val { font-variant-numeric: tabular-nums; fill: var(--fg-soft); }
+	.chart line.grid { stroke: var(--line); stroke-width: 1; }
+	.chart line.ref { stroke: var(--warn); stroke-width: 1; }
+	.chart text.ref { fill: var(--warn); font-size: 11px; }
+	.chart .s1 { fill: var(--series-1); } .chart .s2 { fill: var(--series-2); } .chart .s3 { fill: var(--series-3); }
+	.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--fg-soft); margin: 0 0 12px; }
+	.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+	.legend .s1 { background: var(--series-1); } .legend .s2 { background: var(--series-2); } .legend .s3 { background: var(--series-3); }
+	.caption { font-size: 13px; color: var(--fg-soft); margin: 0 0 20px; }
+	.metrics.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.note.quiet { border-left-color: var(--fg-soft); background: var(--bg-soft); }
+	@media print { .chart svg { min-width: 0; } }
+</style>
+</head>
+<body>
+<script>
+/* 가로 막대: 그룹 제목 → 막대(두께 16, 끝 4px 라운드, 기준선 쪽은 각짐), 값은 막대 끝에 직접 표기 */
+function hbars(el, groups, opt) {
+	var W = 760, L = 96, R = 84, bh = 16, gap = 4, gg = 16, y = 12, out = [];
+	var pw = W - L - R, x = function (v) { return L + v / opt.max * pw; };
+	opt.ticks.forEach(function (t) {
+		out.push('<line class="grid" x1="' + x(t) + '" y1="8" x2="' + x(t) + '" y2="__H__"/>');
+	});
+	groups.forEach(function (g) {
+		out.push('<text class="grp" x="0" y="' + (y + 11) + '">' + g.label + '</text>');
+		y += 20;
+		g.bars.forEach(function (b) {
+			var w = Math.max(x(b.v) - L, 6);
+			out.push('<g><title>' + g.label + ' / ' + b.label + ': ' + opt.fmt(b.v) + '</title>' +
+				'<path class="s' + b.s + '" d="M' + L + ' ' + y + ' h' + (w - 4) + ' a4 4 0 0 1 4 4 v' + (bh - 8) +
+				' a4 4 0 0 1 -4 4 h-' + (w - 4) + ' z"/>' +
+				'<text class="soft" x="' + (L - 8) + '" y="' + (y + bh / 2 + 4) + '" text-anchor="end">' + b.label + '</text>' +
+				'<text class="val" x="' + (L + w + 6) + '" y="' + (y + bh / 2 + 4) + '">' + opt.fmt(b.v) + '</text></g>');
+			y += bh + gap;
+		});
+		y += gg;
+	});
+	var ay = y - gg + 6;
+	out.push('<line class="grid" x1="' + L + '" y1="' + ay + '" x2="' + (W - R) + '" y2="' + ay + '"/>');
+	opt.ticks.forEach(function (t) {
+		out.push('<text class="soft" x="' + x(t) + '" y="' + (ay + 16) + '" text-anchor="middle">' + opt.tick(t) + '</text>');
+	});
+	if (opt.ref) {
+		out.push('<line class="ref" x1="' + x(opt.ref.v) + '" y1="8" x2="' + x(opt.ref.v) + '" y2="' + ay + '"/>');
+		out.push('<text class="ref" x="' + (x(opt.ref.v) + 5) + '" y="16">' + opt.ref.label + '</text>');
+	}
+	var H = ay + 26;
+	el.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+	el.innerHTML = out.join('').split('__H__').join(ay);
+}
+</script>
+<div class="wrap">
+
+<nav class="toc">
+	<p>목차</p>
+	<a href="#summary">요약</a>
+	<a href="#problem">가설과 측정 방식</a>
+	<a href="#design">설계</a>
+	<a class="sub2" href="#design-mp4">MP4 그대로, HLS 없이</a>
+	<a class="sub2" href="#design-sign">서명 URL과 캐시 키</a>
+	<a class="sub2" href="#design-oac">원본은 OAC로 닫는다</a>
+	<a class="sub2" href="#design-key">교체마다 다른 파일 경로</a>
+	<a href="#flow">흐름 도해</a>
+	<a href="#numbers">실측</a>
+	<a href="#verify">함께 검증한 것</a>
+	<a href="#caveat">말할 때 주의</a>
+	<a href="#glossary">용어</a>
+	<div class="rel">
+		<a href="./playback-flow.html">영상 재생 플로우</a>
+		<a href="./encoding-distribution.html">인코딩 분산과 워커 회수</a>
+	</div>
+</nav>
+
+<main>
+<header class="title">
+	<h1>CloudFront 재생 경로와 반복 재생 실측</h1>
+	<p class="sub">S3 직접 전송에 엣지 캐시를 얹고 서명 URL로 접근을 잠근 뒤, 같은 파일로 콜드와 웜을 재 본 기록. MSG-67, 2026-08-27 dev 실측.</p>
+</header>
+
+<h2 id="summary">요약</h2>
+<p>재생 API가 접근 권한을 판정한 뒤 S3 사전서명 URL 대신 CloudFront 서명 URL을 발급한다. 원본 버킷은 OAC로 닫아 CloudFront만 읽고, 파생 파일 경로에 인코딩 시도 ID를 붙여 교체된 영상이 옛 캐시를 받지 않게 했다. 개선 폭을 합격 조건으로 미리 고정하지 않고, 느려진 축도 그대로 적었다.</p>
+<div class="metrics six">
+	<div class="metric"><b>51.8ms</b><span>전체 GET 첫 바이트, 웜 캐시 (S3 직접 105.9ms)</span></div>
+	<div class="metric"><b>−51.1%</b><span>첫 바이트 응답 중앙값 감소</span></div>
+	<div class="metric"><b>181.0ms</b><span>전체 GET 완료, 웜 캐시 (S3 직접 250.8ms)</span></div>
+	<div class="metric"><b>−27.8%</b><span>다운로드 완료 중앙값 감소</span></div>
+	<div class="metric"><b>29/30 · 30/30</b><span>웜 캐시 적중 (전체 GET · 1MiB Range)</span></div>
+	<div class="metric"><b>199.2ms</b><span>콜드 첫 바이트, S3 직접보다 느림</span></div>
+</div>
+<p class="caption">서울에서 MP4 세 개(2.6MB, 1.1MB, 3.0MB)로 측정. S3 직접은 9회 중앙값, 콜드는 파일별 첫 요청 3회의 중앙값, 웜은 파일별 10회씩 30회의 중앙값이다.</p>
+
+<h2 id="problem">가설과 측정 방식</h2>
+<p>재생 요청은 서울 리전 S3로 바로 갔다. 국내 접속이라 첫 요청의 지연 차이는 작을 수 있다. 다만 격자 대표 영상과 핫구역처럼 <strong>같은 영상을 여럿이 반복해서 보는 자리</strong>에서는 엣지 캐시가 원본 요청과 전송량을 줄일 여지가 있다. 이걸 미리 단정하지 않고 같은 파일로 세 경로를 비교하기로 했다.</p>
+<ul>
+	<li><strong>S3 직접</strong>: 기존 사전서명 URL. 9회.</li>
+	<li><strong>CloudFront 콜드</strong>: 캐시가 비어 있어 엣지가 S3 원본까지 다녀오는 첫 요청. 파일별 3회.</li>
+	<li><strong>CloudFront 웜</strong>: 캐시가 채워진 뒤의 반복 요청. 파일별 10회.</li>
+</ul>
+<p>요청 종류는 두 가지다. 파일 전체를 받는 GET과, 플레이어가 재생 시작이나 시킹 때 쓰는 첫 1MiB Range 요청. 각 요청에서 첫 바이트가 올 때까지(TTFB)와 다 받을 때까지(완료)를 쟀다.</p>
+
+<h2 id="design">설계</h2>
+
+<h3 id="design-mp4">MP4 그대로, HLS 없이</h3>
+<p>Jira의 옛 AI 컨텍스트에는 인코딩 산출물이 HLS라고 적혀 있었지만 실제 산출물은 <code>+faststart</code>가 적용된 720p H.264와 AAC MP4 한 파일이다. CloudFront는 전체 파일과 Range 요청을 모두 캐시할 수 있고, 영상은 최대 30초라 HLS의 재생 목록, 세그먼트 저장과 정리, 서명 쿠키 계약을 새로 만들 이유가 없었다. 이 티켓은 성능 검증이지 포맷 전환이 아니다.</p>
+
+<h3 id="design-sign">서명 URL과 캐시 키</h3>
+<p>재생과 썸네일은 객체 하나를 여는 요청이라 canned policy 서명 URL을 쓴다. 기존 응답의 <code>expiresInSec=600</code> 계약은 그대로다. 애플리케이션이 AWS SDK의 <code>CloudFrontUtilities</code>로 서명하고, 공개 키 ID와 PKCS#8 개인 키 파일 경로를 설정으로 받는다. 개인 키는 레포와 환경변수에 넣지 않고 EC2의 권한 600 파일로 둔다.</p>
+<p>캐시 정책은 쿼리 문자열, 쿠키, 요청 헤더를 <strong>캐시 키에서 뺐다</strong>. 서명 파라미터는 사용자마다 다르지만 객체 경로가 같으면 같은 캐시를 쓴다. 이게 없으면 사용자마다 캐시가 따로 생겨 반복 재생의 이점이 사라진다. TTL은 기본과 최대 모두 600초다.</p>
+<div class="note">
+	<strong>서명 실패를 S3 URL로 조용히 우회하지 않는다</strong>
+	CDN을 켠 환경에서 도메인, 키 ID, 키 파일이 없거나 키를 읽지 못하면 기동 자체를 실패시킨다. 설정 오류는 배포 문제라 기동 단계에서 잡는 게 맞다. 대신 <code>cloudfront.enabled=false</code>인 로컬과 CI에서는 기존 S3 사전서명 URL을 그대로 발급한다.
+</div>
+
+<h3 id="design-oac">원본은 OAC로 닫는다</h3>
+<p>CloudFront는 Origin Access Control로 버킷을 읽는다. 버킷 정책은 해당 배포 ARN이 <code>videos/encoded/*</code>, <code>videos/blurred/*</code>, <code>videos/thumb/*</code>를 읽는 <code>s3:GetObject</code>만 추가로 허용한다. 원본과 pending 파일은 CDN이 읽지 못한다. 배포에는 신뢰 키 그룹을 연결해 모든 조회에 서명을 요구한다.</p>
+<p>순서가 중요하다. CloudFront 배포와 버킷 정책을 먼저 반영한 뒤 애플리케이션 플래그를 켠다. 거꾸로 하면 아직 읽을 수 없는 CDN URL이 API에서 나간다.</p>
+
+<h3 id="design-key">교체마다 다른 파일 경로</h3>
+<p>기존 인코딩본, 블러본, 썸네일 키는 <code>videoId</code>만 들어 있어 영상을 교체하면 같은 키를 덮어썼다. CDN이 이전 바이트를 캐시한 상태에서 같은 경로를 다시 요청하면 <strong>새 URL도 이전 영상을 받는다</strong>. 그래서 새 키에 인코딩 시도 ID를 붙였다.</p>
+<pre><code>videos/encoded/{userId}/{videoId}/{attemptId}.mp4
+videos/blurred/{userId}/{videoId}/{attemptId}.mp4
+videos/thumb/{userId}/{videoId}/{attemptId}.jpg</code></pre>
+<p><code>attemptId</code>는 원본 S3 키에서 <code>UUID.nameUUIDFromBytes</code>로 결정적으로 만든다. 새 원본이면 새 경로가 되고, 같은 시도를 다시 실행하면 같은 경로라 재시도 업로드가 멱등이다. 교체 트랜잭션은 이전 시도의 원본과 파생 파일 키를 잡아 뒀다가 커밋 뒤 삭제한다. DB에 남은 구형 키는 그대로 읽을 수 있어 마이그레이션은 없다.</p>
+
+<h2 id="flow">흐름 도해</h2>
+<div class="diagram">
+<svg viewBox="0 0 940 260" role="img" aria-label="재생 경로 도해: 앱이 BE API에 재생을 요청하면 권한을 판정하고 600초 서명 URL을 발급한다. 앱은 CloudFront 엣지로 요청하고, 엣지는 키 그룹으로 서명을 검증한 뒤 캐시가 있으면 바로 응답하고 없으면 OAC로 S3에서 가져온다. CDN이 꺼진 환경은 S3 사전서명 URL로 폴백한다.">
+	<defs>
+		<marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="context-stroke"/></marker>
+	</defs>
+	<rect class="box" x="20" y="40" width="120" height="60" rx="8"/>
+	<text x="80" y="66" text-anchor="middle" font-weight="700">앱</text>
+	<text class="soft" x="80" y="86" text-anchor="middle" font-size="12">MP4 플레이어</text>
+
+	<rect class="box" x="220" y="40" width="200" height="60" rx="8"/>
+	<text x="320" y="64" text-anchor="middle" font-weight="700">BE API</text>
+	<text class="soft" x="320" y="84" text-anchor="middle" font-size="12">권한 판정 → 서명 URL 600초</text>
+
+	<rect class="hl" x="500" y="20" width="220" height="100" rx="8"/>
+	<text x="610" y="46" text-anchor="middle" font-weight="700">CloudFront 엣지</text>
+	<text class="soft" x="610" y="68" text-anchor="middle" font-size="12">키 그룹으로 서명 검증</text>
+	<text class="soft" x="610" y="86" text-anchor="middle" font-size="12">캐시 키 = 객체 경로만</text>
+	<text class="soft" x="610" y="104" text-anchor="middle" font-size="12">TTL 600초 · PriceClass_200</text>
+
+	<rect class="box" x="800" y="40" width="120" height="60" rx="8"/>
+	<text x="860" y="64" text-anchor="middle" font-weight="700">S3</text>
+	<text class="soft" x="860" y="84" text-anchor="middle" font-size="12">fillmap-video-dev</text>
+
+	<path d="M140 60 H220" marker-end="url(#ar2)"/>
+	<text class="soft" x="180" y="52" text-anchor="middle" font-size="11">재생 요청</text>
+	<path d="M220 84 H140" marker-end="url(#ar2)"/>
+	<text class="soft" x="180" y="102" text-anchor="middle" font-size="11">playbackUrl</text>
+
+	<path d="M80 100 V160 H500 V90" marker-end="url(#ar2)"/>
+	<text class="soft" x="290" y="176" text-anchor="middle" font-size="11">서명 URL로 GET 또는 Range 요청 · 미서명·만료는 403</text>
+
+	<path d="M720 70 H800" marker-end="url(#ar2)"/>
+	<text class="soft" x="760" y="60" text-anchor="middle" font-size="11">OAC</text>
+	<text class="soft" x="760" y="98" text-anchor="middle" font-size="10">캐시 없을 때만</text>
+
+	<path class="recover" d="M320 100 V206 H860 V100" marker-end="url(#ar2)"/>
+	<text class="recover" x="590" y="224" text-anchor="middle" font-size="12">cloudfront.enabled=false (로컬 · CI): 기존 S3 사전서명 URL로 폴백</text>
+	<text class="soft" x="470" y="248" text-anchor="middle" font-size="11">OAC가 읽는 prefix: videos/encoded · videos/blurred · videos/thumb. 원본과 pending은 제외</text>
+</svg>
+</div>
+
+<h2 id="numbers">실측</h2>
+<p>세 파일마다 전체 GET과 1MiB Range GET을 콜드 1회, 웜 10회 실행했다. 값은 모두 중앙값이다.</p>
+<div class="legend"><span><i class="s1"></i>S3 직접</span><span><i class="s2"></i>CloudFront 콜드</span><span><i class="s3"></i>CloudFront 웜</span></div>
+<div class="chart"><svg id="c-lat" role="img" aria-label="요청 종류별 S3 직접, CloudFront 콜드, CloudFront 웜의 중앙값. 웜은 모든 축에서 S3 직접보다 빠르고, 콜드는 모든 축에서 느리다."></svg></div>
+<p class="caption">웜 캐시는 네 축 모두에서 S3 직접보다 빠르고, 콜드는 네 축 모두에서 느리다. 이 구성의 이점은 첫 재생이 아니라 같은 영상의 반복 재생에서 나온다.</p>
+<div class="scroll-x"><table>
+	<thead><tr><th>요청</th><th class="num">S3 직접</th><th class="num">CloudFront 콜드</th><th class="num">CloudFront 웜</th><th class="num">웜 개선 폭</th></tr></thead>
+	<tbody>
+		<tr><td>전체 GET 첫 바이트</td><td class="num">105.9ms</td><td class="num">199.2ms</td><td class="num">51.8ms</td><td class="num">51.1%</td></tr>
+		<tr><td>전체 GET 완료</td><td class="num">250.8ms</td><td class="num">284.4ms</td><td class="num">181.0ms</td><td class="num">27.8%</td></tr>
+		<tr><td>1MiB Range 첫 바이트</td><td class="num">94.4ms</td><td class="num">191.6ms</td><td class="num">48.6ms</td><td class="num">48.5%</td></tr>
+		<tr><td>1MiB Range 완료</td><td class="num">181.6ms</td><td class="num">285.0ms</td><td class="num">129.2ms</td><td class="num">28.9%</td></tr>
+	</tbody>
+</table></div>
+<p>첫 바이트가 절반으로 준 것에 비해 완료 시간은 28% 정도 줄었다. 완료 시간에는 전송 자체가 포함되는데, 서울 리전 S3와 서울 엣지 사이의 전송 속도 차이는 첫 바이트 지연 차이만큼 크지 않다. 새로 발급한 서명 URL도 같은 객체 캐시를 적중했다. 캐시 키에서 쿼리 문자열을 뺀 효과다.</p>
+
+<h2 id="verify">함께 검증한 것</h2>
+<div class="scroll-x"><table>
+	<thead><tr><th>항목</th><th>결과</th></tr></thead>
+	<tbody>
+		<tr><td>접근 제한</td><td>미서명 URL과 만료 URL은 403, 유효한 전체 GET은 200</td></tr>
+		<tr><td>Range 요청</td><td><code>Range: bytes=0-1048575</code>에 206과 올바른 <code>Content-Range</code>. 교체 뒤 새 경로에서도 206</td></tr>
+		<tr><td>캐시 적중</td><td><code>X-Cache</code>가 첫 요청 Miss, 반복 요청 Hit. 웜 적중은 전체 GET 29/30, Range 30/30</td></tr>
+		<tr><td>영상 교체</td><td>비공개 영상 하나를 실제로 교체했다. 재생 경로가 <code>videos/encoded/524/240325.mp4</code>에서 <code>videos/encoded/524/240325/2483237a-….mp4</code>로 바뀌었고 이전 인코딩본과 썸네일은 S3에서 삭제됐다</td></tr>
+		<tr><td>API 계약</td><td>신규 필드 없음. <code>playbackUrl</code>과 <code>thumbnailUrl</code>의 호스트와 서명 파라미터만 바뀌고 <code>expiresInSec</code>은 600 그대로</td></tr>
+		<tr><td>롤백 준비</td><td>배포 전 JAR과 환경 파일을 <code>app.jar.pre-msg67</code>, <code>fillmap-dev.env.pre-msg67</code>로 보존</td></tr>
+	</tbody>
+</table></div>
+<p>교체 검증의 첫 폴링 스크립트는 zsh 예약 변수명 충돌로 중단됐다. 교체 요청은 이미 접수된 상태라 새 요청을 만들지 않고 현재 상태를 이어서 조회해 READY 수렴을 확인했다.</p>
+
+<h2 id="caveat">말할 때 주의</h2>
+<div class="note warn">
+	<strong>정확한 표현은 "반복 재생 시 전송 지연 개선"이다</strong>
+	서울에서 MP4 세 개로 잰 결과이고, 첫 요청(콜드)은 S3 직접보다 느렸다. "재생 성능 51% 개선"처럼 조건 없이 쓰면 콜드 결과와 어긋난다. 51.1%는 <strong>캐시가 채워진 상태의 전체 GET 첫 바이트 중앙값</strong>이다.
+</div>
+<div class="note quiet">
+	<strong>하지 않은 것</strong>
+	HLS와 적응형 화질, 사용자 지정 도메인과 ACM 인증서, Origin Shield와 WAF, prod 배포, CloudFront Functions. dev에서 효과와 운영 형태를 확인한 뒤 prod가 필요할 때 같은 구성을 복제한다.
+</div>
+
+<h2 id="glossary">용어</h2>
+<div class="scroll-x"><table>
+	<thead><tr><th>용어</th><th>이 문서에서의 뜻</th></tr></thead>
+	<tbody>
+		<tr><td>서명 URL</td><td>애플리케이션이 만료 시각과 객체 경로를 개인 키로 서명한 주소. CloudFront는 신뢰 키 그룹의 공개 키로 확인한 뒤 캐시나 원본에서 파일을 준다</td></tr>
+		<tr><td>canned policy</td><td>객체 하나와 만료 시각만 담는 짧은 서명 정책. 시작 시각이나 IP 제한이 있는 custom policy보다 URL이 짧고 현재 계약에 맞다</td></tr>
+		<tr><td>OAC (Origin Access Control)</td><td>CloudFront가 S3에 보내는 요청을 AWS 서명으로 인증하는 설정. 버킷을 공개하지 않고 지정한 배포만 객체를 읽게 한다</td></tr>
+		<tr><td>Range 요청</td><td>파일 전체가 아니라 지정한 바이트 구간만 받는 HTTP 요청. 플레이어가 재생 시작이나 시킹 때 필요한 부분만 읽는 데 쓴다. 응답 코드는 206</td></tr>
+		<tr><td>TTFB (첫 바이트 응답)</td><td>요청을 보낸 뒤 응답의 첫 바이트가 도착할 때까지의 시간. 전송량과 무관한 지연을 본다</td></tr>
+		<tr><td>콜드 / 웜</td><td>엣지 캐시가 비어 원본까지 다녀오는 요청 / 캐시가 채워져 엣지에서 바로 응답하는 요청</td></tr>
+		<tr><td>캐시 키</td><td>CloudFront가 "같은 응답"으로 볼 기준. 여기서는 객체 경로만이라 서명 파라미터가 달라도 캐시를 공유한다</td></tr>
+	</tbody>
+</table></div>
+
+<p class="foot">출처: <code>docs/spec/MSG-67.md</code> 설계 결정 D1~D6, dev 실측, 2026-08-27 작업 로그. dev 배포 ID와 자원 식별자는 스펙 문서에 있다. 이 문서는 2026-09-05에 정리했다.</p>
+</main>
+</div>
+<script>
+hbars(document.getElementById('c-lat'), [
+	{ label: '전체 GET 첫 바이트', bars: [ { label: 'S3 직접', v: 105.9, s: 1 }, { label: 'CF 콜드', v: 199.2, s: 2 }, { label: 'CF 웜', v: 51.8, s: 3 } ] },
+	{ label: '전체 GET 완료', bars: [ { label: 'S3 직접', v: 250.8, s: 1 }, { label: 'CF 콜드', v: 284.4, s: 2 }, { label: 'CF 웜', v: 181.0, s: 3 } ] },
+	{ label: '1MiB Range 첫 바이트', bars: [ { label: 'S3 직접', v: 94.4, s: 1 }, { label: 'CF 콜드', v: 191.6, s: 2 }, { label: 'CF 웜', v: 48.6, s: 3 } ] },
+	{ label: '1MiB Range 완료', bars: [ { label: 'S3 직접', v: 181.6, s: 1 }, { label: 'CF 콜드', v: 285.0, s: 2 }, { label: 'CF 웜', v: 129.2, s: 3 } ] }
+], { max: 320, ticks: [0, 100, 200, 300], tick: function (t) { return t + 'ms'; },
+	fmt: function (v) { return v.toFixed(1) + 'ms'; } });
+</script>
+</body>
+</html>

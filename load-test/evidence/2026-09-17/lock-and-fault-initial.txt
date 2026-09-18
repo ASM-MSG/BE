@@ -1,0 +1,4 @@
+FANOUT_LOCK_SAMPLE mode=CONTROLLED size=50000 holder_pid=973 waiter_pid=984 blocked_confirmed=true lock_acquire_statement_ms=820.922 fanout_tx_envelope_ms=886.385 notifications=50000
+FAULT_RESULT boundary=broker_unreachable pending=100 recovered=100 deliveries=100 recovery_ms=2563.280
+FAULT_RESULT boundary=kafka_then_db records=2 deliveries=1 final=SENT
+FAULT_RESULT boundary=send_then_db deliveries=2 rows=1 final=SENT terminal_replay=0

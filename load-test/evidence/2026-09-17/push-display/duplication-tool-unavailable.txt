@@ -1,0 +1,6 @@
+
+> fillmap-fe@1.0.0 check:duplication /Users/ssomae/seongmin/coding/fillmap-FE-push-dedupe
+> nose query -r apps/web/src -r apps/mobile/src -r packages/ui-web/src -r packages/ui-native/src -r packages/design-tokens/src --exclude 'apps/web/src/shared/api/generated/**' --baseline nose.baseline.json --fail-on new
+
+sh: nose: command not found
+ ELIFECYCLE  Command failed.
