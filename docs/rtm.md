@@ -230,7 +230,7 @@ AC 요약: 스펙 성공 기준 91건 중 테스트 연결 85건, 미커버 6건
 | FR-ROUTE-20 | 구현됨 | RouteIntentClientTest, RouteRecommendServiceTest |
 | FR-NOTI-01 | 구현됨 | AuthControllerTest, AuthServiceTest, PushTokenControllerTest, PushTokenServiceIntegrationTest |
 | FR-NOTI-02 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest, NotificationRelayTest |
-| FR-NOTI-03 | 구현됨 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest |
+| FR-NOTI-03 | 진행 중 | NotificationCommandServiceIntegrationTest, NotificationConsumerTest |
 | FR-NOTI-04 | 구현됨 | NotificationConsumerTest |
 | FR-NOTI-05 | 구현됨 | FcmNotificationSenderTest, NotificationConsumerTest, PushTokenRepositoryIntegrationTest, StaleTokenCleanerTest |
 | FR-NOTI-06 | 구현됨 | NotificationConsumerTest, NotificationPreferenceControllerTest, NotificationPreferenceServiceIntegrationTest |
