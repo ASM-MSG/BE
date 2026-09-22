@@ -20,10 +20,15 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 	 * 도감 요약 3지표를 스칼라 서브쿼리 3개로 1왕복 조회한다 (MSG-152 D4).
 	 * - totalGridCount: 내가 점령한 격자 수 (user_grids COUNT).
 	 * - totalVideoCount: 내 영상 총합 (SUM(video_count), 점령 0건이면 COALESCE 로 0).
-	 * - visitedRegionCount: 방문한 서로 다른 행정동 수 — 영상이 있는 격자들의 라벨(grids.region_code) DISTINCT
-	 *   (MSG-246, by-grid 귀속 MSG-167). videos.region_code 는 쓰기 경로가 없어 항상 NULL 이라 축에서 제외했다.
-	 *   DELETED 제외·BLINDED 포함(MSG-152 D6), 무라벨 격자(NULL)는 COUNT DISTINCT 가 자동 제외.
-	 *   videos.grid_id 는 NOT NULL FK 라 inner JOIN 에서 유실 없음. 저장 라벨 equi-join 소비(geospatial 0).
+	 * - visitedRegionCount: 방문한 서로 다른 행정동 수 — region_stats 에서 collected_count > 0 인 행 수 (MSG-596).
+	 *   종전(MSG-246)엔 videos ⨝ grids 로 COUNT(DISTINCT region_code) 를 읽기 시점에 셌는데, 사용자 영상 수에
+	 *   비례해 느려지는 유일한 지표였다(격자 40만 사용자 1.1~1.4s, 5% 섞인 부하에서 50 rps 부터 풀 고갈).
+	 *   region_stats 는 첫 점령·점령 롤백마다 RegionStatsCommandService.refresh 가 (user_id, region_code)
+	 *   단위로 재계산해 두므로(user_grids ⨝ grids 기준), 읽기는 PK 인덱스 범위 스캔 한 번이다.
+	 *   등가성 근거: 점령 롤백 규칙(영상 0 → user_grids 행 삭제 → refresh 로 count 0)이라 "영상이 있는 격자"와
+	 *   "user_grids 행"이 같은 집합이고, BLINDED 는 양쪽 다 포함·DELETED 는 양쪽 다 제외다. 무라벨 격자(NULL)는
+	 *   refresh 가 행을 만들지 않아 종전 COUNT DISTINCT 의 NULL 제외와 같다. 롤백으로 0 이 된 행이 남으므로
+	 *   collected_count > 0 필터가 필요하다.
 	 * COUNT 는 bigint 라 ::int 캐스트로 Integer 프로젝션과 맞춘다.
 	 *
 	 * MSG-362 확장 — 같은 문장에 스트릭·뱃지 서브쿼리 3개를 얹어 왕복 1회를 유지한다(§D2).
@@ -40,10 +45,8 @@ public interface UserGridRepository extends JpaRepository<UserGrid, UserGridId> 
 				FROM user_grids WHERE user_id = :userId) AS "totalGridCount",
 			(SELECT COALESCE(SUM(video_count), 0)
 				FROM user_grids WHERE user_id = :userId) AS "totalVideoCount",
-			(SELECT COUNT(DISTINCT g.region_code)::int
-				FROM videos v
-				JOIN grids g ON g.grid_id = v.grid_id
-				WHERE v.user_id = :userId AND v.status <> 'DELETED') AS "visitedRegionCount",
+			(SELECT COUNT(*)::int
+				FROM region_stats WHERE user_id = :userId AND collected_count > 0) AS "visitedRegionCount",
 			COALESCE((SELECT CASE
 					WHEN s.last_recorded_date >= (statement_timestamp() AT TIME ZONE 'Asia/Seoul')::date - 1
 						THEN s.current_count
