@@ -17,6 +17,11 @@ scrape_configs:
     static_configs:
       - targets: ["postgres-exporter:9187"]
 
+  # 컨테이너 자원 (cAdvisor) — container_cpu_usage_seconds_total{name="fillmap-postgres"} 등.
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
   # Prometheus 자기 자신(선택).
   - job_name: prometheus
     static_configs:
