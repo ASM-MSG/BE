@@ -33,6 +33,8 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render     # 대시보드 PNG 캡처(/render/d/...) — 블로그·PR 첨부용
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -40,6 +42,9 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+
+  renderer:
+    image: grafana/grafana-image-renderer:3.11.6
 
   postgres-exporter:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
@@ -49,3 +54,14 @@ services:
       - "9187:9187"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+  # 컨테이너 CPU·메모리·디스크 I/O (fillmap-postgres 등). DB 가 CPU 병목인지 I/O 병목인지 가르는 근거 (MSG-596).
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro   # 호스트 docker.sock 을 넣으면 Docker Desktop 에선 컨테이너 식별이 깨져 지표가 끊긴다 — cgroup id 로만 본다
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    # 포트는 안 연다 — Prometheus 가 compose 네트워크 안에서 cadvisor:8080 을 긁는다.
