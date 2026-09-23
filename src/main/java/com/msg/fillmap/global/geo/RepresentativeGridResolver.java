@@ -23,6 +23,13 @@ public final class RepresentativeGridResolver {
 	 */
 	public static final int GRID_INDEX_UPPER_EXCLUSIVE = 100_000;
 
+	/**
+	 * 위치 하나의 격자 셀 수 상한 (5km × 5km 상당, MSG-600 에서 신청 접수도 같은 값). 아래 중심 최근접 산술이
+	 * 오버플로하지 않는다는 논증이 이 값 위에 서 있으므로, 셀 집합을 만드는 쪽(시딩·신청 접수)이 전부 같은 값으로
+	 * 걸러야 한다 — 그래서 값의 자리가 산출기 옆 한 곳이다 (MSG-600 에서 EventSeeder 승격).
+	 */
+	public static final int MAX_CELLS_PER_LOCATION = 2_500;
+
 	private RepresentativeGridResolver() {
 	}
 
@@ -76,7 +83,10 @@ public final class RepresentativeGridResolver {
 	/**
 	 * 중심 {@code (Sy/n, Sx/n)} 과의 거리 제곱에 {@code n²} 을 곱한 동치식
 	 * {@code (n·gy - Sy)² + (n·gx - Sx)²} 을 최소화하는 격자. long 정수 산술만 쓰므로 부동소수점 오차가 없다
-	 * (인덱스 상한 100,000 · 셀 수 상한 2,500 에서 최대 약 2.5e17 이라 long 범위 안이다).
+	 * (셀 수 상한은 위치당 2,500 이지만 승인 합집합은 최대 50,000 — 위치 20개 — 이며, 그때 안전한 조건은 인덱스 폭
+	 * (최대에서 최소를 뺀 값) × n ≤ 약 3e9 다. {@code n·gy - Sy} 는 {@code n × (gy - 평균)} 과 같아 절대 인덱스가
+	 * 아니라 폭이 크기를 정하고, 폭 10,000 × n 50,000 = 5e8 이면 제곱합이 5e17 이라 여유가 열 배 넘게 남는다.
+	 * 넘으면 조용한 오답 대신 {@link ArithmeticException} 으로 드러난다).
 	 * 동률이면 gridY, 그다음 gridX 가 작은 것(남서 우선)으로 결정성을 확보한다.
 	 */
 	private static String nearestToCentroid(Set<AreaCell> cells) {
@@ -93,7 +103,7 @@ public final class RepresentativeGridResolver {
 		for (AreaCell cell : cells) {
 			long dy = n * cell.gridY() - sumY;
 			long dx = n * cell.gridX() - sumX;
-			long distance = dy * dy + dx * dx;
+			long distance = Math.addExact(Math.multiplyExact(dy, dy), Math.multiplyExact(dx, dx));
 			if (distance < bestDistance || (distance == bestDistance && isSouthWestOf(cell, best))) {
 				best = cell;
 				bestDistance = distance;

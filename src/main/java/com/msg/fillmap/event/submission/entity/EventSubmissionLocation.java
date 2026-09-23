@@ -25,7 +25,7 @@ import lombok.NoArgsConstructor;
  * 신청 위치 하나 (MSG-498 FR-9). <b>이름 필드가 없다</b> — 화면 식별은 순번(displayOrder, 1부터)과
  * 대표 격자에서 계산한 지역 라벨로 한다 (피그마 #102).
  * <p>
- * 사각형은 {@link ElementCollection} 이다. 위치당 최대 81개로 상한이 분명하고 위치 없이 홀로 의미가 없어
+ * 사각형은 {@link ElementCollection} 이다. 위치당 최대 2,500개로 상한이 분명하고 위치 없이 홀로 의미가 없어
  * 별도 엔티티일 이유가 없다. {@code @BatchSize} 는 상세 응답이 위치 수만큼 사각형 조회를 내는 N+1 을 막는다.
  * <p>
  * 신청으로 가는 {@code @ManyToOne} 이 <b>연관의 주인</b>이다 (스펙 D-12) — FK 를 가진 쪽이 주인이라야

@@ -49,8 +49,8 @@ import com.msg.fillmap.global.geo.RepresentativeGridResolver;
  * 똑같이 돌아간다 — 재제출은 부분 수정이 아니라 폼 전체 교체라 같은 입력을 같은 규칙으로 다시 받는 것과
  * 다르지 않기 때문이다.
  * <p>
- * 81칸 상한은 사각형 합산이 아니라 <b>전개한 격자 집합의 크기</b>로 판정한다 (D-7) — 겹침을 두 번 세면
- * 정당한 81칸 영역이 그리는 방식에 따라 거부되는 비결정성이 생긴다. 대표 격자도 같은 집합을 입력으로 받아
+ * 2,500칸 상한은 사각형 합산이 아니라 <b>전개한 격자 집합의 크기</b>로 판정한다 (D-7) — 겹침을 두 번 세면
+ * 정당한 2,500칸 영역이 그리는 방식에 따라 거부되는 비결정성이 생긴다. 대표 격자도 같은 집합을 입력으로 받아
  * 표현이 아니라 기하로 결정된다.
  */
 @Service
@@ -61,9 +61,6 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 
 	/** 위치 수 상한 (D-10). 실사용을 막지 않으면서 무제한 엔티티 생성을 차단하는 값이다. */
 	private static final int MAX_LOCATIONS = 20;
-
-	/** 위치 하나의 영역 상한 (FR-24). 사각형 수 상한이기도 하다 — 사각형마다 최소 1칸이라 초과는 전부 중복 입력이다. */
-	private static final int MAX_CELLS_PER_LOCATION = 81;
 
 	private final EventSubmissionRepository submissionRepository;
 	private final EventSubmissionStatusHistoryRepository historyRepository;
@@ -306,7 +303,8 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 	 * 이 상한 위에 서 있다.
 	 */
 	private Set<AreaCell> expand(List<EventSubmissionAreaRectDto> rects) {
-		if (rects == null || rects.isEmpty() || rects.size() > MAX_CELLS_PER_LOCATION) {
+		// 사각형 수 상한도 같은 값이다 (D-2) — 사각형마다 최소 1칸이라 초과는 합집합 초과가 아니면 전부 중복 입력이다.
+		if (rects == null || rects.isEmpty() || rects.size() > RepresentativeGridResolver.MAX_CELLS_PER_LOCATION) {
 			throw new ApiException(EventErrorCode.INVALID_SUBMISSION_AREA);
 		}
 		Set<AreaCell> cells = new LinkedHashSet<>();
@@ -314,7 +312,7 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 			validateRect(rect);
 			long rows = (long) rect.maxGridY() - rect.minGridY() + 1;
 			long columns = (long) rect.maxGridX() - rect.minGridX() + 1;
-			if (rows * columns > MAX_CELLS_PER_LOCATION) {
+			if (rows * columns > RepresentativeGridResolver.MAX_CELLS_PER_LOCATION) {
 				throw new ApiException(EventErrorCode.SUBMISSION_AREA_LIMIT_EXCEEDED);
 			}
 			for (int gridY = rect.minGridY(); gridY <= rect.maxGridY(); gridY++) {
@@ -323,7 +321,7 @@ public class EventSubmissionServiceImpl implements EventSubmissionService {
 				}
 			}
 			// 합집합 판정 (D-7) — 겹치는 사각형은 Set 이 자연히 한 번만 센다.
-			if (cells.size() > MAX_CELLS_PER_LOCATION) {
+			if (cells.size() > RepresentativeGridResolver.MAX_CELLS_PER_LOCATION) {
 				throw new ApiException(EventErrorCode.SUBMISSION_AREA_LIMIT_EXCEEDED);
 			}
 		}

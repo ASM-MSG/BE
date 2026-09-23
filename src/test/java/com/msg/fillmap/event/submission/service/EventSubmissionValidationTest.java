@@ -35,6 +35,7 @@ import com.msg.fillmap.event.repository.EventOccurrenceRepository;
 import com.msg.fillmap.event.submission.dto.EventSubmissionAreaRectDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionCreateRequestDto;
 import com.msg.fillmap.event.submission.dto.EventSubmissionLocationRequestDto;
+import com.msg.fillmap.event.submission.dto.EventSubmissionUpdateRequestDto;
 import com.msg.fillmap.event.submission.entity.EventSubmission;
 import com.msg.fillmap.event.submission.entity.EventSubmissionLocation;
 import com.msg.fillmap.event.submission.entity.EventSubmissionType;
@@ -104,6 +105,13 @@ class EventSubmissionValidationTest {
 		return new EventSubmissionLocationRequestDto(List.of(rects));
 	}
 
+	/** 재제출 요청 — 축제 폼에 위치만 바꿔 끼운다. 이미지 키는 setUp 의 confirm 스텁이 확정본으로 바꿔 준다. */
+	private EventSubmissionUpdateRequestDto update(List<EventSubmissionLocationRequestDto> locations) {
+		return new EventSubmissionUpdateRequestDto("부산불꽃축제", "부산문화관광축제조직위원회",
+			LocalDate.of(2026, 11, 7), LocalDate.of(2026, 11, 7), null, "멀티불꽃쇼, 드론 라이트쇼", null,
+			"광안리 일원에서 열리는 부산 대표 불꽃 축제", "event-submissions/pending/42/b.jpg", locations);
+	}
+
 	private EventSubmission submitted(EventSubmissionCreateRequestDto request) {
 		service.submit(USER_ID, request);
 		ArgumentCaptor<EventSubmission> captor = ArgumentCaptor.forClass(EventSubmission.class);
@@ -112,36 +120,57 @@ class EventSubmissionValidationTest {
 	}
 
 	@Nested
-	@DisplayName("영역 검증과 81칸 상한")
+	@DisplayName("영역 검증과 2,500칸 상한")
 	class Area {
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-13, AC-600-01, AC-600-06
 		@Test
-		@DisplayName("위치 사각형 합산이 81칸이면 통과하고 82칸이면 거부한다")
-		void 위치_사각형_합산이_81칸이면_통과하고_82칸이면_거부한다() {
+		@DisplayName("위치 사각형 합산이 2,500칸이면 통과하고 2,501칸이면 거부한다")
+		void 위치_사각형_합산이_2500칸이면_통과하고_2501칸이면_거부한다() {
 			assertThatCode(() -> service.submit(USER_ID,
-				withLocations(List.of(location(rect(100, 108, 200, 208))))))
+				withLocations(List.of(location(rect(100, 149, 200, 249))))))
 				.doesNotThrowAnyException();
 
 			assertThatThrownBy(() -> service.submit(USER_ID, withLocations(List.of(
-				location(rect(100, 108, 200, 208), rect(200, 200, 300, 300))))))
+				location(rect(100, 149, 200, 249), rect(300, 300, 400, 400))))))
+				.isInstanceOf(ApiException.class)
+				.hasFieldOrPropertyWithValue("errorCode", EventErrorCode.SUBMISSION_AREA_LIMIT_EXCEEDED)
+				.hasMessageContaining("최대 2,500칸");
+		}
+
+		// 검증: FR-EVENT-13, AC-600-01
+		@Test
+		@DisplayName("재제출도 2,500칸이면 통과하고 2,501칸이면 거부한다 — 제출과 같은 규칙을 탄다")
+		void 재제출도_2500칸이면_통과하고_2501칸이면_거부한다() {
+			long submissionId = 9L;
+			EventSubmission rejected = EventSubmission.submit("FM-2026-0009", USER_ID, EventSubmissionType.FESTIVAL,
+				null, LocalDateTime.of(2026, 11, 1, 0, 0));
+			given(submissionRepository.findByIdAndUserId(submissionId, USER_ID)).willReturn(Optional.of(rejected));
+			given(submissionRepository.reopenRejected(anyLong(), anyLong(), any())).willReturn(1);
+
+			assertThatCode(() -> service.resubmit(USER_ID, submissionId,
+				update(List.of(location(rect(100, 149, 200, 249))))))
+				.doesNotThrowAnyException();
+
+			assertThatThrownBy(() -> service.resubmit(USER_ID, submissionId,
+				update(List.of(location(rect(100, 149, 200, 249), rect(300, 300, 400, 400))))))
 				.isInstanceOf(ApiException.class)
 				.hasFieldOrPropertyWithValue("errorCode", EventErrorCode.SUBMISSION_AREA_LIMIT_EXCEEDED);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-13, AC-600-05
 		@Test
-		@DisplayName("겹치는 사각형은 한 번만 센다 — 합산이면 162칸이라 거부될 입력이다")
+		@DisplayName("겹치는 사각형은 한 번만 센다 — 합산이면 5,000칸이라 거부될 입력이다")
 		void 겹치는_사각형은_한_번만_센다() {
 			assertThatCode(() -> service.submit(USER_ID, withLocations(List.of(
-				location(rect(100, 108, 200, 208), rect(100, 108, 200, 208))))))
+				location(rect(100, 149, 200, 249), rect(100, 149, 200, 249))))))
 				.doesNotThrowAnyException();
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-13, AC-600-02
 		@Test
-		@DisplayName("사각형 하나가 81칸을 넘으면 전개 없이 거부한다")
-		void 사각형_하나가_81칸을_넘으면_전개_없이_거부한다() {
+		@DisplayName("사각형 하나가 2,500칸을 넘으면 전개 없이 거부한다")
+		void 사각형_하나가_2500칸을_넘으면_전개_없이_거부한다() {
 			// 전개하면 4조 칸이라 선검사가 없으면 메모리를 태운다.
 			assertThatThrownBy(() -> service.submit(USER_ID, withLocations(List.of(
 				location(rect(1, 99_999, 1, 99_999))))))
@@ -197,17 +226,37 @@ class EventSubmissionValidationTest {
 				.hasFieldOrPropertyWithValue("errorCode", EventErrorCode.INVALID_SUBMISSION_AREA);
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-13, AC-600-03
 		@Test
-		@DisplayName("위치당 사각형이 81개를 넘으면 거부한다 — 정상 드로잉으로는 나올 수 없는 형태다")
-		void 위치당_사각형이_81개를_넘으면_거부한다() {
-			List<EventSubmissionAreaRectDto> rects = IntStream.range(0, 82)
-				.mapToObj(index -> rect(100 + index, 100 + index, 200, 200))
-				.toList();
+		@DisplayName("위치당 사각형이 2,500개면 통과하고 2,501개면 거부한다 — 초과는 정상 드로잉으로는 나올 수 없는 형태다")
+		void 위치당_사각형이_2500개면_통과하고_2501개면_거부한다() {
+			assertThatCode(() -> service.submit(USER_ID,
+				withLocations(List.of(new EventSubmissionLocationRequestDto(singleCellRects(2500))))))
+				.doesNotThrowAnyException();
+
 			assertThatThrownBy(() -> service.submit(USER_ID,
-				withLocations(List.of(new EventSubmissionLocationRequestDto(rects)))))
+				withLocations(List.of(new EventSubmissionLocationRequestDto(singleCellRects(2501))))))
 				.isInstanceOf(ApiException.class)
 				.hasFieldOrPropertyWithValue("errorCode", EventErrorCode.INVALID_SUBMISSION_AREA);
+		}
+
+		// 검증: FR-EVENT-13, AC-600-07
+		@Test
+		@DisplayName("위치 20개에 각 2,500칸을 담아도 한 번에 접수된다 — 총 50,000칸")
+		void 위치_20개에_각_2500칸을_담아도_한_번에_접수된다() {
+			List<EventSubmissionLocationRequestDto> locations = new ArrayList<>();
+			for (int index = 0; index < 20; index++) {
+				locations.add(location(rect(100 + index * 60, 149 + index * 60, 200, 249)));
+			}
+
+			assertThatCode(() -> service.submit(USER_ID, withLocations(locations))).doesNotThrowAnyException();
+		}
+
+		/** 서로 다른 행의 1칸짜리 사각형 — 겹치지 않아 개수가 곧 칸 수다. */
+		private List<EventSubmissionAreaRectDto> singleCellRects(int count) {
+			return IntStream.range(0, count)
+				.mapToObj(index -> rect(100 + index, 100 + index, 200, 200))
+				.toList();
 		}
 
 		private List<EventSubmissionLocationRequestDto> manyLocations(int count) {
@@ -530,13 +579,13 @@ class EventSubmissionValidationTest {
 			거부된다(이벤트_신청(PARENT_ID, List.of()), EventErrorCode.INVALID_SUBMISSION_AREA);
 		}
 
-		// 검증: FR-EVENT-17
+		// 검증: FR-EVENT-17, AC-600-04
 		@Test
-		@DisplayName("이벤트 위치도 81칸 상한이 적용된다 — 기존 검증 경로를 분기 없이 탄다")
-		void 이벤트_위치도_81칸_상한이_적용된다() {
+		@DisplayName("이벤트 위치도 2,500칸 상한이 적용된다 — 기존 검증 경로를 분기 없이 탄다")
+		void 이벤트_위치도_2500칸_상한이_적용된다() {
 			부모가_있다(NOW.plusDays(10));
 
-			거부된다(이벤트_신청(PARENT_ID, List.of(location(rect(100, 108, 200, 208), rect(300, 300, 400, 400)))),
+			거부된다(이벤트_신청(PARENT_ID, List.of(location(rect(100, 149, 200, 249), rect(300, 300, 400, 400)))),
 				EventErrorCode.SUBMISSION_AREA_LIMIT_EXCEEDED);
 		}
 

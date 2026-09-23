@@ -7,7 +7,7 @@
 
 요약: FR 302건 중 테스트 연결 271건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
 
-AC 요약: 스펙 성공 기준 91건 중 테스트 연결 85건, 미커버 6건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
+AC 요약: 스펙 성공 기준 100건 중 테스트 연결 93건, 미커버 7건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -201,7 +201,7 @@ AC 요약: 스펙 성공 기준 91건 중 테스트 연결 85건, 미커버 6건
 | FR-EVENT-10 | 구현됨 | EventInteractionLockTest, EventLifecycleGuardTest, EventNotificationSubscriptionRepositoryTest, EventSeederScheduleChangeTest, EventVideoQueryServiceTest, EventVideoUploadConcurrencyTest, EventVideoUploadServiceTest |
 | FR-EVENT-11 | 구현됨 | EventViewerCacheFailureControllerTest, EventViewerControllerTest, EventViewerServiceImplTest |
 | FR-EVENT-12 | 구현됨 | MissionAwardQueryTest, MissionListVideoCountTest, MissionProgressQueryTest, MissionVideoCountQueryTest, MissionVideoListQueryTest, MissionVisitedGridQueryTest |
-| FR-EVENT-13 | 구현됨 | EventSubmissionCommitBoundaryTest, EventSubmissionControllerTest, EventSubmissionImageStoreTest, EventSubmissionValidationTest |
+| FR-EVENT-13 | 구현됨 | AdminEventSubmissionReviewTest, EventSubmissionCommitBoundaryTest, EventSubmissionControllerTest, EventSubmissionImageStoreTest, EventSubmissionValidationTest, RepresentativeGridResolverTest |
 | FR-EVENT-14 | 구현됨 | EventSubmissionCommitBoundaryTest, EventSubmissionControllerTest |
 | FR-EVENT-15 | 구현됨 | AdminEventParticipationApprovalTest, AdminEventSubmissionControllerTest, AdminEventSubmissionReviewTest, EventParticipationApprovalConcurrencyTest, EventSeederTest, EventSubmissionApprovalConcurrencyTest, EventSubmissionImageStoreTest, EventSubmissionReviewSchemaTest, MissionQueryServiceCacheTest |
 | FR-EVENT-16 | 구현됨 | EventOccurrenceRepositoryTest, OrgEventControllerTest, OrgEventQueryServiceTest |
@@ -469,6 +469,15 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 | AC-597-10 | MSG-597 | (없음) |
 | AC-597-11 | MSG-597 | MissionQueryServiceCacheTest, RouteCandidateCollectorTest |
 | AC-597-12 | MSG-597 | MissionDetailServiceTest |
+| AC-600-01 | MSG-600 | EventSubmissionControllerTest, EventSubmissionValidationTest |
+| AC-600-02 | MSG-600 | EventSubmissionValidationTest |
+| AC-600-03 | MSG-600 | EventSubmissionValidationTest |
+| AC-600-04 | MSG-600 | EventSubmissionValidationTest |
+| AC-600-05 | MSG-600 | EventSubmissionValidationTest |
+| AC-600-06 | MSG-600 | EventSubmissionValidationTest |
+| AC-600-07 | MSG-600 | AdminEventSubmissionReviewTest, EventSubmissionValidationTest |
+| AC-600-08 | MSG-600 | (없음) |
+| AC-600-09 | MSG-600 | RepresentativeGridResolverTest |
 
 ## 미커버 AC (보고만 — 실패 아님)
 
@@ -478,6 +487,7 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 - AC-594-14 (MSG-594)
 - AC-597-06 (MSG-597)
 - AC-597-10 (MSG-597)
+- AC-600-08 (MSG-600)
 
 ## 테스트에만 있고 스펙에 없는 AC (마커 오타 의심)
 

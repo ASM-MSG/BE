@@ -148,6 +148,38 @@ class RepresentativeGridResolverTest {
 			assertThat(RepresentativeGridResolver.resolve(reversed, null))
 				.isEqualTo(RepresentativeGridResolver.resolve(forward, null));
 		}
+
+		// 검증: FR-EVENT-13, AC-600-09
+		@Test
+		@DisplayName("블록 20개 5만 칸 합집합도 예외 없이 같은 대표 격자를 낸다 — 승인이 전 위치 합집합으로 다시 푸는 규모다")
+		void 블록_20개_5만칸_합집합도_예외_없이_같은_대표_격자를_낸다() {
+			// 50×50 블록 20개를 4행 5열로 60칸 간격에 흩어 놓는다 (위치 20개 × 2,500칸, 폭 300 안).
+			Set<AreaCell> forward = new LinkedHashSet<>();
+			for (int row = 0; row < 4; row++) {
+				for (int column = 0; column < 5; column++) {
+					forward.addAll(rect(1000 + row * 60, 1049 + row * 60, 1000 + column * 60, 1049 + column * 60));
+				}
+			}
+			assertThat(forward).hasSize(50_000);
+			Set<AreaCell> reversed = new LinkedHashSet<>();
+			forward.stream().toList().reversed().forEach(reversed::add);
+
+			// 중심 (1114.5, 1144.5) 는 행 간격에 떨어져 y 1109·1120, x 1144·1145 조합 4칸이 동률 → 남서 우선.
+			assertThat(RepresentativeGridResolver.resolve(forward, null)).isEqualTo("1109_1144");
+			assertThat(RepresentativeGridResolver.resolve(reversed, null)).isEqualTo("1109_1144");
+		}
+
+		// 검증: FR-EVENT-13, AC-600-09
+		@Test
+		@DisplayName("거리 제곱이 long 범위를 넘으면 ArithmeticException 이다 — 부호가 뒤집힌 조용한 오답을 막는 가드다")
+		void 거리_제곱이_long_범위를_넘으면_ArithmeticException_이다() {
+			// 인덱스 폭 99,998 × n 40,001 ≈ 4e9 — 제곱이 1.6e19 로 long 최댓값(9.2e18)을 넘는 인위 입력이다.
+			Set<AreaCell> cells = rect(1, 1, 1, 40_000);
+			cells.add(new AreaCell(99_999, 1));
+
+			assertThatThrownBy(() -> RepresentativeGridResolver.resolve(cells, null))
+				.isInstanceOf(ArithmeticException.class);
+		}
 	}
 
 	@Test
