@@ -17,7 +17,7 @@ import jakarta.validation.constraints.NotNull;
  */
 @Schema(description = "신청 위치 — 영역 사각형 목록만 담는다 (이름 없음)")
 public record EventSubmissionLocationRequestDto(
-	@Schema(description = "영역 사각형 목록. 겹쳐도 되고 합집합 크기로 81칸 상한을 판정한다.")
+	@Schema(description = "영역 사각형 목록. 겹쳐도 되고 합집합 크기로 2,500칸 상한을 판정한다.")
 	List<@NotNull @Valid EventSubmissionAreaRectDto> areaRects
 ) {
 }

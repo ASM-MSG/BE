@@ -62,9 +62,6 @@ import com.msg.fillmap.notification.service.NotificationCommandService;
 @Order(30)
 public class EventSeeder implements ApplicationRunner {
 
-	/** 위치당 고유 셀 상한 (5km × 5km 상당) — zones 의 남북 26행 캡과 같은 성격의 입력 상한. */
-	static final int MAX_CELLS_PER_LOCATION = 2500;
-
 	/**
 	 * 시드 대표 이미지 키의 유일한 프리픽스 (MSG-538). 회차와 위치가 같은 프리픽스를 쓰는 이유는 공개 읽기
 	 * 버킷 정책이 프리픽스 단위라, 나누면 환경마다 Statement 를 둘씩 관리해야 하기 때문이다.
@@ -343,16 +340,16 @@ public class EventSeeder implements ApplicationRunner {
 			long rows = (long) rect.maxGridY() - rect.minGridY() + 1;
 			long columns = (long) rect.maxGridX() - rect.minGridX() + 1;
 			// 단일 사각형의 고유 셀 수는 정확히 행 × 열 이라 전개 전에 거부해도 과잉 거부가 없다 (OOM 1차 가드).
-			if (rows * columns > MAX_CELLS_PER_LOCATION) {
+			if (rows * columns > RepresentativeGridResolver.MAX_CELLS_PER_LOCATION) {
 				throw new IllegalStateException("행사 위치 %s 의 사각형 하나가 상한 %d 칸을 넘습니다 (%d 칸)".formatted(
-					seed.locationKey(), MAX_CELLS_PER_LOCATION, rows * columns));
+					seed.locationKey(), RepresentativeGridResolver.MAX_CELLS_PER_LOCATION, rows * columns));
 			}
 			for (int gridY = rect.minGridY(); gridY <= rect.maxGridY(); gridY++) {
 				for (int gridX = rect.minGridX(); gridX <= rect.maxGridX(); gridX++) {
 					cells.add(new AreaCell(gridY, gridX));
-					if (cells.size() > MAX_CELLS_PER_LOCATION) {
+					if (cells.size() > RepresentativeGridResolver.MAX_CELLS_PER_LOCATION) {
 						throw new IllegalStateException("행사 위치 %s 의 고유 셀 수가 상한 %d 칸을 넘습니다".formatted(
-							seed.locationKey(), MAX_CELLS_PER_LOCATION));
+							seed.locationKey(), RepresentativeGridResolver.MAX_CELLS_PER_LOCATION));
 					}
 				}
 			}

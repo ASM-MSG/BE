@@ -27,7 +27,7 @@ public record EventSubmissionLocationResponseDto(
 	@Schema(description = "행정동 이름 — 무귀속이면 null", example = "부산 수영구 광안동", nullable = true)
 	String regionName,
 
-	@Schema(description = "영역 합집합 칸 수 — 최대 81", example = "21")
+	@Schema(description = "영역 합집합 칸 수 — 최대 2,500", example = "21")
 	int cellCount,
 
 	@Schema(description = "제출 원본 사각형 — 재제출 폼 프리필 재료라 보낸 그대로다")

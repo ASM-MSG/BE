@@ -48,7 +48,7 @@ public enum EventErrorCode implements ErrorCodeIfs {
 	// 하므로 두 경우의 코드 경로 자체가 하나이고, 응답이 갈릴 여지가 없다.
 	SUBMISSION_NOT_FOUND(13430, HttpStatus.NOT_FOUND, "신청을 찾을 수 없습니다"),
 	INVALID_SUBMISSION_AREA(13431, HttpStatus.BAD_REQUEST, "유효하지 않은 위치 영역입니다"),
-	SUBMISSION_AREA_LIMIT_EXCEEDED(13432, HttpStatus.BAD_REQUEST, "위치 하나의 영역은 최대 81칸입니다"),
+	SUBMISSION_AREA_LIMIT_EXCEEDED(13432, HttpStatus.BAD_REQUEST, "위치 하나의 영역은 최대 2,500칸입니다"),
 	INVALID_SUBMISSION_PERIOD(13433, HttpStatus.BAD_REQUEST, "행사 기간이 유효하지 않습니다"),
 	// 권한이 아니라 신청의 현재 상태와 요청이 충돌하는 거절이라 409 다 (13409 · 11409 선례).
 	SUBMISSION_NOT_EDITABLE(13434, HttpStatus.CONFLICT, "반려된 신청만 수정할 수 있습니다"),
