@@ -239,7 +239,7 @@ AC 요약: 스펙 성공 기준 100건 중 테스트 연결 93건, 미커버 7�
 | FR-NOTI-09 | 구현됨 | HotZoneEntryDetectorTest |
 | FR-NOTI-10 | 구현됨 | VideoNotificationIntegrationTest |
 | FR-NOTI-11 | 구현됨 | WeeklySummarySchedulerTest |
-| FR-NOTI-12 | 계획 | (없음) |
+| FR-NOTI-12 | 진행 중 | (없음 — PRD 초안 단계) |
 | FR-NOTI-13 | 폐기됨 | (없음) |
 | FR-NOTI-14 | 구현됨 | FriendIntegrationTest, FriendNotificationRollbackTest, NotificationPreferenceServiceIntegrationTest |
 | FR-NOTI-15 | 구현됨 | NotificationConsumerTest, NotificationPreferenceServiceIntegrationTest, OpenApiNullableDataTest, VideoBlindIntegrationTest |
@@ -339,7 +339,7 @@ AC 요약: 스펙 성공 기준 100건 중 테스트 연결 93건, 미커버 7�
 - FR-EVENT-04 (폐기됨)
 - FR-EVENT-05 (폐기됨)
 - FR-ROUTE-15 (계획)
-- FR-NOTI-12 (계획)
+- FR-NOTI-12 (진행 중 — PRD 초안, 구현 전)
 - FR-NOTI-13 (폐기됨)
 - FR-FRIEND-13 (계획)
 - FR-MOD-14 (계획)
