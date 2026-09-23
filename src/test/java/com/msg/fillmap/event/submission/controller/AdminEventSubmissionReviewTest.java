@@ -253,6 +253,25 @@ class AdminEventSubmissionReviewTest {
 			assertThat(grids).extracting(MissionGrid::getGridId).contains(UNION_CENTER);
 		}
 
+		// 검증: FR-EVENT-13, AC-600-07
+		@Test
+		@DisplayName("위치 20개 각 2,500칸 신청을 승인하면 격자 5만 행과 대표 격자가 생긴다 — 상한을 꽉 채운 규모다")
+		void 위치_20개_각_2500칸_신청을_승인하면_격자_5만행과_대표_격자가_생긴다() throws Exception {
+			// 50×50 사각형 20개를 60행 간격으로 놓는다 — 겹치지 않아 합집합이 정확히 50,000칸이다.
+			String[] locations = new String[20];
+			for (int index = 0; index < 20; index++) {
+				locations[index] = location(rect(100 + index * 60, 149 + index * 60, 200, 249));
+			}
+			long id = 신청한다(festivalBody(organizer.getId(), locations));
+
+			승인한다(id).andExpect(status().isOk());
+
+			Mission mission = 승인_미션(id);
+			List<MissionGrid> grids = missionGridRepository.findByMissionIds(List.of(mission.getId()));
+			assertThat(grids).hasSize(50_000);
+			assertThat(grids).extracting(MissionGrid::getGridId).contains(mission.getRepresentativeGridId());
+		}
+
 		// 검증: FR-EVENT-15
 		@Test
 		@DisplayName("승인하면 승인됨 상태와 APR 꼴 승인 번호, 승인 이력이 함께 남는다")

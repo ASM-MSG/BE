@@ -230,12 +230,12 @@ class EventSubmissionControllerTest {
 				.andExpect(jsonPath("$.data.history[0].changedAt").exists());
 		}
 
-		// 검증: FR-EVENT-13
+		// 검증: FR-EVENT-13, AC-600-01
 		@Test
-		@DisplayName("합집합 82칸 위치는 13432 로 거부한다")
-		void 위치_사각형_합산이_82칸이면_거부한다() throws Exception {
+		@DisplayName("합집합 2,501칸 위치는 13432 로 거부한다")
+		void 위치_사각형_합산이_2501칸이면_거부한다() throws Exception {
 			신청_실패(organizer, festivalBody(organizer.getId(),
-				location(rect(100, 108, 200, 208), rect(300, 300, 400, 400))), 400, 13432);
+				location(rect(100, 149, 200, 249), rect(300, 300, 400, 400))), 400, 13432);
 		}
 
 		// 검증: FR-EVENT-13
