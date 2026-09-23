@@ -347,6 +347,7 @@ class UserGridRepositoryTest {
 
 	private void occupy(long userId, String gridId, int videoCount) {
 		GridFixtures.seedUserGrid(em, userId, gridId, videoCount);
+		regionRepository.refreshRegionStats(userId, gridId);
 	}
 
 	/** GY0 행의 격자 dx 구간 [dxFrom, dxTo) 중심점을 덮는 합성 행정동(999 대역)을 시드한다. */
