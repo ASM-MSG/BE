@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import com.msg.fillmap.notification.entity.Notification;
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTargetType;
 
 /**
  * 알림함 목록 응답 (GET /api/notifications — MSG-434 FR-1·FR-2). id 내림차순 keyset 페이지로,
@@ -48,13 +49,21 @@ public record NotificationPageResponseDto(
 		LocalDateTime createdAt,
 
 		@Schema(description = "읽음 여부", example = "false")
-		boolean read
+		boolean read,
+
+		// MSG-432 FR-3 — 화면 매핑은 앱이 이 종류로 정한다. null 이면 대상 없음(REMIND·WEEKLY·V56 이전 알림) → 지도 홈.
+		@Schema(description = "딥링크 이동 대상 종류 — 없으면 null", example = "VIDEO", nullable = true)
+		NotificationTargetType targetType,
+
+		@Schema(description = "딥링크 이동 대상 식별자(videoId·gridId·badgeId·occurrenceId·userId) — "
+			+ "targetType 이 null 이면 null", example = "9876", nullable = true)
+		String targetId
 	) {
 
 		public static NotificationItemResponseDto from(Notification notification) {
 			return new NotificationItemResponseDto(notification.getId(), notification.getCategory(),
 				notification.getTitle(), notification.getBody(), notification.getCreatedAt(),
-				notification.getReadAt() != null);
+				notification.getReadAt() != null, notification.getTargetType(), notification.getTargetId());
 		}
 	}
 }
