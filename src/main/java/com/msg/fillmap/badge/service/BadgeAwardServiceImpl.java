@@ -23,6 +23,7 @@ import com.msg.fillmap.badge.repository.BadgeRepository;
 import com.msg.fillmap.badge.repository.EligibleBadgeProjection;
 import com.msg.fillmap.badge.repository.UserBadgeRepository;
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTarget;
 import com.msg.fillmap.notification.repository.NotificationRepository;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 
@@ -99,7 +100,7 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
 				// 발급과 같은 커밋에 BADGE 알림 기록 (MSG-181 D1·D2) — 경합 패자(0행)는 record 도 안 탄다.
 				notificationCommandService.record(userId, NotificationCategory.BADGE,
 					"BADGE:" + candidate.getBadgeId(), "새 뱃지 획득",
-					"'" + candidate.getName() + "' 뱃지를 획득했어요");
+					"'" + candidate.getName() + "' 뱃지를 획득했어요", NotificationTarget.badge(candidate.getBadgeId()));
 				earned.add(EarnedBadgeResponseDto.from(candidate));
 			}
 		}
@@ -137,6 +138,6 @@ public class BadgeAwardServiceImpl implements BadgeAwardService {
 		EligibleBadgeProjection nearMiss = nearMisses.get(0);
 		notificationCommandService.record(userId, NotificationCategory.BADGE,
 			NEAR_EVENT_PREFIX + nearMiss.getBadgeId(), "뱃지 획득 임박",
-			"'" + nearMiss.getName() + "' 뱃지까지 딱 하나 남았어요");
+			"'" + nearMiss.getName() + "' 뱃지까지 딱 하나 남았어요", NotificationTarget.badge(nearMiss.getBadgeId()));
 	}
 }

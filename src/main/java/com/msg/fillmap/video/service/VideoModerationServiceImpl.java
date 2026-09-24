@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.global.exception.ApiException;
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTarget;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.Video;
@@ -62,7 +63,8 @@ public class VideoModerationServiceImpl implements VideoModerationService {
 		// 이 서비스에 들어오지도 않는다(FR-6). 키 꼬리 무작위 UUID: 해제 후 재블라인드가 새 알림이 된다(FR-5).
 		notificationCommandService.record(video.getUserId(), NotificationCategory.MODERATION,
 			"MODERATION:BLIND:" + videoId + ":" + UUID.randomUUID(),
-			"영상이 가려졌어요", "올린 영상이 운영 정책에 따라 가려졌어요. 지금은 다른 사람에게 보이지 않아요");
+			"영상이 가려졌어요", "올린 영상이 운영 정책에 따라 가려졌어요. 지금은 다른 사람에게 보이지 않아요",
+			NotificationTarget.video(videoId));
 	}
 
 	/** 해제는 상태 복귀만 한다 (D6) — 대표 원복도, 그 외 파생 갱신도 없다. */
@@ -83,7 +85,7 @@ public class VideoModerationServiceImpl implements VideoModerationService {
 		// 복구 통지 (MSG-417 FR-3). "공개" 아닌 "원래 상태" — visibility 보존이라 PRIVATE 은 해제돼도 안 보인다.
 		notificationCommandService.record(video.getUserId(), NotificationCategory.MODERATION,
 			"MODERATION:UNBLIND:" + videoId + ":" + UUID.randomUUID(),
-			"영상 숨김이 풀렸어요", "가려졌던 영상이 원래 상태로 돌아왔어요");
+			"영상 숨김이 풀렸어요", "가려졌던 영상이 원래 상태로 돌아왔어요", NotificationTarget.video(videoId));
 	}
 
 	/**

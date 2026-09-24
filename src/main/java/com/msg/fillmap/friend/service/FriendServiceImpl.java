@@ -34,6 +34,7 @@ import com.msg.fillmap.grid.service.GridQueryService;
 import com.msg.fillmap.grid.service.OccupiedGridPage;
 import com.msg.fillmap.grid.service.RegionAggregateView;
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTarget;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.exception.UserErrorCode;
@@ -136,7 +137,8 @@ public class FriendServiceImpl implements FriendService {
 				String eventKey = "FRIEND_REQ:" + userId + ":"
 					+ LocalDate.now(clock.withZone(KST)).format(DateTimeFormatter.BASIC_ISO_DATE);
 				notificationCommandService.record(target.getId(), NotificationCategory.FRIEND, eventKey,
-					"새 친구 요청", findUser(userId).getNickname() + "님이 친구 요청을 보냈어요");
+					"새 친구 요청", findUser(userId).getNickname() + "님이 친구 요청을 보냈어요",
+					NotificationTarget.user(userId));
 				yield new FriendRequestCreateResponseDto(FriendshipStatus.PENDING);
 			}
 			case FRIENDS -> throw new ApiException(FriendErrorCode.ALREADY_FRIENDS);
@@ -301,7 +303,8 @@ public class FriendServiceImpl implements FriendService {
 	private void recordAcceptedNotification(Long requesterId, Long accepterId) {
 		notificationCommandService.record(requesterId, NotificationCategory.FRIEND,
 			"FRIEND_ACC:" + accepterId + ":" + UUID.randomUUID(),
-			"친구 요청 수락", findUser(accepterId).getNickname() + "님이 친구 요청을 수락했어요");
+			"친구 요청 수락", findUser(accepterId).getNickname() + "님이 친구 요청을 수락했어요",
+			NotificationTarget.user(accepterId));
 	}
 
 	private User findByCode(String friendCode) {

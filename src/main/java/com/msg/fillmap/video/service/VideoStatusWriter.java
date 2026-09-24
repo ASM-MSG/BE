@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTarget;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.user.repository.UserRepository;
 import com.msg.fillmap.video.entity.ProcessingStatus;
@@ -340,10 +341,12 @@ public class VideoStatusWriter {
 		String eventKey = "VIDEO:" + video.getId() + ":" + suffix;
 		if (ready) {
 			notificationCommandService.record(video.getUserId(), NotificationCategory.VIDEO, eventKey,
-				"영상이 준비됐어요", "올린 영상 처리가 끝났어요. 지금 확인해 보세요");
+				"영상이 준비됐어요", "올린 영상 처리가 끝났어요. 지금 확인해 보세요",
+				NotificationTarget.video(video.getId()));
 		} else {
 			notificationCommandService.record(video.getUserId(), NotificationCategory.VIDEO, eventKey,
-				"영상 처리에 실패했어요", "올린 영상을 준비하지 못했어요. 영상을 다시 올려 주세요");
+				"영상 처리에 실패했어요", "올린 영상을 준비하지 못했어요. 영상을 다시 올려 주세요",
+				NotificationTarget.video(video.getId()));
 		}
 	}
 
