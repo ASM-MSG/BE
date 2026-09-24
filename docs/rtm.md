@@ -5,9 +5,9 @@
 **병합 충돌이 나면 손으로 합치지 말고 재생성한다.** 어느 쪽이든 골라 충돌만 없앤 뒤(`git checkout --ours docs/rtm.md` 등)
 스크립트를 다시 돌려 그 결과를 커밋한다. 이 표는 두 원천에서 계산되는 값이라 양쪽 diff를 섞으면 어느 쪽과도 다른 상태가 된다.
 
-요약: FR 302건 중 테스트 연결 271건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 24건, 성격상 테스트 비대상 7건 별도)
+요약: FR 302건 중 테스트 연결 272건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 23건, 성격상 테스트 비대상 7건 별도)
 
-AC 요약: 스펙 성공 기준 100건 중 테스트 연결 93건, 미커버 7건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
+AC 요약: 스펙 성공 기준 107건 중 테스트 연결 100건, 미커버 7건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -239,7 +239,7 @@ AC 요약: 스펙 성공 기준 100건 중 테스트 연결 93건, 미커버 7�
 | FR-NOTI-09 | 구현됨 | HotZoneEntryDetectorTest |
 | FR-NOTI-10 | 구현됨 | VideoNotificationIntegrationTest |
 | FR-NOTI-11 | 구현됨 | WeeklySummarySchedulerTest |
-| FR-NOTI-12 | 계획 | (없음) |
+| FR-NOTI-12 | 진행 중 | BadgeNotificationIntegrationTest, EventNotificationSchedulerTest, EventSeederScheduleChangeTest, FcmNotificationSenderTest, FriendIntegrationTest, NotificationCommandServiceIntegrationTest, NotificationConsumerTest, NotificationInboxControllerTest, NotificationInboxIntegrationTest, VideoBlindIntegrationTest, VideoNotificationIntegrationTest |
 | FR-NOTI-13 | 폐기됨 | (없음) |
 | FR-NOTI-14 | 구현됨 | FriendIntegrationTest, FriendNotificationRollbackTest, NotificationPreferenceServiceIntegrationTest |
 | FR-NOTI-15 | 구현됨 | NotificationConsumerTest, NotificationPreferenceServiceIntegrationTest, OpenApiNullableDataTest, VideoBlindIntegrationTest |
@@ -339,7 +339,6 @@ AC 요약: 스펙 성공 기준 100건 중 테스트 연결 93건, 미커버 7�
 - FR-EVENT-04 (폐기됨)
 - FR-EVENT-05 (폐기됨)
 - FR-ROUTE-15 (계획)
-- FR-NOTI-12 (계획)
 - FR-NOTI-13 (폐기됨)
 - FR-FRIEND-13 (계획)
 - FR-MOD-14 (계획)
@@ -378,6 +377,13 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 
 | AC ID | 스펙 | 검증 테스트 |
 |---|---|---|
+| AC-432-01 | MSG-432 | NotificationCommandServiceIntegrationTest |
+| AC-432-02 | MSG-432 | NotificationCommandServiceIntegrationTest |
+| AC-432-03 | MSG-432 | EventNotificationSchedulerTest |
+| AC-432-04 | MSG-432 | FcmNotificationSenderTest |
+| AC-432-05 | MSG-432 | NotificationConsumerTest |
+| AC-432-06 | MSG-432 | NotificationInboxControllerTest, NotificationInboxIntegrationTest |
+| AC-432-07 | MSG-432 | BadgeNotificationIntegrationTest, EventSeederScheduleChangeTest, FriendIntegrationTest, VideoBlindIntegrationTest, VideoNotificationIntegrationTest |
 | AC-513-01 | MSG-513 | RouteIntentClientTest, RouteRecommendServiceTest |
 | AC-513-02 | MSG-513 | RouteRecommendServiceTest |
 | AC-513-03 | MSG-513 | RouteRecommendServiceTest |

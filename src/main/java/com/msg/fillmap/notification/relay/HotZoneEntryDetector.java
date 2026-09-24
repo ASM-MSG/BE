@@ -18,6 +18,7 @@ import com.msg.fillmap.grid.dto.ViewportBounds;
 import com.msg.fillmap.hotzone.service.HotZoneService;
 import com.msg.fillmap.hotzone.service.HotZoneView;
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTarget;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.usergrid.service.GridOccupantView;
 import com.msg.fillmap.usergrid.service.UserGridQueryService;
@@ -99,7 +100,7 @@ public class HotZoneEntryDetector {
 				? "내가 수집한 격자가 지금 인기예요. 지도에서 확인해 보세요"
 				: occupant.regionName() + "에서 수집한 격자가 지금 인기예요. 지도에서 확인해 보세요";
 			notificationCommandService.record(occupant.userId(), NotificationCategory.HOTZONE, eventKey,
-				"내 격자가 핫구역에 들어왔어요", body);
+				"내 격자가 핫구역에 들어왔어요", body, NotificationTarget.grid(gridId));
 		}
 	}
 }

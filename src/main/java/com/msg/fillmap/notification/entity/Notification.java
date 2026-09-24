@@ -67,4 +67,18 @@ public class Notification {
 	/** 알림함 읽음 시각 (MSG-434 D-1). NULL 이면 안읽음 — 쓰기는 전부 @Modifying 이라 도메인 메서드가 없다. */
 	@Column(name = "read_at")
 	private LocalDateTime readAt;
+
+	/** 딥링크 이동 대상 종류 (MSG-432 D-1). NULL = 대상 없음(REMIND·WEEKLY·V56 이전 행) — 앱은 지도 홈. */
+	@Enumerated(EnumType.STRING)
+	@Column(name = "target_type", length = 20)
+	private NotificationTargetType targetType;
+
+	/** 딥링크 이동 대상 식별자 — target_type 과 함께 있거나 함께 없다 (chk_notifications_target_pair). */
+	@Column(name = "target_id", length = 64)
+	private String targetId;
+
+	/** 컨슈머(FCM data)와 알림함 DTO 가 같은 조립 규칙을 쓴다 — 둘 다 NULL 이면 null (MSG-432 D-2). */
+	public NotificationTarget target() {
+		return targetType == null ? null : new NotificationTarget(targetType, targetId);
+	}
 }

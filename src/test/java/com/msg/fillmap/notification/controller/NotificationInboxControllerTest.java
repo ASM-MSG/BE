@@ -28,6 +28,7 @@ import com.msg.fillmap.notification.dto.NotificationPageResponseDto;
 import com.msg.fillmap.notification.dto.NotificationPageResponseDto.NotificationItemResponseDto;
 import com.msg.fillmap.notification.dto.NotificationUnreadCountResponseDto;
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTargetType;
 import com.msg.fillmap.notification.exception.NotificationErrorCode;
 import com.msg.fillmap.notification.service.NotificationInboxService;
 import com.msg.fillmap.user.entity.UserRole;
@@ -61,12 +62,26 @@ class NotificationInboxControllerTest {
 	private NotificationPageResponseDto onePage() {
 		return new NotificationPageResponseDto(List.of(new NotificationItemResponseDto(
 			123L, NotificationCategory.BADGE, "새 뱃지 획득", "'첫 걸음' 뱃지를 획득했어요",
-			LocalDateTime.of(2026, 8, 19, 2, 11), false)), 123L, true);
+			LocalDateTime.of(2026, 8, 19, 2, 11), false, NotificationTargetType.BADGE, "7")), 123L, true);
 	}
 
 	@Nested
 	@DisplayName("응답 형식")
 	class ResponseShape {
+
+		// 검증: FR-NOTI-12, AC-432-06
+		@Test
+		@DisplayName("응답에 targetType·targetId 는 실리고 event_key 는 여전히 실리지 않는다 — MSG-432 FR-3")
+		void 응답에_targetType_targetId는_실리고_event_key는_여전히_실리지_않는다() throws Exception {
+			given(notificationInboxService.getInbox(USER_ID, null, 20)).willReturn(onePage());
+
+			mockMvc.perform(get(URL).header(HttpHeaders.AUTHORIZATION, bearer()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.notifications[0].targetType").value("BADGE"))
+				.andExpect(jsonPath("$.data.notifications[0].targetId").value("7"))
+				.andExpect(jsonPath("$.data.notifications[0].eventKey").doesNotExist())
+				.andExpect(jsonPath("$.data.notifications[0].event_key").doesNotExist());
+		}
 
 		// 검증: FR-NOTI-17
 		@Test

@@ -78,11 +78,14 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 	 * status·retry_count 는 DDL DEFAULT (PENDING·0). created_at 은 DDL DEFAULT(CURRENT_TIMESTAMP)에 맡기지
 	 * 않고 markSent 와 동일 형상의 명시 UTC 로 쓴다 (MSG-314 D4) — timestamptz→timestamp 대입은 세션 TZ
 	 * 캐스트라 KST JVM 에선 +9h 저장돼 countRecordedSince 의 KST 자정 판정이 환경별로 스큐난다.
+	 * 딥링크 대상(MSG-432)은 같은 문장에 들어간다 — 별도 UPDATE 가 없어 "대상 저장 실패가 기록을 막는" 경로가 없다.
+	 * 대상 없는 알림은 둘 다 null 바인딩 (chk_notifications_target_pair).
 	 */
 	@Modifying
 	@Query(value = """
-		INSERT INTO notifications (user_id, category, event_key, title, body, created_at)
-		VALUES (:userId, :category, :eventKey, :title, :body, statement_timestamp() AT TIME ZONE 'UTC')
+		INSERT INTO notifications (user_id, category, event_key, title, body, created_at, target_type, target_id)
+		VALUES (:userId, :category, :eventKey, :title, :body, statement_timestamp() AT TIME ZONE 'UTC',
+		        :targetType, :targetId)
 		ON CONFLICT (user_id, event_key) DO NOTHING
 		""", nativeQuery = true)
 	int insert(
@@ -90,15 +93,20 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 		@Param("category") String category,
 		@Param("eventKey") String eventKey,
 		@Param("title") String title,
-		@Param("body") String body
+		@Param("body") String body,
+		@Param("targetType") String targetType,
+		@Param("targetId") String targetId
 	);
 
-	/** 회차별 시작 알림 기록 (MSG-583). 구독자 엔티티 조회 없이 기존 outbox 기본값과 멱등 키를 유지한다. */
+	/**
+	 * 회차별 시작 알림 기록 (MSG-583). 구독자 엔티티 조회 없이 기존 outbox 기본값과 멱등 키를 유지한다.
+	 * 대상은 회차 자체라 상수 열로 넣는다 (MSG-432 D-3) — 호출자 시그니처는 그대로다.
+	 */
 	@Modifying
 	@Query(value = """
-		INSERT INTO notifications (user_id, category, event_key, title, body, created_at)
+		INSERT INTO notifications (user_id, category, event_key, title, body, created_at, target_type, target_id)
 		SELECT s.user_id, 'EVENT', :eventKey, :title, :body,
-		       statement_timestamp() AT TIME ZONE 'UTC'
+		       statement_timestamp() AT TIME ZONE 'UTC', 'EVENT_OCCURRENCE', CAST(:occurrenceId AS VARCHAR)
 		FROM event_notification_subscriptions s
 		WHERE s.event_occurrence_id = :occurrenceId
 		  AND s.created_at <= :startsAt

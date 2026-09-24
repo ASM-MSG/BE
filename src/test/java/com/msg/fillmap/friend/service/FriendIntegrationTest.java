@@ -519,11 +519,14 @@ class FriendIntegrationTest {
 		assertThat(row[0]).isEqualTo("FRIEND");
 		assertThat(row[1]).isEqualTo("새 친구 요청");
 		assertThat(row[2]).isEqualTo("나채움님이 친구 요청을 보냈어요");
+		assertThat(row[3]).isEqualTo("USER");   // MSG-432 FR-5 — 요청자
+		assertThat(row[4]).isEqualTo(String.valueOf(me.getId()));
 		assertThat(notificationCount(me.getId())).isZero();
 	}
 
 	// 검증: FR-NOTI-14
 	@Test
+	// 검증: FR-NOTI-12, AC-432-07
 	@DisplayName("요청을 수락하면 요청자에게 수락 알림이 기록된다 — 수락자 닉네임, FRIEND_ACC 무작위 꼬리 키 (D1·D2)")
 	void 요청을_수락하면_요청자에게_수락_알림이_기록된다() {
 		friendService.request(other.getId(), me.getFriendCode());
@@ -531,6 +534,8 @@ class FriendIntegrationTest {
 		friendService.accept(me.getId(), other.getId());
 
 		List<Object[]> rows = notificationRows(other.getId(), "FRIEND_ACC:" + me.getId() + ":");
+		assertThat(rows.get(0)[4]).isEqualTo("USER");   // MSG-432 FR-5 — 수락자
+		assertThat(rows.get(0)[5]).isEqualTo(String.valueOf(me.getId()));
 		assertThat(rows).hasSize(1);
 		assertThat(rows.get(0)[1]).isEqualTo("FRIEND");
 		assertThat(rows.get(0)[2]).isEqualTo("친구 요청 수락");
@@ -617,7 +622,7 @@ class FriendIntegrationTest {
 	/** category·title·body 스냅샷 — 단언은 호출부에서 (BadgeNotificationIntegrationTest 관례). */
 	private Object[] notificationRow(long userId, String eventKey) {
 		return (Object[]) em.createNativeQuery("""
-				SELECT category, title, body FROM notifications
+				SELECT category, title, body, target_type, target_id FROM notifications
 				WHERE user_id = :userId AND event_key = :eventKey
 				""")
 			.setParameter("userId", userId)
@@ -629,7 +634,7 @@ class FriendIntegrationTest {
 	@SuppressWarnings("unchecked")
 	private List<Object[]> notificationRows(long userId, String keyPrefix) {
 		return em.createNativeQuery("""
-				SELECT event_key, category, title, body FROM notifications
+				SELECT event_key, category, title, body, target_type, target_id FROM notifications
 				WHERE user_id = :userId AND event_key LIKE :prefix || '%'
 				""")
 			.setParameter("userId", userId)

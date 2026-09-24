@@ -197,6 +197,13 @@ class EventSeederScheduleChangeTest {
 	}
 
 	@SuppressWarnings("unchecked")
+	private List<Object[]> 알림대상() {
+		return tx.execute(status -> (List<Object[]>) em.createNativeQuery(
+			"SELECT target_type, target_id FROM notifications WHERE user_id = :userId ORDER BY id")
+			.setParameter("userId", userId).getResultList());
+	}
+
+	@SuppressWarnings("unchecked")
 	private List<String> 알림키() {
 		return tx.execute(status -> (List<String>) em.createNativeQuery(
 			"SELECT event_key FROM notifications WHERE user_id = :userId ORDER BY id")
@@ -209,6 +216,7 @@ class EventSeederScheduleChangeTest {
 
 		// 검증: FR-EVENT-06
 		@Test
+		// 검증: FR-NOTI-12, AC-432-07
 		@DisplayName("일정 변경 재시드는 개정 번호를 올리고 구독자에게 변경 알림을 기록한다")
 		void 일정_변경_재시드는_개정_번호를_올리고_구독자에게_변경_알림을_기록한다() {
 			시딩(진행중, 시작_KST, 종료_KST);
@@ -218,6 +226,10 @@ class EventSeederScheduleChangeTest {
 
 			assertThat(개정번호()).isEqualTo(1);
 			assertThat(알림키()).containsExactly("EVENT_SCHEDULE:" + 회차키 + ":1");
+			assertThat(알림대상()).singleElement().satisfies(target -> {   // MSG-432 FR-5
+				assertThat(target[0]).isEqualTo("EVENT_OCCURRENCE");
+				assertThat(target[1]).isEqualTo(String.valueOf(회차id()));
+			});
 		}
 
 		// 검증: FR-EVENT-06

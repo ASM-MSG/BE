@@ -107,7 +107,7 @@ public class NotificationConsumer {
 		}
 		SendResult result = notificationSender.send(
 			id, tokens.stream().map(PushToken::getFcmToken).toList(),
-			notification.getTitle(), notification.getBody());
+			notification.getTitle(), notification.getBody(), notification.getCategory(), notification.target());
 		if (!result.invalidTokens().isEmpty()) {
 			// FR-5 즉시 정리 — FCM 응답 경로에는 "현재 사용자"가 없어 소유 검증 없는 시스템 삭제 (D10).
 			tx.executeWithoutResult(status ->

@@ -350,6 +350,7 @@ class VideoBlindIntegrationTest {
 
 	// 검증: FR-NOTI-15
 	@Test
+	// 검증: FR-NOTI-12, AC-432-07
 	@DisplayName("블라인드 전환이 소유자에게 MODERATION 알림을 남긴다 — 문구에 신고 정보 미탑재 (FR-1·FR-2)")
 	void 블라인드_전환이_소유자에게_MODERATION_알림을_남긴다() {
 		long videoId = upload("PUBLIC");
@@ -362,6 +363,8 @@ class VideoBlindIntegrationTest {
 		assertThat(rows.get(0)[1]).isEqualTo("영상이 가려졌어요");
 		assertThat(rows.get(0)[2]).isEqualTo("올린 영상이 운영 정책에 따라 가려졌어요. 지금은 다른 사람에게 보이지 않아요");
 		assertThat(rows.get(0)[3]).isEqualTo("PENDING");
+		assertThat(rows.get(0)[4]).isEqualTo("VIDEO");   // MSG-432 FR-5 — 소유자는 가려진 자기 영상 화면에 들어간다 (Q3)
+		assertThat(rows.get(0)[5]).isEqualTo(String.valueOf(videoId));
 	}
 
 	// 검증: FR-NOTI-15
@@ -427,7 +430,7 @@ class VideoBlindIntegrationTest {
 	@SuppressWarnings("unchecked")
 	private List<Object[]> moderationRows() {
 		return em.createNativeQuery("""
-				SELECT event_key, title, body, status FROM notifications
+				SELECT event_key, title, body, status, target_type, target_id FROM notifications
 				WHERE user_id = :u AND category = 'MODERATION' ORDER BY id
 				""")
 			.setParameter("u", userId)

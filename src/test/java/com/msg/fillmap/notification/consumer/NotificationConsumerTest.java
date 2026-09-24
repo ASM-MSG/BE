@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
@@ -42,6 +43,7 @@ import org.springframework.util.backoff.FixedBackOff;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.msg.fillmap.notification.config.NotificationProperties;
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTarget;
 import com.msg.fillmap.notification.relay.NotificationBacklogMetrics;
 import com.msg.fillmap.notification.repository.PushTokenRepository;
 import com.msg.fillmap.notification.sender.NotificationSender;
@@ -133,7 +135,7 @@ class NotificationConsumerTest {
 		tx.executeWithoutResult(status -> me = userRepository.save(
 			User.createLocalUser("consumer-" + System.nanoTime() + "@example.com", "hash", "컨슈머테스터")).getId());
 		given(notificationPreferenceService.isEnabled(anyLong(), any())).willReturn(true);
-		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString(), any(), any()))
 			.willReturn(new SendResult(1, List.of()));
 	}
 
@@ -155,7 +157,22 @@ class NotificationConsumerTest {
 
 		awaitStatus(id, "SENT");
 		assertThat(sentAtOf(id)).isNotNull();
-		then(notificationSender).should().send(eq(id), eq(List.of(token)), eq("발송제목"), eq("본문"));
+		then(notificationSender).should().send(eq(id), eq(List.of(token)), eq("발송제목"), eq("본문"),
+			eq(NotificationCategory.BADGE), isNull());
+	}
+
+	// 검증: FR-NOTI-12, AC-432-05
+	@Test
+	@DisplayName("컨슈머는 행의 카테고리와 딥링크 대상을 발송기에 그대로 넘긴다 — MSG-432 FR-2")
+	void 컨슈머는_행의_카테고리와_대상을_발송기에_그대로_넘긴다() throws Exception {
+		String token = registerToken("ok-" + System.nanoTime());
+		long id = newNotification(NotificationCategory.VIDEO, "영상 준비", NotificationTarget.video(77L));
+
+		publish(id);
+
+		awaitStatus(id, "SENT");
+		then(notificationSender).should().send(eq(id), eq(List.of(token)), eq("영상 준비"), eq("본문"),
+			eq(NotificationCategory.VIDEO), eq(NotificationTarget.video(77L)));
 	}
 
 	// 검증: FR-NOTI-03
@@ -173,7 +190,7 @@ class NotificationConsumerTest {
 		awaitStatus(fresh, "SENT");   // 같은 파티션 — fresh 처리 완료 = already 소비도 끝났다
 		assertThat(statusOf(already)).isEqualTo("SENT");
 		assertThat(retryCountOf(already)).isZero();   // 종결 판정이 retry_count 증가보다 앞선다
-		then(notificationSender).should(never()).send(anyLong(), anyList(), eq("A제목"), anyString());
+		then(notificationSender).should(never()).send(anyLong(), anyList(), eq("A제목"), anyString(), any(), any());
 	}
 
 	// 검증: FR-NOTI-06
@@ -327,7 +344,7 @@ class NotificationConsumerTest {
 	void UNREGISTERED_토큰은_push_tokens에서_삭제된다() throws Exception {
 		String alive = registerToken("ok-" + System.nanoTime());
 		String dead = registerToken("dead-" + System.nanoTime());
-		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString(), any(), any()))
 			.willReturn(new SendResult(1, List.of(dead)));
 		long id = newNotification(NotificationCategory.BADGE, "제목");
 
@@ -343,7 +360,7 @@ class NotificationConsumerTest {
 	void 일부_토큰만_성공해도_SENT다() throws Exception {
 		String first = registerToken("ok1-" + System.nanoTime());
 		String second = registerToken("ok2-" + System.nanoTime());
-		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString(), any(), any()))
 			.willReturn(new SendResult(1, List.of()));   // 2개 중 1개만 성공, 무효 아님(순단)
 		long id = newNotification(NotificationCategory.BADGE, "제목");
 
@@ -359,7 +376,7 @@ class NotificationConsumerTest {
 	@DisplayName("전부 실패가 상한을 넘으면 DEAD 로 격리되고 last_error 가 남는다 — FR-4")
 	void 전부_실패가_상한을_넘으면_DEAD로_격리되고_last_error가_남는다() throws Exception {
 		registerToken("ok-" + System.nanoTime());
-		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString(), any(), any()))
 			.willThrow(new IllegalStateException("FCM 다운"));
 		long id = newNotification(NotificationCategory.BADGE, "제목");
 
@@ -389,7 +406,7 @@ class NotificationConsumerTest {
 	@DisplayName("재시도 횟수가 retry_count 에 남는다 — 몇 번 만에 성공했는지 (D4)")
 	void 재시도_횟수가_retry_count에_남는다() throws Exception {
 		registerToken("ok-" + System.nanoTime());
-		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString(), any(), any()))
 			.willThrow(new IllegalStateException("1차 실패"))
 			.willThrow(new IllegalStateException("2차 실패"))
 			.willReturn(new SendResult(1, List.of()));
@@ -451,7 +468,7 @@ class NotificationConsumerTest {
 		double before = outcomeCount("sent", "none");
 		registerToken("ok-" + System.nanoTime());
 		long vanished = newNotification(NotificationCategory.BADGE, "탈퇴중");
-		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString(), any(), any()))
 			.willAnswer(invocation -> {
 				deleteRow(vanished);   // FCM 발송 중 탈퇴 CASCADE 로 행이 지워지는 창 재현
 				return new SendResult(1, List.of());
@@ -471,7 +488,7 @@ class NotificationConsumerTest {
 	void 재시도_상한_소진은_dead를_증가시킨다() throws Exception {
 		double before = outcomeCount("dead", "none");
 		registerToken("ok-" + System.nanoTime());
-		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString()))
+		given(notificationSender.send(anyLong(), anyList(), anyString(), anyString(), any(), any()))
 			.willThrow(new IllegalStateException("FCM 다운"));
 		long id = newNotification(NotificationCategory.BADGE, "제목");
 
@@ -546,8 +563,12 @@ class NotificationConsumerTest {
 	}
 
 	private long newNotification(NotificationCategory category, String title) {
+		return newNotification(category, title, null);
+	}
+
+	private long newNotification(NotificationCategory category, String title, NotificationTarget target) {
 		String eventKey = category.name() + ":" + System.nanoTime();
-		notificationCommandService.record(me, category, eventKey, title, "본문");
+		notificationCommandService.record(me, category, eventKey, title, "본문", target);
 		return ((Number) em.createNativeQuery(
 				"SELECT id FROM notifications WHERE user_id = :userId AND event_key = :key")
 			.setParameter("userId", me)

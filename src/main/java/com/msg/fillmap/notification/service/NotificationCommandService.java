@@ -3,6 +3,7 @@ package com.msg.fillmap.notification.service;
 import java.time.LocalDateTime;
 
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTarget;
 
 /**
  * 알림 발송 요청 진입점 (MSG-179 D6) — MSG-181 트리거가 호출한다. 게이트 없이 상시 빈 —
@@ -16,6 +17,13 @@ public interface NotificationCommandService {
 	 */
 	void record(Long userId, NotificationCategory category, String eventKey, String title, String body);
 
-	/** 회차 시작 정각까지의 현재 구독자에게 멱등 기록한다. 호출자의 발송 트랜잭션에 참여한다. */
+	/**
+	 * 딥링크 이동 대상을 함께 기록한다 (MSG-432 FR-1). target 이 null 이면 대상 없음 — 5인자와 같다.
+	 * 대상은 앱이 이미 API 로 조회할 수 있는 공개 식별자만 쓴다 (비기능 보안).
+	 */
+	void record(Long userId, NotificationCategory category, String eventKey, String title, String body,
+		NotificationTarget target);
+
+	/** 회차 시작 정각까지의 현재 구독자에게 멱등 기록한다. 호출자의 발송 트랜잭션에 참여한다. 대상은 그 회차다 (MSG-432). */
 	void recordEventStart(long occurrenceId, LocalDateTime startsAt, String eventKey, String title, String body);
 }

@@ -27,6 +27,7 @@ import com.msg.fillmap.notification.dto.NotificationPageResponseDto.Notification
 import com.msg.fillmap.notification.entity.Notification;
 import com.msg.fillmap.notification.entity.NotificationCategory;
 import com.msg.fillmap.notification.entity.NotificationStatus;
+import com.msg.fillmap.notification.entity.NotificationTargetType;
 import com.msg.fillmap.notification.exception.NotificationErrorCode;
 import com.msg.fillmap.notification.repository.NotificationRepository;
 import com.msg.fillmap.user.entity.User;
@@ -101,6 +102,25 @@ class NotificationInboxIntegrationTest {
 			assertThat(page.notifications().get(0).read()).isFalse();
 			assertThat(page.hasNext()).isFalse();
 			assertThat(page.nextCursor()).isNull();
+		}
+
+		// 검증: FR-NOTI-12, AC-432-06
+		@Test
+		@DisplayName("알림함 항목에 targetType·targetId 가 실리고 대상 없는 행은 null 이다 — MSG-432 FR-3")
+		void 알림함_항목에_targetType과_targetId가_실리고_대상_없는_행은_null이다() {
+			long plain = record(me, "대상 없음");
+			tx.executeWithoutResult(status -> notificationRepository.insert(me, "VIDEO",
+				"INBOX:TARGET:" + System.nanoTime(), "대상 있음", "본문", "VIDEO", "9876"));
+
+			List<NotificationItemResponseDto> items = notificationInboxService.getInbox(me, null, 20).notifications();
+
+			assertThat(items).hasSize(2);
+			assertThat(items.get(0).title()).isEqualTo("대상 있음");
+			assertThat(items.get(0).targetType()).isEqualTo(NotificationTargetType.VIDEO);
+			assertThat(items.get(0).targetId()).isEqualTo("9876");
+			assertThat(items.get(1).notificationId()).isEqualTo(plain);
+			assertThat(items.get(1).targetType()).isNull();
+			assertThat(items.get(1).targetId()).isNull();
 		}
 
 		// 검증: FR-NOTI-17

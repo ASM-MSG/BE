@@ -45,6 +45,7 @@ import com.msg.fillmap.event.repository.EventVideoRepository;
 import com.msg.fillmap.global.geo.AreaCell;
 import com.msg.fillmap.global.geo.RepresentativeGridResolver;
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTarget;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 
 /**
@@ -229,7 +230,8 @@ public class EventSeeder implements ApplicationRunner {
 		for (EventNotificationSubscription subscription :
 			subscriptionRepository.findAllByIdEventOccurrenceId(occurrence.getId())) {
 			notificationCommandService.record(subscription.getId().getUserId(), NotificationCategory.EVENT,
-				eventKey, occurrence.getTitle(), SCHEDULE_CHANGED_BODY);
+				eventKey, occurrence.getTitle(), SCHEDULE_CHANGED_BODY,
+				NotificationTarget.eventOccurrence(occurrence.getId()));
 		}
 	}
 
