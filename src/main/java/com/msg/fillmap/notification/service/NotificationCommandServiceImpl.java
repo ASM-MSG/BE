@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
 import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTarget;
 import com.msg.fillmap.notification.repository.NotificationRepository;
 
 /**
@@ -24,7 +25,15 @@ public class NotificationCommandServiceImpl implements NotificationCommandServic
 	@Override
 	@Transactional
 	public void record(Long userId, NotificationCategory category, String eventKey, String title, String body) {
-		notificationRepository.insert(userId, category.name(), eventKey, title, body);
+		record(userId, category, eventKey, title, body, null);
+	}
+
+	@Override
+	@Transactional
+	public void record(Long userId, NotificationCategory category, String eventKey, String title, String body,
+		NotificationTarget target) {
+		notificationRepository.insert(userId, category.name(), eventKey, title, body,
+			target == null ? null : target.type().name(), target == null ? null : target.id());
 	}
 
 	@Override
