@@ -28,8 +28,9 @@ public record NotificationPageResponseDto(
 	boolean hasNext
 ) {
 
+	// required 는 "키가 존재한다"는 뜻이라 nullable 두 필드도 목록에 든다 (ResponseSchemaNullabilityTest, MSG-319).
 	@Schema(description = "알림 한 건", requiredProperties = {"notificationId", "category", "title", "body",
-		"createdAt", "read"})
+		"createdAt", "read", "targetType", "targetId"})
 	public record NotificationItemResponseDto(
 		@Schema(description = "알림 ID — 읽음 처리와 커서에 쓴다", example = "123")
 		long notificationId,
