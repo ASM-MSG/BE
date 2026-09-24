@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +24,8 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.SendResponse;
+import com.msg.fillmap.notification.entity.NotificationCategory;
+import com.msg.fillmap.notification.entity.NotificationTarget;
 import com.msg.fillmap.notification.sender.NotificationSender.SendResult;
 
 /**
@@ -38,6 +41,28 @@ class FcmNotificationSenderTest {
 
 	@InjectMocks
 	private FcmNotificationSender sender;
+
+	// 검증: FR-NOTI-12, AC-432-04
+	@Test
+	@DisplayName("대상이 있으면 data 에 notificationId·category·targetType·targetId 네 키가 실린다 — MSG-432 FR-2")
+	void 대상이_있으면_data에_네_키가_실린다() {
+		Map<String, String> data = FcmNotificationSender.dataOf(42L, NotificationCategory.HOTZONE,
+			NotificationTarget.grid("wydm6r"));
+
+		assertThat(data).containsOnlyKeys("notificationId", "category", "targetType", "targetId")
+			.containsEntry("notificationId", "42").containsEntry("category", "HOTZONE")
+			.containsEntry("targetType", "GRID").containsEntry("targetId", "wydm6r");
+	}
+
+	// 검증: FR-NOTI-12, AC-432-04
+	@Test
+	@DisplayName("대상이 없으면 data 는 notificationId·category 두 키뿐이다 — 키 자체를 넣지 않는다 (D-4)")
+	void 대상이_없으면_data에_notificationId와_category만_실린다() {
+		Map<String, String> data = FcmNotificationSender.dataOf(42L, NotificationCategory.REMIND, null);
+
+		assertThat(data).containsOnlyKeys("notificationId", "category")
+			.containsEntry("notificationId", "42").containsEntry("category", "REMIND");
+	}
 
 	// 검증: FR-NOTI-05
 	@Test
@@ -64,7 +89,7 @@ class FcmNotificationSenderTest {
 			.willReturn(firstChunk)
 			.willReturn(secondChunk);
 
-		SendResult result = sender.send(42L, tokens, "제목", "본문");
+		SendResult result = sender.send(42L, tokens, "제목", "본문", NotificationCategory.BADGE, null);
 
 		var captured = org.mockito.ArgumentCaptor.forClass(com.google.firebase.messaging.MulticastMessage.class);
 		then(firebaseMessaging).should(times(2)).sendEachForMulticast(captured.capture());

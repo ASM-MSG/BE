@@ -1,6 +1,7 @@
 package com.msg.fillmap.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 
 import java.time.Instant;
@@ -21,6 +22,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import com.msg.fillmap.notification.entity.Notification;
 import com.msg.fillmap.notification.entity.NotificationCategory;
 import com.msg.fillmap.notification.entity.NotificationStatus;
+import com.msg.fillmap.notification.entity.NotificationTarget;
+import com.msg.fillmap.notification.entity.NotificationTargetType;
 import com.msg.fillmap.notification.repository.NotificationRepository;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -115,6 +118,51 @@ class NotificationCommandServiceIntegrationTest {
 
 		assertThat(rowCount(me, eventKey)).isEqualTo(1);
 		assertThat(rowCount(other, eventKey)).isEqualTo(1);
+	}
+
+	// 검증: FR-NOTI-12, AC-432-01
+	@Test
+	@DisplayName("대상과 함께 기록하면 target_type·target_id 가 저장된다 — MSG-432 FR-1")
+	void 대상과_함께_기록하면_target_type과_target_id가_저장된다() {
+		notificationCommandService.record(me, NotificationCategory.VIDEO, eventKey, "제목", "본문",
+			NotificationTarget.video(9876L));
+
+		Notification saved = notificationRepository.findById(findId(me, eventKey)).orElseThrow();
+		assertThat(saved.getTargetType()).isEqualTo(NotificationTargetType.VIDEO);
+		assertThat(saved.getTargetId()).isEqualTo("9876");
+		assertThat(saved.target()).isEqualTo(NotificationTarget.video(9876L));
+	}
+
+	// 검증: FR-NOTI-12, AC-432-01
+	@Test
+	@DisplayName("대상 없이 기록하면 두 컬럼이 NULL 이다 — 기존 5인자 경로(REMIND·WEEKLY), 앱은 지도 홈")
+	void 대상_없이_기록하면_두_컬럼이_NULL이다() {
+		notificationCommandService.record(me, NotificationCategory.REMIND, eventKey, "제목", "본문");
+
+		Notification saved = notificationRepository.findById(findId(me, eventKey)).orElseThrow();
+		assertThat(saved.getTargetType()).isNull();
+		assertThat(saved.getTargetId()).isNull();
+		assertThat(saved.target()).isNull();
+	}
+
+	// 검증: FR-NOTI-12, AC-432-02
+	@Test
+	@DisplayName("종류만·식별자만·미지 종류인 행은 CHECK 가 거부한다 — V56 chk_notifications_target_pair/type")
+	void 종류만_있거나_식별자만_있거나_미지_종류인_행은_CHECK가_거부한다() {
+		assertThatThrownBy(() -> rawInsert("'VIDEO', NULL")).hasStackTraceContaining("chk_notifications_target_pair");
+		assertThatThrownBy(() -> rawInsert("NULL, '1'")).hasStackTraceContaining("chk_notifications_target_pair");
+		assertThatThrownBy(() -> rawInsert("'SCREEN', '1'")).hasStackTraceContaining("chk_notifications_target_type");
+		assertThat(rowCount(me, eventKey)).isZero();
+	}
+
+	/** 값 객체를 우회한 native INSERT — DB 가 최종 방어선인지 본다. 실패 트랜잭션은 롤백돼 행이 남지 않는다. */
+	private void rawInsert(String targetColumns) {
+		tx.executeWithoutResult(status -> em.createNativeQuery("""
+				INSERT INTO notifications (user_id, category, event_key, title, body, target_type, target_id)
+				VALUES (:userId, 'BADGE', :key, '제목', '본문', """ + targetColumns + ")")
+			.setParameter("userId", me)
+			.setParameter("key", eventKey)
+			.executeUpdate());
 	}
 
 	@Test

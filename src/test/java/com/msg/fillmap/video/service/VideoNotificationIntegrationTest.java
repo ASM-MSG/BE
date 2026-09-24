@@ -93,7 +93,7 @@ class VideoNotificationIntegrationTest {
 		});
 	}
 
-	// 검증: FR-MEDIA-08, FR-NOTI-10
+	// 검증: FR-MEDIA-08, FR-NOTI-10, FR-NOTI-12, AC-432-07
 	@Test
 	@DisplayName("인코딩만 경로 완료 전이는 VIDEO 완료 알림을 기록한다 — event_key·문구 (FR-1)")
 	void 인코딩만_경로_완료_전이는_VIDEO_완료_알림을_기록한다() {
@@ -104,6 +104,8 @@ class VideoNotificationIntegrationTest {
 		assertThat(row[0]).isEqualTo("VIDEO");
 		assertThat(row[1]).isEqualTo("영상이 준비됐어요");
 		assertThat(row[2]).isEqualTo("올린 영상 처리가 끝났어요. 지금 확인해 보세요");
+		assertThat(row[3]).isEqualTo("VIDEO");   // MSG-432 FR-5
+		assertThat(row[4]).isEqualTo(String.valueOf(videoId));
 	}
 
 	@Test
@@ -304,7 +306,7 @@ class VideoNotificationIntegrationTest {
 	/** category·title·body 스냅샷 — 단언은 호출부에서 (BadgeNotificationIntegrationTest 선례). */
 	private Object[] notificationRow(String eventKey) {
 		return (Object[]) em.createNativeQuery("""
-				SELECT category, title, body FROM notifications
+				SELECT category, title, body, target_type, target_id FROM notifications
 				WHERE user_id = :userId AND event_key = :eventKey
 				""")
 			.setParameter("userId", userId)

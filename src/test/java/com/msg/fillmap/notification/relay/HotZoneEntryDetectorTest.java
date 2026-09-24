@@ -146,6 +146,8 @@ class HotZoneEntryDetectorTest {
 		assertThat(row[0]).isEqualTo("HOTZONE");
 		assertThat(row[1]).isEqualTo("내 격자가 핫구역에 들어왔어요");
 		assertThat(row[2]).isEqualTo(regionCode + "에서 수집한 격자가 지금 인기예요. 지도에서 확인해 보세요");
+		assertThat(row[3]).isEqualTo("GRID");   // MSG-432 FR-5, AC-432-07
+		assertThat(row[4]).isEqualTo(GRID_A);
 		assertThat(notificationCount(user2, eventKey)).isEqualTo(1);
 	}
 
@@ -278,7 +280,7 @@ class HotZoneEntryDetectorTest {
 	/** category·title·body 스냅샷 — 단언은 호출부에서. */
 	private Object[] notificationRow(long userId, String eventKey) {
 		return (Object[]) em.createNativeQuery("""
-				SELECT category, title, body FROM notifications
+				SELECT category, title, body, target_type, target_id FROM notifications
 				WHERE user_id = :userId AND event_key = :eventKey
 				""")
 			.setParameter("userId", userId)

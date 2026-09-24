@@ -104,6 +104,8 @@ class BadgeNearMissIntegrationTest {
 		assertThat(row[0]).isEqualTo("BADGE");
 		assertThat(row[1]).isEqualTo("뱃지 획득 임박");
 		assertThat(row[2]).isEqualTo("'기록러 I' 뱃지까지 딱 하나 남았어요");
+		assertThat(row[3]).isEqualTo("BADGE");   // MSG-432 FR-5, AC-432-07
+		assertThat(row[4]).isEqualTo(String.valueOf(badgeId("RECORDER_10")));
 	}
 
 	// 검증: FR-BADGE-10
@@ -293,7 +295,7 @@ class BadgeNearMissIntegrationTest {
 	/** category·title·body 스냅샷 — 단언은 호출부에서 (BadgeNotificationIntegrationTest 선례). */
 	private Object[] notificationRow(String eventKey) {
 		return (Object[]) em.createNativeQuery("""
-				SELECT category, title, body FROM notifications
+				SELECT category, title, body, target_type, target_id FROM notifications
 				WHERE user_id = :userId AND event_key = :eventKey
 				""")
 			.setParameter("userId", userId)

@@ -63,6 +63,7 @@ class BadgeNotificationIntegrationTest {
 
 	// 검증: FR-NOTI-08
 	@Test
+	// 검증: FR-NOTI-12, AC-432-07
 	@DisplayName("뱃지 발급 시 뱃지당 BADGE 알림이 한 건씩 기록된다 — 다중 발급 N건, event_key·문구 (D1·D2)")
 	void 뱃지_발급_시_뱃지당_BADGE_알림이_한_건씩_기록된다() {
 		// TOTAL_GRIDS 12 는 EXPLORER_1(1)·EXPLORER_10(10) 두 티어를 동시 통과한다 — 뱃지당 1건씩.
@@ -73,6 +74,8 @@ class BadgeNotificationIntegrationTest {
 		assertThat(explorer1[0]).isEqualTo("BADGE");
 		assertThat(explorer1[1]).isEqualTo("새 뱃지 획득");
 		assertThat(explorer1[2]).isEqualTo("'첫 발자국' 뱃지를 획득했어요");
+		assertThat(explorer1[3]).isEqualTo("BADGE");   // MSG-432 FR-5
+		assertThat(explorer1[4]).isEqualTo(String.valueOf(badgeId("EXPLORER_1")));
 		Object[] explorer10 = notificationRow("BADGE:" + badgeId("EXPLORER_10"));
 		assertThat(explorer10[2]).isEqualTo("'탐험가 I' 뱃지를 획득했어요");
 	}
@@ -112,7 +115,7 @@ class BadgeNotificationIntegrationTest {
 	/** category·title·body 스냅샷 — 단언은 호출부에서. */
 	private Object[] notificationRow(String eventKey) {
 		return (Object[]) em.createNativeQuery("""
-				SELECT category, title, body FROM notifications
+				SELECT category, title, body, target_type, target_id FROM notifications
 				WHERE user_id = :userId AND event_key = :eventKey
 				""")
 			.setParameter("userId", userId)

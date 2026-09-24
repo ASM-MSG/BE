@@ -38,6 +38,7 @@ import com.msg.fillmap.event.repository.EventSeriesRepository;
 import com.msg.fillmap.notification.entity.Notification;
 import com.msg.fillmap.notification.entity.NotificationCategory;
 import com.msg.fillmap.notification.entity.NotificationStatus;
+import com.msg.fillmap.notification.entity.NotificationTargetType;
 import com.msg.fillmap.notification.service.NotificationCommandService;
 import com.msg.fillmap.user.entity.User;
 import com.msg.fillmap.user.repository.UserRepository;
@@ -213,7 +214,7 @@ class EventNotificationSchedulerTest {
 	@DisplayName("시작 알림")
 	class StartNotification {
 
-		// 검증: AC-583-01, FR-EVENT-06
+		// 검증: AC-583-01, FR-EVENT-06, FR-NOTI-12, AC-432-03
 		@Test
 		void 시작_정각은_포함하고_구독_시각을_마이크로초로_구분한다() {
 			구독(시작.minusNanos(1_000));
@@ -237,6 +238,8 @@ class EventNotificationSchedulerTest {
 				assertThat(n.getBody()).isEqualTo("행사가 시작됐어요. 현장 영상을 올려보세요");
 				assertThat(n.getStatus()).isEqualTo(NotificationStatus.PENDING);
 				assertThat(n.getRetryCount()).isZero();
+				assertThat(n.getTargetType()).isEqualTo(NotificationTargetType.EVENT_OCCURRENCE);   // MSG-432 D-3
+				assertThat(n.getTargetId()).isEqualTo(String.valueOf(occurrenceId));
 			});
 			assertThat(알림(onTime)).hasSize(1);
 			assertThat(알림(after)).singleElement().satisfies(n -> assertThat(n.getTitle()).isEqualTo("추가 회차"));
