@@ -7,7 +7,7 @@
 
 요약: FR 302건 중 테스트 연결 272건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 23건, 성격상 테스트 비대상 7건 별도)
 
-AC 요약: 스펙 성공 기준 107건 중 테스트 연결 100건, 미커버 7건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
+AC 요약: 스펙 성공 기준 116건 중 테스트 연결 104건, 미커버 12건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -366,6 +366,7 @@ AC 요약: 스펙 성공 기준 107건 중 테스트 연결 100건, 미커버 7�
 
 - NFR-OPS-06
 - NFR-OPS-09
+- NFR-PERF-01
 - NFR-SEC-08
 - NFR-SEC-09
 - NFR-SEC-10
@@ -484,6 +485,15 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 | AC-600-07 | MSG-600 | AdminEventSubmissionReviewTest, EventSubmissionValidationTest |
 | AC-600-08 | MSG-600 | (없음) |
 | AC-600-09 | MSG-600 | RepresentativeGridResolverTest |
+| AC-608-01 | MSG-608 | WarmupPropertiesTest, WarmupRunnerTest |
+| AC-608-02 | MSG-608 | WarmupRunnerTest |
+| AC-608-03 | MSG-608 | WarmupReadinessIntegrationTest |
+| AC-608-04 | MSG-608 | WarmupPropertiesTest |
+| AC-608-05 | MSG-608 | (없음) |
+| AC-608-06 | MSG-608 | (없음) |
+| AC-608-07 | MSG-608 | (없음) |
+| AC-608-08 | MSG-608 | (없음) |
+| AC-608-09 | MSG-608 | (없음) |
 
 ## 미커버 AC (보고만 — 실패 아님)
 
@@ -494,6 +504,11 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 - AC-597-06 (MSG-597)
 - AC-597-10 (MSG-597)
 - AC-600-08 (MSG-600)
+- AC-608-05 (MSG-608)
+- AC-608-06 (MSG-608)
+- AC-608-07 (MSG-608)
+- AC-608-08 (MSG-608)
+- AC-608-09 (MSG-608)
 
 ## 테스트에만 있고 스펙에 없는 AC (마커 오타 의심)
 
