@@ -32,6 +32,12 @@ management:
     web:
       exposure:
         include: health, info, prometheus
+  # readiness 지표를 /actuator/health 집계에 넣는다 (MSG-608 D5). 기동 워밍업(fillmap.warmup)이 도는 동안
+  # health 가 503 이라 compose healthcheck 가 워밍업 완료 뒤에 healthy 가 된다. 노출 범위(include)는 그대로다.
+  endpoint:
+    health:
+      probes:
+        enabled: true
   metrics:
     tags:
       application: fillmap
@@ -100,6 +106,14 @@ fillmap:
       poll-interval: PT1S
       retry-delay: PT5S
       lease-duration: PT35M
+
+  # 기동 워밍업 (MSG-608) — 기본 off, dev/prod 는 FILLMAP_WARMUP_ENABLED=true 로 켠다.
+  # iterations 는 대상별 호출 건수 — dev 실측 2026-09-27: N=2,000에서 핫구역 p95 263ms, 워밍업 32.7초(상한 45초).
+  # grid-user-id 는 격자 조회용 실존 사용자 id 로 FILLMAP_WARMUP_GRID_USER_ID 로 주입하고, 없으면 격자 조회만 건너뛴다.
+  warmup:
+    enabled: false
+    iterations: 2000
+    base-url: http://localhost:${server.port:8080}
 
   hotzone:
     top-k: 50

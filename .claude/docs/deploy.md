@@ -51,6 +51,9 @@ docker compose up -d          # PostGIS 컨테이너(fillmap DB) 기동
 | `CLOUDFRONT_PRIVATE_KEY_PATH` | 운영 서명 개인 키 경로 `/home/ubuntu/fillmap-prod-cloudfront-private-key.pem` |
 | `SERVER_PORT` | 서버 포트 (기본 `8080`) |
 | `SPRING_PROFILES_ACTIVE` / `HEALTH_PORT` | 컨테이너 배포(MSG-595)에서 env 파일이 정한다: `prod` / `8081`(관리 포트, compose healthcheck) |
+| `FILLMAP_WARMUP_ENABLED` | 기동 워밍업(MSG-608) 켜기. 기본 `false`, dev·prod api 는 `true`. 인코딩 워커 env 에는 넣지 않는다 |
+| `FILLMAP_WARMUP_ITERATIONS` | 워밍업 대상별 호출 건수. 기본 `2000`(2026-09-27 dev 실측으로 확정). 보통 비워 둔다 |
+| `FILLMAP_WARMUP_GRID_USER_ID` | 격자 뷰포트 조회 워밍업에 쓸 실존 사용자 id(점령 격자가 있는 계정). 없으면 격자 조회만 건너뛴다 |
 
 - 카카오 엔드포인트 두 개(`oauth.kakao.token-uri` 인가 코드 교환, `oauth.kakao.authorize-uri` 로그인 진입점의
   302 목적지 — MSG-345)는 issuer·jwk-set-uri 와 같은 공개 고정값이라 공통 `application.yml`에 있다.
@@ -136,6 +139,18 @@ sudo TAG=sha-abc1234 docker compose -f docker-compose.app.yml up -d --wait worke
 
 **로컬에서 이미지 확인**: `./gradlew bootJar -x test && docker build -t fillmap .` 뒤 로컬 DB·Redis(`docker compose up -d`)에
 붙여 본다 — `docker run --rm -p 18080:8080 -e SPRING_PROFILES_ACTIVE=local -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/fillmap -e SPRING_DATA_REDIS_HOST=host.docker.internal fillmap` 후 `curl localhost:18080/actuator/health`.
+
+**기동 워밍업과 healthcheck (MSG-608)**: `management.endpoint.health.probes.enabled: true` 라 readiness 가
+`/actuator/health` 집계에 들어간다. Boot 는 `ApplicationReadyEvent` 리스너가 전부 돌아온 뒤에야 readiness 를
+`ACCEPTING_TRAFFIC` 으로 바꾸는데, 워밍업 러너가 그 동기 리스너라 **워밍업이 도는 동안 health 는 503
+(`OUT_OF_SERVICE`)이고 끝나야 200** 이 된다. compose healthcheck 는 URL·판정(200 정확 일치)을 그대로 둔 채 워밍업
+완료가 healthy 조건이 되고, CD 의 `--wait` 성공도 같은 신호를 본다. 워밍업은 상한 45초에서 끊긴다(기동 약 15초 +
+45초 = 60초 probe 에서 healthy, `start_period 30s` + `retries 6 × 10s` 로 약 90초에 unhealthy 확정이라 그 안). 이
+값들을 바꾸면 `WarmupRunner.TIME_LIMIT` 도 함께 본다. **트래픽을 막지는 않는다** — nginx 는 health 와 무관하게
+`127.0.0.1:8080` 으로 프록시하므로 워밍업 중 들어온 사용자 요청도 200 을 받되 워밍업과 CPU 를 나눠 쓴다. 효과는
+재기동 직후의 JIT 벌점을 배포 시점으로 옮기는 것이고, 진짜 차단은 인스턴스 2대 + 로드밸런서 구성에서만 된다.
+`/actuator/health/readiness`·`/liveness` 경로가 함께 생기지만 노출 범위(`exposure.include`)는 그대로다. 결과는
+`docker logs fillmap-api` 의 `워밍업 완료:` 한 줄(대상별 호출·실패 수, 총 소요, `timedOut`)로 본다.
 
 ## 운영 배포 — 컨테이너 (MSG-595)
 

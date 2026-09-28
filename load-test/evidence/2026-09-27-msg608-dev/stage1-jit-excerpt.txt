@@ -1,0 +1,34 @@
+# MSG-608 1단계 JIT 컴파일 로그 발췌 (dev r0 회차, 워밍업 끔, -Xlog:jit+compilation=debug)
+# 원본 stage1-jit.log.gz. 시각은 JVM 기동 후 경과(초)이고 부하(k6 10배)는 약 59초에 시작했다.
+# 형식: [경과] id 플래그 tier 메서드 (바이트코드 크기). tier 1~3 = C1, 4 = C2, % = OSR(루프 도중 진입), ! = 예외 핸들러 있음.
+# 부하 창 [59, 99)초 컴파일 6,300건 중 fillmap 메서드의 tier 4 승격은 0건이다(전수 grep). 아래는 그중 골라 뽑은 줄이다.
+
+## 부하 시작 직후: 요청 경로의 프레임워크 코드가 tier 3(C1)로 "처음" 컴파일된다
+[59.871s][debug][jit,compilation] 17188       3       org.springframework.web.filter.ForwardedHeaderFilter$ForwardedHeaderExtractingRequest::getAttribute (23 bytes)
+[60.534s][debug][jit,compilation] 17281       3       tools.jackson.databind.introspect.MemberKey::hashCode (14 bytes)
+[61.037s][debug][jit,compilation] 17513 %     3       org.apache.coyote.http11.Http11OutputBuffer::write @ 28 (93 bytes)
+[61.270s][debug][jit,compilation] 17359       3       org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher::matcher (50 bytes)
+[62.364s][debug][jit,compilation] 18131       3       io.lettuce.core.protocol.RedisStateMachine::isEmpty (13 bytes)
+[62.448s][debug][jit,compilation] 18162       3       org.hibernate.query.internal.QueryParameterBindingsImpl::getBinding (71 bytes)
+[63.512s][debug][jit,compilation] 18847       3       com.msg.fillmap.grid.GridEncoder::center (35 bytes)
+[64.875s][debug][jit,compilation] 19054       3       org.apache.catalina.connector.RequestFacade::getContentType (12 bytes)
+
+## 우리 코드도 처음 컴파일된다 — 사소한 getter는 tier 1, 집계 로직은 tier 3. tier 4는 없다
+[62.474s][debug][jit,compilation] 17238       1       com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl$CachedMission::type (5 bytes)
+[62.617s][debug][jit,compilation] 17758       2       com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl::containsAnchor (58 bytes)
+[69.410s][debug][jit,compilation] 21265       3       com.msg.fillmap.hotzone.service.HotZoneServiceImpl$$Lambda/0x0000705cc16aebc8::apply (10 bytes)
+[73.834s][debug][jit,compilation] 22816       3       com.msg.fillmap.mission.service.impl.MissionQueryServiceImpl::toAggregate (145 bytes)
+[75.511s][debug][jit,compilation] 23039       3       com.msg.fillmap.hotzone.service.HotZoneServiceImpl::lambda$getHotZoneAggregates$3 (24 bytes)
+
+## 부하 20초 뒤에도 DispatcherServlet 같은 핵심 경로가 아직 tier 3 대기열에 있다
+[76.741s][debug][jit,compilation] 23426       3       com.msg.fillmap.grid.dto.RegionUnit::valueOf (10 bytes)
+[79.208s][debug][jit,compilation] 23951       3       org.springframework.web.servlet.DispatcherServlet::getHandler (58 bytes)
+[79.252s][debug][jit,compilation] 23948       3       org.springframework.web.servlet.DispatcherServlet::buildLocaleContext (33 bytes)
+
+## 부하 창의 tier 4(C2) 235건은 전부 JDK·Tomcat·Netty·Jackson 몫이다
+[61.828s][debug][jit,compilation] 17365   !   4       java.util.concurrent.ConcurrentHashMap::putVal (432 bytes)
+[65.699s][debug][jit,compilation] 19982 %     4       io.netty.buffer.AbstractByteBuf::forEachByteAsc0 @ 0 (29 bytes)
+[66.320s][debug][jit,compilation] 17077   !   4       org.apache.tomcat.util.http.parser.HttpParser::isToken (9 bytes)
+[67.103s][debug][jit,compilation] 19250 %     4       org.apache.tomcat.util.http.parser.HttpHeaderParser::parseHeader @ 697 (1205 bytes)
+[82.617s][debug][jit,compilation] 20557 %     4       tools.jackson.core.json.UTF8JsonGenerator::_writeStringSegment @ 22 (122 bytes)
+[84.680s][debug][jit,compilation] 20243 %     4       tools.jackson.core.json.UTF8JsonGenerator::writeRaw @ 59 (193 bytes)
