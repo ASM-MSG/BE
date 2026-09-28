@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# MSG-608 dev 회차 스크립트. 사용: ~/msg608-round.sh on|off [jitlog]   (ITER=1000 env 로 반복 횟수 조정)
+# MSG-608 dev 회차 스크립트. 사용: ~/msg608-round.sh on|off [jitlog]   (ITER=1000 env 로 반복 횟수 조정,
+#   EXTRA="KEY=V[;KEY2=V2]" 로 env 줄을 더한다 — 예: EXTRA="SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=30")
 # env 파일 끝의 "# MSG-608" 블록을 갈아 끼우고 API 컨테이너를 재생성한다. 원본은 fillmap-dev.env.bak-msg608 에 보관.
 set -euo pipefail
 TAG=${TAG:-msg608-b15fd3a-wt1}
@@ -18,6 +19,7 @@ sed -i '/^# MSG-608/,$d' "$ENV"
 	if [[ ${2:-} == jitlog ]]; then
 		echo "JAVA_TOOL_OPTIONS=-Xlog:class+load:file=/tmp/classload.log -Xlog:jit+compilation=debug:file=/tmp/jit.log"
 	fi
+	if [[ -n ${EXTRA:-} ]]; then tr ';' '\n' <<< "$EXTRA"; fi
 } >> "$ENV"
 cd ~
 t0=$(date +%s)
