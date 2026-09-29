@@ -16,7 +16,7 @@
 | `r10-on2000-jitlog-*` | 워밍업 켬 N=2,000 + JIT 로그 플래그 — 2단계 로그용(수치는 참고만) |
 | `r11-on2000-*` · `r12-on2000-*` | 워밍업 켬 N=2,000 반복 2·3회차 — p95 491(:02초 멈춤이 7초에 걸림, 제외 시 298)·234 |
 | `r13-off-minidle10-*` | 워밍업 끔 + Hikari minimumIdle 2→10 — 효과 없음(카카오페이 글의 옵션 셋 중 마지막) |
-| `stage2-jit-on-analysis.txt` · `stage2-jit-on.log.gz` | 워밍업 켠 채 뜬 JIT 로그(r10)와 창별 분석 — 워밍업 창 13,090건(tier3 목록이 r0 부하 창과 동일), 부하 창 2,372건 중 tier4 1,010 |
+| `stage2-jit-on-analysis.txt` · `stage2-jit-on.log.gz` | 워밍업 켠 채 뜬 JIT 로그(r10)와 창별 분석 — 워밍업 창 13,090건(tier3 목록이 r0 부하 창과 거의 같다), 부하 창 2,372건 중 tier4 1,010 |
 | `*-summary.json` | k6 요약(하네스 SUMMARY_JSON 형식, `cluster`·`k6` 두 키) |
 | `*-actuator.txt` | ssh로 5초마다 읽은 actuator(Hikari·CPU·요청 수·서버 측 max) |
 | `stage1-jit-analysis.txt` | `-Xlog:jit+compilation` 로그를 5초 구간·패키지별로 접은 결과(`scripts/analyze-jit-log.py`) |
