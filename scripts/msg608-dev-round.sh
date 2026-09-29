@@ -23,6 +23,7 @@ sed -i '/^# MSG-608/,$d' "$ENV"
 } >> "$ENV"
 cd ~
 t0=$(date +%s)
-TAG=$TAG docker compose -f docker-compose.app.yml up -d --wait api
+# --force-recreate: env 줄이 같은 회차를 반복하면 compose 가 재생성을 건너뛴다(블록 헤더의 시각은 주석이라 diff 에 안 잡힘)
+TAG=$TAG docker compose -f docker-compose.app.yml up -d --force-recreate --wait api
 echo "healthy after $(( $(date +%s) - t0 ))s at $(date -u +%T)Z  $(docker inspect fillmap-api --format '{{.State.Health.Status}} {{.Config.Image}}')"
 docker logs fillmap-api 2>&1 | grep -E '워밍업|Started MsgbeApplication' | tail -3

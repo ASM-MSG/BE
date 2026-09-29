@@ -5,7 +5,7 @@
 
 | 파일 | 내용 |
 |---|---|
-| `rounds-table.txt` | 10회차 요약표(`summarize-rounds.py`가 k6 요약에서 생성, r8·r9는 같은 스크립트로 뒤에 추가) |
+| `rounds-table.txt` | 14회차 요약표(`summarize-rounds.py`가 k6 요약에서 생성, r8·r9는 같은 스크립트로 뒤에 추가) |
 | `r0-off-jitlog-*` | 워밍업 끔 + JIT/클래스 로딩 로그 플래그 켬(1단계 원인 굳히기용, 플래그 오버헤드로 수치는 참고만) |
 | `r1-off-*`, `r2-off-*` | 워밍업 끔 = "전" 기준 2회 |
 | `r3-on-*`, `r4-on-*`, `r5-on-*` | 워밍업 켬 N=1,000 3회 |
@@ -13,6 +13,10 @@
 | `r7-on200-*` | N=200 (효과 없음 — 곡선 아래쪽 확인) |
 | `r8-off-hikari30-*` | 워밍업 끔 + Hikari 풀 10→30 (카카오페이 글의 1단계 재현 — 효과 없음, pending 내내 0) |
 | `r9-off-c1only-*` | 워밍업 끔 + `-XX:TieredStopAtLevel=1`(C2 끔) — 벌점 37→19초로 절반, 목표 미달 |
+| `r10-on2000-jitlog-*` | 워밍업 켬 N=2,000 + JIT 로그 플래그 — 2단계 로그용(수치는 참고만) |
+| `r11-on2000-*` · `r12-on2000-*` | 워밍업 켬 N=2,000 반복 2·3회차 — p95 491(:02초 멈춤이 7초에 걸림, 제외 시 298)·234 |
+| `r13-off-minidle10-*` | 워밍업 끔 + Hikari minimumIdle 2→10 — 효과 없음(카카오페이 글의 옵션 셋 중 마지막) |
+| `stage2-jit-on-analysis.txt` · `stage2-jit-on.log.gz` | 워밍업 켠 채 뜬 JIT 로그(r10)와 창별 분석 — 워밍업 창 13,090건(tier3 목록이 r0 부하 창과 거의 같다), 부하 창 2,372건 중 tier4 1,010 |
 | `*-summary.json` | k6 요약(하네스 SUMMARY_JSON 형식, `cluster`·`k6` 두 키) |
 | `*-actuator.txt` | ssh로 5초마다 읽은 actuator(Hikari·CPU·요청 수·서버 측 max) |
 | `stage1-jit-analysis.txt` | `-Xlog:jit+compilation` 로그를 5초 구간·패키지별로 접은 결과(`scripts/analyze-jit-log.py`) |
