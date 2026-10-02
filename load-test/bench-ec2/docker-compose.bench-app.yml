@@ -1,0 +1,9 @@
+# 임시 벤치 박스 전용 — dev 와 같은 develop 이미지를 env 만 바꿔 띄운다. DB·Redis 는 레포 docker-compose.yml.
+name: fillmap-bench
+services:
+  api:
+    image: "951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap:${TAG:-sha-ca51f34}"
+    container_name: fillmap-api
+    network_mode: host
+    env_file: [bench.env]
+    restart: unless-stopped
