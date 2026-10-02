@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""스펙 문서 완료 정의 검사기 (spec-writer 스킬 절차 6의 증거 생성기).
+"""스펙 문서 완료 정의 검사기 (spec-writer 스킬 절차 5의 증거 생성기).
 
 docs/spec/MSG-{n}.md 한 건을 받아 기계로 확인 가능한 항목을 돌리고, 항목마다
 PASS / FAIL / WARN / INFO 와 증거(줄 번호, 실측값)를 출력한다. FAIL 이 하나라도 있으면
@@ -14,12 +14,14 @@ exit 1. "괜찮아 보인다"는 검증이 아니므로, 스킬은 이 출력을
   S1  파일명 MSG-{n}.md 와 제목 `# MSG-{n}:` 의 번호 일치
   S2  `**Owner**:` 헤더 존재, 첫 토큰이 A / B / 공동
   S3  요구사항 정본: 언급된 docs/prd/*.md 가 전부 실존하고, 헤더 영역(첫 `## ` 전)의 PRD 는
-      `상태:` 첫 토큰이 검토됨/확정. PRD 언급도 "PRD 면제" 문구도 없으면 게이트 우회로 FAIL
+      `상태:` 첫 토큰이 검토됨/확정. 면제 선언은 헤더 영역의 "PRD 면제" 류 문구만 인정한다
+      (부정문 제외). PRD 언급 없이 면제 선언이 본문에만 있으면 WARN, 어디에도 없으면 FAIL
   S4  본문의 FR-/NFR- ID 가 docs/srs.md 표에 실존 (없으면 FAIL, 폐기됨이면 WARN)
   S5  `## 성공 기준` 의 최상위 불릿이 `- AC-{티켓}-{2자리}:` 형식, 티켓 번호 일치, 순번 유일
   S6  필수 절 존재: 개요 / 배경 / 성공 기준 / API 명세 / 도메인 로직 / 데이터 모델 / 계약 변경 / 테스트 시나리오
   S7  본문(작업 로그 전, 코드블록 제외)에 줄표(— –) 0건
-  S8  각주 `[^n]` 참조와 정의가 1:1 (불일치 FAIL), 개수 3~7 밖이면 WARN
+  S8  각주 `[^n]` 참조와 정의가 1:1 (불일치 FAIL, 코드블록·인라인 코드 안은 제외), 본문 참조 개수가
+      3~7 밖이면 WARN
   S9  `## 변경 파일` 절의 전체 경로가 실존하거나 같은 줄에 신설/신규/가져오기/삭제 표기 (아니면 WARN)
   S10 `## 미해결 질문` 에 종결되지 않은 항목이 있으면 INFO
 
@@ -130,6 +132,34 @@ def body_range(lines: list[str]) -> int:
     return len(lines)
 
 
+EXEMPT_RE = re.compile(r"PRD[^\n]{0,20}?면제")
+# '면제' 뒤 12자 안에 부정·유보 표현이 오면 선언이 아니다: "면제 아님", "면제 대상이 아니다", "면제 여부 미정", "면제했으나"
+EXEMPT_NEG_RE = re.compile(r"아님|아니|않|여부|미정|했으나")
+
+
+def exempt_decl(text: str) -> bool:
+    """'PRD 면제' 선언이 있으면 True. 같은 자리에 부정 표현이 붙은 문장("면제 아님", "면제했으나")은 선언이 아니다."""
+    for m in EXEMPT_RE.finditer(text):
+        tail = text[m.end() : m.end() + 12]
+        if EXEMPT_NEG_RE.search(tail):
+            continue
+        return True
+    return False
+
+
+def strip_code(lines: list[str], end: int) -> str:
+    """펜스 코드블록 통째로, 인라인 코드 `...` 조각을 뺀 1~end 행 텍스트. 코드 안의 `[^n]` 은 각주가 아니다."""
+    out, in_code = [], False
+    for i in range(end):
+        l = lines[i]
+        if l.lstrip().startswith("```"):
+            in_code = not in_code
+            continue
+        if not in_code:
+            out.append(re.sub(r"`[^`]*`", "", l))
+    return "\n".join(out)
+
+
 def check(path: Path, root: Path, srs: dict[str, str]) -> Report:
     rep = Report(path)
     text = path.read_text(encoding="utf-8")
@@ -169,12 +199,17 @@ def check(path: Path, root: Path, srs: dict[str, str]) -> Report:
     # S3 요구사항 정본 (PRD 게이트 흔적)
     body_text = "\n".join(lines[:body_end])
     prd_paths = sorted({f"docs/prd/{n}" for n in PRD_PATH_RE.findall(body_text)})
-    # 면제 문구는 헤더 블록쿼트가 관례지만 개요 첫 문단에 적은 스펙도 있어 본문 전체에서 찾는다.
-    # 표기 변형: "PRD 면제", "PRD 게이트: 면제", "**PRD**: 면제". PRD 뒤 20자 안의 '면제'를 면제 선언으로 본다.
-    exempt = re.search(r"PRD[^\n]{0,20}면제", body_text) is not None
+    # 면제 선언은 헤더 영역(첫 `## ` 전)에서만 인정한다. 표기 변형: "PRD 면제:", "PRD 게이트: 면제",
+    # "**PRD**: 면제". 뒤에 부정 표현이 붙으면("면제 아님", "면제 여부 미정", "면제했으나") 선언이 아니다.
+    # 본문에만 있는 선언은 PASS 가 아니라 WARN 이다. 본문 전체를 훑어 통과시키면 개요의 부정문 한 줄로
+    # 게이트를 지나칠 수 있다 (PR #291 리뷰, 실측: MSG-461·470 헤더와 MSG-538 본문에 부정문 존재).
+    exempt_header = exempt_decl(header)
+    exempt_body_only = not exempt_header and exempt_decl(body_text)
     missing = [p for p in prd_paths if not (root / p).exists()]
-    if not prd_paths and not exempt:
+    if not prd_paths and not exempt_header and not exempt_body_only:
         rep.add("S3", "FAIL", "PRD 경로 언급도 'PRD 면제' 문구도 없음 (게이트 우회 의심). 헤더 영역에 `> 요구사항 정본:` 또는 `> PRD 면제:` 를 적는다")
+    elif not prd_paths and exempt_body_only:
+        rep.add("S3", "WARN", "PRD 면제 선언이 헤더 영역이 아니라 본문에만 있음. 헤더의 `> PRD 면제:` 로 옮긴다")
     elif missing:
         rep.add("S3", "FAIL", "언급된 PRD 파일이 레포에 없음", ", ".join(missing))
     else:
@@ -191,7 +226,7 @@ def check(path: Path, root: Path, srs: dict[str, str]) -> Report:
                 bad_status.append(f"{p} (상태: {st or '헤더 없음'})")
         if bad_status:
             rep.add("S3", "FAIL", "헤더가 정본으로 지목한 PRD 가 승인 전 (첫 토큰이 검토됨/확정 아님, fail-closed)", "; ".join(bad_status))
-        elif exempt and not header_prds:
+        elif exempt_header and not header_prds:
             rep.add("S3", "PASS", "PRD 면제 근거 명시", "헤더에 'PRD 면제' 문구")
         else:
             rep.add("S3", "PASS", "정본 PRD 실존·승인 확인", ", ".join(header_prds) if header_prds else f"본문 언급 {len(prd_paths)}건 실존(헤더 지목 없음)")
@@ -268,19 +303,22 @@ def check(path: Path, root: Path, srs: dict[str, str]) -> Report:
         rep.add("S7", "PASS", "본문 줄표 0건", f"검사 범위 1~{body_end}행 (코드블록 제외)")
 
     # S8 각주
-    # 참조는 작업 로그까지 포함해 센다 (작업 로그에서만 쓰는 각주도 '참조됨'이다). 3~7 개수 판정도 같은 집합.
-    refs = set(FOOT_REF_RE.findall(text))
+    # 1:1 대조는 작업 로그까지 포함한다 (작업 로그에서만 쓰는 각주도 '참조됨'이다). 3~7 개수 판정은 문체
+    # 조항이 본문에 거는 기준이라 본문 참조만 센다. 코드블록·인라인 코드 안의 `[^n]` 은 둘 다에서 뺀다
+    # (실측: MSG-193:96·MSG-437:65 코드 주석에 각주 표기가 있다).
+    refs = set(FOOT_REF_RE.findall(strip_code(lines, len(lines))))
+    body_refs = set(FOOT_REF_RE.findall(strip_code(lines, body_end)))
     defs = set(m.group(1) for l in lines for m in [FOOT_DEF_RE.match(l)] if m)
     undefined = sorted(refs - defs, key=int)
     unused = sorted(defs - refs, key=int)
     if undefined or unused:
         rep.add("S8", "FAIL", "각주 참조와 정의 불일치", f"정의 없는 참조 {undefined or '없음'} / 참조 없는 정의 {unused or '없음'}")
-    elif not refs:
-        rep.add("S8", "WARN", "각주 0개 (문체 조항: 결론을 떠받치는 전문 용어 3~7개에 각주)")
-    elif not (3 <= len(refs) <= 7):
-        rep.add("S8", "WARN", "각주 개수가 3~7 범위 밖", f"{len(refs)}개")
+    elif not body_refs:
+        rep.add("S8", "WARN", "본문 각주 0개 (문체 조항: 결론을 떠받치는 전문 용어 3~7개에 각주)")
+    elif not (3 <= len(body_refs) <= 7):
+        rep.add("S8", "WARN", "본문 각주 개수가 3~7 범위 밖", f"{len(body_refs)}개")
     else:
-        rep.add("S8", "PASS", "각주 참조·정의 일치", f"{len(refs)}개")
+        rep.add("S8", "PASS", "각주 참조·정의 일치", f"본문 {len(body_refs)}개")
 
     # S9 변경 파일 경로
     cf_key = next((k for k in sections if k.startswith("변경 파일")), None)
@@ -312,7 +350,7 @@ def check(path: Path, root: Path, srs: dict[str, str]) -> Report:
                       and not lines[i].startswith(("- [x]", "- [X]", "- ~~"))
                       and not re.search(r"종결|확정", lines[i][:40])]
         if open_items:
-            rep.add("S10", "INFO", "미종결 질문 있음. 구현 착수 전에 해소한다 (스킬 절차 6)", f"{len(open_items)}건: {open_items}행")
+            rep.add("S10", "INFO", "미종결 질문 있음. 구현 착수 전에 해소한다 (스킬 절차 7 보고 규칙)", f"{len(open_items)}건: {open_items}행")
         else:
             rep.add("S10", "PASS", "미해결 질문 없음 또는 전부 종결")
     else:
