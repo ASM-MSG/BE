@@ -1,0 +1,291 @@
+{
+  "runs": [
+    {
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "python": "3.13.1",
+      "git_head": "ca51f3457c8affa1db253519077a57ad8354ec74",
+      "started_utc": "2026-09-29T15:37:20.352340+00:00",
+      "constants": {
+        "relay_poll_interval_ms": 5000,
+        "relay_batch_size": 100,
+        "relay_stale_published_minutes": 30,
+        "consumer_retry_initial_ms": 1000,
+        "consumer_retry_multiplier": 2.0,
+        "consumer_retry_max_retries": 8,
+        "consumer_retry_max_interval_ms": 128000,
+        "consumer_max_poll_records": 10,
+        "consumer_max_poll_interval_ms": 600000,
+        "topic_partitions": 1,
+        "fcm_multicast_limit": 500
+      },
+      "backoff_ms": [
+        1000,
+        2000,
+        4000,
+        8000,
+        16000,
+        32000,
+        64000,
+        128000
+      ],
+      "fcm_delay_ms": 30,
+      "db_poll": {
+        "interval_ms": 1000,
+        "batch": 100,
+        "claim_sql": "SELECT id, user_id, category, retry_count FROM notifications\nWHERE status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= statement_timestamp() AT TIME ZONE 'UTC')\nORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED"
+      },
+      "users": 20000,
+      "subscribers": 10000,
+      "args": {
+        "out": "load-test/evidence/2026-09-30/notification-story",
+        "modes": "sync,db_poll,outbox_kafka",
+        "workloads": "idle,w1,w4",
+        "rounds": "3",
+        "w1_count": "2000",
+        "w1_rate": "50",
+        "burst_mix_seconds": "10",
+        "w3_mix_seconds": "25",
+        "outage_start": "5",
+        "outage_seconds": "20",
+        "idle_seconds": "30",
+        "deadline": "1500",
+        "burst_size": "10000",
+        "summarize_only": "False"
+      },
+      "containers": {
+        "fillmap-notif-compare-pg": "postgres:16-alpine cpus=1000000000 mem=1073741824",
+        "fillmap-notif-compare-kafka": "apache/kafka:3.9.1 cpus=1000000000 mem=1073741824"
+      },
+      "libraries": {
+        "psycopg": "3.3.6",
+        "confluent_kafka": "2",
+        "librdkafka": "2.15.1"
+      },
+      "source_sha256": {
+        "src/main/resources/application.yml": "35a66d82ad36bd4b69028746d772f6dfc11249184348f9b8f8cfec434cc2e77a",
+        "src/main/java/com/msg/fillmap/notification/config/NotificationConfig.java": "b59199cb8411f10df611282137efd0c0dcee59af2e319a70aae3176bc207b900",
+        "src/main/java/com/msg/fillmap/notification/relay/NotificationRelay.java": "f096767954facfccdc941d90cd538a606d9692dcd1cf6a7e047075767d6feee1",
+        "src/main/java/com/msg/fillmap/notification/consumer/NotificationConsumer.java": "f2b2b73192a11dc6b0ebecb8885f37173b370d6e0a3317dcc40d76aa293f2591",
+        "src/main/java/com/msg/fillmap/notification/repository/NotificationRepository.java": "0e20778ec63f9cca1bbfd0107385386baab19dd1f1b9ce32e288f748e5f09406",
+        "src/main/java/com/msg/fillmap/notification/sender/FcmNotificationSender.java": "e8ffb8f3a5d33933df2611e53905dcbef83536f85750b46e2442c8d7725217fc"
+      },
+      "server_version": "16.14",
+      "finished_utc": "2026-09-29T15:51:42.618332+00:00"
+    },
+    {
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "python": "3.13.1",
+      "git_head": "ca51f3457c8affa1db253519077a57ad8354ec74",
+      "started_utc": "2026-09-29T15:51:42.994093+00:00",
+      "constants": {
+        "relay_poll_interval_ms": 5000,
+        "relay_batch_size": 100,
+        "relay_stale_published_minutes": 30,
+        "consumer_retry_initial_ms": 1000,
+        "consumer_retry_multiplier": 2.0,
+        "consumer_retry_max_retries": 8,
+        "consumer_retry_max_interval_ms": 128000,
+        "consumer_max_poll_records": 10,
+        "consumer_max_poll_interval_ms": 600000,
+        "topic_partitions": 1,
+        "fcm_multicast_limit": 500
+      },
+      "backoff_ms": [
+        1000,
+        2000,
+        4000,
+        8000,
+        16000,
+        32000,
+        64000,
+        128000
+      ],
+      "fcm_delay_ms": 30,
+      "db_poll": {
+        "interval_ms": 1000,
+        "batch": 100,
+        "claim_sql": "SELECT id, user_id, category, retry_count FROM notifications\nWHERE status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= statement_timestamp() AT TIME ZONE 'UTC')\nORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED"
+      },
+      "users": 20000,
+      "subscribers": 10000,
+      "args": {
+        "out": "load-test/evidence/2026-09-30/notification-story",
+        "modes": "sync,db_poll,outbox_kafka",
+        "workloads": "w2,w3",
+        "rounds": "3",
+        "w1_count": "2000",
+        "w1_rate": "50",
+        "burst_mix_seconds": "10",
+        "w3_mix_seconds": "25",
+        "outage_start": "5",
+        "outage_seconds": "20",
+        "idle_seconds": "30",
+        "deadline": "1500",
+        "burst_size": "10000",
+        "summarize_only": "False"
+      },
+      "containers": {
+        "fillmap-notif-compare-pg": "postgres:16-alpine cpus=1000000000 mem=1073741824",
+        "fillmap-notif-compare-kafka": "apache/kafka:3.9.1 cpus=1000000000 mem=1073741824"
+      },
+      "libraries": {
+        "psycopg": "3.3.6",
+        "confluent_kafka": "2",
+        "librdkafka": "2.15.1"
+      },
+      "source_sha256": {
+        "src/main/resources/application.yml": "35a66d82ad36bd4b69028746d772f6dfc11249184348f9b8f8cfec434cc2e77a",
+        "src/main/java/com/msg/fillmap/notification/config/NotificationConfig.java": "b59199cb8411f10df611282137efd0c0dcee59af2e319a70aae3176bc207b900",
+        "src/main/java/com/msg/fillmap/notification/relay/NotificationRelay.java": "f096767954facfccdc941d90cd538a606d9692dcd1cf6a7e047075767d6feee1",
+        "src/main/java/com/msg/fillmap/notification/consumer/NotificationConsumer.java": "f2b2b73192a11dc6b0ebecb8885f37173b370d6e0a3317dcc40d76aa293f2591",
+        "src/main/java/com/msg/fillmap/notification/repository/NotificationRepository.java": "0e20778ec63f9cca1bbfd0107385386baab19dd1f1b9ce32e288f748e5f09406",
+        "src/main/java/com/msg/fillmap/notification/sender/FcmNotificationSender.java": "e8ffb8f3a5d33933df2611e53905dcbef83536f85750b46e2442c8d7725217fc"
+      },
+      "server_version": "16.14"
+    },
+    {
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "python": "3.13.1",
+      "git_head": "ca51f3457c8affa1db253519077a57ad8354ec74",
+      "started_utc": "2026-09-29T15:52:23.666168+00:00",
+      "constants": {
+        "relay_poll_interval_ms": 5000,
+        "relay_batch_size": 100,
+        "relay_stale_published_minutes": 30,
+        "consumer_retry_initial_ms": 1000,
+        "consumer_retry_multiplier": 2.0,
+        "consumer_retry_max_retries": 8,
+        "consumer_retry_max_interval_ms": 128000,
+        "consumer_max_poll_records": 10,
+        "consumer_max_poll_interval_ms": 600000,
+        "topic_partitions": 1,
+        "fcm_multicast_limit": 500
+      },
+      "backoff_ms": [
+        1000,
+        2000,
+        4000,
+        8000,
+        16000,
+        32000,
+        64000,
+        128000
+      ],
+      "fcm_delay_ms": 30,
+      "db_poll": {
+        "interval_ms": 1000,
+        "batch": 100,
+        "claim_sql": "SELECT id, user_id, category, retry_count FROM notifications\nWHERE status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= statement_timestamp() AT TIME ZONE 'UTC')\nORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED"
+      },
+      "users": 20000,
+      "subscribers": 10000,
+      "args": {
+        "out": "load-test/evidence/2026-09-30/notification-story",
+        "modes": "sync,db_poll,outbox_kafka",
+        "workloads": "w2,w3",
+        "rounds": "1",
+        "w1_count": "2000",
+        "w1_rate": "50",
+        "burst_mix_seconds": "10",
+        "w3_mix_seconds": "25",
+        "outage_start": "5",
+        "outage_seconds": "20",
+        "idle_seconds": "30",
+        "deadline": "600",
+        "burst_size": "10000",
+        "summarize_only": "False"
+      },
+      "containers": {
+        "fillmap-notif-compare-pg": "postgres:16-alpine cpus=1000000000 mem=1073741824",
+        "fillmap-notif-compare-kafka": "apache/kafka:3.9.1 cpus=1000000000 mem=1073741824"
+      },
+      "libraries": {
+        "psycopg": "3.3.6",
+        "confluent_kafka": "2",
+        "librdkafka": "2.15.1"
+      },
+      "source_sha256": {
+        "src/main/resources/application.yml": "35a66d82ad36bd4b69028746d772f6dfc11249184348f9b8f8cfec434cc2e77a",
+        "src/main/java/com/msg/fillmap/notification/config/NotificationConfig.java": "b59199cb8411f10df611282137efd0c0dcee59af2e319a70aae3176bc207b900",
+        "src/main/java/com/msg/fillmap/notification/relay/NotificationRelay.java": "f096767954facfccdc941d90cd538a606d9692dcd1cf6a7e047075767d6feee1",
+        "src/main/java/com/msg/fillmap/notification/consumer/NotificationConsumer.java": "f2b2b73192a11dc6b0ebecb8885f37173b370d6e0a3317dcc40d76aa293f2591",
+        "src/main/java/com/msg/fillmap/notification/repository/NotificationRepository.java": "0e20778ec63f9cca1bbfd0107385386baab19dd1f1b9ce32e288f748e5f09406",
+        "src/main/java/com/msg/fillmap/notification/sender/FcmNotificationSender.java": "e8ffb8f3a5d33933df2611e53905dcbef83536f85750b46e2442c8d7725217fc"
+      },
+      "server_version": "16.14",
+      "finished_utc": "2026-09-29T16:42:44.980757+00:00"
+    },
+    {
+      "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+      "python": "3.13.1",
+      "git_head": "ca51f3457c8affa1db253519077a57ad8354ec74",
+      "started_utc": "2026-09-29T16:42:45.278516+00:00",
+      "constants": {
+        "relay_poll_interval_ms": 5000,
+        "relay_batch_size": 100,
+        "relay_stale_published_minutes": 30,
+        "consumer_retry_initial_ms": 1000,
+        "consumer_retry_multiplier": 2.0,
+        "consumer_retry_max_retries": 8,
+        "consumer_retry_max_interval_ms": 128000,
+        "consumer_max_poll_records": 10,
+        "consumer_max_poll_interval_ms": 600000,
+        "topic_partitions": 1,
+        "fcm_multicast_limit": 500
+      },
+      "backoff_ms": [
+        1000,
+        2000,
+        4000,
+        8000,
+        16000,
+        32000,
+        64000,
+        128000
+      ],
+      "fcm_delay_ms": 30,
+      "db_poll": {
+        "interval_ms": 1000,
+        "batch": 100,
+        "claim_sql": "SELECT id, user_id, category, retry_count FROM notifications\nWHERE status = 'PENDING' AND (next_attempt_at IS NULL OR next_attempt_at <= statement_timestamp() AT TIME ZONE 'UTC')\nORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED"
+      },
+      "users": 20000,
+      "subscribers": 10000,
+      "args": {
+        "out": "load-test/evidence/2026-09-30/notification-story",
+        "modes": "outbox_kafka_1s",
+        "workloads": "w1,w2",
+        "rounds": "1",
+        "w1_count": "2000",
+        "w1_rate": "50",
+        "burst_mix_seconds": "10",
+        "w3_mix_seconds": "25",
+        "outage_start": "5",
+        "outage_seconds": "20",
+        "idle_seconds": "30",
+        "deadline": "600",
+        "burst_size": "10000",
+        "summarize_only": "False"
+      },
+      "containers": {
+        "fillmap-notif-compare-pg": "postgres:16-alpine cpus=1000000000 mem=1073741824",
+        "fillmap-notif-compare-kafka": "apache/kafka:3.9.1 cpus=1000000000 mem=1073741824"
+      },
+      "libraries": {
+        "psycopg": "3.3.6",
+        "confluent_kafka": "2",
+        "librdkafka": "2.15.1"
+      },
+      "source_sha256": {
+        "src/main/resources/application.yml": "35a66d82ad36bd4b69028746d772f6dfc11249184348f9b8f8cfec434cc2e77a",
+        "src/main/java/com/msg/fillmap/notification/config/NotificationConfig.java": "b59199cb8411f10df611282137efd0c0dcee59af2e319a70aae3176bc207b900",
+        "src/main/java/com/msg/fillmap/notification/relay/NotificationRelay.java": "f096767954facfccdc941d90cd538a606d9692dcd1cf6a7e047075767d6feee1",
+        "src/main/java/com/msg/fillmap/notification/consumer/NotificationConsumer.java": "f2b2b73192a11dc6b0ebecb8885f37173b370d6e0a3317dcc40d76aa293f2591",
+        "src/main/java/com/msg/fillmap/notification/repository/NotificationRepository.java": "0e20778ec63f9cca1bbfd0107385386baab19dd1f1b9ce32e288f748e5f09406",
+        "src/main/java/com/msg/fillmap/notification/sender/FcmNotificationSender.java": "e8ffb8f3a5d33933df2611e53905dcbef83536f85750b46e2442c8d7725217fc"
+      },
+      "server_version": "16.14",
+      "finished_utc": "2026-09-29T16:51:55.329238+00:00"
+    }
+  ]
+}

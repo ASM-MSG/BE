@@ -1,0 +1,14 @@
+{
+  "platform": "macOS-27.0-arm64-arm-64bit",
+  "python": "3.9.18",
+  "git_head": "ca51f3457c8affa1db253519077a57ad8354ec74",
+  "started_utc": "2026-09-29T14:50:15.487026+00:00",
+  "now": 1789614000,
+  "sql": "SELECT grid_id, count(*) AS score FROM signals\nWHERE occurred_at >= %s AND occurred_at < %s\nGROUP BY grid_id ORDER BY score DESC, grid_id COLLATE \"C\" DESC LIMIT 50",
+  "ensure_script": "if redis.call('EXISTS', KEYS[1]) == 0 then redis.call('ZUNIONSTORE', KEYS[1], #KEYS - 1, unpack(KEYS, 2)) redis.call('EXPIRE', KEYS[1], ARGV[1]) end return 1",
+  "increment_script": "redis.call('ZINCRBY', KEYS[1], 1, ARGV[1]) redis.call('EXPIRE', KEYS[1], ARGV[2]) return 1",
+  "source_sha256": {
+    "src/main/java/com/msg/fillmap/hotzone/service/HotZoneServiceImpl.java": "8da49761562b715964c8955f692b361ab8cdb036f6fb12f8fe93d4987985e092",
+    "src/main/java/com/msg/fillmap/hotzone/service/HotScoreCommandServiceImpl.java": "c62c77dc33e345db30ee43a3ce25bf9e38525f814b7fe621a014385f7d4fe88b"
+  }
+}

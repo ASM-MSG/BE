@@ -1,0 +1,1127 @@
+{
+  "run": "20260929T151938",
+  "source_sha256": "085fc6fc90c7ec4d72fdbba0b0b8362f702622ef4edd7947de452092ecf58cb0",
+  "rounds": [
+    {
+      "nodes": 1,
+      "concurrency": 3,
+      "wall_seconds": 59.454021959,
+      "items": [
+        {
+          "id": 241860,
+          "duration": 10,
+          "confirm_ms": 3444.4891249999996,
+          "ready_ms": 53349.53400000001,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 53183.714
+        },
+        {
+          "id": 241859,
+          "duration": 19,
+          "confirm_ms": 3613.461417000001,
+          "ready_ms": 19808.840916999998,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 19386.383
+        },
+        {
+          "id": 241861,
+          "duration": 29,
+          "confirm_ms": 2741.3683750000005,
+          "ready_ms": 44213.57925,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 44026.281
+        }
+      ]
+    },
+    {
+      "nodes": 1,
+      "concurrency": 6,
+      "wall_seconds": 102.15984170799999,
+      "items": [
+        {
+          "id": 241862,
+          "duration": 10,
+          "confirm_ms": 495.7894589999938,
+          "ready_ms": 19115.907041999988,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 18755.822
+        },
+        {
+          "id": 241865,
+          "duration": 19,
+          "confirm_ms": 379.08204099998954,
+          "ready_ms": 50825.429584000005,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 50006.189
+        },
+        {
+          "id": 241866,
+          "duration": 29,
+          "confirm_ms": 466.87720799999965,
+          "ready_ms": 74157.11825000001,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 73281.114
+        },
+        {
+          "id": 241863,
+          "duration": 10,
+          "confirm_ms": 493.95541700000933,
+          "ready_ms": 9606.982875,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 9369.379
+        },
+        {
+          "id": 241864,
+          "duration": 19,
+          "confirm_ms": 338.6635410000025,
+          "ready_ms": 35010.950792,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 34271.991
+        },
+        {
+          "id": 241867,
+          "duration": 29,
+          "confirm_ms": 545.0065830000028,
+          "ready_ms": 97824.132625,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 97372.388
+        }
+      ]
+    },
+    {
+      "nodes": 1,
+      "concurrency": 12,
+      "wall_seconds": 199.98038350000002,
+      "items": [
+        {
+          "id": 241868,
+          "duration": 10,
+          "confirm_ms": 348.9440419999994,
+          "ready_ms": 10078.90520799998,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 9214.756
+        },
+        {
+          "id": 241869,
+          "duration": 19,
+          "confirm_ms": 542.2621250000077,
+          "ready_ms": 24246.401082999993,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 24166.277
+        },
+        {
+          "id": 241878,
+          "duration": 29,
+          "confirm_ms": 459.51908300000355,
+          "ready_ms": 168835.90175,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 168674.441
+        },
+        {
+          "id": 241870,
+          "duration": 10,
+          "confirm_ms": 549.7124999999983,
+          "ready_ms": 34127.85554200002,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 33529.059
+        },
+        {
+          "id": 241873,
+          "duration": 19,
+          "confirm_ms": 480.2612080000017,
+          "ready_ms": 66730.19966700002,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 66640.89
+        },
+        {
+          "id": 241876,
+          "duration": 29,
+          "confirm_ms": 426.788375000001,
+          "ready_ms": 121909.10570900001,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 121824.555
+        },
+        {
+          "id": 241871,
+          "duration": 10,
+          "confirm_ms": 675.6587909999894,
+          "ready_ms": 43898.38729100001,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 43083.66
+        },
+        {
+          "id": 241874,
+          "duration": 19,
+          "confirm_ms": 380.36250000001814,
+          "ready_ms": 83810.51400000001,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 82952.801
+        },
+        {
+          "id": 241879,
+          "duration": 29,
+          "confirm_ms": 609.5917909999855,
+          "ready_ms": 192541.881,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 191663.047
+        },
+        {
+          "id": 241872,
+          "duration": 10,
+          "confirm_ms": 339.9792089999778,
+          "ready_ms": 51559.94520800002,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 51236.016
+        },
+        {
+          "id": 241875,
+          "duration": 19,
+          "confirm_ms": 374.1360410000141,
+          "ready_ms": 99483.07845899998,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 98976.217
+        },
+        {
+          "id": 241877,
+          "duration": 29,
+          "confirm_ms": 521.5622910000093,
+          "ready_ms": 146813.30733300003,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 145464.937
+        }
+      ]
+    },
+    {
+      "nodes": 2,
+      "concurrency": 3,
+      "wall_seconds": 35.218403249999994,
+      "items": [
+        {
+          "id": 241880,
+          "duration": 10,
+          "confirm_ms": 324.1023749999954,
+          "ready_ms": 11066.497832999972,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 10088.702
+        },
+        {
+          "id": 241881,
+          "duration": 19,
+          "confirm_ms": 255.3983340000059,
+          "ready_ms": 16020.317165999984,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 15604.284
+        },
+        {
+          "id": 241882,
+          "duration": 29,
+          "confirm_ms": 368.9866249999909,
+          "ready_ms": 32504.075916999966,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 31893.047
+        }
+      ]
+    },
+    {
+      "nodes": 2,
+      "concurrency": 6,
+      "wall_seconds": 60.128435583,
+      "items": [
+        {
+          "id": 241883,
+          "duration": 10,
+          "confirm_ms": 389.83554200001436,
+          "ready_ms": 8256.682458,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 7682.094
+        },
+        {
+          "id": 241887,
+          "duration": 19,
+          "confirm_ms": 391.77170899995417,
+          "ready_ms": 38378.27129200002,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 37566.27
+        },
+        {
+          "id": 241888,
+          "duration": 29,
+          "confirm_ms": 456.50333300000057,
+          "ready_ms": 55996.588749999944,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 55306.451
+        },
+        {
+          "id": 241884,
+          "duration": 10,
+          "confirm_ms": 1079.546166,
+          "ready_ms": 9890.519500000039,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 8993.463
+        },
+        {
+          "id": 241885,
+          "duration": 19,
+          "confirm_ms": 426.83450000004086,
+          "ready_ms": 21766.981250000015,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 20690.657
+        },
+        {
+          "id": 241886,
+          "duration": 29,
+          "confirm_ms": 446.5938750000191,
+          "ready_ms": 32329.556958000012,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 31376.038
+        }
+      ]
+    },
+    {
+      "nodes": 2,
+      "concurrency": 12,
+      "wall_seconds": 106.12318933400002,
+      "items": [
+        {
+          "id": 241893,
+          "duration": 10,
+          "confirm_ms": 432.5135409999348,
+          "ready_ms": 24297.145666000004,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 22834.449
+        },
+        {
+          "id": 241890,
+          "duration": 19,
+          "confirm_ms": 368.01600000001145,
+          "ready_ms": 16708.081125000033,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 15495.448
+        },
+        {
+          "id": 241900,
+          "duration": 29,
+          "confirm_ms": 407.29675000000043,
+          "ready_ms": 99126.98404100002,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 98769.195
+        },
+        {
+          "id": 241889,
+          "duration": 10,
+          "confirm_ms": 884.5245410000189,
+          "ready_ms": 7245.963624999945,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 7143.046
+        },
+        {
+          "id": 241896,
+          "duration": 19,
+          "confirm_ms": 407.4745419999317,
+          "ready_ms": 52429.38612499995,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 51882.952
+        },
+        {
+          "id": 241899,
+          "duration": 29,
+          "confirm_ms": 413.14074999991135,
+          "ready_ms": 83450.59133300003,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 82480.435
+        },
+        {
+          "id": 241891,
+          "duration": 10,
+          "confirm_ms": 355.84816599998703,
+          "ready_ms": 13360.560374999977,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 13169.707
+        },
+        {
+          "id": 241894,
+          "duration": 19,
+          "confirm_ms": 434.739082999954,
+          "ready_ms": 37311.29316700003,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 37004.025
+        },
+        {
+          "id": 241897,
+          "duration": 29,
+          "confirm_ms": 469.98779199998353,
+          "ready_ms": 59922.77112499994,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 59726.333
+        },
+        {
+          "id": 241892,
+          "duration": 10,
+          "confirm_ms": 366.529958000001,
+          "ready_ms": 24352.922207999996,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 23113.704
+        },
+        {
+          "id": 241895,
+          "duration": 19,
+          "confirm_ms": 406.7125420000366,
+          "ready_ms": 36190.17612499999,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 35740.138
+        },
+        {
+          "id": 241898,
+          "duration": 29,
+          "confirm_ms": 525.898624999968,
+          "ready_ms": 75706.518458,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 74492.366
+        }
+      ]
+    },
+    {
+      "nodes": 2,
+      "concurrency": 3,
+      "wall_seconds": 34.41557245800004,
+      "items": [
+        {
+          "id": 241901,
+          "duration": 10,
+          "confirm_ms": 413.7725410000712,
+          "ready_ms": 10230.11812499999,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 8850.649
+        },
+        {
+          "id": 241902,
+          "duration": 19,
+          "confirm_ms": 431.54950000007375,
+          "ready_ms": 14161.463292000008,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 14170.282
+        },
+        {
+          "id": 241903,
+          "duration": 29,
+          "confirm_ms": 463.09037499997885,
+          "ready_ms": 31029.41054200005,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 31024.74
+        }
+      ]
+    },
+    {
+      "nodes": 2,
+      "concurrency": 6,
+      "wall_seconds": 51.25618741699998,
+      "items": [
+        {
+          "id": 241905,
+          "duration": 10,
+          "confirm_ms": 351.9525000000385,
+          "ready_ms": 9433.399624999993,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 8955.089
+        },
+        {
+          "id": 241907,
+          "duration": 19,
+          "confirm_ms": 463.73737500005063,
+          "ready_ms": 24269.40191699998,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 23558.664
+        },
+        {
+          "id": 241909,
+          "duration": 29,
+          "confirm_ms": 392.655665999996,
+          "ready_ms": 46864.75095899993,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 46350.804
+        },
+        {
+          "id": 241904,
+          "duration": 10,
+          "confirm_ms": 288.90770800001064,
+          "ready_ms": 8622.779917000003,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 7424.682
+        },
+        {
+          "id": 241906,
+          "duration": 19,
+          "confirm_ms": 347.3837500000627,
+          "ready_ms": 22037.039000000048,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 20971.914
+        },
+        {
+          "id": 241908,
+          "duration": 29,
+          "confirm_ms": 464.464874999976,
+          "ready_ms": 43265.41229199995,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 42379.654
+        }
+      ]
+    },
+    {
+      "nodes": 2,
+      "concurrency": 12,
+      "wall_seconds": 108.56939225000008,
+      "items": [
+        {
+          "id": 241912,
+          "duration": 10,
+          "confirm_ms": 407.1182919999501,
+          "ready_ms": 21665.676208000037,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 21011.479
+        },
+        {
+          "id": 241916,
+          "duration": 19,
+          "confirm_ms": 351.34070799995243,
+          "ready_ms": 46229.63304199993,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 45435.42
+        },
+        {
+          "id": 241919,
+          "duration": 29,
+          "confirm_ms": 342.74024999990615,
+          "ready_ms": 78236.94991599995,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 77451.599
+        },
+        {
+          "id": 241913,
+          "duration": 10,
+          "confirm_ms": 523.4567920000472,
+          "ready_ms": 31827.075292000016,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 31384.846
+        },
+        {
+          "id": 241917,
+          "duration": 19,
+          "confirm_ms": 356.67129199998726,
+          "ready_ms": 54252.87900000001,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 54130.194
+        },
+        {
+          "id": 241910,
+          "duration": 29,
+          "confirm_ms": 354.8934579999923,
+          "ready_ms": 24424.14929200004,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 23800.023
+        },
+        {
+          "id": 241914,
+          "duration": 10,
+          "confirm_ms": 458.3928749999586,
+          "ready_ms": 31636.700667000012,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 30595.394
+        },
+        {
+          "id": 241918,
+          "duration": 19,
+          "confirm_ms": 450.31012499998724,
+          "ready_ms": 62431.29537499999,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 61251.484
+        },
+        {
+          "id": 241921,
+          "duration": 29,
+          "confirm_ms": 410.51466600004005,
+          "ready_ms": 101746.23899999994,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 100992.839
+        },
+        {
+          "id": 241915,
+          "duration": 10,
+          "confirm_ms": 527.9005419999976,
+          "ready_ms": 40072.371750000006,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 39416.537
+        },
+        {
+          "id": 241911,
+          "duration": 19,
+          "confirm_ms": 415.5713330000026,
+          "ready_ms": 13809.051167000007,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 12775.987
+        },
+        {
+          "id": 241920,
+          "duration": 29,
+          "confirm_ms": 380.51675000008345,
+          "ready_ms": 85042.16608299999,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "ai",
+          "attempt_count": 1,
+          "job_total_ms": 83861.407
+        }
+      ]
+    },
+    {
+      "nodes": 1,
+      "concurrency": 3,
+      "wall_seconds": 50.816278334,
+      "items": [
+        {
+          "id": 241922,
+          "duration": 10,
+          "confirm_ms": 370.6415829999514,
+          "ready_ms": 10365.365750000023,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 9244.426
+        },
+        {
+          "id": 241923,
+          "duration": 19,
+          "confirm_ms": 281.7077500000096,
+          "ready_ms": 24233.37866700001,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 24178.395
+        },
+        {
+          "id": 241924,
+          "duration": 29,
+          "confirm_ms": 307.4739579999459,
+          "ready_ms": 48171.835791000034,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 47888.091
+        }
+      ]
+    },
+    {
+      "nodes": 1,
+      "concurrency": 6,
+      "wall_seconds": 101.27156104200003,
+      "items": [
+        {
+          "id": 241925,
+          "duration": 10,
+          "confirm_ms": 274.9972499999558,
+          "ready_ms": 8919.053125000006,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 8775.449
+        },
+        {
+          "id": 241926,
+          "duration": 19,
+          "confirm_ms": 287.46191699997325,
+          "ready_ms": 25884.589208000078,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 24979.738
+        },
+        {
+          "id": 241930,
+          "duration": 29,
+          "confirm_ms": 351.4648750000333,
+          "ready_ms": 97010.86129199996,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 96827.982
+        },
+        {
+          "id": 241928,
+          "duration": 10,
+          "confirm_ms": 362.5587499999483,
+          "ready_ms": 51279.21904099992,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 50317.864
+        },
+        {
+          "id": 241927,
+          "duration": 19,
+          "confirm_ms": 346.27033300000676,
+          "ready_ms": 41402.739041000015,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 41102.222
+        },
+        {
+          "id": 241929,
+          "duration": 29,
+          "confirm_ms": 398.9683749999813,
+          "ready_ms": 74472.414083,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 73594.476
+        }
+      ]
+    },
+    {
+      "nodes": 1,
+      "concurrency": 12,
+      "wall_seconds": 195.83373399999994,
+      "items": [
+        {
+          "id": 241933,
+          "duration": 10,
+          "confirm_ms": 419.24937499993575,
+          "ready_ms": 31745.15987500013,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 31329.475
+        },
+        {
+          "id": 241936,
+          "duration": 19,
+          "confirm_ms": 415.85349999991195,
+          "ready_ms": 64372.043250000046,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 63655.099
+        },
+        {
+          "id": 241939,
+          "duration": 29,
+          "confirm_ms": 415.57387499995,
+          "ready_ms": 118579.99470800007,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 117937.642
+        },
+        {
+          "id": 241932,
+          "duration": 10,
+          "confirm_ms": 347.9899580000847,
+          "ready_ms": 22933.83712499997,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 22402.692
+        },
+        {
+          "id": 241931,
+          "duration": 19,
+          "confirm_ms": 312.165833999984,
+          "ready_ms": 15566.44170900006,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 15532.685
+        },
+        {
+          "id": 241942,
+          "duration": 29,
+          "confirm_ms": 439.3524999999272,
+          "ready_ms": 188564.3046670001,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 188020.543
+        },
+        {
+          "id": 241934,
+          "duration": 10,
+          "confirm_ms": 523.4398329999976,
+          "ready_ms": 40084.439707999874,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 39994.866
+        },
+        {
+          "id": 241938,
+          "duration": 19,
+          "confirm_ms": 415.06404200004,
+          "ready_ms": 96462.37712499998,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 95869.107
+        },
+        {
+          "id": 241941,
+          "duration": 29,
+          "confirm_ms": 496.6469580000421,
+          "ready_ms": 141774.70441700006,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 141666.626
+        },
+        {
+          "id": 241935,
+          "duration": 10,
+          "confirm_ms": 680.0092500000119,
+          "ready_ms": 49541.9260000001,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 48924.252
+        },
+        {
+          "id": 241937,
+          "duration": 19,
+          "confirm_ms": 343.62750000002507,
+          "ready_ms": 79762.10087499999,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 79530.633
+        },
+        {
+          "id": 241940,
+          "duration": 29,
+          "confirm_ms": 499.6940830000085,
+          "ready_ms": 165676.9775,
+          "processing_status": "READY",
+          "status": "COMPLETED",
+          "claimed_by": "be",
+          "attempt_count": 1,
+          "job_total_ms": 165374.794
+        }
+      ]
+    }
+  ],
+  "video_ids": [
+    241860,
+    241859,
+    241861,
+    241862,
+    241865,
+    241866,
+    241863,
+    241864,
+    241867,
+    241868,
+    241869,
+    241878,
+    241870,
+    241873,
+    241876,
+    241871,
+    241874,
+    241879,
+    241872,
+    241875,
+    241877,
+    241880,
+    241881,
+    241882,
+    241883,
+    241887,
+    241888,
+    241884,
+    241885,
+    241886,
+    241893,
+    241890,
+    241900,
+    241889,
+    241896,
+    241899,
+    241891,
+    241894,
+    241897,
+    241892,
+    241895,
+    241898,
+    241901,
+    241902,
+    241903,
+    241905,
+    241907,
+    241909,
+    241904,
+    241906,
+    241908,
+    241912,
+    241916,
+    241919,
+    241913,
+    241917,
+    241910,
+    241914,
+    241918,
+    241921,
+    241915,
+    241911,
+    241920,
+    241922,
+    241923,
+    241924,
+    241925,
+    241926,
+    241930,
+    241928,
+    241927,
+    241929,
+    241933,
+    241936,
+    241939,
+    241932,
+    241931,
+    241942,
+    241934,
+    241938,
+    241941,
+    241935,
+    241937,
+    241940
+  ],
+  "errors": [
+    "image mismatch tolerated: ['951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap:msg577-19035f5-cacheonly', '951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap:sha-ca51f34']"
+  ],
+  "images": [
+    "951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap:msg577-19035f5-cacheonly",
+    "951142447485.dkr.ecr.ap-northeast-2.amazonaws.com/fillmap:sha-ca51f34"
+  ],
+  "test_oid": "encoding-ab-20260929T151938",
+  "samples": [
+    {
+      "duration": 10,
+      "bytes": 2610542,
+      "sha256": "477a06ede719a129b43105e6a5160cf7c681cc16d56aa681e9094de03469c152"
+    },
+    {
+      "duration": 19,
+      "bytes": 4749987,
+      "sha256": "fee6804628b2fa6d36a02dc3bf042285a6b4647dc401c22e1bda6524af3c4d0b"
+    },
+    {
+      "duration": 29,
+      "bytes": 7334526,
+      "sha256": "9bf4d97ff320699e783a6ae973453283aaca16568b74156e7b56f963b13a695e"
+    }
+  ],
+  "worker_restored": true,
+  "test_account_deleted": true
+}

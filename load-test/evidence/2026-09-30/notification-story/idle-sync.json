@@ -1,0 +1,19 @@
+{
+  "mode": "sync",
+  "workload": "idle",
+  "seconds": 30,
+  "resources": {
+    "pg_cpu_seconds": 0.081,
+    "kafka_cpu_seconds": 0.405,
+    "db": {
+      "xact_commit": 14,
+      "xact_rollback": 0,
+      "tup_inserted": 1,
+      "tup_updated": 40,
+      "tup_returned": 2348,
+      "tup_fetched": 1414
+    },
+    "wall_seconds": 30.103
+  },
+  "pipeline": {}
+}

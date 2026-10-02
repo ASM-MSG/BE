@@ -1,0 +1,95 @@
+{
+  "mode": "outbox_kafka",
+  "workload": "w1",
+  "round": 0,
+  "count": 2000,
+  "rate": 50,
+  "requests": {
+    "offered": 2000,
+    "success": 2000,
+    "errors": {},
+    "latency": {
+      "n": 2000,
+      "p50_ms": 5.717083055060357,
+      "p95_ms": 8.374458004254848,
+      "p99_ms": 10.417125013191253,
+      "max_ms": 16.768875007983297,
+      "mean_ms": 5.712259231484495
+    },
+    "service": {
+      "n": 2000,
+      "p50_ms": 2.7817499940283597,
+      "p95_ms": 4.4517089845612645,
+      "p99_ms": 6.652166019193828,
+      "max_ms": 16.104749985970557,
+      "mean_ms": 2.8768815875519067
+    }
+  },
+  "e2e_delivery": {
+    "n": 2000,
+    "p50_ms": 35642.397,
+    "p95_ms": 64296.237,
+    "p99_ms": 67119.124,
+    "max_ms": 67545.205,
+    "mean_ms": 36173.891985
+  },
+  "drain": {
+    "complete": true,
+    "elapsed_s": 67.763,
+    "final": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    }
+  },
+  "fcm": {
+    "calls": 2000,
+    "ok": 2000,
+    "rejected": 0,
+    "distinct_ok_ids": 2000,
+    "duplicate_ids": 0,
+    "duplicate_extra_deliveries": 0,
+    "max_per_id": 1,
+    "outage_end_wall": null,
+    "first_ok_after_outage_wall": null
+  },
+  "reconcile": {
+    "rows": 2000,
+    "counts": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    "duplicate_event_keys": 0,
+    "sent_not_delivered": 0,
+    "delivered_not_sent": 0,
+    "balanced": true
+  },
+  "resources": {
+    "pg_cpu_seconds": 5.541,
+    "kafka_cpu_seconds": 3.927,
+    "db": {
+      "xact_commit": 14116,
+      "xact_rollback": 0,
+      "tup_inserted": 2000,
+      "tup_updated": 5887,
+      "tup_returned": 562783,
+      "tup_fetched": 12896
+    },
+    "wall_seconds": 107.96
+  },
+  "pipeline": {
+    "relay": {
+      "polls": 21,
+      "published": 2000
+    },
+    "consumer": {
+      "sent": 2000
+    }
+  },
+  "raw": "w1-outbox_kafka-0.jsonl.gz"
+}

@@ -1,0 +1,4504 @@
+{
+  "mode": "db_poll",
+  "workload": "w3",
+  "round": 0,
+  "burst": {
+    "inserted": 10000,
+    "insert_ms": 56.179833016358316,
+    "request_ms": 56.185125024057925,
+    "inline_failures": 0
+  },
+  "burst_rows": {
+    "PENDING": 0,
+    "PUBLISHED": 0,
+    "SENT": 10000,
+    "SKIPPED": 0,
+    "DEAD": 0
+  },
+  "burst_complete_s": 511.819,
+  "burst_wall_s": 575.04,
+  "complete": true,
+  "final": {
+    "PENDING": 0,
+    "PUBLISHED": 0,
+    "SENT": 11250,
+    "SKIPPED": 0,
+    "DEAD": 0
+  },
+  "interference": {
+    "start_s": 5,
+    "count": 1250,
+    "rate": 50,
+    "finished_at_s": 29.995,
+    "rows": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 1250,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    "offered": 1250,
+    "success": 1250,
+    "errors": {},
+    "latency": {
+      "n": 1250,
+      "p50_ms": 7.424707990139723,
+      "p95_ms": 11.229167052078992,
+      "p99_ms": 12.917417043354362,
+      "max_ms": 17.55700004287064,
+      "mean_ms": 7.197791352588683
+    },
+    "service": {
+      "n": 1250,
+      "p50_ms": 2.1902500302530825,
+      "p95_ms": 3.577624971512705,
+      "p99_ms": 6.141374993603677,
+      "max_ms": 13.048124965280294,
+      "mean_ms": 2.385288453521207
+    }
+  },
+  "outage": {
+    "started_at_s": 5.003,
+    "seconds": 20
+  },
+  "e2e_delivery_burst": {
+    "n": 10000,
+    "p50_ms": 264101.912,
+    "p95_ms": 486820.725,
+    "p99_ms": 506844.311,
+    "max_ms": 511818.959,
+    "mean_ms": 265505.2810404
+  },
+  "fcm": {
+    "calls": 11650,
+    "ok": 11250,
+    "rejected": 400,
+    "distinct_ok_ids": 11250,
+    "duplicate_ids": 0,
+    "duplicate_extra_deliveries": 0,
+    "max_per_id": 1,
+    "outage_end_wall": 1790699028.059021,
+    "first_ok_after_outage_wall": 1790699028.408294
+  },
+  "reconcile": {
+    "rows": 11250,
+    "counts": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 11250,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    "duplicate_event_keys": 0,
+    "sent_not_delivered": 0,
+    "delivered_not_sent": 0,
+    "balanced": true
+  },
+  "resources": {
+    "pg_cpu_seconds": 17.231,
+    "kafka_cpu_seconds": 5.394,
+    "db": {
+      "xact_commit": 3517,
+      "xact_rollback": 0,
+      "tup_inserted": 11250,
+      "tup_updated": 23439,
+      "tup_returned": 23683856,
+      "tup_fetched": 53693
+    },
+    "wall_seconds": 575.285
+  },
+  "pipeline": {
+    "db-poller": {
+      "polls": 118,
+      "sent": 11250,
+      "retry_scheduled": 400
+    }
+  },
+  "timeline": [
+    {
+      "t_s": 0.0,
+      "PENDING": 11050,
+      "PUBLISHED": 0,
+      "SENT": 200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 1.04,
+      "PENDING": 11050,
+      "PUBLISHED": 0,
+      "SENT": 200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 2.08,
+      "PENDING": 11050,
+      "PUBLISHED": 0,
+      "SENT": 200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 3.12,
+      "PENDING": 11050,
+      "PUBLISHED": 0,
+      "SENT": 200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 4.16,
+      "PENDING": 10950,
+      "PUBLISHED": 0,
+      "SENT": 300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 5.2,
+      "PENDING": 10950,
+      "PUBLISHED": 0,
+      "SENT": 300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 6.24,
+      "PENDING": 10950,
+      "PUBLISHED": 0,
+      "SENT": 300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 7.01,
+      "PENDING": 10950,
+      "PUBLISHED": 0,
+      "SENT": 300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 8.05,
+      "PENDING": 10950,
+      "PUBLISHED": 0,
+      "SENT": 300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 9.09,
+      "PENDING": 10850,
+      "PUBLISHED": 0,
+      "SENT": 400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 10.12,
+      "PENDING": 10850,
+      "PUBLISHED": 0,
+      "SENT": 400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 11.17,
+      "PENDING": 10850,
+      "PUBLISHED": 0,
+      "SENT": 400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 12.2,
+      "PENDING": 10850,
+      "PUBLISHED": 0,
+      "SENT": 400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 13.23,
+      "PENDING": 10850,
+      "PUBLISHED": 0,
+      "SENT": 400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 14.0,
+      "PENDING": 10750,
+      "PUBLISHED": 0,
+      "SENT": 500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 15.03,
+      "PENDING": 10750,
+      "PUBLISHED": 0,
+      "SENT": 500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 16.07,
+      "PENDING": 10750,
+      "PUBLISHED": 0,
+      "SENT": 500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 17.11,
+      "PENDING": 10750,
+      "PUBLISHED": 0,
+      "SENT": 500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 18.14,
+      "PENDING": 10750,
+      "PUBLISHED": 0,
+      "SENT": 500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 19.17,
+      "PENDING": 10650,
+      "PUBLISHED": 0,
+      "SENT": 600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 20.22,
+      "PENDING": 10650,
+      "PUBLISHED": 0,
+      "SENT": 600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 21.24,
+      "PENDING": 10650,
+      "PUBLISHED": 0,
+      "SENT": 600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 22.03,
+      "PENDING": 10650,
+      "PUBLISHED": 0,
+      "SENT": 600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 23.07,
+      "PENDING": 10650,
+      "PUBLISHED": 0,
+      "SENT": 600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 24.11,
+      "PENDING": 10550,
+      "PUBLISHED": 0,
+      "SENT": 700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 25.14,
+      "PENDING": 10550,
+      "PUBLISHED": 0,
+      "SENT": 700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 26.19,
+      "PENDING": 10550,
+      "PUBLISHED": 0,
+      "SENT": 700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 27.22,
+      "PENDING": 10550,
+      "PUBLISHED": 0,
+      "SENT": 700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 28.0,
+      "PENDING": 10550,
+      "PUBLISHED": 0,
+      "SENT": 700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 29.05,
+      "PENDING": 10450,
+      "PUBLISHED": 0,
+      "SENT": 800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 30.09,
+      "PENDING": 10450,
+      "PUBLISHED": 0,
+      "SENT": 800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 31.14,
+      "PENDING": 10450,
+      "PUBLISHED": 0,
+      "SENT": 800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 32.19,
+      "PENDING": 10450,
+      "PUBLISHED": 0,
+      "SENT": 800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 33.23,
+      "PENDING": 10450,
+      "PUBLISHED": 0,
+      "SENT": 800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 34.0,
+      "PENDING": 10350,
+      "PUBLISHED": 0,
+      "SENT": 900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 35.03,
+      "PENDING": 10350,
+      "PUBLISHED": 0,
+      "SENT": 900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 36.07,
+      "PENDING": 10350,
+      "PUBLISHED": 0,
+      "SENT": 900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 37.1,
+      "PENDING": 10350,
+      "PUBLISHED": 0,
+      "SENT": 900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 38.14,
+      "PENDING": 10350,
+      "PUBLISHED": 0,
+      "SENT": 900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 39.18,
+      "PENDING": 10250,
+      "PUBLISHED": 0,
+      "SENT": 1000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 40.22,
+      "PENDING": 10250,
+      "PUBLISHED": 0,
+      "SENT": 1000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 41.26,
+      "PENDING": 10250,
+      "PUBLISHED": 0,
+      "SENT": 1000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 42.04,
+      "PENDING": 10250,
+      "PUBLISHED": 0,
+      "SENT": 1000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 43.07,
+      "PENDING": 10150,
+      "PUBLISHED": 0,
+      "SENT": 1100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 44.1,
+      "PENDING": 10150,
+      "PUBLISHED": 0,
+      "SENT": 1100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 45.14,
+      "PENDING": 10150,
+      "PUBLISHED": 0,
+      "SENT": 1100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 46.16,
+      "PENDING": 10150,
+      "PUBLISHED": 0,
+      "SENT": 1100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 47.2,
+      "PENDING": 10150,
+      "PUBLISHED": 0,
+      "SENT": 1100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 48.25,
+      "PENDING": 10050,
+      "PUBLISHED": 0,
+      "SENT": 1200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 49.04,
+      "PENDING": 10050,
+      "PUBLISHED": 0,
+      "SENT": 1200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 50.09,
+      "PENDING": 10050,
+      "PUBLISHED": 0,
+      "SENT": 1200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 51.14,
+      "PENDING": 10050,
+      "PUBLISHED": 0,
+      "SENT": 1200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 52.19,
+      "PENDING": 10050,
+      "PUBLISHED": 0,
+      "SENT": 1200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 53.24,
+      "PENDING": 9950,
+      "PUBLISHED": 0,
+      "SENT": 1300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 54.03,
+      "PENDING": 9950,
+      "PUBLISHED": 0,
+      "SENT": 1300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 55.07,
+      "PENDING": 9950,
+      "PUBLISHED": 0,
+      "SENT": 1300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 56.1,
+      "PENDING": 9950,
+      "PUBLISHED": 0,
+      "SENT": 1300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 57.14,
+      "PENDING": 9950,
+      "PUBLISHED": 0,
+      "SENT": 1300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 58.18,
+      "PENDING": 9850,
+      "PUBLISHED": 0,
+      "SENT": 1400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 59.22,
+      "PENDING": 9850,
+      "PUBLISHED": 0,
+      "SENT": 1400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 60.25,
+      "PENDING": 9850,
+      "PUBLISHED": 0,
+      "SENT": 1400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 61.03,
+      "PENDING": 9850,
+      "PUBLISHED": 0,
+      "SENT": 1400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 62.07,
+      "PENDING": 9850,
+      "PUBLISHED": 0,
+      "SENT": 1400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 63.12,
+      "PENDING": 9750,
+      "PUBLISHED": 0,
+      "SENT": 1500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 64.16,
+      "PENDING": 9750,
+      "PUBLISHED": 0,
+      "SENT": 1500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 65.19,
+      "PENDING": 9750,
+      "PUBLISHED": 0,
+      "SENT": 1500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 66.23,
+      "PENDING": 9750,
+      "PUBLISHED": 0,
+      "SENT": 1500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 67.0,
+      "PENDING": 9750,
+      "PUBLISHED": 0,
+      "SENT": 1500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 68.04,
+      "PENDING": 9650,
+      "PUBLISHED": 0,
+      "SENT": 1600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 69.07,
+      "PENDING": 9650,
+      "PUBLISHED": 0,
+      "SENT": 1600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 70.11,
+      "PENDING": 9650,
+      "PUBLISHED": 0,
+      "SENT": 1600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 71.15,
+      "PENDING": 9650,
+      "PUBLISHED": 0,
+      "SENT": 1600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 72.19,
+      "PENDING": 9650,
+      "PUBLISHED": 0,
+      "SENT": 1600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 73.24,
+      "PENDING": 9550,
+      "PUBLISHED": 0,
+      "SENT": 1700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 74.02,
+      "PENDING": 9550,
+      "PUBLISHED": 0,
+      "SENT": 1700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 75.08,
+      "PENDING": 9550,
+      "PUBLISHED": 0,
+      "SENT": 1700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 76.13,
+      "PENDING": 9550,
+      "PUBLISHED": 0,
+      "SENT": 1700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 77.16,
+      "PENDING": 9550,
+      "PUBLISHED": 0,
+      "SENT": 1700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 78.21,
+      "PENDING": 9450,
+      "PUBLISHED": 0,
+      "SENT": 1800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 79.26,
+      "PENDING": 9450,
+      "PUBLISHED": 0,
+      "SENT": 1800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 80.06,
+      "PENDING": 9450,
+      "PUBLISHED": 0,
+      "SENT": 1800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 81.11,
+      "PENDING": 9450,
+      "PUBLISHED": 0,
+      "SENT": 1800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 82.16,
+      "PENDING": 9450,
+      "PUBLISHED": 0,
+      "SENT": 1800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 83.22,
+      "PENDING": 9350,
+      "PUBLISHED": 0,
+      "SENT": 1900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 84.25,
+      "PENDING": 9350,
+      "PUBLISHED": 0,
+      "SENT": 1900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 85.02,
+      "PENDING": 9350,
+      "PUBLISHED": 0,
+      "SENT": 1900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 86.07,
+      "PENDING": 9350,
+      "PUBLISHED": 0,
+      "SENT": 1900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 87.1,
+      "PENDING": 9350,
+      "PUBLISHED": 0,
+      "SENT": 1900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 88.13,
+      "PENDING": 9250,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 89.17,
+      "PENDING": 9250,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 90.21,
+      "PENDING": 9250,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 91.26,
+      "PENDING": 9250,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 92.03,
+      "PENDING": 9250,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 93.07,
+      "PENDING": 9150,
+      "PUBLISHED": 0,
+      "SENT": 2100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 94.1,
+      "PENDING": 9150,
+      "PUBLISHED": 0,
+      "SENT": 2100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 95.14,
+      "PENDING": 9150,
+      "PUBLISHED": 0,
+      "SENT": 2100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 96.18,
+      "PENDING": 9150,
+      "PUBLISHED": 0,
+      "SENT": 2100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 97.21,
+      "PENDING": 9150,
+      "PUBLISHED": 0,
+      "SENT": 2100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 98.26,
+      "PENDING": 9050,
+      "PUBLISHED": 0,
+      "SENT": 2200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 99.04,
+      "PENDING": 9050,
+      "PUBLISHED": 0,
+      "SENT": 2200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 100.09,
+      "PENDING": 9050,
+      "PUBLISHED": 0,
+      "SENT": 2200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 101.13,
+      "PENDING": 9050,
+      "PUBLISHED": 0,
+      "SENT": 2200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 102.17,
+      "PENDING": 9050,
+      "PUBLISHED": 0,
+      "SENT": 2200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 103.22,
+      "PENDING": 8950,
+      "PUBLISHED": 0,
+      "SENT": 2300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 104.0,
+      "PENDING": 8950,
+      "PUBLISHED": 0,
+      "SENT": 2300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 105.04,
+      "PENDING": 8950,
+      "PUBLISHED": 0,
+      "SENT": 2300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 106.09,
+      "PENDING": 8950,
+      "PUBLISHED": 0,
+      "SENT": 2300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 107.13,
+      "PENDING": 8950,
+      "PUBLISHED": 0,
+      "SENT": 2300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 108.18,
+      "PENDING": 8850,
+      "PUBLISHED": 0,
+      "SENT": 2400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 109.23,
+      "PENDING": 8850,
+      "PUBLISHED": 0,
+      "SENT": 2400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 110.02,
+      "PENDING": 8850,
+      "PUBLISHED": 0,
+      "SENT": 2400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 111.07,
+      "PENDING": 8850,
+      "PUBLISHED": 0,
+      "SENT": 2400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 112.11,
+      "PENDING": 8850,
+      "PUBLISHED": 0,
+      "SENT": 2400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 113.15,
+      "PENDING": 8750,
+      "PUBLISHED": 0,
+      "SENT": 2500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 114.2,
+      "PENDING": 8750,
+      "PUBLISHED": 0,
+      "SENT": 2500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 115.26,
+      "PENDING": 8750,
+      "PUBLISHED": 0,
+      "SENT": 2500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 116.05,
+      "PENDING": 8750,
+      "PUBLISHED": 0,
+      "SENT": 2500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 117.1,
+      "PENDING": 8750,
+      "PUBLISHED": 0,
+      "SENT": 2500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 118.14,
+      "PENDING": 8650,
+      "PUBLISHED": 0,
+      "SENT": 2600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 119.2,
+      "PENDING": 8650,
+      "PUBLISHED": 0,
+      "SENT": 2600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 120.26,
+      "PENDING": 8650,
+      "PUBLISHED": 0,
+      "SENT": 2600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 121.04,
+      "PENDING": 8650,
+      "PUBLISHED": 0,
+      "SENT": 2600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 122.08,
+      "PENDING": 8650,
+      "PUBLISHED": 0,
+      "SENT": 2600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 123.13,
+      "PENDING": 8550,
+      "PUBLISHED": 0,
+      "SENT": 2700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 124.18,
+      "PENDING": 8550,
+      "PUBLISHED": 0,
+      "SENT": 2700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 125.23,
+      "PENDING": 8550,
+      "PUBLISHED": 0,
+      "SENT": 2700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 126.02,
+      "PENDING": 8550,
+      "PUBLISHED": 0,
+      "SENT": 2700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 127.07,
+      "PENDING": 8550,
+      "PUBLISHED": 0,
+      "SENT": 2700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 128.1,
+      "PENDING": 8450,
+      "PUBLISHED": 0,
+      "SENT": 2800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 129.15,
+      "PENDING": 8450,
+      "PUBLISHED": 0,
+      "SENT": 2800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 130.19,
+      "PENDING": 8450,
+      "PUBLISHED": 0,
+      "SENT": 2800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 131.24,
+      "PENDING": 8450,
+      "PUBLISHED": 0,
+      "SENT": 2800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 132.01,
+      "PENDING": 8450,
+      "PUBLISHED": 0,
+      "SENT": 2800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 133.06,
+      "PENDING": 8350,
+      "PUBLISHED": 0,
+      "SENT": 2900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 134.12,
+      "PENDING": 8350,
+      "PUBLISHED": 0,
+      "SENT": 2900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 135.16,
+      "PENDING": 8350,
+      "PUBLISHED": 0,
+      "SENT": 2900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 136.2,
+      "PENDING": 8350,
+      "PUBLISHED": 0,
+      "SENT": 2900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 137.25,
+      "PENDING": 8250,
+      "PUBLISHED": 0,
+      "SENT": 3000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 138.04,
+      "PENDING": 8250,
+      "PUBLISHED": 0,
+      "SENT": 3000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 139.08,
+      "PENDING": 8250,
+      "PUBLISHED": 0,
+      "SENT": 3000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 140.13,
+      "PENDING": 8250,
+      "PUBLISHED": 0,
+      "SENT": 3000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 141.18,
+      "PENDING": 8250,
+      "PUBLISHED": 0,
+      "SENT": 3000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 142.22,
+      "PENDING": 8150,
+      "PUBLISHED": 0,
+      "SENT": 3100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 143.0,
+      "PENDING": 8150,
+      "PUBLISHED": 0,
+      "SENT": 3100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 144.05,
+      "PENDING": 8150,
+      "PUBLISHED": 0,
+      "SENT": 3100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 145.1,
+      "PENDING": 8150,
+      "PUBLISHED": 0,
+      "SENT": 3100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 146.14,
+      "PENDING": 8150,
+      "PUBLISHED": 0,
+      "SENT": 3100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 147.18,
+      "PENDING": 8050,
+      "PUBLISHED": 0,
+      "SENT": 3200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 148.22,
+      "PENDING": 8050,
+      "PUBLISHED": 0,
+      "SENT": 3200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 149.0,
+      "PENDING": 8050,
+      "PUBLISHED": 0,
+      "SENT": 3200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 150.05,
+      "PENDING": 8050,
+      "PUBLISHED": 0,
+      "SENT": 3200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 151.09,
+      "PENDING": 8050,
+      "PUBLISHED": 0,
+      "SENT": 3200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 152.13,
+      "PENDING": 7950,
+      "PUBLISHED": 0,
+      "SENT": 3300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 153.16,
+      "PENDING": 7950,
+      "PUBLISHED": 0,
+      "SENT": 3300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 154.19,
+      "PENDING": 7950,
+      "PUBLISHED": 0,
+      "SENT": 3300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 155.24,
+      "PENDING": 7950,
+      "PUBLISHED": 0,
+      "SENT": 3300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 156.02,
+      "PENDING": 7950,
+      "PUBLISHED": 0,
+      "SENT": 3300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 157.06,
+      "PENDING": 7850,
+      "PUBLISHED": 0,
+      "SENT": 3400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 158.09,
+      "PENDING": 7850,
+      "PUBLISHED": 0,
+      "SENT": 3400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 159.14,
+      "PENDING": 7850,
+      "PUBLISHED": 0,
+      "SENT": 3400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 160.18,
+      "PENDING": 7850,
+      "PUBLISHED": 0,
+      "SENT": 3400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 161.23,
+      "PENDING": 7850,
+      "PUBLISHED": 0,
+      "SENT": 3400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 162.01,
+      "PENDING": 7750,
+      "PUBLISHED": 0,
+      "SENT": 3500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 163.05,
+      "PENDING": 7750,
+      "PUBLISHED": 0,
+      "SENT": 3500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 164.09,
+      "PENDING": 7750,
+      "PUBLISHED": 0,
+      "SENT": 3500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 165.12,
+      "PENDING": 7750,
+      "PUBLISHED": 0,
+      "SENT": 3500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 166.16,
+      "PENDING": 7750,
+      "PUBLISHED": 0,
+      "SENT": 3500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 167.19,
+      "PENDING": 7650,
+      "PUBLISHED": 0,
+      "SENT": 3600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 168.24,
+      "PENDING": 7650,
+      "PUBLISHED": 0,
+      "SENT": 3600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 169.02,
+      "PENDING": 7650,
+      "PUBLISHED": 0,
+      "SENT": 3600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 170.08,
+      "PENDING": 7650,
+      "PUBLISHED": 0,
+      "SENT": 3600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 171.12,
+      "PENDING": 7650,
+      "PUBLISHED": 0,
+      "SENT": 3600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 172.16,
+      "PENDING": 7550,
+      "PUBLISHED": 0,
+      "SENT": 3700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 173.22,
+      "PENDING": 7550,
+      "PUBLISHED": 0,
+      "SENT": 3700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 174.26,
+      "PENDING": 7550,
+      "PUBLISHED": 0,
+      "SENT": 3700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 175.04,
+      "PENDING": 7550,
+      "PUBLISHED": 0,
+      "SENT": 3700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 176.1,
+      "PENDING": 7550,
+      "PUBLISHED": 0,
+      "SENT": 3700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 177.15,
+      "PENDING": 7450,
+      "PUBLISHED": 0,
+      "SENT": 3800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 178.19,
+      "PENDING": 7450,
+      "PUBLISHED": 0,
+      "SENT": 3800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 179.25,
+      "PENDING": 7450,
+      "PUBLISHED": 0,
+      "SENT": 3800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 180.03,
+      "PENDING": 7450,
+      "PUBLISHED": 0,
+      "SENT": 3800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 181.07,
+      "PENDING": 7450,
+      "PUBLISHED": 0,
+      "SENT": 3800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 182.13,
+      "PENDING": 7350,
+      "PUBLISHED": 0,
+      "SENT": 3900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 183.17,
+      "PENDING": 7350,
+      "PUBLISHED": 0,
+      "SENT": 3900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 184.22,
+      "PENDING": 7350,
+      "PUBLISHED": 0,
+      "SENT": 3900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 185.25,
+      "PENDING": 7350,
+      "PUBLISHED": 0,
+      "SENT": 3900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 186.03,
+      "PENDING": 7350,
+      "PUBLISHED": 0,
+      "SENT": 3900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 187.06,
+      "PENDING": 7250,
+      "PUBLISHED": 0,
+      "SENT": 4000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 188.09,
+      "PENDING": 7250,
+      "PUBLISHED": 0,
+      "SENT": 4000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 189.12,
+      "PENDING": 7250,
+      "PUBLISHED": 0,
+      "SENT": 4000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 190.15,
+      "PENDING": 7250,
+      "PUBLISHED": 0,
+      "SENT": 4000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 191.19,
+      "PENDING": 7250,
+      "PUBLISHED": 0,
+      "SENT": 4000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 192.23,
+      "PENDING": 7150,
+      "PUBLISHED": 0,
+      "SENT": 4100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 193.0,
+      "PENDING": 7150,
+      "PUBLISHED": 0,
+      "SENT": 4100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 194.04,
+      "PENDING": 7150,
+      "PUBLISHED": 0,
+      "SENT": 4100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 195.08,
+      "PENDING": 7150,
+      "PUBLISHED": 0,
+      "SENT": 4100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 196.12,
+      "PENDING": 7050,
+      "PUBLISHED": 0,
+      "SENT": 4200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 197.16,
+      "PENDING": 7050,
+      "PUBLISHED": 0,
+      "SENT": 4200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 198.19,
+      "PENDING": 7050,
+      "PUBLISHED": 0,
+      "SENT": 4200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 199.23,
+      "PENDING": 7050,
+      "PUBLISHED": 0,
+      "SENT": 4200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 200.01,
+      "PENDING": 7050,
+      "PUBLISHED": 0,
+      "SENT": 4200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 201.05,
+      "PENDING": 6950,
+      "PUBLISHED": 0,
+      "SENT": 4300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 202.07,
+      "PENDING": 6950,
+      "PUBLISHED": 0,
+      "SENT": 4300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 203.11,
+      "PENDING": 6950,
+      "PUBLISHED": 0,
+      "SENT": 4300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 204.14,
+      "PENDING": 6950,
+      "PUBLISHED": 0,
+      "SENT": 4300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 205.18,
+      "PENDING": 6950,
+      "PUBLISHED": 0,
+      "SENT": 4300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 206.22,
+      "PENDING": 6850,
+      "PUBLISHED": 0,
+      "SENT": 4400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 207.26,
+      "PENDING": 6850,
+      "PUBLISHED": 0,
+      "SENT": 4400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 208.03,
+      "PENDING": 6850,
+      "PUBLISHED": 0,
+      "SENT": 4400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 209.07,
+      "PENDING": 6850,
+      "PUBLISHED": 0,
+      "SENT": 4400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 210.1,
+      "PENDING": 6850,
+      "PUBLISHED": 0,
+      "SENT": 4400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 211.14,
+      "PENDING": 6750,
+      "PUBLISHED": 0,
+      "SENT": 4500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 212.17,
+      "PENDING": 6750,
+      "PUBLISHED": 0,
+      "SENT": 4500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 213.2,
+      "PENDING": 6750,
+      "PUBLISHED": 0,
+      "SENT": 4500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 214.24,
+      "PENDING": 6750,
+      "PUBLISHED": 0,
+      "SENT": 4500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 215.02,
+      "PENDING": 6750,
+      "PUBLISHED": 0,
+      "SENT": 4500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 216.05,
+      "PENDING": 6650,
+      "PUBLISHED": 0,
+      "SENT": 4600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 217.08,
+      "PENDING": 6650,
+      "PUBLISHED": 0,
+      "SENT": 4600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 218.12,
+      "PENDING": 6650,
+      "PUBLISHED": 0,
+      "SENT": 4600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 219.15,
+      "PENDING": 6650,
+      "PUBLISHED": 0,
+      "SENT": 4600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 220.19,
+      "PENDING": 6550,
+      "PUBLISHED": 0,
+      "SENT": 4700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 221.24,
+      "PENDING": 6550,
+      "PUBLISHED": 0,
+      "SENT": 4700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 222.01,
+      "PENDING": 6550,
+      "PUBLISHED": 0,
+      "SENT": 4700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 223.04,
+      "PENDING": 6550,
+      "PUBLISHED": 0,
+      "SENT": 4700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 224.07,
+      "PENDING": 6550,
+      "PUBLISHED": 0,
+      "SENT": 4700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 225.1,
+      "PENDING": 6450,
+      "PUBLISHED": 0,
+      "SENT": 4800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 226.14,
+      "PENDING": 6450,
+      "PUBLISHED": 0,
+      "SENT": 4800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 227.18,
+      "PENDING": 6450,
+      "PUBLISHED": 0,
+      "SENT": 4800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 228.21,
+      "PENDING": 6450,
+      "PUBLISHED": 0,
+      "SENT": 4800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 229.24,
+      "PENDING": 6450,
+      "PUBLISHED": 0,
+      "SENT": 4800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 230.01,
+      "PENDING": 6350,
+      "PUBLISHED": 0,
+      "SENT": 4900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 231.05,
+      "PENDING": 6350,
+      "PUBLISHED": 0,
+      "SENT": 4900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 232.08,
+      "PENDING": 6350,
+      "PUBLISHED": 0,
+      "SENT": 4900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 233.11,
+      "PENDING": 6350,
+      "PUBLISHED": 0,
+      "SENT": 4900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 234.14,
+      "PENDING": 6250,
+      "PUBLISHED": 0,
+      "SENT": 5000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 235.2,
+      "PENDING": 6250,
+      "PUBLISHED": 0,
+      "SENT": 5000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 236.24,
+      "PENDING": 6250,
+      "PUBLISHED": 0,
+      "SENT": 5000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 237.04,
+      "PENDING": 6250,
+      "PUBLISHED": 0,
+      "SENT": 5000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 238.08,
+      "PENDING": 6250,
+      "PUBLISHED": 0,
+      "SENT": 5000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 239.12,
+      "PENDING": 6150,
+      "PUBLISHED": 0,
+      "SENT": 5100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 240.16,
+      "PENDING": 6150,
+      "PUBLISHED": 0,
+      "SENT": 5100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 241.21,
+      "PENDING": 6150,
+      "PUBLISHED": 0,
+      "SENT": 5100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 242.25,
+      "PENDING": 6150,
+      "PUBLISHED": 0,
+      "SENT": 5100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 243.03,
+      "PENDING": 6150,
+      "PUBLISHED": 0,
+      "SENT": 5100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 244.09,
+      "PENDING": 6050,
+      "PUBLISHED": 0,
+      "SENT": 5200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 245.14,
+      "PENDING": 6050,
+      "PUBLISHED": 0,
+      "SENT": 5200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 246.19,
+      "PENDING": 6050,
+      "PUBLISHED": 0,
+      "SENT": 5200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 247.24,
+      "PENDING": 6050,
+      "PUBLISHED": 0,
+      "SENT": 5200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 248.03,
+      "PENDING": 6050,
+      "PUBLISHED": 0,
+      "SENT": 5200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 249.06,
+      "PENDING": 5950,
+      "PUBLISHED": 0,
+      "SENT": 5300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 250.11,
+      "PENDING": 5950,
+      "PUBLISHED": 0,
+      "SENT": 5300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 251.15,
+      "PENDING": 5950,
+      "PUBLISHED": 0,
+      "SENT": 5300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 252.2,
+      "PENDING": 5950,
+      "PUBLISHED": 0,
+      "SENT": 5300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 253.25,
+      "PENDING": 5950,
+      "PUBLISHED": 0,
+      "SENT": 5300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 254.04,
+      "PENDING": 5850,
+      "PUBLISHED": 0,
+      "SENT": 5400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 255.09,
+      "PENDING": 5850,
+      "PUBLISHED": 0,
+      "SENT": 5400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 256.13,
+      "PENDING": 5850,
+      "PUBLISHED": 0,
+      "SENT": 5400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 257.18,
+      "PENDING": 5850,
+      "PUBLISHED": 0,
+      "SENT": 5400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 258.22,
+      "PENDING": 5850,
+      "PUBLISHED": 0,
+      "SENT": 5400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 259.01,
+      "PENDING": 5750,
+      "PUBLISHED": 0,
+      "SENT": 5500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 260.07,
+      "PENDING": 5750,
+      "PUBLISHED": 0,
+      "SENT": 5500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 261.1,
+      "PENDING": 5750,
+      "PUBLISHED": 0,
+      "SENT": 5500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 262.14,
+      "PENDING": 5750,
+      "PUBLISHED": 0,
+      "SENT": 5500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 263.2,
+      "PENDING": 5750,
+      "PUBLISHED": 0,
+      "SENT": 5500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 264.24,
+      "PENDING": 5650,
+      "PUBLISHED": 0,
+      "SENT": 5600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 265.03,
+      "PENDING": 5650,
+      "PUBLISHED": 0,
+      "SENT": 5600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 266.08,
+      "PENDING": 5650,
+      "PUBLISHED": 0,
+      "SENT": 5600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 267.11,
+      "PENDING": 5650,
+      "PUBLISHED": 0,
+      "SENT": 5600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 268.15,
+      "PENDING": 5650,
+      "PUBLISHED": 0,
+      "SENT": 5600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 269.19,
+      "PENDING": 5550,
+      "PUBLISHED": 0,
+      "SENT": 5700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 270.25,
+      "PENDING": 5550,
+      "PUBLISHED": 0,
+      "SENT": 5700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 271.03,
+      "PENDING": 5550,
+      "PUBLISHED": 0,
+      "SENT": 5700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 272.07,
+      "PENDING": 5550,
+      "PUBLISHED": 0,
+      "SENT": 5700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 273.12,
+      "PENDING": 5550,
+      "PUBLISHED": 0,
+      "SENT": 5700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 274.17,
+      "PENDING": 5450,
+      "PUBLISHED": 0,
+      "SENT": 5800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 275.23,
+      "PENDING": 5450,
+      "PUBLISHED": 0,
+      "SENT": 5800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 276.01,
+      "PENDING": 5450,
+      "PUBLISHED": 0,
+      "SENT": 5800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 277.05,
+      "PENDING": 5450,
+      "PUBLISHED": 0,
+      "SENT": 5800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 278.11,
+      "PENDING": 5450,
+      "PUBLISHED": 0,
+      "SENT": 5800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 279.16,
+      "PENDING": 5350,
+      "PUBLISHED": 0,
+      "SENT": 5900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 280.19,
+      "PENDING": 5350,
+      "PUBLISHED": 0,
+      "SENT": 5900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 281.25,
+      "PENDING": 5350,
+      "PUBLISHED": 0,
+      "SENT": 5900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 282.03,
+      "PENDING": 5350,
+      "PUBLISHED": 0,
+      "SENT": 5900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 283.08,
+      "PENDING": 5350,
+      "PUBLISHED": 0,
+      "SENT": 5900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 284.13,
+      "PENDING": 5250,
+      "PUBLISHED": 0,
+      "SENT": 6000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 285.18,
+      "PENDING": 5250,
+      "PUBLISHED": 0,
+      "SENT": 6000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 286.24,
+      "PENDING": 5250,
+      "PUBLISHED": 0,
+      "SENT": 6000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 287.02,
+      "PENDING": 5250,
+      "PUBLISHED": 0,
+      "SENT": 6000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 288.06,
+      "PENDING": 5250,
+      "PUBLISHED": 0,
+      "SENT": 6000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 289.1,
+      "PENDING": 5150,
+      "PUBLISHED": 0,
+      "SENT": 6100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 290.14,
+      "PENDING": 5150,
+      "PUBLISHED": 0,
+      "SENT": 6100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 291.19,
+      "PENDING": 5150,
+      "PUBLISHED": 0,
+      "SENT": 6100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 292.24,
+      "PENDING": 5150,
+      "PUBLISHED": 0,
+      "SENT": 6100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 293.02,
+      "PENDING": 5150,
+      "PUBLISHED": 0,
+      "SENT": 6100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 294.07,
+      "PENDING": 5050,
+      "PUBLISHED": 0,
+      "SENT": 6200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 295.13,
+      "PENDING": 5050,
+      "PUBLISHED": 0,
+      "SENT": 6200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 296.17,
+      "PENDING": 5050,
+      "PUBLISHED": 0,
+      "SENT": 6200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 297.22,
+      "PENDING": 5050,
+      "PUBLISHED": 0,
+      "SENT": 6200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 298.01,
+      "PENDING": 5050,
+      "PUBLISHED": 0,
+      "SENT": 6200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 299.06,
+      "PENDING": 4950,
+      "PUBLISHED": 0,
+      "SENT": 6300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 300.11,
+      "PENDING": 4950,
+      "PUBLISHED": 0,
+      "SENT": 6300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 301.15,
+      "PENDING": 4950,
+      "PUBLISHED": 0,
+      "SENT": 6300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 302.19,
+      "PENDING": 4950,
+      "PUBLISHED": 0,
+      "SENT": 6300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 303.23,
+      "PENDING": 4950,
+      "PUBLISHED": 0,
+      "SENT": 6300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 304.02,
+      "PENDING": 4850,
+      "PUBLISHED": 0,
+      "SENT": 6400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 305.06,
+      "PENDING": 4850,
+      "PUBLISHED": 0,
+      "SENT": 6400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 306.09,
+      "PENDING": 4850,
+      "PUBLISHED": 0,
+      "SENT": 6400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 307.14,
+      "PENDING": 4850,
+      "PUBLISHED": 0,
+      "SENT": 6400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 308.19,
+      "PENDING": 4850,
+      "PUBLISHED": 0,
+      "SENT": 6400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 309.24,
+      "PENDING": 4750,
+      "PUBLISHED": 0,
+      "SENT": 6500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 310.03,
+      "PENDING": 4750,
+      "PUBLISHED": 0,
+      "SENT": 6500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 311.07,
+      "PENDING": 4750,
+      "PUBLISHED": 0,
+      "SENT": 6500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 312.11,
+      "PENDING": 4750,
+      "PUBLISHED": 0,
+      "SENT": 6500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 313.15,
+      "PENDING": 4750,
+      "PUBLISHED": 0,
+      "SENT": 6500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 314.2,
+      "PENDING": 4650,
+      "PUBLISHED": 0,
+      "SENT": 6600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 315.26,
+      "PENDING": 4650,
+      "PUBLISHED": 0,
+      "SENT": 6600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 316.04,
+      "PENDING": 4650,
+      "PUBLISHED": 0,
+      "SENT": 6600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 317.08,
+      "PENDING": 4650,
+      "PUBLISHED": 0,
+      "SENT": 6600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 318.13,
+      "PENDING": 4650,
+      "PUBLISHED": 0,
+      "SENT": 6600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 319.19,
+      "PENDING": 4550,
+      "PUBLISHED": 0,
+      "SENT": 6700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 320.24,
+      "PENDING": 4550,
+      "PUBLISHED": 0,
+      "SENT": 6700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 321.03,
+      "PENDING": 4550,
+      "PUBLISHED": 0,
+      "SENT": 6700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 322.08,
+      "PENDING": 4550,
+      "PUBLISHED": 0,
+      "SENT": 6700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 323.12,
+      "PENDING": 4550,
+      "PUBLISHED": 0,
+      "SENT": 6700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 324.18,
+      "PENDING": 4450,
+      "PUBLISHED": 0,
+      "SENT": 6800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 325.23,
+      "PENDING": 4450,
+      "PUBLISHED": 0,
+      "SENT": 6800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 326.02,
+      "PENDING": 4450,
+      "PUBLISHED": 0,
+      "SENT": 6800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 327.07,
+      "PENDING": 4450,
+      "PUBLISHED": 0,
+      "SENT": 6800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 328.12,
+      "PENDING": 4450,
+      "PUBLISHED": 0,
+      "SENT": 6800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 329.17,
+      "PENDING": 4350,
+      "PUBLISHED": 0,
+      "SENT": 6900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 330.21,
+      "PENDING": 4350,
+      "PUBLISHED": 0,
+      "SENT": 6900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 331.25,
+      "PENDING": 4350,
+      "PUBLISHED": 0,
+      "SENT": 6900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 332.03,
+      "PENDING": 4350,
+      "PUBLISHED": 0,
+      "SENT": 6900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 333.08,
+      "PENDING": 4350,
+      "PUBLISHED": 0,
+      "SENT": 6900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 334.12,
+      "PENDING": 4250,
+      "PUBLISHED": 0,
+      "SENT": 7000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 335.17,
+      "PENDING": 4250,
+      "PUBLISHED": 0,
+      "SENT": 7000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 336.22,
+      "PENDING": 4250,
+      "PUBLISHED": 0,
+      "SENT": 7000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 337.0,
+      "PENDING": 4250,
+      "PUBLISHED": 0,
+      "SENT": 7000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 338.05,
+      "PENDING": 4250,
+      "PUBLISHED": 0,
+      "SENT": 7000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 339.1,
+      "PENDING": 4150,
+      "PUBLISHED": 0,
+      "SENT": 7100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 340.16,
+      "PENDING": 4150,
+      "PUBLISHED": 0,
+      "SENT": 7100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 341.21,
+      "PENDING": 4150,
+      "PUBLISHED": 0,
+      "SENT": 7100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 342.0,
+      "PENDING": 4150,
+      "PUBLISHED": 0,
+      "SENT": 7100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 343.05,
+      "PENDING": 4150,
+      "PUBLISHED": 0,
+      "SENT": 7100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 344.1,
+      "PENDING": 4050,
+      "PUBLISHED": 0,
+      "SENT": 7200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 345.15,
+      "PENDING": 4050,
+      "PUBLISHED": 0,
+      "SENT": 7200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 346.2,
+      "PENDING": 4050,
+      "PUBLISHED": 0,
+      "SENT": 7200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 347.26,
+      "PENDING": 4050,
+      "PUBLISHED": 0,
+      "SENT": 7200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 348.04,
+      "PENDING": 4050,
+      "PUBLISHED": 0,
+      "SENT": 7200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 349.09,
+      "PENDING": 3950,
+      "PUBLISHED": 0,
+      "SENT": 7300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 350.14,
+      "PENDING": 3950,
+      "PUBLISHED": 0,
+      "SENT": 7300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 351.18,
+      "PENDING": 3950,
+      "PUBLISHED": 0,
+      "SENT": 7300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 352.22,
+      "PENDING": 3950,
+      "PUBLISHED": 0,
+      "SENT": 7300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 353.01,
+      "PENDING": 3950,
+      "PUBLISHED": 0,
+      "SENT": 7300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 354.04,
+      "PENDING": 3850,
+      "PUBLISHED": 0,
+      "SENT": 7400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 355.1,
+      "PENDING": 3850,
+      "PUBLISHED": 0,
+      "SENT": 7400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 356.15,
+      "PENDING": 3850,
+      "PUBLISHED": 0,
+      "SENT": 7400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 357.19,
+      "PENDING": 3850,
+      "PUBLISHED": 0,
+      "SENT": 7400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 358.24,
+      "PENDING": 3750,
+      "PUBLISHED": 0,
+      "SENT": 7500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 359.03,
+      "PENDING": 3750,
+      "PUBLISHED": 0,
+      "SENT": 7500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 360.08,
+      "PENDING": 3750,
+      "PUBLISHED": 0,
+      "SENT": 7500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 361.14,
+      "PENDING": 3750,
+      "PUBLISHED": 0,
+      "SENT": 7500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 362.18,
+      "PENDING": 3750,
+      "PUBLISHED": 0,
+      "SENT": 7500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 363.22,
+      "PENDING": 3750,
+      "PUBLISHED": 0,
+      "SENT": 7500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 364.01,
+      "PENDING": 3650,
+      "PUBLISHED": 0,
+      "SENT": 7600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 365.05,
+      "PENDING": 3650,
+      "PUBLISHED": 0,
+      "SENT": 7600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 366.11,
+      "PENDING": 3650,
+      "PUBLISHED": 0,
+      "SENT": 7600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 367.15,
+      "PENDING": 3650,
+      "PUBLISHED": 0,
+      "SENT": 7600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 368.19,
+      "PENDING": 3650,
+      "PUBLISHED": 0,
+      "SENT": 7600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 369.25,
+      "PENDING": 3550,
+      "PUBLISHED": 0,
+      "SENT": 7700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 370.02,
+      "PENDING": 3550,
+      "PUBLISHED": 0,
+      "SENT": 7700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 371.06,
+      "PENDING": 3550,
+      "PUBLISHED": 0,
+      "SENT": 7700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 372.1,
+      "PENDING": 3550,
+      "PUBLISHED": 0,
+      "SENT": 7700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 373.16,
+      "PENDING": 3550,
+      "PUBLISHED": 0,
+      "SENT": 7700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 374.21,
+      "PENDING": 3450,
+      "PUBLISHED": 0,
+      "SENT": 7800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 375.26,
+      "PENDING": 3450,
+      "PUBLISHED": 0,
+      "SENT": 7800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 376.04,
+      "PENDING": 3450,
+      "PUBLISHED": 0,
+      "SENT": 7800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 377.09,
+      "PENDING": 3450,
+      "PUBLISHED": 0,
+      "SENT": 7800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 378.14,
+      "PENDING": 3450,
+      "PUBLISHED": 0,
+      "SENT": 7800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 379.17,
+      "PENDING": 3350,
+      "PUBLISHED": 0,
+      "SENT": 7900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 380.22,
+      "PENDING": 3350,
+      "PUBLISHED": 0,
+      "SENT": 7900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 381.01,
+      "PENDING": 3350,
+      "PUBLISHED": 0,
+      "SENT": 7900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 382.07,
+      "PENDING": 3350,
+      "PUBLISHED": 0,
+      "SENT": 7900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 383.11,
+      "PENDING": 3350,
+      "PUBLISHED": 0,
+      "SENT": 7900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 384.17,
+      "PENDING": 3250,
+      "PUBLISHED": 0,
+      "SENT": 8000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 385.22,
+      "PENDING": 3250,
+      "PUBLISHED": 0,
+      "SENT": 8000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 386.01,
+      "PENDING": 3250,
+      "PUBLISHED": 0,
+      "SENT": 8000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 387.05,
+      "PENDING": 3250,
+      "PUBLISHED": 0,
+      "SENT": 8000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 388.09,
+      "PENDING": 3250,
+      "PUBLISHED": 0,
+      "SENT": 8000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 389.12,
+      "PENDING": 3150,
+      "PUBLISHED": 0,
+      "SENT": 8100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 390.17,
+      "PENDING": 3150,
+      "PUBLISHED": 0,
+      "SENT": 8100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 391.21,
+      "PENDING": 3150,
+      "PUBLISHED": 0,
+      "SENT": 8100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 392.24,
+      "PENDING": 3150,
+      "PUBLISHED": 0,
+      "SENT": 8100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 393.02,
+      "PENDING": 3150,
+      "PUBLISHED": 0,
+      "SENT": 8100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 394.07,
+      "PENDING": 3050,
+      "PUBLISHED": 0,
+      "SENT": 8200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 395.1,
+      "PENDING": 3050,
+      "PUBLISHED": 0,
+      "SENT": 8200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 396.13,
+      "PENDING": 3050,
+      "PUBLISHED": 0,
+      "SENT": 8200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 397.16,
+      "PENDING": 3050,
+      "PUBLISHED": 0,
+      "SENT": 8200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 398.2,
+      "PENDING": 2950,
+      "PUBLISHED": 0,
+      "SENT": 8300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 399.25,
+      "PENDING": 2950,
+      "PUBLISHED": 0,
+      "SENT": 8300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 400.03,
+      "PENDING": 2950,
+      "PUBLISHED": 0,
+      "SENT": 8300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 401.06,
+      "PENDING": 2950,
+      "PUBLISHED": 0,
+      "SENT": 8300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 402.11,
+      "PENDING": 2950,
+      "PUBLISHED": 0,
+      "SENT": 8300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 403.15,
+      "PENDING": 2850,
+      "PUBLISHED": 0,
+      "SENT": 8400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 404.19,
+      "PENDING": 2850,
+      "PUBLISHED": 0,
+      "SENT": 8400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 405.23,
+      "PENDING": 2850,
+      "PUBLISHED": 0,
+      "SENT": 8400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 406.0,
+      "PENDING": 2850,
+      "PUBLISHED": 0,
+      "SENT": 8400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 407.05,
+      "PENDING": 2850,
+      "PUBLISHED": 0,
+      "SENT": 8400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 408.09,
+      "PENDING": 2750,
+      "PUBLISHED": 0,
+      "SENT": 8500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 409.14,
+      "PENDING": 2750,
+      "PUBLISHED": 0,
+      "SENT": 8500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 410.19,
+      "PENDING": 2750,
+      "PUBLISHED": 0,
+      "SENT": 8500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 411.24,
+      "PENDING": 2750,
+      "PUBLISHED": 0,
+      "SENT": 8500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 412.02,
+      "PENDING": 2750,
+      "PUBLISHED": 0,
+      "SENT": 8500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 413.07,
+      "PENDING": 2650,
+      "PUBLISHED": 0,
+      "SENT": 8600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 414.12,
+      "PENDING": 2650,
+      "PUBLISHED": 0,
+      "SENT": 8600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 415.16,
+      "PENDING": 2650,
+      "PUBLISHED": 0,
+      "SENT": 8600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 416.21,
+      "PENDING": 2650,
+      "PUBLISHED": 0,
+      "SENT": 8600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 417.26,
+      "PENDING": 2650,
+      "PUBLISHED": 0,
+      "SENT": 8600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 418.04,
+      "PENDING": 2550,
+      "PUBLISHED": 0,
+      "SENT": 8700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 419.09,
+      "PENDING": 2550,
+      "PUBLISHED": 0,
+      "SENT": 8700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 420.13,
+      "PENDING": 2550,
+      "PUBLISHED": 0,
+      "SENT": 8700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 421.18,
+      "PENDING": 2550,
+      "PUBLISHED": 0,
+      "SENT": 8700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 422.22,
+      "PENDING": 2550,
+      "PUBLISHED": 0,
+      "SENT": 8700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 423.0,
+      "PENDING": 2450,
+      "PUBLISHED": 0,
+      "SENT": 8800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 424.06,
+      "PENDING": 2450,
+      "PUBLISHED": 0,
+      "SENT": 8800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 425.1,
+      "PENDING": 2450,
+      "PUBLISHED": 0,
+      "SENT": 8800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 426.15,
+      "PENDING": 2450,
+      "PUBLISHED": 0,
+      "SENT": 8800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 427.2,
+      "PENDING": 2450,
+      "PUBLISHED": 0,
+      "SENT": 8800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 428.26,
+      "PENDING": 2350,
+      "PUBLISHED": 0,
+      "SENT": 8900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 429.04,
+      "PENDING": 2350,
+      "PUBLISHED": 0,
+      "SENT": 8900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 430.07,
+      "PENDING": 2350,
+      "PUBLISHED": 0,
+      "SENT": 8900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 431.1,
+      "PENDING": 2350,
+      "PUBLISHED": 0,
+      "SENT": 8900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 432.15,
+      "PENDING": 2350,
+      "PUBLISHED": 0,
+      "SENT": 8900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 433.18,
+      "PENDING": 2250,
+      "PUBLISHED": 0,
+      "SENT": 9000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 434.23,
+      "PENDING": 2250,
+      "PUBLISHED": 0,
+      "SENT": 9000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 435.0,
+      "PENDING": 2250,
+      "PUBLISHED": 0,
+      "SENT": 9000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 436.04,
+      "PENDING": 2250,
+      "PUBLISHED": 0,
+      "SENT": 9000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 437.08,
+      "PENDING": 2250,
+      "PUBLISHED": 0,
+      "SENT": 9000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 438.12,
+      "PENDING": 2150,
+      "PUBLISHED": 0,
+      "SENT": 9100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 439.17,
+      "PENDING": 2150,
+      "PUBLISHED": 0,
+      "SENT": 9100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 440.2,
+      "PENDING": 2150,
+      "PUBLISHED": 0,
+      "SENT": 9100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 441.24,
+      "PENDING": 2150,
+      "PUBLISHED": 0,
+      "SENT": 9100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 442.02,
+      "PENDING": 2150,
+      "PUBLISHED": 0,
+      "SENT": 9100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 443.05,
+      "PENDING": 2050,
+      "PUBLISHED": 0,
+      "SENT": 9200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 444.07,
+      "PENDING": 2050,
+      "PUBLISHED": 0,
+      "SENT": 9200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 445.1,
+      "PENDING": 2050,
+      "PUBLISHED": 0,
+      "SENT": 9200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 446.14,
+      "PENDING": 2050,
+      "PUBLISHED": 0,
+      "SENT": 9200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 447.17,
+      "PENDING": 1950,
+      "PUBLISHED": 0,
+      "SENT": 9300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 448.21,
+      "PENDING": 1950,
+      "PUBLISHED": 0,
+      "SENT": 9300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 449.25,
+      "PENDING": 1950,
+      "PUBLISHED": 0,
+      "SENT": 9300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 450.04,
+      "PENDING": 1950,
+      "PUBLISHED": 0,
+      "SENT": 9300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 451.07,
+      "PENDING": 1950,
+      "PUBLISHED": 0,
+      "SENT": 9300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 452.12,
+      "PENDING": 1850,
+      "PUBLISHED": 0,
+      "SENT": 9400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 453.17,
+      "PENDING": 1850,
+      "PUBLISHED": 0,
+      "SENT": 9400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 454.21,
+      "PENDING": 1850,
+      "PUBLISHED": 0,
+      "SENT": 9400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 455.24,
+      "PENDING": 1850,
+      "PUBLISHED": 0,
+      "SENT": 9400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 456.01,
+      "PENDING": 1850,
+      "PUBLISHED": 0,
+      "SENT": 9400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 457.05,
+      "PENDING": 1750,
+      "PUBLISHED": 0,
+      "SENT": 9500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 458.1,
+      "PENDING": 1750,
+      "PUBLISHED": 0,
+      "SENT": 9500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 459.15,
+      "PENDING": 1750,
+      "PUBLISHED": 0,
+      "SENT": 9500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 460.2,
+      "PENDING": 1750,
+      "PUBLISHED": 0,
+      "SENT": 9500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 461.25,
+      "PENDING": 1750,
+      "PUBLISHED": 0,
+      "SENT": 9500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 462.04,
+      "PENDING": 1650,
+      "PUBLISHED": 0,
+      "SENT": 9600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 463.09,
+      "PENDING": 1650,
+      "PUBLISHED": 0,
+      "SENT": 9600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 464.14,
+      "PENDING": 1650,
+      "PUBLISHED": 0,
+      "SENT": 9600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 465.18,
+      "PENDING": 1650,
+      "PUBLISHED": 0,
+      "SENT": 9600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 466.22,
+      "PENDING": 1650,
+      "PUBLISHED": 0,
+      "SENT": 9600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 467.01,
+      "PENDING": 1550,
+      "PUBLISHED": 0,
+      "SENT": 9700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 468.07,
+      "PENDING": 1550,
+      "PUBLISHED": 0,
+      "SENT": 9700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 469.12,
+      "PENDING": 1550,
+      "PUBLISHED": 0,
+      "SENT": 9700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 470.15,
+      "PENDING": 1550,
+      "PUBLISHED": 0,
+      "SENT": 9700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 471.2,
+      "PENDING": 1550,
+      "PUBLISHED": 0,
+      "SENT": 9700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 472.25,
+      "PENDING": 1450,
+      "PUBLISHED": 0,
+      "SENT": 9800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 473.04,
+      "PENDING": 1450,
+      "PUBLISHED": 0,
+      "SENT": 9800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 474.09,
+      "PENDING": 1450,
+      "PUBLISHED": 0,
+      "SENT": 9800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 475.13,
+      "PENDING": 1450,
+      "PUBLISHED": 0,
+      "SENT": 9800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 476.17,
+      "PENDING": 1450,
+      "PUBLISHED": 0,
+      "SENT": 9800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 477.22,
+      "PENDING": 1350,
+      "PUBLISHED": 0,
+      "SENT": 9900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 478.0,
+      "PENDING": 1350,
+      "PUBLISHED": 0,
+      "SENT": 9900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 479.06,
+      "PENDING": 1350,
+      "PUBLISHED": 0,
+      "SENT": 9900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 480.11,
+      "PENDING": 1350,
+      "PUBLISHED": 0,
+      "SENT": 9900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 481.15,
+      "PENDING": 1350,
+      "PUBLISHED": 0,
+      "SENT": 9900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 482.19,
+      "PENDING": 1250,
+      "PUBLISHED": 0,
+      "SENT": 10000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 483.24,
+      "PENDING": 1250,
+      "PUBLISHED": 0,
+      "SENT": 10000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 484.02,
+      "PENDING": 1250,
+      "PUBLISHED": 0,
+      "SENT": 10000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 485.07,
+      "PENDING": 1250,
+      "PUBLISHED": 0,
+      "SENT": 10000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 486.12,
+      "PENDING": 1250,
+      "PUBLISHED": 0,
+      "SENT": 10000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 487.16,
+      "PENDING": 1150,
+      "PUBLISHED": 0,
+      "SENT": 10100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 488.22,
+      "PENDING": 1150,
+      "PUBLISHED": 0,
+      "SENT": 10100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 489.26,
+      "PENDING": 1150,
+      "PUBLISHED": 0,
+      "SENT": 10100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 490.04,
+      "PENDING": 1150,
+      "PUBLISHED": 0,
+      "SENT": 10100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 491.08,
+      "PENDING": 1150,
+      "PUBLISHED": 0,
+      "SENT": 10100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 492.13,
+      "PENDING": 1050,
+      "PUBLISHED": 0,
+      "SENT": 10200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 493.17,
+      "PENDING": 1050,
+      "PUBLISHED": 0,
+      "SENT": 10200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 494.22,
+      "PENDING": 1050,
+      "PUBLISHED": 0,
+      "SENT": 10200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 495.0,
+      "PENDING": 1050,
+      "PUBLISHED": 0,
+      "SENT": 10200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 496.06,
+      "PENDING": 1050,
+      "PUBLISHED": 0,
+      "SENT": 10200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 497.09,
+      "PENDING": 950,
+      "PUBLISHED": 0,
+      "SENT": 10300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 498.15,
+      "PENDING": 950,
+      "PUBLISHED": 0,
+      "SENT": 10300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 499.2,
+      "PENDING": 950,
+      "PUBLISHED": 0,
+      "SENT": 10300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 500.24,
+      "PENDING": 950,
+      "PUBLISHED": 0,
+      "SENT": 10300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 501.03,
+      "PENDING": 950,
+      "PUBLISHED": 0,
+      "SENT": 10300,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 502.08,
+      "PENDING": 850,
+      "PUBLISHED": 0,
+      "SENT": 10400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 503.14,
+      "PENDING": 850,
+      "PUBLISHED": 0,
+      "SENT": 10400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 504.19,
+      "PENDING": 850,
+      "PUBLISHED": 0,
+      "SENT": 10400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 505.24,
+      "PENDING": 850,
+      "PUBLISHED": 0,
+      "SENT": 10400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 506.03,
+      "PENDING": 850,
+      "PUBLISHED": 0,
+      "SENT": 10400,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 507.07,
+      "PENDING": 750,
+      "PUBLISHED": 0,
+      "SENT": 10500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 508.12,
+      "PENDING": 750,
+      "PUBLISHED": 0,
+      "SENT": 10500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 509.17,
+      "PENDING": 750,
+      "PUBLISHED": 0,
+      "SENT": 10500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 510.21,
+      "PENDING": 750,
+      "PUBLISHED": 0,
+      "SENT": 10500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 511.26,
+      "PENDING": 750,
+      "PUBLISHED": 0,
+      "SENT": 10500,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 512.04,
+      "PENDING": 650,
+      "PUBLISHED": 0,
+      "SENT": 10600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 513.09,
+      "PENDING": 650,
+      "PUBLISHED": 0,
+      "SENT": 10600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 514.14,
+      "PENDING": 650,
+      "PUBLISHED": 0,
+      "SENT": 10600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 515.19,
+      "PENDING": 650,
+      "PUBLISHED": 0,
+      "SENT": 10600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 516.23,
+      "PENDING": 650,
+      "PUBLISHED": 0,
+      "SENT": 10600,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 517.01,
+      "PENDING": 550,
+      "PUBLISHED": 0,
+      "SENT": 10700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 518.06,
+      "PENDING": 550,
+      "PUBLISHED": 0,
+      "SENT": 10700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 519.11,
+      "PENDING": 550,
+      "PUBLISHED": 0,
+      "SENT": 10700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 520.16,
+      "PENDING": 550,
+      "PUBLISHED": 0,
+      "SENT": 10700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 521.21,
+      "PENDING": 550,
+      "PUBLISHED": 0,
+      "SENT": 10700,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 522.26,
+      "PENDING": 450,
+      "PUBLISHED": 0,
+      "SENT": 10800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 523.05,
+      "PENDING": 450,
+      "PUBLISHED": 0,
+      "SENT": 10800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 524.1,
+      "PENDING": 450,
+      "PUBLISHED": 0,
+      "SENT": 10800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 525.14,
+      "PENDING": 450,
+      "PUBLISHED": 0,
+      "SENT": 10800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 526.18,
+      "PENDING": 450,
+      "PUBLISHED": 0,
+      "SENT": 10800,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 527.23,
+      "PENDING": 350,
+      "PUBLISHED": 0,
+      "SENT": 10900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 528.02,
+      "PENDING": 350,
+      "PUBLISHED": 0,
+      "SENT": 10900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 529.07,
+      "PENDING": 350,
+      "PUBLISHED": 0,
+      "SENT": 10900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 530.12,
+      "PENDING": 350,
+      "PUBLISHED": 0,
+      "SENT": 10900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 531.18,
+      "PENDING": 350,
+      "PUBLISHED": 0,
+      "SENT": 10900,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 532.24,
+      "PENDING": 250,
+      "PUBLISHED": 0,
+      "SENT": 11000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 533.02,
+      "PENDING": 250,
+      "PUBLISHED": 0,
+      "SENT": 11000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 534.07,
+      "PENDING": 250,
+      "PUBLISHED": 0,
+      "SENT": 11000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 535.11,
+      "PENDING": 250,
+      "PUBLISHED": 0,
+      "SENT": 11000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 536.15,
+      "PENDING": 250,
+      "PUBLISHED": 0,
+      "SENT": 11000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 537.2,
+      "PENDING": 150,
+      "PUBLISHED": 0,
+      "SENT": 11100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 538.25,
+      "PENDING": 150,
+      "PUBLISHED": 0,
+      "SENT": 11100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 539.02,
+      "PENDING": 150,
+      "PUBLISHED": 0,
+      "SENT": 11100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 540.07,
+      "PENDING": 150,
+      "PUBLISHED": 0,
+      "SENT": 11100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 541.11,
+      "PENDING": 150,
+      "PUBLISHED": 0,
+      "SENT": 11100,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 542.16,
+      "PENDING": 50,
+      "PUBLISHED": 0,
+      "SENT": 11200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 543.21,
+      "PENDING": 50,
+      "PUBLISHED": 0,
+      "SENT": 11200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 544.0,
+      "PENDING": 50,
+      "PUBLISHED": 0,
+      "SENT": 11200,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    {
+      "t_s": 545.04,
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 11250,
+      "SKIPPED": 0,
+      "DEAD": 0
+    }
+  ],
+  "w3": {
+    "lost": {
+      "burst": 0,
+      "mix": 0
+    },
+    "lost_total": 0,
+    "request_failures": 0,
+    "inline_failures": 0,
+    "outage_end_at_s": 25.003,
+    "all_terminal_at_s": 575.04,
+    "finished_before_recovery": false,
+    "recovery_to_all_terminal_s": 550.037,
+    "first_success_after_recovery_s": 0.349,
+    "fcm_rejected": 400,
+    "dead": 0,
+    "duplicates": 0
+  }
+}

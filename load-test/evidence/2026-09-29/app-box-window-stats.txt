@@ -1,0 +1,12 @@
+viewport-s1 no samples
+viewport-s3-300rps         n= 17 api_cpu avg    79% max  107% | pg_cpu avg  114% max  129% | load1 max  12.9 | pg_active max  11 | mem_avail min  467MB
+viewport-s4-stress         n= 20 api_cpu avg    76% max   98% | pg_cpu avg  116% max  133% | load1 max  12.3 | pg_active max  11 | mem_avail min  443MB
+hotzone-expiry-200rps      n= 25 api_cpu avg    36% max   96% | pg_cpu avg    4% max   15% | load1 max   4.6 | pg_active max   1 | mem_avail min  454MB
+hotzone-cap                n= 25 api_cpu avg   105% max  162% | pg_cpu avg   12% max   25% | load1 max  30.6 | pg_active max   3 | mem_avail min  428MB
+viewport-s1-rerun          n= 10 api_cpu avg     1% max    2% | pg_cpu avg    5% max   17% | load1 max   7.1 | pg_active max   2 | mem_avail min  459MB
+viewport-s1-40vu           n=  9 api_cpu avg     1% max    1% | pg_cpu avg    3% max    8% | load1 max   1.4 | pg_active max   1 | mem_avail min  486MB
+hotzone-scale-400rps       n=  6 api_cpu avg    48% max   52% | pg_cpu avg    4% max    5% | load1 max   0.7 | pg_active max   2 | mem_avail min  354MB
+hotzone-scale-600rps       n=  7 api_cpu avg    59% max   72% | pg_cpu avg    7% max   16% | load1 max   1.6 | pg_active max   1 | mem_avail min  496MB
+hotzone-scale-800rps       n=  6 api_cpu avg    89% max   93% | pg_cpu avg    9% max   17% | load1 max   1.4 | pg_active max   2 | mem_avail min  500MB
+collection-summary-smoke   n=  1 api_cpu avg     0% max    0% | pg_cpu avg   29% max   29% | load1 max   0.6 | pg_active max   1 | mem_avail min  739MB
+collection-summary-ramp    n= 40 api_cpu avg    12% max   31% | pg_cpu avg  155% max  193% | load1 max  12.5 | pg_active max  14 | mem_avail min  513MB

@@ -1,0 +1,87 @@
+{
+  "mode": "sync",
+  "workload": "w1",
+  "round": 2,
+  "count": 2000,
+  "rate": 50,
+  "requests": {
+    "offered": 2000,
+    "success": 2000,
+    "errors": {},
+    "latency": {
+      "n": 2000,
+      "p50_ms": 46.25416698399931,
+      "p95_ms": 50.127958005759865,
+      "p99_ms": 52.22050001611933,
+      "max_ms": 71.85933302389458,
+      "mean_ms": 45.95563878599205
+    },
+    "service": {
+      "n": 2000,
+      "p50_ms": 43.1196250137873,
+      "p95_ms": 46.85187496943399,
+      "p99_ms": 48.65533398697153,
+      "max_ms": 69.72554104868323,
+      "mean_ms": 42.99780029570684
+    }
+  },
+  "e2e_delivery": {
+    "n": 2000,
+    "p50_ms": 40.14,
+    "p95_ms": 42.972,
+    "p99_ms": 44.847,
+    "max_ms": 59.66,
+    "mean_ms": 40.013837
+  },
+  "drain": {
+    "complete": true,
+    "elapsed_s": 0.0,
+    "final": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    }
+  },
+  "fcm": {
+    "calls": 2000,
+    "ok": 2000,
+    "rejected": 0,
+    "distinct_ok_ids": 2000,
+    "duplicate_ids": 0,
+    "duplicate_extra_deliveries": 0,
+    "max_per_id": 1,
+    "outage_end_wall": null,
+    "first_ok_after_outage_wall": null
+  },
+  "reconcile": {
+    "rows": 2000,
+    "counts": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    "duplicate_event_keys": 0,
+    "sent_not_delivered": 0,
+    "delivered_not_sent": 0,
+    "balanced": true
+  },
+  "resources": {
+    "pg_cpu_seconds": 3.751,
+    "kafka_cpu_seconds": 0.438,
+    "db": {
+      "xact_commit": 10038,
+      "xact_rollback": 0,
+      "tup_inserted": 2000,
+      "tup_updated": 4022,
+      "tup_returned": 21319,
+      "tup_fetched": 8361
+    },
+    "wall_seconds": 40.177
+  },
+  "pipeline": {},
+  "raw": "w1-sync-2.jsonl.gz"
+}

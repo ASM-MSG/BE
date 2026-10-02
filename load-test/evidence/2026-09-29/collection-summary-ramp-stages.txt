@@ -1,0 +1,8 @@
+stage(s)         rps     p50ms     p95ms     p99ms    hk_act   hk_pend    acq_ms    use_ms    tomcat   app_cpu    db_cpu tup_ret/s  tmp_MB/s   gc_ms/s   heap_MB
+  0-40         38.2     400.0     545.0    1000.0       4.0       0.0     249.1    2261.0       5.0       2.2       nan 4022659.6       1.2      31.8     323.3
+ 40-80         59.6    1000.0    1000.0    1000.0      10.0     190.0    6305.1    3830.0     200.0       1.9       nan 5082372.6       0.0      19.8     326.4
+ 80-120        82.7    1000.0    1000.0    1000.0      10.0     190.0    7102.5    3830.0     200.0       1.5       nan 4572608.4       0.0      21.2     216.2
+120-160         nan       nan       nan       nan       nan       nan       nan       nan       nan       nan       nan 4681634.0       0.0       nan       nan
+160-200         nan       nan       nan       nan       nan       nan       nan       nan       nan       nan       nan 4458528.2       0.0       nan       nan
+200-240         nan       nan       nan       nan       nan       nan       nan       nan       nan       nan       nan 4458528.2       0.0       nan       nan
+240-280         nan       nan       nan       nan       nan       nan       nan       nan       nan       nan       nan 4858245.4       0.0       nan       nan

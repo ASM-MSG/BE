@@ -1,0 +1,38 @@
+ miny  | maxy  | minx | maxx 
+-------+-------+------+------
+ 19446 | 19490 | 9513 | 9558
+(1 row)
+
+                                                                           QUERY PLAN                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=3650.35..3650.69 rows=136 width=47) (actual time=11.013..11.060 rows=411 loops=1)
+   Buffers: shared hit=6020
+   ->  Sort  (cost=3650.35..3650.69 rows=136 width=47) (actual time=11.012..11.031 rows=411 loops=1)
+         Sort Key: g.grid_y, g.grid_x
+         Sort Method: quicksort  Memory: 79kB
+         Buffers: shared hit=6020
+         ->  Nested Loop Left Join  (cost=174.19..3645.53 rows=136 width=47) (actual time=0.883..10.635 rows=411 loops=1)
+               Buffers: shared hit=6017
+               ->  Nested Loop  (cost=173.91..3112.24 rows=136 width=30) (actual time=0.862..9.494 rows=411 loops=1)
+                     Buffers: shared hit=4784
+                     ->  Bitmap Heap Scan on grids g  (cost=173.49..1429.47 rows=404 width=30) (actual time=0.689..5.180 rows=1221 loops=1)
+                           Recheck Cond: ((grid_y >= 19505) AND (grid_y <= 19551) AND (grid_x >= 9536) AND (grid_x <= 9581))
+                           Heap Blocks: exact=1094
+                           Buffers: shared hit=1117
+                           ->  Bitmap Index Scan on uq_grids_yx  (cost=0.00..173.38 rows=404 width=0) (actual time=0.534..0.534 rows=1221 loops=1)
+                                 Index Cond: ((grid_y >= 19505) AND (grid_y <= 19551) AND (grid_x >= 9536) AND (grid_x <= 9581))
+                                 Buffers: shared hit=23
+                     ->  Index Only Scan using user_grids_pkey on user_grids ug  (cost=0.42..4.17 rows=1 width=11) (actual time=0.003..0.003 rows=0 loops=1221)
+                           Index Cond: ((user_id = 501) AND (grid_id = (g.grid_id)::text))
+                           Heap Fetches: 0
+                           Buffers: shared hit=3667
+               ->  Index Scan using regions_pkey on regions r  (cost=0.28..3.92 rows=1 width=39) (actual time=0.002..0.002 rows=1 loops=411)
+                     Index Cond: ((region_code)::text = (g.region_code)::text)
+                     Buffers: shared hit=1233
+ Settings: search_path = '"$user", public, topology, tiger'
+ Planning:
+   Buffers: shared hit=346
+ Planning Time: 3.191 ms
+ Execution Time: 11.214 ms
+(29 rows)
+

@@ -1,0 +1,24 @@
+{
+  "mode": "outbox_kafka",
+  "workload": "idle",
+  "seconds": 30,
+  "resources": {
+    "pg_cpu_seconds": 0.027,
+    "kafka_cpu_seconds": 0.495,
+    "db": {
+      "xact_commit": 19,
+      "xact_rollback": 0,
+      "tup_inserted": 0,
+      "tup_updated": 9,
+      "tup_returned": 1522,
+      "tup_fetched": 586
+    },
+    "wall_seconds": 30.202
+  },
+  "pipeline": {
+    "relay": {
+      "polls": 7
+    },
+    "consumer": {}
+  }
+}

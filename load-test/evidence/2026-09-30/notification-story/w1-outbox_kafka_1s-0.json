@@ -1,0 +1,95 @@
+{
+  "mode": "outbox_kafka_1s",
+  "workload": "w1",
+  "round": 0,
+  "count": 2000,
+  "rate": 50,
+  "requests": {
+    "offered": 2000,
+    "success": 2000,
+    "errors": {},
+    "latency": {
+      "n": 2000,
+      "p50_ms": 7.540875056292862,
+      "p95_ms": 11.410792067181319,
+      "p99_ms": 13.503375055734068,
+      "max_ms": 21.48662501713261,
+      "mean_ms": 7.403458619170124
+    },
+    "service": {
+      "n": 2000,
+      "p50_ms": 2.373749972321093,
+      "p95_ms": 4.132124944590032,
+      "p99_ms": 6.539458001498133,
+      "max_ms": 19.29887500591576,
+      "mean_ms": 2.5198723185167182
+    }
+  },
+  "e2e_delivery": {
+    "n": 2000,
+    "p50_ms": 23708.615,
+    "p95_ms": 45442.462,
+    "p99_ms": 47342.224,
+    "max_ms": 47805.563,
+    "mean_ms": 24033.7351355
+  },
+  "drain": {
+    "complete": true,
+    "elapsed_s": 47.84,
+    "final": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    }
+  },
+  "fcm": {
+    "calls": 2000,
+    "ok": 2000,
+    "rejected": 0,
+    "distinct_ok_ids": 2000,
+    "duplicate_ids": 0,
+    "duplicate_extra_deliveries": 0,
+    "max_per_id": 1,
+    "outage_end_wall": null,
+    "first_ok_after_outage_wall": null
+  },
+  "reconcile": {
+    "rows": 2000,
+    "counts": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    "duplicate_event_keys": 0,
+    "sent_not_delivered": 0,
+    "delivered_not_sent": 0,
+    "balanced": true
+  },
+  "resources": {
+    "pg_cpu_seconds": 4.916,
+    "kafka_cpu_seconds": 1.993,
+    "db": {
+      "xact_commit": 14312,
+      "xact_rollback": 0,
+      "tup_inserted": 2014,
+      "tup_updated": 6012,
+      "tup_returned": 389918,
+      "tup_fetched": 15607
+    },
+    "wall_seconds": 88.099
+  },
+  "pipeline": {
+    "relay": {
+      "polls": 84,
+      "published": 2000
+    },
+    "consumer": {
+      "sent": 2000
+    }
+  },
+  "raw": "w1-outbox_kafka_1s-0.jsonl.gz"
+}
