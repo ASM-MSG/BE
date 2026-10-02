@@ -1,0 +1,273 @@
+Timing is off.
+BEGIN
+SELECT 3558
+SELECT 104
+ALTER TABLE
+UPDATE 104
+INSERT 0 104
+UPDATE 104
+INSERT 0 462200
+INSERT 0 1111000
+INSERT 0 443712
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+### 적재 형상
+ n | user_id | n_videos | n_grids | user_grids_rows 
+---+---------+----------+---------+-----------------
+ 0 |     502 |     1000 |     200 |             192
+ 1 |     503 |    10000 |    2000 |            1920
+ 2 |     504 |   100000 |   20000 |           19200
+ 3 |     505 |   800000 |  400000 |          384000
+(4 rows)
+
+ videos_total | users_total 
+--------------+-------------
+      1471000 |         604
+(1 row)
+
+### (현재) visitedRegionCount — 영상 1천
+                                                                         QUERY PLAN                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=6930.50..6930.51 rows=1 width=4) (actual time=78.709..78.710 rows=1 loops=1)
+   Buffers: shared hit=3857 read=224
+   ->  Sort  (cost=6927.04..6928.77 rows=692 width=11) (actual time=78.533..78.576 rows=960 loops=1)
+         Sort Key: g.region_code
+         Sort Method: quicksort  Memory: 47kB
+         Buffers: shared hit=3857 read=224
+         ->  Nested Loop  (cost=0.85..6894.40 rows=692 width=11) (actual time=2.449..77.773 rows=960 loops=1)
+               Buffers: shared hit=3857 read=224
+               ->  Index Scan using idx_videos_user_created on videos v  (cost=0.43..1316.19 rows=692 width=11) (actual time=1.474..4.599 rows=960 loops=1)
+                     Index Cond: (user_id = 502)
+                     Filter: ((status)::text <> 'DELETED'::text)
+                     Rows Removed by Filter: 40
+                     Buffers: shared hit=220 read=21
+               ->  Index Scan using grids_pkey on grids g  (cost=0.42..8.06 rows=1 width=22) (actual time=0.076..0.076 rows=1 loops=960)
+                     Index Cond: ((grid_id)::text = (v.grid_id)::text)
+                     Buffers: shared hit=3637 read=203
+ Planning:
+   Buffers: shared hit=47 read=34
+ Planning Time: 5.338 ms
+ Execution Time: 78.785 ms
+(20 rows)
+
+### (현재) visitedRegionCount — 영상 1만
+                                                                            QUERY PLAN                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=46554.15..46554.16 rows=1 width=4) (actual time=164.026..177.813 rows=1 loops=1)
+   Buffers: shared hit=37057 read=1575
+   ->  Gather Merge  (cost=45315.35..46528.12 rows=10413 width=11) (actual time=159.326..176.035 rows=9600 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=37057 read=1575
+         ->  Sort  (cost=44315.33..44326.18 rows=4339 width=11) (actual time=113.409..113.674 rows=3200 loops=3)
+               Sort Key: g.region_code
+               Sort Method: quicksort  Memory: 173kB
+               Buffers: shared hit=37057 read=1575
+               Worker 0:  Sort Method: quicksort  Memory: 172kB
+               Worker 1:  Sort Method: quicksort  Memory: 170kB
+               ->  Nested Loop  (cost=263.98..44053.18 rows=4339 width=11) (actual time=1.773..106.485 rows=3200 loops=3)
+                     Buffers: shared hit=37042 read=1574
+                     ->  Parallel Bitmap Heap Scan on videos v  (cost=263.56..21780.34 rows=4339 width=11) (actual time=1.525..19.931 rows=3200 loops=3)
+                           Recheck Cond: (user_id = 503)
+                           Filter: ((status)::text <> 'DELETED'::text)
+                           Rows Removed by Filter: 133
+                           Heap Blocks: exact=59
+                           Buffers: shared hit=4 read=210
+                           ->  Bitmap Index Scan on idx_videos_user_created  (cost=0.00..260.96 rows=10737 width=0) (actual time=4.388..4.389 rows=10000 loops=1)
+                                 Index Cond: (user_id = 503)
+                                 Buffers: shared hit=3 read=38
+                     ->  Index Scan using grids_pkey on grids g  (cost=0.42..5.13 rows=1 width=22) (actual time=0.026..0.026 rows=1 loops=9600)
+                           Index Cond: ((grid_id)::text = (v.grid_id)::text)
+                           Buffers: shared hit=37038 read=1364
+ Planning:
+   Buffers: shared hit=10
+ Planning Time: 0.275 ms
+ Execution Time: 177.992 ms
+(30 rows)
+
+### (현재) visitedRegionCount — 영상 10만
+                                                                              QUERY PLAN                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=77744.61..77744.63 rows=1 width=4) (actual time=1399.598..1419.191 rows=1 loops=1)
+   Buffers: shared hit=181 read=21121, temp read=3323 written=3364
+   ->  Gather Merge  (cost=66211.29..77502.25 rows=96946 width=11) (actual time=1323.054..1401.508 rows=96000 loops=1)
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=181 read=21121, temp read=3323 written=3364
+         ->  Sort  (cost=65211.27..65312.25 rows=40394 width=11) (actual time=1257.480..1261.319 rows=32000 loops=3)
+               Sort Key: g.region_code
+               Sort Method: quicksort  Memory: 734kB
+               Buffers: shared hit=181 read=21121, temp read=3323 written=3364
+               Worker 0:  Sort Method: quicksort  Memory: 2930kB
+               Worker 1:  Sort Method: quicksort  Memory: 1276kB
+               ->  Parallel Hash Join  (cost=29177.93..62120.75 rows=40394 width=11) (actual time=1102.414..1193.466 rows=32000 loops=3)
+                     Hash Cond: ((v.grid_id)::text = (g.grid_id)::text)
+                     Buffers: shared hit=165 read=21121, temp read=3323 written=3364
+                     ->  Parallel Bitmap Heap Scan on videos v  (cost=2438.40..33295.18 rows=40394 width=11) (actual time=18.884..307.440 rows=32000 loops=3)
+                           Recheck Cond: (user_id = 504)
+                           Filter: ((status)::text <> 'DELETED'::text)
+                           Rows Removed by Filter: 1333
+                           Heap Blocks: exact=571
+                           Buffers: shared hit=4 read=2107
+                           ->  Bitmap Index Scan on idx_videos_user_created  (cost=0.00..2414.16 rows=99965 width=0) (actual time=18.125..18.126 rows=100000 loops=1)
+                                 Index Cond: (user_id = 504)
+                                 Buffers: shared hit=3 read=383
+                     ->  Parallel Hash  (cost=21777.46..21777.46 rows=270246 width=22) (actual time=744.097..744.098 rows=216197 loops=3)
+                           Buckets: 131072  Batches: 8  Memory Usage: 5504kB
+                           Buffers: shared hit=66 read=19009, temp written=2980
+                           ->  Parallel Seq Scan on grids g  (cost=0.00..21777.46 rows=270246 width=22) (actual time=0.870..653.635 rows=216197 loops=3)
+                                 Buffers: shared hit=66 read=19009
+ Planning:
+   Buffers: shared hit=10
+ Planning Time: 0.326 ms
+ Execution Time: 1419.426 ms
+(33 rows)
+
+### (현재) visitedRegionCount — 격자 40만 (영상 80만)
+                                                                QUERY PLAN                                                                
+------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate  (cost=196897.43..196897.45 rows=1 width=4) (actual time=3147.877..3147.882 rows=1 loops=1)
+   Buffers: shared hit=10930 read=38377, temp read=6967 written=6976
+   ->  Sort  (cost=192993.92..194945.68 rows=780702 width=11) (actual time=2939.241..3081.291 rows=768000 loops=1)
+         Sort Key: g.region_code
+         Sort Method: external merge  Disk: 11288kB
+         Buffers: shared hit=10930 read=38377, temp read=6967 written=6976
+         ->  Hash Join  (cost=37469.28..103239.51 rows=780702 width=11) (actual time=1260.148..2199.869 rows=768000 loops=1)
+               Hash Cond: ((v.grid_id)::text = (g.grid_id)::text)
+               Buffers: shared hit=10930 read=38377, temp read=5556 written=5556
+               ->  Seq Scan on videos v  (cost=0.00..52293.88 rows=780702 width=11) (actual time=308.883..690.659 rows=768000 loops=1)
+                     Filter: (((status)::text <> 'DELETED'::text) AND (user_id = 505))
+                     Rows Removed by Filter: 703000
+                     Buffers: shared hit=10768 read=19464
+               ->  Hash  (cost=25560.90..25560.90 rows=648590 width=22) (actual time=950.488..950.490 rows=648590 loops=1)
+                     Buckets: 131072  Batches: 8  Memory Usage: 5350kB
+                     Buffers: shared hit=162 read=18913, temp written=2937
+                     ->  Seq Scan on grids g  (cost=0.00..25560.90 rows=648590 width=22) (actual time=0.724..744.496 rows=648590 loops=1)
+                           Buffers: shared hit=162 read=18913
+ Planning:
+   Buffers: shared hit=10
+ Planning Time: 0.327 ms
+ JIT:
+   Functions: 15
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 0.855 ms, Inlining 0.000 ms, Optimization 0.477 ms, Emission 11.296 ms, Total 12.627 ms
+ Execution Time: 3151.092 ms
+(26 rows)
+
+### (현재) 도감 요약 전체 문장 — 격자 40만 (지표 6개 중 어디가 무거운지)
+                                                                             QUERY PLAN                                                                              
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Result  (cost=225528.88..225528.89 rows=1 width=28) (actual time=3794.895..3795.039 rows=1 loops=1)
+   Buffers: shared hit=13478 read=52649, temp read=6967 written=6976
+   InitPlan 1 (returns $1)
+     ->  Finalize Aggregate  (cost=14300.34..14300.35 rows=1 width=4) (actual time=369.899..369.989 rows=1 loops=1)
+           Buffers: shared hit=1191 read=7216
+           ->  Gather  (cost=14300.13..14300.34 rows=2 width=8) (actual time=368.891..369.957 rows=3 loops=1)
+                 Workers Planned: 2
+                 Workers Launched: 2
+                 Buffers: shared hit=1191 read=7216
+                 ->  Partial Aggregate  (cost=13300.13..13300.14 rows=1 width=8) (actual time=318.630..318.631 rows=1 loops=3)
+                       Buffers: shared hit=1191 read=7216
+                       ->  Parallel Seq Scan on user_grids  (cost=0.00..12900.15 rows=159992 width=0) (actual time=188.268..306.009 rows=128000 loops=3)
+                             Filter: (user_id = 505)
+                             Rows Removed by Filter: 159561
+                             Buffers: shared hit=1191 read=7216
+   InitPlan 2 (returns $3)
+     ->  Finalize Aggregate  (cost=14300.34..14300.35 rows=1 width=8) (actual time=283.890..283.938 rows=1 loops=1)
+           Buffers: shared hit=1287 read=7120
+           ->  Gather  (cost=14300.13..14300.34 rows=2 width=8) (actual time=283.579..283.915 rows=3 loops=1)
+                 Workers Planned: 2
+                 Workers Launched: 2
+                 Buffers: shared hit=1287 read=7120
+                 ->  Partial Aggregate  (cost=13300.13..13300.14 rows=1 width=8) (actual time=169.966..169.968 rows=1 loops=3)
+                       Buffers: shared hit=1287 read=7120
+                       ->  Parallel Seq Scan on user_grids user_grids_1  (cost=0.00..12900.15 rows=159992 width=4) (actual time=95.525..140.478 rows=128000 loops=3)
+                             Filter: (user_id = 505)
+                             Rows Removed by Filter: 159561
+                             Buffers: shared hit=1287 read=7120
+   InitPlan 3 (returns $4)
+     ->  Aggregate  (cost=196897.43..196897.45 rows=1 width=4) (actual time=3116.490..3116.493 rows=1 loops=1)
+           Buffers: shared hit=10994 read=38313, temp read=6967 written=6976
+           ->  Sort  (cost=192993.92..194945.68 rows=780702 width=11) (actual time=2913.373..3055.134 rows=768000 loops=1)
+                 Sort Key: g.region_code
+                 Sort Method: external merge  Disk: 11288kB
+                 Buffers: shared hit=10994 read=38313, temp read=6967 written=6976
+                 ->  Hash Join  (cost=37469.28..103239.51 rows=780702 width=11) (actual time=1266.577..2192.677 rows=768000 loops=1)
+                       Hash Cond: ((v.grid_id)::text = (g.grid_id)::text)
+                       Buffers: shared hit=10994 read=38313, temp read=5556 written=5556
+                       ->  Seq Scan on videos v  (cost=0.00..52293.88 rows=780702 width=11) (actual time=301.919..678.411 rows=768000 loops=1)
+                             Filter: (((status)::text <> 'DELETED'::text) AND (user_id = 505))
+                             Rows Removed by Filter: 703000
+                             Buffers: shared hit=10800 read=19432
+                       ->  Hash  (cost=25560.90..25560.90 rows=648590 width=22) (actual time=963.840..963.841 rows=648590 loops=1)
+                             Buckets: 131072  Batches: 8  Memory Usage: 5350kB
+                             Buffers: shared hit=194 read=18881, temp written=2937
+                             ->  Seq Scan on grids g  (cost=0.00..25560.90 rows=648590 width=22) (actual time=0.778..747.561 rows=648590 loops=1)
+                                   Buffers: shared hit=194 read=18881
+   InitPlan 4 (returns $5)
+     ->  Index Scan using streaks_pkey on streaks s  (cost=0.15..8.18 rows=1 width=4) (actual time=0.065..0.065 rows=0 loops=1)
+           Index Cond: (user_id = 505)
+           Buffers: shared hit=2
+   InitPlan 5 (returns $6)
+     ->  Index Scan using streaks_pkey on streaks s_1  (cost=0.15..8.17 rows=1 width=4) (actual time=0.015..0.016 rows=0 loops=1)
+           Index Cond: (user_id = 505)
+           Buffers: shared hit=2
+   InitPlan 6 (returns $7)
+     ->  Aggregate  (cost=14.37..14.38 rows=1 width=4) (actual time=0.012..0.012 rows=1 loops=1)
+           Buffers: shared hit=2
+           ->  Bitmap Heap Scan on user_badges  (cost=4.21..14.35 rows=7 width=0) (actual time=0.004..0.004 rows=0 loops=1)
+                 Recheck Cond: (user_id = 505)
+                 Buffers: shared hit=2
+                 ->  Bitmap Index Scan on user_badges_pkey  (cost=0.00..4.21 rows=7 width=0) (actual time=0.002..0.002 rows=0 loops=1)
+                       Index Cond: (user_id = 505)
+                       Buffers: shared hit=2
+ Planning:
+   Buffers: shared hit=89 read=3
+ Planning Time: 3.074 ms
+ JIT:
+   Functions: 172
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 28.477 ms, Inlining 0.000 ms, Optimization 9.810 ms, Emission 217.985 ms, Total 256.272 ms
+ Execution Time: 3800.207 ms
+(72 rows)
+
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+### 결과표 — 규모별 p50/p95 (ms). current = 현재 쿼리, candidate = 후보 자리
+NOTICE:  table "_t" does not exist, skipping
+   label    |    arm    | samples |  p50_ms  |  p95_ms  |  p99_ms  |  avg_ms  |  max_ms  
+------------+-----------+---------+----------+----------+----------+----------+----------
+ 1k         | current   |      30 |   49.745 |   53.700 |   61.365 |   50.564 |   63.949
+ 1k         | candidate |      30 |   49.923 |   56.758 |   68.284 |   51.118 |   71.440
+ 10k        | current   |      30 |   78.557 |   80.468 |  109.243 |   80.139 |  120.948
+ 10k        | candidate |      30 |   78.802 |   98.310 |  107.550 |   81.407 |  109.093
+ 100k       | current   |      30 |  454.636 |  499.934 |  514.287 |  463.278 |  519.994
+ 100k       | candidate |      30 |  450.642 |  516.159 |  537.918 |  466.073 |  546.756
+ 400k grids | current   |      30 | 3812.793 | 6326.425 | 6466.777 | 4437.964 | 6517.095
+ 400k grids | candidate |      30 | 3743.708 | 3787.665 | 3874.145 | 3739.895 | 3907.409
+(8 rows)
+
+### 등가성 검사 — current 와 candidate 의 값이 규모 4개 전부 같아야 한다
+NOTICE:  n=0 uid=502 current=192 candidate=192
+NOTICE:  n=1 uid=503 current=1920 candidate=1920
+NOTICE:  n=2 uid=504 current=3558 candidate=3558
+NOTICE:  n=3 uid=505 current=3558 candidate=3558
+DO
+NOTICE:  등가성 OK
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+COMMIT
+### 유지 모드 — 더미가 남아 있다. k6 OID: b596-0(1천) b596-1(1만) b596-2(10만) b596-3(격자 40만)
+### 끝나면: docker exec -i fillmap-postgres psql -U user -d fillmap < scripts/bench-msg596-cleanup.sql
+### 원상복구 검증 (기대: 벤치 행 0, videos_reltuples = 실제 videos 수)
+ bench_users | bench_grids | videos  | user_grids | videos_reltuples | leftover_funcs 
+-------------+-------------+---------+------------+------------------+----------------
+         104 |      462200 | 1471000 |     862684 |          1470792 |              0
+(1 row)
+
+0.03user 0.01system 10:32.72elapsed 0%CPU (0avgtext+0avgdata 28208maxresident)k
+288inputs+72outputs (0major+2868minor)pagefaults 0swaps

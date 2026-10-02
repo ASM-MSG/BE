@@ -124,9 +124,9 @@ export function hitViewport() {
 
 	const ok = check(res, {
 		'status 200': (r) => r.status === 200,
-		'body is JSON array': (r) => {
+		'body has grids array': (r) => {
 			try {
-				return Array.isArray(JSON.parse(r.body).body);
+				return Array.isArray(JSON.parse(r.body).data.grids);
 			} catch (_) {
 				return false;
 			}
@@ -135,7 +135,7 @@ export function hitViewport() {
 
 	failRate.add(!ok, tag);
 	if (ok) {
-		cells.add((JSON.parse(res.body).body || []).length, tag);
+		cells.add((JSON.parse(res.body).data.grids || []).length, tag);
 	}
 }
 

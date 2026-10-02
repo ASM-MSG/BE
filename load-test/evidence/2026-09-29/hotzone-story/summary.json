@@ -1,0 +1,59 @@
+[
+  {
+    "mode": "redis",
+    "rate": 100,
+    "rounds": 3,
+    "offered": 9900,
+    "success": 9900,
+    "errors": {},
+    "p95_ms": 10.163958000021012,
+    "p99_ms": 10.75362500000665,
+    "expiry_p99_ms": 10.337290999984816,
+    "pg_cpu_seconds": 0.034098,
+    "redis_cpu_seconds": 15.133939999999999
+  },
+  {
+    "mode": "redis_cache",
+    "rate": 100,
+    "rounds": 3,
+    "offered": 9900,
+    "success": 9900,
+    "errors": {},
+    "p95_ms": 6.008707999995977,
+    "p99_ms": 6.585834000020441,
+    "expiry_p99_ms": 6.618959000007862,
+    "pg_cpu_seconds": 0.090822,
+    "redis_cpu_seconds": 0.6854950000000006
+  },
+  {
+    "mode": "redis_naive",
+    "rate": 100,
+    "rounds": 3,
+    "offered": 9900,
+    "success": 288,
+    "errors": {
+      "dropped_capacity": 9612
+    },
+    "p95_ms": 16092.783624999996,
+    "p99_ms": 16917.838000000018,
+    "expiry_p99_ms": 15418.842917000005,
+    "pg_cpu_seconds": 0.125495,
+    "redis_cpu_seconds": 8.340492
+  },
+  {
+    "mode": "sql",
+    "rate": 100,
+    "rounds": 3,
+    "offered": 9900,
+    "success": 72,
+    "errors": {
+      "dropped_capacity": 9079,
+      "QueryCanceled": 749
+    },
+    "p95_ms": 4198.695165999993,
+    "p99_ms": 4282.628333000048,
+    "expiry_p99_ms": 4080.8270000000134,
+    "pg_cpu_seconds": 36.67799,
+    "redis_cpu_seconds": 0.18838999999999984
+  }
+]

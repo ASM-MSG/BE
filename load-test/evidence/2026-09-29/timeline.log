@@ -1,0 +1,30 @@
+=== 2026-09-29T13:38:42Z START viewport-s1 ===
+=== 2026-09-29T13:39:53Z END viewport-s1 rc=99 ===
+=== 2026-09-29T13:40:53Z START viewport-s3-300rps ===
+=== 2026-09-29T13:45:04Z END viewport-s3-300rps rc=99 ===
+=== 2026-09-29T13:46:04Z START viewport-s4-stress ===
+=== 2026-09-29T13:48:39Z END viewport-s4-stress rc=99 ===
+=== 2026-09-29T13:49:39Z START hotzone-expiry-200rps ===
+=== 2026-09-29T13:52:39Z END hotzone-expiry-200rps rc=99 ===
+=== 2026-09-29T13:53:39Z START hotzone-cap ===
+=== 2026-09-29T13:56:50Z END hotzone-cap rc=99 ===
+PHASE1 DONE
+=== 2026-09-29T13:58:20Z START viewport-s1-rerun ===
+=== 2026-09-29T13:59:29Z END viewport-s1-rerun rc=99 ===
+PHASE2 s1 DONE
+=== 2026-09-29T14:00:29Z START viewport-s1-40vu ===
+=== 2026-09-29T14:01:35Z END viewport-s1-40vu rc=99 ===
+PHASE2 s1-40 DONE
+=== 2026-09-29T14:02:38Z START hotzone-scale-400rps ===
+=== 2026-09-29T14:03:24Z END hotzone-scale-400rps rc=0 ===
+=== 2026-09-29T14:03:54Z START hotzone-scale-600rps ===
+=== 2026-09-29T14:04:39Z END hotzone-scale-600rps rc=0 ===
+=== 2026-09-29T14:05:09Z START hotzone-scale-800rps ===
+=== 2026-09-29T14:05:54Z END hotzone-scale-800rps rc=0 ===
+HZSCALE DONE
+=== 2026-09-29T14:18:48Z START collection-summary-smoke ===
+=== 2026-09-29T14:18:51Z END collection-summary-smoke rc=0 ===
+PHASE2 summary-smoke DONE
+=== 2026-09-29T14:20:24Z START collection-summary-ramp ===
+=== 2026-09-29T14:25:30Z END collection-summary-ramp rc=99 ===
+PHASE2 summary DONE

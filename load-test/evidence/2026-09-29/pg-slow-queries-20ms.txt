@@ -1,0 +1,10 @@
+  1647회 avg   1389.9ms max   3825.3ms | SELECT
+   206회 avg     97.3ms max    614.6ms | select g1_0.grid_id,g1_0.grid_y,g1_0.grid_x,r1_0.region_name from user_grids ug1_0 join grids g1_0 
+    38회 avg     29.7ms max     72.7ms |
+    37회 avg     41.7ms max     68.8ms | select count(*) filter (where state='active')||','||count(*) from pg_stat_activity where datname='f
+    12회 avg     23.6ms max     29.0ms | SELECT pg_database_size($1)
+     8회 avg     29.8ms max     54.2ms | SELECT name, setting, COALESCE(unit, ''), short_desc, vartype FROM pg_settings WHERE vartype IN ('b
+     5회 avg   1729.0ms max   3808.5ms | EXPLAIN (ANALYZE, BUFFERS)
+     1회 avg 337338.6ms max 337338.6ms | SELECT s.label, s.arm, r.*
+     1회 avg 157499.5ms max 157499.5ms | INSERT INTO grids (grid_id, grid_y, grid_x, center_geom, bbox_geom, region_code)
+     1회 avg  67562.4ms max  67562.4ms | INSERT INTO videos (user_id, grid_id, geom, duration_sec, recorded_at, created_at, status, processi
