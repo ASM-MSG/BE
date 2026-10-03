@@ -7,7 +7,7 @@
 
 요약: FR 302건 중 테스트 연결 272건, 검증 공백 0건 (계획·폐기라 테스트 부재가 정상인 23건, 성격상 테스트 비대상 7건 별도)
 
-AC 요약: 스펙 성공 기준 123건 중 테스트 연결 105건, 미커버 18건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
+AC 요약: 스펙 성공 기준 132건 중 테스트 연결 112건, 미커버 20건 — 미커버는 보고만 한다 (소급 없이 신규 스펙부터 쌓인다, MSG-526)
 
 | 요구사항 ID | SRS 상태 | 검증 테스트 |
 |---|---|---|
@@ -113,7 +113,7 @@ AC 요약: 스펙 성공 기준 123건 중 테스트 연결 105건, 미커버 18
 | FR-VIDEO-18 | 구현됨 | AnonymousReadAccessHttpTest, VideoAuthorNicknameIntegrationTest, VideoGlobalCoverServiceTest, VideoPlaybackServiceTest |
 | FR-MEDIA-01 | 구현됨 | FfmpegRunnerTest, VideoEncodingServiceTest |
 | FR-MEDIA-02 | 구현됨 | AiBlurPollerTest, VideoBlurTransitionTest, VideoEncodingAiTriggerTest, VideoEncodingServiceTest, VideoGridQueryServiceTest, VideoPlaybackServiceTest, VideoStatusTransitionTest, VideoStatusWriterTest |
-| FR-MEDIA-03 | 구현됨 | VideoEncodingDurationRealFfmpegTest, VideoEncodingServiceTest |
+| FR-MEDIA-03 | 구현됨 | FfmpegRunnerRemuxDecisionTest, VideoEncodingDurationRealFfmpegTest, VideoEncodingServiceTest |
 | FR-MEDIA-04 | 구현됨 | AiBlurPollerTest, VideoBlurTransitionTest, VideoEncodingServiceTest, VideoPlaybackServiceTest |
 | FR-MEDIA-05 | 구현됨 | AiEnabledContextTest, VideoEncodingAiTriggerTest |
 | FR-MEDIA-17 | 구현됨 | (없음) |
@@ -367,6 +367,7 @@ AC 요약: 스펙 성공 기준 123건 중 테스트 연결 105건, 미커버 18
 - NFR-OPS-06
 - NFR-OPS-09
 - NFR-PERF-01
+- NFR-PERF-08
 - NFR-SEC-08
 - NFR-SEC-09
 - NFR-SEC-10
@@ -501,6 +502,15 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 | AC-612-05 | MSG-612 | EventVideoUploadServiceTest |
 | AC-612-06 | MSG-612 | (없음) |
 | AC-612-07 | MSG-612 | (없음) |
+| AC-615-01 | MSG-615 | FfmpegRunnerRemuxDecisionTest |
+| AC-615-02 | MSG-615 | VideoEncodingServiceTest |
+| AC-615-03 | MSG-615 | VideoEncodingDurationRealFfmpegTest, VideoEncodingServiceTest |
+| AC-615-04 | MSG-615 | VideoEncodingServiceTest |
+| AC-615-05 | MSG-615 | VideoEncodingServiceTest |
+| AC-615-06 | MSG-615 | (없음) |
+| AC-615-07 | MSG-615 | VideoProcessingMetricsTest |
+| AC-615-08 | MSG-615 | (없음) |
+| AC-615-09 | MSG-615 | FfmpegRunnerTest |
 
 ## 미커버 AC (보고만 — 실패 아님)
 
@@ -522,6 +532,8 @@ FR 축과 다른 축이라 표를 섞지 않는다. 미커버는 조치 유도�
 - AC-612-04 (MSG-612)
 - AC-612-06 (MSG-612)
 - AC-612-07 (MSG-612)
+- AC-615-06 (MSG-615)
+- AC-615-08 (MSG-615)
 
 ## 테스트에만 있고 스펙에 없는 AC (마커 오타 의심)
 
