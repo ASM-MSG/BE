@@ -58,6 +58,38 @@ class FfmpegRunnerTest {
 		return out;
 	}
 
+	/** lavfi 로 합성한 1280×720 h264/aac — MSG-616 이 앱에서 줄여 보내는 규격이자 remux 대상의 대표형이다. */
+	private Path sample720p(Path dir, int durationSec) throws Exception {
+		Path out = dir.resolve("src720.mp4");
+		Process p = new ProcessBuilder(List.of(
+			"ffmpeg", "-y",
+			"-f", "lavfi", "-i", "testsrc=size=1280x720:rate=30:duration=" + durationSec,
+			"-f", "lavfi", "-i", "sine=frequency=1000:duration=" + durationSec,
+			"-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+			out.toString()))
+			.redirectErrorStream(true)
+			.redirectOutput(dir.resolve("gen720.log").toFile())
+			.start();
+		assertThat(p.waitFor()).isZero();
+		return out;
+	}
+
+	/**
+	 * 세로 촬영본 흉내 — 폰이 센서 가로 프레임에 Display Matrix(회전 90)를 얹어 저장하는 것과 같은 구조다.
+	 * ffmpeg 8 은 {@code -metadata rotate} 를 side data 로 쓰지 않아 {@code -display_rotation} 입력 옵션으로 찍는다.
+	 */
+	private Path rotated(Path dir, Path source, int degrees) throws Exception {
+		Path out = dir.resolve("rotated.mp4");
+		Process p = new ProcessBuilder(List.of(
+			"ffmpeg", "-y", "-display_rotation", String.valueOf(degrees), "-i", source.toString(),
+			"-c", "copy", out.toString()))
+			.redirectErrorStream(true)
+			.redirectOutput(dir.resolve("rot.log").toFile())
+			.start();
+		assertThat(p.waitFor()).isZero();
+		return out;
+	}
+
 	private String probe(Path file, String entries) throws Exception {
 		Process p = new ProcessBuilder(List.of(
 			"ffprobe", "-v", "error", "-select_streams", "v:0",
@@ -122,6 +154,83 @@ class FfmpegRunnerTest {
 		// 인프라 실패(타임아웃·바이너리 부재)와 구분되는 파일 불량 타입 — 선분석 3426 분류 근거 (MSG-351 P2-2)
 		assertThatThrownBy(() -> runner.probeDurationSec(broken))
 			.isInstanceOf(FfmpegRunner.InvalidMediaException.class);
+	}
+
+	// ── remux (MSG-615) ──
+
+	// 검증: NFR-PERF-08, FR-MEDIA-01
+	@Test
+	void remux_는_720p_h264_입력을_재인코딩_없이_mp4로_옮긴다(@TempDir Path dir) throws Exception {
+		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
+		Path source = sample720p(dir, 3);
+		Path out = dir.resolve("out.mp4");
+
+		assertThat(runner.isRemuxable(source)).isTrue();
+		runner.remux(source, out);
+
+		assertThat(Files.size(out)).isPositive();
+		assertThat(probe(out, "stream=width,height,codec_name")).isEqualTo("h264,1280,720");
+		assertThat(probe(out, "format=format_name")).contains("mp4");
+		// 재인코딩이 없었다는 증거 — 패킷이 그대로 옮겨져 비디오 비트레이트가 원본과 같다.
+		assertThat(probe(out, "stream=bit_rate")).isEqualTo(probe(source, "stream=bit_rate"));
+	}
+
+	// 검증: FR-MEDIA-01
+	@Test
+	void remux_는_회전_메타데이터를_보존한다(@TempDir Path dir) throws Exception {
+		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
+		Path source = rotated(dir, sample720p(dir, 2), 90);
+		assertThat(probe(source, "stream_side_data=rotation")).isEqualTo("90");   // 샘플 자체에 Display Matrix 가 있다
+		Path out = dir.resolve("out.mp4");
+
+		assertThat(runner.isRemuxable(source)).isTrue();   // 회전은 판정에 영향 없음 (D2) — width/height 는 코딩 크기
+		runner.remux(source, out);
+
+		assertThat(probe(out, "stream=width,height")).startsWith("1280,720");   // 픽셀은 그대로 (side data 행이 꼬리에 붙는다)
+		assertThat(probe(out, "stream_side_data=rotation")).isEqualTo("90");  // 플레이어가 세로로 그릴 근거가 남는다
+	}
+
+	@Test
+	void isRemuxable_은_1080p_샘플에_거짓이다(@TempDir Path dir) throws Exception {
+		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
+
+		assertThat(runner.isRemuxable(sample1080p(dir, 1))).isFalse();
+	}
+
+	/** 스트림 probe 와 remux 가 인스턴스 기본값(10분)이 아니라 REMUX_TIMEOUT(60초)으로 도는지 본다 (AC-615-09). */
+	// 검증: AC-615-09
+	@Test
+	void remux_와_스트림_probe_는_60초_호출별_타임아웃으로_돈다() {
+		assertThat(FfmpegRunner.REMUX_TIMEOUT).isEqualTo(Duration.ofSeconds(60));
+
+		// 60초 자체를 기다릴 수는 없으니, 같은 run(command, timeout) 오버로드가 인스턴스 기본값을 이기는지로 본다.
+		FfmpegRunner tenMinutes = new FfmpegRunner(Duration.ofMinutes(10));
+		long started = System.currentTimeMillis();
+		assertThatThrownBy(() -> tenMinutes.runForTest(List.of("sleep", "30"), Duration.ofMillis(300)))
+			.isInstanceOf(IllegalStateException.class)
+			.isNotInstanceOf(FfmpegRunner.InvalidMediaException.class)   // 타임아웃은 폴백 대상(D4)이지 파일 불량이 아니다
+			.hasMessageContaining("타임아웃");
+		assertThat(System.currentTimeMillis() - started).isLessThan(5_000);
+	}
+
+	/**
+	 * 인스턴스 기본 타임아웃을 1ms 로 줘서 쓸 수 없게 만들면, 60초 오버로드를 타는 호출만 살아남는다 —
+	 * 스트림 probe 와 remux 가 정말 REMUX_TIMEOUT 으로 도는지 직접 본다 (AC-615-09, 리뷰 기록 지시 2).
+	 */
+	// 검증: AC-615-09
+	@Test
+	void 스트림_probe_와_remux_는_인스턴스_기본_타임아웃이_아니라_60초_오버로드로_돈다(@TempDir Path dir) throws Exception {
+		assumeTrue(ffmpegAvailable, "ffmpeg 없음 — skip");
+		FfmpegRunner unusableDefault = new FfmpegRunner(Duration.ofMillis(1));
+		Path source = sample720p(dir, 1);
+		Path out = dir.resolve("out.mp4");
+
+		// 대조군 — 인스턴스 기본값을 쓰는 길이 probe 는 1ms 에 끊긴다.
+		assertThatThrownBy(() -> unusableDefault.probeDurationSec(source)).hasMessageContaining("타임아웃");
+
+		assertThat(unusableDefault.isRemuxable(source)).isTrue();
+		unusableDefault.remux(source, out);
+		assertThat(Files.size(out)).isPositive();
 	}
 
 	/**

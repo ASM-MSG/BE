@@ -9,16 +9,30 @@ import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Component;
 
+import lombok.extern.slf4j.Slf4j;
+
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
 /**
  * ffmpeg/ffprobe 호출 래퍼. PATH 에 있는 바이너리를 쓴다 (로컬 brew, EC2 apt).
  * 실패는 IllegalStateException 계열로 올리고, 처리 정책(FAILED 기록)은 호출자가 정한다.
  * 파일 불량(도구가 돌았는데 입력을 거부)은 {@link InvalidMediaException} 으로 구분한다 — 바이너리 부재·
  * 타임아웃 같은 인프라 실패를 사용자 파일 탓(4xx)으로 오분류하지 않기 위해서다 (MSG-351 교차 리뷰 P2-2).
  */
+@Slf4j
 @Component
 public class FfmpegRunner {
 
 	private static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(10);
+	/**
+	 * 스트림 probe 와 remux 의 호출별 타임아웃 (MSG-615 D3). 둘 다 헤더 읽기·디스크 복사라 수 초면 끝나고,
+	 * 기본 10분을 쓰면 한 작업의 ffmpeg 최악 예산이 MSG-494 D5 의 임대 35분을 넘긴다.
+	 */
+	static final Duration REMUX_TIMEOUT = Duration.ofSeconds(60);
+	// ffprobe JSON 파싱 전용 — 시각 필드가 없어 전역 UTC 코덱(UtcLocalDateTimeJsonCodec)과 무관하다.
+	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private final Duration timeout;
 
@@ -52,6 +66,87 @@ public class FfmpegRunner {
 			// exit 0 인데 duration 이 없는 파일(N/A 등) — 우리 목적엔 못 여는 파일과 같다.
 			throw new InvalidMediaException("ffprobe duration 파싱 실패: " + out, e);
 		}
+	}
+
+	/** 원본을 probe 해 remux 가능 여부를 판정한다 (MSG-615 D2). 타임아웃은 remux 와 같은 60초다 (D3). */
+	public boolean isRemuxable(Path input) {
+		JsonNode streams = parseStreams(run(List.of("ffprobe", "-v", "error", "-show_streams", "-of", "json",
+			input.toString()), REMUX_TIMEOUT));
+		boolean remuxable = isRemuxable(streams);
+		// D6 실측 표의 "ffprobe 판정" 열이 이 줄에서 나온다. input 의 상위 디렉터리명(encode-{videoId}-…)이 영상을 가리킨다.
+		log.info("remux 판정: input={} remuxable={} {}", input, remuxable, describe(streams));
+		return remuxable;
+	}
+
+	/**
+	 * ffprobe {@code -show_streams} JSON 으로만 판정한다 (MSG-615 D2). 테스트가 고정 JSON 을 넣는 진입점이라
+	 * public static 이다. 첫 비디오가 h264 + 8비트 4:2:0 + 720p 안(방향 무관: 짧은 변 720·긴 변 1280 이하)이고
+	 * 첫 오디오가 없거나 aac 면 참. 회전 메타데이터는 읽지 않는다 — width/height 가 회전 적용 전 코딩 크기라
+	 * 방향과 무관하게 같은 판정이 나오고, 회전 보존은 remux 명령(-c copy 의 side data 복사)이 맡는다.
+	 */
+	public static boolean isRemuxable(String ffprobeJson) {
+		return isRemuxable(parseStreams(ffprobeJson));
+	}
+
+	private static JsonNode parseStreams(String ffprobeJson) {
+		try {
+			return MAPPER.readTree(ffprobeJson).path("streams");
+		} catch (JacksonException e) {
+			// exit 0 인데 JSON 이 아닌 출력 — probeDurationSec 의 숫자 파싱 실패와 같은 분류다.
+			throw new InvalidMediaException("ffprobe streams 파싱 실패: " + ffprobeJson, e);
+		}
+	}
+
+	private static boolean isRemuxable(JsonNode streams) {
+		JsonNode video = firstStreamOf(streams, "video");
+		if (video == null || !"h264".equals(video.path("codec_name").asString(""))) {
+			return false;
+		}
+		String pixFmt = video.path("pix_fmt").asString("");
+		if (!"yuv420p".equals(pixFmt) && !"yuvj420p".equals(pixFmt)) {
+			return false;
+		}
+		int width = video.path("width").asInt(0);
+		int height = video.path("height").asInt(0);
+		if (Math.min(width, height) > 720 || Math.max(width, height) > 1280) {
+			return false;
+		}
+		JsonNode audio = firstStreamOf(streams, "audio");
+		return audio == null || "aac".equals(audio.path("codec_name").asString(""));
+	}
+
+	/** 판정 로그용 요약 — 예: {@code video=h264 1280x720 yuv420p audio=aac}. 판정이 읽은 필드만 적는다. */
+	private static String describe(JsonNode streams) {
+		JsonNode video = firstStreamOf(streams, "video");
+		JsonNode audio = firstStreamOf(streams, "audio");
+		String videoPart = video == null ? "none" : "%s %dx%d %s".formatted(
+			video.path("codec_name").asString("?"), video.path("width").asInt(0), video.path("height").asInt(0),
+			video.path("pix_fmt").asString("?"));
+		String audioPart = audio == null ? "none" : audio.path("codec_name").asString("?");
+		return "video=" + videoPart + " audio=" + audioPart;
+	}
+
+	/** ffmpeg 의 {@code 0:v:0} / {@code 0:a:0} 선택과 같은 "그 타입의 첫 스트림". data·subtitle 은 자연히 건너뛴다. */
+	private static JsonNode firstStreamOf(JsonNode streams, String codecType) {
+		for (JsonNode stream : streams) {
+			if (codecType.equals(stream.path("codec_type").asString(""))) {
+				return stream;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 재인코딩 없이 첫 비디오·첫 오디오만 mp4 로 다시 담는다 (MSG-615 D3). 명시 map 이 iPhone mov 의 mebx
+	 * 데이터 트랙을 버린다 — 그 트랙이 끼면 -c copy 가 "codec not currently supported in container" 로 실패한다.
+	 */
+	public void remux(Path input, Path output) {
+		run(List.of(
+			"ffmpeg", "-y", "-i", input.toString(),
+			"-map", "0:v:0", "-map", "0:a:0?",
+			"-c", "copy",
+			"-movflags", "+faststart",
+			output.toString()), REMUX_TIMEOUT);
 	}
 
 	/** 720p H.264 + AAC 로 변환 (MSG-65 D4). 세로 720 기준, 가로는 짝수로 맞춘다(-2). */
