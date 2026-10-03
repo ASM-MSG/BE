@@ -67,8 +67,8 @@ public final class EventVideoFixtures {
 			.executeUpdate();
 
 		em.createNativeQuery("""
-				INSERT INTO event_videos (video_id, event_occurrence_id, event_location_id)
-				VALUES (:videoId, :occurrenceId, :locationId)
+				INSERT INTO event_videos (video_id, event_occurrence_id, event_location_id, created_at)
+				SELECT id, :occurrenceId, :locationId, created_at FROM videos WHERE id = :videoId
 				""")
 			.setParameter("videoId", videoId)
 			.setParameter("occurrenceId", occurrenceId)

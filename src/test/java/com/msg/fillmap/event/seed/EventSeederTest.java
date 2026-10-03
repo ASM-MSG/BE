@@ -637,8 +637,8 @@ class EventSeederTest {
 
 			assertThatThrownBy(() -> {
 				em.createNativeQuery("""
-						INSERT INTO event_videos (video_id, event_occurrence_id, event_location_id)
-						VALUES (:videoId, :occurrenceId, :locationId)""")
+						INSERT INTO event_videos (video_id, event_occurrence_id, event_location_id, created_at)
+						SELECT id, :occurrenceId, :locationId, created_at FROM videos WHERE id = :videoId""")
 					.setParameter("videoId", 영상id)
 					.setParameter("occurrenceId", 회차B)      // 위치 A 의 회차가 아니다
 					.setParameter("locationId", 위치A)

@@ -270,6 +270,25 @@ class EventVideoUploadServiceTest {
 				.getSingleResult()).isEqualTo("PUBLIC");
 		}
 
+		// 검증: AC-612-05 — 정합 규칙 "event_videos.created_at = videos.created_at" 을 쓰기 경로 한 곳에서 지킨다.
+		@Test
+		@DisplayName("행사 영상을 올리면 연결 행의 created_at 이 영상의 created_at 과 같다")
+		void 행사_영상을_올리면_연결_행의_created_at이_영상의_created_at과_같다() {
+			EventLocation location = 진행중_위치(7, 0);
+
+			EventVideoUploadResponseDto response = 업로드(location, 키(userId));
+
+			em.flush();
+			Object[] row = (Object[]) em.createNativeQuery("""
+					SELECT ev.created_at, v.created_at
+					FROM event_videos ev JOIN videos v ON v.id = ev.video_id
+					WHERE ev.video_id = :v
+					""")
+				.setParameter("v", response.videoId())
+				.getSingleResult();
+			assertThat(row[0]).isNotNull().isEqualTo(row[1]);
+		}
+
 		@Test
 		@DisplayName("행사 업로드 응답에 획득 뱃지가 동봉된다")
 		void 행사_업로드_응답에_획득_뱃지가_동봉된다() {
