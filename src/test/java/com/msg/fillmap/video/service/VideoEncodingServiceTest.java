@@ -383,6 +383,129 @@ class VideoEncodingServiceTest {
 		assertThat(taskCount("failed_over_duration")).isZero();
 	}
 
+	// ── remux 분기 (MSG-615) ──
+	// 위 기존 케이스는 목 isRemuxable 기본값 false 라 수정 없이 encode 경로를 지난다 (AC-615-03).
+
+	private double pathCount(String path) {
+		return meterRegistry.get("video.encoding.path").tag("path", path).counter().count();
+	}
+
+	// 검증: FR-MEDIA-03, NFR-PERF-08, AC-615-02
+	@Test
+	void remux_가능하면_encode720p_를_호출하지_않는다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(true);
+		createFileOn(ffmpegRunner).remux(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(claim);
+
+		verify(ffmpegRunner).remux(any(), any());
+		verify(ffmpegRunner, never()).encode720p(any(), any());
+		verify(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(), MEASURED);
+		assertThat(pathCount("remux")).isEqualTo(1.0);
+		assertThat(pathCount("encode")).isZero();
+		assertThat(pathCount("fallback")).isZero();
+	}
+
+	// 검증: FR-MEDIA-03, AC-615-03
+	@Test
+	void remux_불가면_기존대로_encode720p_를_호출한다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(false);
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(claim);
+
+		verify(ffmpegRunner, never()).remux(any(), any());
+		verify(ffmpegRunner).encode720p(any(), any());
+		verify(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(), MEASURED);
+		assertThat(pathCount("encode")).isEqualTo(1.0);
+		assertThat(pathCount("remux")).isZero();
+	}
+
+	// 검증: FR-MEDIA-03, AC-615-04
+	@Test
+	void remux_실패면_encode720p_로_한_번_폴백한다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(true);
+		willThrow(new FfmpegRunner.InvalidMediaException("copy 불가")).given(ffmpegRunner).remux(any(), any());
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(claim);
+
+		verify(ffmpegRunner, times(1)).remux(any(), any());
+		verify(ffmpegRunner, times(1)).encode720p(any(), any());
+		verify(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(), MEASURED);
+		verify(statusWriter, never()).markFailed(claim);
+		assertThat(pathCount("fallback")).isEqualTo(1.0);
+		assertThat(pathCount("remux")).isZero();
+		assertThat(taskCount("completed")).isEqualTo(1.0);
+	}
+
+	// 검증: FR-MEDIA-03, AC-615-04
+	@Test
+	void remux_폴백도_실패하면_기존_실패_분기를_탄다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(true);
+		willThrow(new FfmpegRunner.InvalidMediaException("copy 불가")).given(ffmpegRunner).remux(any(), any());
+		willThrow(new FfmpegRunner.InvalidMediaException("디코딩 불가")).given(ffmpegRunner).encode720p(any(), any());
+
+		encodingService.encode(claim);
+
+		verify(ffmpegRunner, times(1)).encode720p(any(), any());   // 폴백은 한 번뿐
+		verify(statusWriter).markFailed(claim);
+		assertThat(taskCount("failed_error")).isEqualTo(1.0);
+		assertThat(pathCount("fallback")).isZero();   // ffmpeg 단계가 끝나지 못했으니 경로 계측 없음
+	}
+
+	// 검증: FR-MEDIA-03, AC-615-05
+	@Test
+	void remux_경로도_썸네일은_원본에서_뽑는다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(true);
+		createFileOn(ffmpegRunner).remux(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(claim);
+
+		ArgumentCaptor<Path> remuxInput = ArgumentCaptor.forClass(Path.class);
+		verify(ffmpegRunner).remux(remuxInput.capture(), any());
+		ArgumentCaptor<Path> thumbnailInput = ArgumentCaptor.forClass(Path.class);
+		verify(ffmpegRunner).extractThumbnail(thumbnailInput.capture(), any(), anyDouble());
+		assertThat(thumbnailInput.getValue()).isEqualTo(remuxInput.getValue());
+		assertThat(thumbnailInput.getValue().getFileName().toString()).isEqualTo("original");
+	}
+
+	// 검증: FR-MEDIA-03, AC-615-05
+	@Test
+	void 길이_초과면_remux_판정_probe_를_돌리지_않는다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(31.5);
+
+		encodingService.encode(claim);
+
+		verify(ffmpegRunner, never()).isRemuxable(any(Path.class));
+		verify(ffmpegRunner, never()).remux(any(), any());
+		verify(statusWriter).markFailed(claim);
+	}
+
+	// 검증: FR-MEDIA-02
+	@Test
+	void 판정_probe_예외는_폴백하지_않고_전파된다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		// 바로 앞 길이 probe 가 같은 파일·같은 바이너리로 성공했으니 여기서 실패하면 인프라 문제 — 재시도 분기로 보낸다 (D1).
+		willThrow(new IllegalStateException("ffprobe 실행 실패")).given(ffmpegRunner).isRemuxable(any(Path.class));
+
+		assertThatThrownBy(() -> encodingService.encode(claim)).hasMessage("ffprobe 실행 실패");
+
+		verify(ffmpegRunner, never()).encode720p(any(), any());
+		verify(ffmpegRunner, never()).remux(any(), any());
+		verify(statusWriter, never()).markFailed(claim);
+		assertThat(taskCount("failed_error")).isEqualTo(1.0);
+	}
+
 	@Test
 	void 교체로_원본이_바뀌면_인코딩_결과를_업로드하지_않는다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);

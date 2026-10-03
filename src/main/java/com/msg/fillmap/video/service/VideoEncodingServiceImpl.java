@@ -97,7 +97,10 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 
 			Path encoded = workDir.resolve("encoded.mp4");
 			Path thumbnail = workDir.resolve("thumb.jpg");
-			ffmpegRunner.encode720p(original, encoded);
+			long ffmpegStarted = System.nanoTime();
+			String path = remuxOrEncode(videoId, original, encoded);
+			long ffmpegMs = (System.nanoTime() - ffmpegStarted) / 1_000_000;
+			videoProcessingMetrics.countEncodingPath(path);
 			// 실효 블러 활성 (MSG-456) — 블러는 AiClient(ai.enabled 게이트)에 의존해 단독 플래그로는 못 켠다.
 			boolean blurActive = aiProperties.enabled() && aiProperties.blurEnabled();
 			// 블러 활성이면 썸네일은 블러 후에 폴러가 뽑는다 — 여기선 만들지도 올리지도 않는다(P1, 미블러 노출 차단).
@@ -135,7 +138,8 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 				resultCounted = true;
 				submitHighlightJob(videoId, originalKey, encodedKey);
 			}
-			log.info("인코딩 완료: videoId={} duration={}s blurActive={}", videoId, duration, blurActive);
+			log.info("인코딩 완료: videoId={} duration={}s path={} ffmpegMs={} blurActive={}",
+				videoId, duration, path, ffmpegMs, blurActive);
 		} catch (ClaimLostException e) {
 			throw e;
 		} catch (FfmpegRunner.InvalidMediaException e) {
@@ -155,6 +159,28 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			throw new IllegalStateException("인코딩 실행 실패", e);
 		} finally {
 			deleteQuietly(workDir);
+		}
+	}
+
+	/**
+	 * remux 가능하면 copy, 아니면 기존 인코딩. remux 실행 실패는 인코딩으로 한 번만 폴백한다 (MSG-615 D4).
+	 * 판정 probe 자체의 예외는 잡지 않는다 — 바로 앞 길이 probe 가 같은 파일·같은 바이너리로 성공했으니 여기서
+	 * 실패하면 인프라 문제이고, 그 분류는 호출자의 재시도 분기 몫이다 (D1). "remux 불가"로 삼키면 장애가 느린
+	 * 경로로 숨는다.
+	 */
+	private String remuxOrEncode(Long videoId, Path original, Path encoded) {
+		if (!ffmpegRunner.isRemuxable(original)) {
+			ffmpegRunner.encode720p(original, encoded);
+			return VideoProcessingMetrics.ENCODING_PATH_ENCODE;
+		}
+		try {
+			ffmpegRunner.remux(original, encoded);
+			return VideoProcessingMetrics.ENCODING_PATH_REMUX;
+		} catch (RuntimeException e) {
+			// 메타데이터로는 copy 가능해 보였지만 패킷이 비표준인 H.264 — 다시 인코딩하면 대개 살아난다.
+			log.warn("remux 실패, 인코딩으로 폴백: videoId={}", videoId, e);
+			ffmpegRunner.encode720p(original, encoded);
+			return VideoProcessingMetrics.ENCODING_PATH_FALLBACK;
 		}
 	}
 

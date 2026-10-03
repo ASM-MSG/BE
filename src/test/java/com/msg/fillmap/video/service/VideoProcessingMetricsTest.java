@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import io.micrometer.core.instrument.Timer;
@@ -55,6 +56,30 @@ class VideoProcessingMetricsTest {
 
 		assertThat(outcomeCount("ready", "encoding")).isEqualTo(1.0);
 		assertThat(durationTimer("ready", "encoding").count()).isZero();
+	}
+
+	// ── ffmpeg 경로 계측 (MSG-615 D5) ──
+
+	// 검증: AC-615-07
+	@Test
+	void 인코딩_경로_counter는_세_값이_0으로_선등록된다() {
+		for (String path : List.of("remux", "encode", "fallback")) {
+			assertThat(registry.get("video.encoding.path").tag("path", path).counter().count())
+				.as("path=%s 는 증가 전에도 0 값으로 노출돼야 한다 (AC-615-07)", path)
+				.isZero();
+		}
+	}
+
+	@Test
+	void 인코딩_경로_counter는_고정값만_증가하고_미등록값은_무시한다() {
+		metrics.countEncodingPath(VideoProcessingMetrics.ENCODING_PATH_REMUX);
+		metrics.countEncodingPath(VideoProcessingMetrics.ENCODING_PATH_FALLBACK);
+		metrics.countEncodingPath("transcode");   // 미등록 — 가변값 태그 금지(D1)라 조용히 무시
+
+		assertThat(registry.get("video.encoding.path").tag("path", "remux").counter().count()).isEqualTo(1.0);
+		assertThat(registry.get("video.encoding.path").tag("path", "fallback").counter().count()).isEqualTo(1.0);
+		assertThat(registry.get("video.encoding.path").tag("path", "encode").counter().count()).isZero();
+		assertThat(registry.find("video.encoding.path").tag("path", "transcode").counter()).isNull();
 	}
 
 	private double outcomeCount(String outcome, String path) {
