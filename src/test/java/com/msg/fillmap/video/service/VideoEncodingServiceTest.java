@@ -14,6 +14,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -390,11 +391,26 @@ class VideoEncodingServiceTest {
 		return meterRegistry.get("video.encoding.path").tag("path", path).counter().count();
 	}
 
+	/**
+	 * 목 S3 다운로드가 주어진 바이트 수의 원본을 놓아 준다 — 비트레이트 상한 판정(파일 바이트 × 8 / 실측 길이)의
+	 * 재료다. 희소 파일이라 30MB 를 줘도 디스크를 쓰지 않는다.
+	 */
+	private void originalOfBytes(long bytes) {
+		org.mockito.BDDMockito.willAnswer(invocation -> {
+			Path target = invocation.getArgument(1);
+			try (RandomAccessFile file = new RandomAccessFile(target.toFile(), "rw")) {
+				file.setLength(bytes);
+			}
+			return null;
+		}).given(s3Client).getObject(any(GetObjectRequest.class), any(Path.class));
+	}
+
 	// 검증: FR-MEDIA-03, NFR-PERF-08, AC-615-02
 	@Test
 	void remux_가능하면_encode720p_를_호출하지_않는다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(true);
+		originalOfBytes(1_000_000);   // 0.8 Mbps — 상한 안
 		createFileOn(ffmpegRunner).remux(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
@@ -430,6 +446,7 @@ class VideoEncodingServiceTest {
 	void remux_실패면_encode720p_로_한_번_폴백한다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(true);
+		originalOfBytes(1_000_000);   // 0.8 Mbps — 상한 안
 		willThrow(new FfmpegRunner.InvalidMediaException("copy 불가")).given(ffmpegRunner).remux(any(), any());
 		createFileOn(ffmpegRunner).encode720p(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
@@ -450,6 +467,7 @@ class VideoEncodingServiceTest {
 	void remux_폴백도_실패하면_기존_실패_분기를_탄다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(true);
+		originalOfBytes(1_000_000);   // 0.8 Mbps — 상한 안
 		willThrow(new FfmpegRunner.InvalidMediaException("copy 불가")).given(ffmpegRunner).remux(any(), any());
 		willThrow(new FfmpegRunner.InvalidMediaException("디코딩 불가")).given(ffmpegRunner).encode720p(any(), any());
 
@@ -466,6 +484,7 @@ class VideoEncodingServiceTest {
 	void remux_경로도_썸네일은_원본에서_뽑는다() {
 		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
 		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(true);
+		originalOfBytes(1_000_000);   // 0.8 Mbps — 상한 안
 		createFileOn(ffmpegRunner).remux(any(), any());
 		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
 
@@ -477,6 +496,40 @@ class VideoEncodingServiceTest {
 		verify(ffmpegRunner).extractThumbnail(thumbnailInput.capture(), any(), anyDouble());
 		assertThat(thumbnailInput.getValue()).isEqualTo(remuxInput.getValue());
 		assertThat(thumbnailInput.getValue().getFileName().toString()).isEqualTo("original");
+	}
+
+	// 검증: FR-MEDIA-03, AC-615-02, AC-615-10
+	@Test
+	void 평균_비트레이트가_12Mbps_이하면_remux_한다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(true);
+		originalOfBytes(10_000_000);   // 10초 10MB → 8 Mbps (아이폰 기본 720p30 수준)
+		createFileOn(ffmpegRunner).remux(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(claim);
+
+		verify(ffmpegRunner).remux(any(), any());
+		verify(ffmpegRunner, never()).encode720p(any(), any());
+		assertThat(pathCount("remux")).isEqualTo(1.0);
+	}
+
+	// 검증: FR-MEDIA-03, AC-615-03, AC-615-10
+	@Test
+	void 평균_비트레이트가_12Mbps_를_넘으면_규격이_맞아도_encode_한다() {
+		given(ffmpegRunner.probeDurationSec(any())).willReturn(10.0);
+		given(ffmpegRunner.isRemuxable(any(Path.class))).willReturn(true);
+		originalOfBytes(30_000_000);   // 10초 30MB → 24 Mbps (화면 녹화·액션캠) — copy 하면 그대로 서빙된다
+		createFileOn(ffmpegRunner).encode720p(any(), any());
+		createFileOn(ffmpegRunner).extractThumbnail(any(), any(), anyDouble());
+
+		encodingService.encode(claim);
+
+		verify(ffmpegRunner, never()).remux(any(), any());
+		verify(ffmpegRunner).encode720p(any(), any());
+		verify(statusWriter).markReady(claim, ASSET_KEYS.encoded(), ASSET_KEYS.thumbnail(), MEASURED);
+		assertThat(pathCount("encode")).isEqualTo(1.0);
+		assertThat(pathCount("remux")).isZero();
 	}
 
 	// 검증: FR-MEDIA-03, AC-615-05

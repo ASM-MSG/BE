@@ -38,6 +38,10 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 	// 실측은 컨테이너 메타데이터 반올림으로 30.0x 초가 나와, 정확히 30.0 으로 끊으면 정상 영상이 FAILED 로
 	// 끝난다 (MSG-370). 여유 구간(30~31초)의 초과분은 인코딩이 자르지 않고 그대로 둔다.
 	private static final double MAX_DURATION_SEC = 31.0;
+	// remux 는 원본 비트레이트를 그대로 서빙하므로 평균 비트레이트 상한을 둔다 (MSG-615 PR #293 리뷰) — 아이폰 기본
+	// 720p30(≈8 Mbps)은 통과하고, 화면 녹화·액션캠(20 Mbps+)은 crf 23 인코딩(2~5 Mbps 수렴)으로 보낸다. 30초 기준 45MB.
+	// 파일 바이트 × 8 / 실측 길이로 계산한다 — ffprobe bit_rate 는 컨테이너에 따라 비고, 서빙되는 바이트가 정확하다.
+	private static final long REMUX_MAX_BITRATE_BPS = 12_000_000L;
 
 	private final VideoRepository videoRepository;
 	private final VideoStatusWriter statusWriter;
@@ -98,7 +102,7 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			Path encoded = workDir.resolve("encoded.mp4");
 			Path thumbnail = workDir.resolve("thumb.jpg");
 			long ffmpegStarted = System.nanoTime();
-			String path = remuxOrEncode(videoId, original, encoded);
+			String path = remuxOrEncode(videoId, original, encoded, duration);
 			long ffmpegMs = (System.nanoTime() - ffmpegStarted) / 1_000_000;
 			videoProcessingMetrics.countEncodingPath(path);
 			// 실효 블러 활성 (MSG-456) — 블러는 AiClient(ai.enabled 게이트)에 의존해 단독 플래그로는 못 켠다.
@@ -166,10 +170,10 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 	 * remux 가능하면 copy, 아니면 기존 인코딩. remux 실행 실패는 인코딩으로 한 번만 폴백한다 (MSG-615 D4).
 	 * 판정 probe 자체의 예외는 잡지 않는다 — 바로 앞 길이 probe 가 같은 파일·같은 바이너리로 성공했으니 여기서
 	 * 실패하면 인프라 문제이고, 그 분류는 호출자의 재시도 분기 몫이다 (D1). "remux 불가"로 삼키면 장애가 느린
-	 * 경로로 숨는다.
+	 * 경로로 숨는다. 스트림 규격이 맞아도 평균 비트레이트가 상한을 넘으면 인코딩이다 (REMUX_MAX_BITRATE_BPS).
 	 */
-	private String remuxOrEncode(Long videoId, Path original, Path encoded) {
-		if (!ffmpegRunner.isRemuxable(original)) {
+	private String remuxOrEncode(Long videoId, Path original, Path encoded, double durationSec) throws IOException {
+		if (!ffmpegRunner.isRemuxable(original) || !withinRemuxBitrate(videoId, original, durationSec)) {
 			ffmpegRunner.encode720p(original, encoded);
 			return VideoProcessingMetrics.ENCODING_PATH_ENCODE;
 		}
@@ -182,6 +186,14 @@ public class VideoEncodingServiceImpl implements VideoEncodingService {
 			ffmpegRunner.encode720p(original, encoded);
 			return VideoProcessingMetrics.ENCODING_PATH_FALLBACK;
 		}
+	}
+
+	private boolean withinRemuxBitrate(Long videoId, Path original, double durationSec) throws IOException {
+		double bitrateBps = durationSec > 0 ? Files.size(original) * 8.0 / durationSec : Double.POSITIVE_INFINITY;
+		boolean within = bitrateBps <= REMUX_MAX_BITRATE_BPS;
+		log.info("remux 비트레이트 판정: videoId={} bitrateMbps={} within={}",
+			videoId, String.format("%.1f", bitrateBps / 1_000_000), within);
+		return within;
 	}
 
 	/**
