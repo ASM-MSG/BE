@@ -46,6 +46,8 @@ public interface EventVideoRepository extends JpaRepository<EventVideo, Long> {
 	 * 프로젝션의 v.userId 는 응답의 uploaderId(차단 대상 식별자)다. 정렬은 업로드 시각 내림차순 + id 내림차순 타이브레이커라 같은 시각 업로드가 둘이어도
 	 * 페이지 경계가 결정적이다. 건수 제한은 Pageable 이 지고(JPQL 에 LIMIT 이 없다) 서비스가 size+1 lookahead
 	 * 로 넘긴다 — Pageable 에 Sort 를 실으면 ORDER BY 계약이 흔들리므로 정렬 없는 PageRequest 여야 한다.
+	 * 정렬과 keyset 은 ev.createdAt(videos.created_at 복사본, MSG-612)·ev.videoId 로 둬 위치 등치 + 정렬 순서가
+	 * idx_event_videos_location_recent 하나로 끝나게 한다 — 값이 v.createdAt·v.id 와 같아 결과·순서·커서는 불변이다.
 	 */
 	@Query("""
 		SELECT new com.msg.fillmap.event.repository.EventLocationVideoRow(
@@ -60,7 +62,7 @@ public interface EventVideoRepository extends JpaRepository<EventVideo, Long> {
 		    SELECT 1 FROM UserBlock b
 		    WHERE (b.id.blockerId = :viewerId AND b.id.blockedId = v.userId)
 		       OR (b.id.blockerId = v.userId AND b.id.blockedId = :viewerId)))
-		ORDER BY v.createdAt DESC, v.id DESC
+		ORDER BY ev.createdAt DESC, ev.videoId DESC
 		""")
 	List<EventLocationVideoRow> findVisibleByLocationId(@Param("locationId") Long locationId,
 		@Param("viewerId") Long viewerId, Pageable pageable);
@@ -82,8 +84,8 @@ public interface EventVideoRepository extends JpaRepository<EventVideo, Long> {
 		    SELECT 1 FROM UserBlock b
 		    WHERE (b.id.blockerId = :viewerId AND b.id.blockedId = v.userId)
 		       OR (b.id.blockerId = v.userId AND b.id.blockedId = :viewerId)))
-		  AND (v.createdAt < :cursorCreatedAt OR (v.createdAt = :cursorCreatedAt AND v.id < :cursorId))
-		ORDER BY v.createdAt DESC, v.id DESC
+		  AND (ev.createdAt < :cursorCreatedAt OR (ev.createdAt = :cursorCreatedAt AND ev.videoId < :cursorId))
+		ORDER BY ev.createdAt DESC, ev.videoId DESC
 		""")
 	List<EventLocationVideoRow> findVisibleByLocationIdAfter(
 		@Param("locationId") Long locationId,

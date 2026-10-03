@@ -1,5 +1,7 @@
 package com.msg.fillmap.event.entity;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -45,9 +47,17 @@ public class EventVideo {
 	@Column(name = "event_occurrence_id", nullable = false)
 	private Long eventOccurrenceId;
 
+	/**
+	 * videos.created_at 의 복사본 (MSG-612). 피드 정렬과 keyset 이 event_videos 쪽 인덱스
+	 * (idx_event_videos_location_recent)만으로 끝나게 하려고 둔다. 원본이 updatable=false 라 갱신 경로가 없다.
+	 */
+	@Column(name = "created_at", nullable = false, updatable = false)
+	private LocalDateTime createdAt;
+
 	public EventVideo(Video video, EventLocation location, Long eventOccurrenceId) {
 		this.video = video;
 		this.location = location;
 		this.eventOccurrenceId = eventOccurrenceId;
+		this.createdAt = video.getCreatedAt();
 	}
 }

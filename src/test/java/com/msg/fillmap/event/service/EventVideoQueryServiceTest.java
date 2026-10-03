@@ -199,10 +199,18 @@ class EventVideoQueryServiceTest {
 		return video;
 	}
 
-	/** 업로드 시각을 직접 못 박는다 — created_at 은 저장 시각 자동 값이라 정렬·동률 검증에는 고정이 필요하다. */
+	/**
+	 * 업로드 시각을 직접 못 박는다 — created_at 은 저장 시각 자동 값이라 정렬·동률 검증에는 고정이 필요하다.
+	 * event_videos.created_at 은 videos.created_at 의 복사본(MSG-612)이라 둘을 같이 바꿔 정합 규칙을 지킨다 —
+	 * 운영에는 created_at 을 고치는 경로가 없고(updatable=false), 이 우회는 테스트 전용이다.
+	 */
 	private void 업로드시각(Long videoId, LocalDateTime createdAt) {
 		em.flush();
 		em.createNativeQuery("UPDATE videos SET created_at = :t WHERE id = :i")
+			.setParameter("t", createdAt)
+			.setParameter("i", videoId)
+			.executeUpdate();
+		em.createNativeQuery("UPDATE event_videos SET created_at = :t WHERE video_id = :i")
 			.setParameter("t", createdAt)
 			.setParameter("i", videoId)
 			.executeUpdate();
