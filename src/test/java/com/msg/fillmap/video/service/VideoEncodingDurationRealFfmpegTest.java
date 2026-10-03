@@ -60,6 +60,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
  * 방식). CI 는 ffmpeg 를 설치하므로 실제로 돈다 — 설치를 빼면 이 클래스가 조용히 건너뛰어지면서
  * {@code docs/rtm.md} 만 검증이 있는 것처럼 남는다.
  */
+// 검증: FR-MEDIA-03, AC-615-03
 @DisplayName("영상 길이 계산 (실 ffmpeg)")
 class VideoEncodingDurationRealFfmpegTest {
 

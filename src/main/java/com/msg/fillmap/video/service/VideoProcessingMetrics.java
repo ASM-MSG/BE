@@ -32,6 +32,10 @@ public class VideoProcessingMetrics {
 	public static final String TASK_FAILED_OVER_DURATION = "failed_over_duration";
 	public static final String TASK_FAILED_ERROR = "failed_error";
 
+	public static final String ENCODING_PATH_REMUX = "remux";
+	public static final String ENCODING_PATH_ENCODE = "encode";
+	public static final String ENCODING_PATH_FALLBACK = "fallback";
+
 	public static final String AI_SUBMITTED = "submitted";
 	public static final String AI_DONE = "done";
 	public static final String AI_FAILED = "failed";
@@ -42,6 +46,7 @@ public class VideoProcessingMetrics {
 	private final Map<String, Counter> outcomeCounters = new HashMap<>();
 	private final Map<String, Timer> durationTimers = new HashMap<>();
 	private final Map<String, Counter> encodingTaskCounters = new HashMap<>();
+	private final Map<String, Counter> encodingPathCounters = new HashMap<>();
 	private final Map<String, Counter> aiJobCounters = new HashMap<>();
 	private final Clock clock;
 
@@ -63,6 +68,10 @@ public class VideoProcessingMetrics {
 		for (String result : List.of(TASK_COMPLETED, TASK_FAILED_OVER_DURATION, TASK_FAILED_ERROR)) {
 			encodingTaskCounters.put(result,
 				Counter.builder("video.encoding.task").tag("result", result).register(registry));
+		}
+		for (String path : List.of(ENCODING_PATH_REMUX, ENCODING_PATH_ENCODE, ENCODING_PATH_FALLBACK)) {
+			encodingPathCounters.put(path,
+				Counter.builder("video.encoding.path").tag("path", path).register(registry));
 		}
 		for (String event : List.of(AI_SUBMITTED, AI_DONE, AI_FAILED, AI_PRECHECK_REJECTED, AI_TIMEOUT, AI_JOB_LOST)) {
 			aiJobCounters.put(event, Counter.builder("video.ai.job").tag("event", event).register(registry));
@@ -91,6 +100,14 @@ public class VideoProcessingMetrics {
 	/** 인코딩 태스크 결과 계측 — result 는 TASK_* 고정값만. */
 	public void countEncodingTask(String result) {
 		increment(encodingTaskCounters, result);
+	}
+
+	/**
+	 * ffmpeg 가 무엇을 했나 계측 (MSG-615 D5) — path 는 ENCODING_PATH_* 고정값만. ffmpeg 단계 직후 증가하고
+	 * 뒤의 fresh 재확인 결과와 무관하다. 영상 종결은 video.processing.outcome 이 센다.
+	 */
+	public void countEncodingPath(String path) {
+		increment(encodingPathCounters, path);
 	}
 
 	/** AI 잡 이벤트 계측 — event 는 AI_* 고정값만. */
