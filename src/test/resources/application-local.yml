@@ -40,6 +40,10 @@ fillmap:
     encoding-job:
       enabled: false
 
+  # 기동 워밍업 (MSG-608) — 기본값에 기대지 않고 명시한다. 켜지면 컨텍스트마다 localhost 호출 수천 건이 나간다.
+  warmup:
+    enabled: false
+
   # 메일 발송 (MSG-497) — 로컬은 실발송 없이 LoggingMailSender 가 링크를 로그로 찍는다.
   # 이 base URL 은 로그에 찍히는 재설정 링크의 앞부분이다 (화면 라우트는 FE 확정 몫).
   mail:

@@ -1,0 +1,92 @@
+{
+  "mode": "db_poll",
+  "workload": "w1",
+  "round": 1,
+  "count": 2000,
+  "rate": 50,
+  "requests": {
+    "offered": 2000,
+    "success": 2000,
+    "errors": {},
+    "latency": {
+      "n": 2000,
+      "p50_ms": 5.922291020397097,
+      "p95_ms": 8.229458006098866,
+      "p99_ms": 10.327291034627706,
+      "max_ms": 12.868458055891097,
+      "mean_ms": 5.768489658978069
+    },
+    "service": {
+      "n": 2000,
+      "p50_ms": 2.849541953764856,
+      "p95_ms": 4.18774998979643,
+      "p99_ms": 6.824792013503611,
+      "max_ms": 10.477165982592851,
+      "mean_ms": 2.931249874527566
+    }
+  },
+  "e2e_delivery": {
+    "n": 2000,
+    "p50_ms": 27150.556,
+    "p95_ms": 51144.151,
+    "p99_ms": 53501.817,
+    "max_ms": 53841.161,
+    "mean_ms": 27264.1139985
+  },
+  "drain": {
+    "complete": true,
+    "elapsed_s": 54.05,
+    "final": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    }
+  },
+  "fcm": {
+    "calls": 2000,
+    "ok": 2000,
+    "rejected": 0,
+    "distinct_ok_ids": 2000,
+    "duplicate_ids": 0,
+    "duplicate_extra_deliveries": 0,
+    "max_per_id": 1,
+    "outage_end_wall": null,
+    "first_ok_after_outage_wall": null
+  },
+  "reconcile": {
+    "rows": 2000,
+    "counts": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    "duplicate_event_keys": 0,
+    "sent_not_delivered": 0,
+    "delivered_not_sent": 0,
+    "balanced": true
+  },
+  "resources": {
+    "pg_cpu_seconds": 3.269,
+    "kafka_cpu_seconds": 1.219,
+    "db": {
+      "xact_commit": 2250,
+      "xact_rollback": 0,
+      "tup_inserted": 2000,
+      "tup_updated": 4022,
+      "tup_returned": 451715,
+      "tup_fetched": 9464
+    },
+    "wall_seconds": 94.231
+  },
+  "pipeline": {
+    "db-poller": {
+      "polls": 22,
+      "sent": 2000
+    }
+  },
+  "raw": "w1-db_poll-1.jsonl.gz"
+}

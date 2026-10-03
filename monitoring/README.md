@@ -34,6 +34,8 @@ docker compose -f monitoring/docker-compose.yml up -d
 
 ## 2. 같은 리전 임시 EC2 (깨끗한 측정)
 
+> 2026-09-29 실측 런북: `load-test/bench-ec2/README.md` (MSG-609 — SG·인스턴스 명령, 시드, 러너, 정리까지 그대로 복붙). 결과는 `docs/reports/2026-09-29-cloud-load-test-t3small.md`.
+
 앱/DB와 **같은 AWS 리전**의 별도 인스턴스에서 이 스택 + k6를 돌린다.
 - `prometheus/prometheus.yml`의 `fillmap-app` target을 **앱 사설 IP:8080**으로 교체.
 - DB 사설 IP를 `POSTGRES_HOST`로 주입:

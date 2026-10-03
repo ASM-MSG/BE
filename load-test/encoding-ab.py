@@ -4,6 +4,7 @@
 외부 변경: dev 테스트 계정/비공개 영상 생성, AI EC2 인코딩 워커 stop/start.
 """
 import concurrent.futures
+import os
 import datetime
 import hashlib
 import json
@@ -74,7 +75,10 @@ def main():
     assert sql("SELECT count(*) FROM video_encoding_jobs WHERE status IN ('PENDING','PROCESSING');") == '0'
     result['images'] = [remote(BE, "docker inspect --format '{{.Config.Image}}' fillmap-api"),
                         remote(AI, "sudo docker inspect --format '{{.Config.Image}}' fillmap-encoding-worker")]
-    assert result['images'][0] == result['images'][1], 'node image mismatch'
+    if result['images'][0] != result['images'][1]:
+        # dev api 가 실험 이미지를 달고 있을 때 기록만 남기고 진행한다 (MSG-609 규모 회차: msg577 vs develop)
+        assert os.environ.get('ALLOW_IMAGE_MISMATCH') == '1', 'node image mismatch: ' + str(result['images'])
+        result['errors'].append('image mismatch tolerated: ' + str(result['images']))
     token = request('/api/auth/dev/social-login', data={'provider': 'KAKAO', 'oid': 'encoding-ab-' + run})['accessToken']
     result['test_oid'] = 'encoding-ab-' + run
     samples = []
@@ -108,7 +112,7 @@ def main():
                 remote(AI, 'sudo docker stop -t 45 fillmap-encoding-worker >/dev/null')
             else:
                 ready_worker()
-            for count in (3, 6):
+            for count in tuple(int(c) for c in os.environ.get('CONCURRENCY', '3,6').split(',')):
                 start = time.monotonic()
                 with concurrent.futures.ThreadPoolExecutor(max_workers=count) as pool:
                     futures = [pool.submit(upload, i) for i in range(count)]
@@ -125,7 +129,7 @@ def main():
                     for row in rows:
                         if row['processing_status'] in ('READY', 'FAILED') and row['id'] not in terminal:
                             terminal[row['id']] = (row, time.monotonic())
-                    if time.monotonic() - start > 480:
+                    if time.monotonic() - start > int(os.environ.get('ROUND_TIMEOUT', '480')):
                         raise RuntimeError('round timeout: ' + str(rows))
                     time.sleep(0.5)
                 for item in uploads:

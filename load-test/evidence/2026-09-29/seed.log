@@ -1,0 +1,20 @@
+>> Postgres 시드: general=300000 hot=60000 users=500
+=== 시드 결과 ===
+        what         | count  
+---------------------+--------
+ users(seed)         |    500
+ user_grids          | 356838
+ grids               | 186390
+ videos              | 360000
+ grids(최근48h 신호) |   8396
+(5 rows)
+
+
+real	2m34.106s
+user	0m0.017s
+sys	0m0.012s
+>> Redis 핫구역 시드 (Postgres 최근48h 신호 → UTC 6h 버킷)
+All data transferred. Waiting for the last reply...
+Last reply received from server.
+errors: 0, replies: 20994
+>> hotzone 버킷 9개

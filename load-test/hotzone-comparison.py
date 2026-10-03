@@ -33,6 +33,7 @@ NOW = BASE + 3 * HOUR
 FIRST = (NOW // WIDTH - 7) * WIDTH
 KEYS = [f"compare:bucket:{i}" for i in range(NOW // WIDTH - 7, NOW // WIDTH + 1)]
 SQL_CACHE_LOCK = threading.Lock()
+NAIVE_KEY = "compare:naive:events"
 SQL = """SELECT grid_id, count(*) AS score FROM signals
 WHERE occurred_at >= %s AND occurred_at < %s
 GROUP BY grid_id ORDER BY score DESC, grid_id COLLATE "C" DESC LIMIT 50"""
@@ -96,11 +97,13 @@ def seed(conn, r, count, grids):
     rng = random.Random(183)
     buckets = defaultdict(Counter)
     exact, aligned = Counter(), Counter()
+    naive = {}
     with conn.cursor().copy("COPY signals FROM STDIN") as copy:
         for i in range(count):
             grid = f"g{rng.randrange(100) if rng.random() < .2 else rng.randrange(grids):09d}"
             ts = NOW - rng.randrange(1, 72 * HOUR + 1)
             copy.write_row((i, grid, stamp(ts)))
+            naive[f"{i}:{grid}"] = ts
             buckets[ts // WIDTH][grid] += 1
             if ts >= NOW - 48 * HOUR:
                 exact[grid] += 1
@@ -116,6 +119,13 @@ def seed(conn, r, count, grids):
         key = f"compare:bucket:{bucket}"
         r.zadd(key, dict(counts))
         r.expire(key, 54 * HOUR)
+    # redis_naive: 신호 1건 = 멤버 1개(score=발생 시각). 창은 ZRANGEBYSCORE, 집계는 앱에서 — 버킷 도입 전 형태.
+    items = list(naive.items())
+    with r.pipeline(transaction=False) as pipe:
+        for i in range(0, len(items), 20_000):
+            pipe.zadd(NAIVE_KEY, dict(items[i:i + 20_000]))
+        pipe.execute()
+    assert query("redis_naive", conn, r) == top(exact)
     assert [(g, int(s)) for g, s in conn.execute(SQL, (stamp(NOW - 48 * HOUR), stamp(NOW)))] == top(exact)
     assert [(g, int(s)) for g, s in conn.execute(SQL, (stamp(FIRST), stamp(NOW)))] == top(aligned)
     r.eval(ENSURE, 9, "compare:verify", *KEYS, 30)
@@ -128,6 +138,7 @@ def seed(conn, r, count, grids):
             "redis_all_72h_bucket_bytes": sum(r.memory_usage(f"compare:bucket:{b}") for b in buckets),
             "redis_selected_8_bucket_bytes": sum(r.memory_usage(k) or 0 for k in KEYS),
             "redis_top_bytes": r.memory_usage("compare:verify"),
+            "redis_naive_events_bytes": r.memory_usage(NAIVE_KEY, samples=0),
             "sql_plan": conn.execute("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + SQL,
                                      (stamp(NOW - 48 * HOUR), stamp(NOW))).fetchone()[0]}
 
@@ -150,6 +161,9 @@ def query(mode, conn, r, *, lower=NOW - 48 * HOUR):
         rows = list(conn.execute(SQL, (stamp(lower), stamp(NOW))))
         r.set("compare:sqltop", json.dumps(rows), ex=30)
         return rows
+    if mode == "redis_naive":
+        counts = Counter(m.split(":", 1)[1] for m in r.zrangebyscore(NAIVE_KEY, lower, NOW - 1))
+        return top(counts)
     key = "compare:redistop" if mode == "redis_cache" else "compare:recompute"
     if mode == "redis":
         r.zunionstore(key, KEYS)
@@ -160,7 +174,7 @@ def query(mode, conn, r, *, lower=NOW - 48 * HOUR):
 
 def micro(conn, r):
     result = {}
-    for mode in ("sql", "sql_cache", "redis", "redis_cache"):
+    for mode in ("sql", "sql_cache", "redis_naive", "redis", "redis_cache"):
         for _ in range(5):
             query(mode, conn, r)
         samples = []
@@ -386,6 +400,9 @@ def main():
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--rate", type=int, default=100)
     parser.add_argument("--skip-load", action="store_true")
+    parser.add_argument("--modes", default="sql,sql_cache,redis,redis_cache",
+                        help="load 단계 비교군. 이야기용 4단: sql,redis_naive,redis,redis_cache")
+    parser.add_argument("--scales", default="100000:1000,1000000:10000", help="events:grids 쌍, 쉼표 구분")
     parser.add_argument("--extra-checks", action="store_true", help="Use already seeded 1M rows, after main run")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -409,7 +426,7 @@ def main():
     dump(args.out, "accuracy.json", accuracy())
     r = rc()
     with pg() as conn:
-        for count, grids in ((100_000, 1000), (1_000_000, 10_000)):
+        for count, grids in (tuple(int(v) for v in pair.split(":")) for pair in args.scales.split(",")):
             data = seed(conn, r, count, grids)
             data["micro"] = micro(conn, r)
             dump(args.out, f"scale-{count}.json", data)
@@ -417,10 +434,10 @@ def main():
         dump(args.out, "writes.json", writes(conn, r))
     results = []
     if not args.skip_load:
-        modes = ["sql", "sql_cache", "redis", "redis_cache"]
+        modes = args.modes.split(",")
         for round_id in range(args.rounds):
             # Rotate/reverse order to reduce systematic order bias.
-            order = modes if round_id == 0 else list(reversed(modes)) if round_id == 1 else modes[2:] + modes[:2]
+            order = modes if round_id == 0 else list(reversed(modes)) if round_id == 1 else modes[len(modes) // 2:] + modes[:len(modes) // 2]
             for mode in order:
                 results.append(load(args.out, mode, round_id, args.duration, args.rate))
     dump(args.out, "load-summary.json", results)

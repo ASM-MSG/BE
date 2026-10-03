@@ -1,0 +1,46 @@
+# MSG-608 2단계 JIT 로그 (r10: 워밍업 켬 N=2,000 + -Xlog:jit+compilation=debug, dev 2026-09-29 00:53 KST 재기동)
+# JVM 기동 15:53:21.5Z 기준 uptime. Started 33.7s → 워밍업 [34, 68.5)s (33.9초, 6,000건 실패 0) → k6 10배 부하 시작 15:54:43Z = uptime 81.5s, 60초.
+# made not entrant 줄 제외. 패키지는 앞 두 토큰.
+
+5초 구간 | tier3 | tier4
+    0 |  2278 |   322   기동
+    5 |   426 |   178
+   10 |   366 |   186
+   15 |  1338 |   330
+   20 |   528 |   240
+   25 |   552 |   236
+   30 |   513 |   173
+   35 |   954 |   318  <- 워밍업
+   40 |   580 |   106  <- 워밍업
+   45 |   588 |   108  <- 워밍업
+   50 |   842 |   210  <- 워밍업
+   55 |   876 |   167  <- 워밍업
+   60 |   114 |   108  <- 워밍업
+   65 |    67 |   165  <- 워밍업
+   70 |    35 |    30
+   75 |    38 |     8
+   80 |   241 |    35
+   85 |   154 |   148  <- 부하
+   90 |   145 |   160  <- 부하
+   95 |     7 |    99  <- 부하
+  100 |    14 |    46  <- 부하
+  105 |     5 |   133  <- 부하
+  110 |    11 |   188  <- 부하
+  115 |    71 |   127  <- 부하
+  120 |     5 |   164  <- 부하
+
+워밍업 창 [34,69)s: 컴파일 13,090건 — tier3 4,126 · tier4 1,162 · fillmap tier4 8
+  tier3 상위: org.springframework 909 · org.hibernate 876 · org.apache 385 · java.util 267 · io.netty 245 · java.lang 169 · io.micrometer 132 · tools.jackson 128
+  → 워밍업 없던 r0의 부하 창 tier3 목록(springframework 953 · hibernate 906 · apache 462 · netty 250 · lettuce 167 · jackson 106)과 거의 같다. 같은 컴파일이 부하 창에서 워밍업 창으로 옮겨갔다.
+  lettuce는 상위 8개 밖이라 위 목록에 없지만 워밍업 창 tier3 124건(부하 창 14건)으로 같이 옮겨갔다.
+
+부하 창 [81.5,121.5)s: 컴파일 2,372건 (r0 6,300건의 38%) — tier3 629 · **tier4 1,010** · fillmap tier4 26
+  tier3 상위: org.hibernate 140 · org.springframework 101 · org.apache 60 · io.jsonwebtoken 40 (JWT 파싱 — 워밍업 격자 호출은 토큰 1개라 분기 일부 미접촉)
+  tier4 상위: org.springframework 230 · org.hibernate 184 · org.apache 133 · java.util 130 · io.netty 65
+  fillmap tier4 예: GridEncoder::toDegrees · GridEncoder::center · MissionQueryServiceImpl 람다 · HotZoneServiceImpl 람다
+  tier별: tier0 16 · tier1 104 · tier2 613 · tier3 629 · tier4 1,010
+  → 부하 중 남는 컴파일에서 최다는 C2(tier 4) 승격 1,010건(43%)이다. 워밍업이 C1까지 올려 둔 메서드가 실제 부하에서 C2 문턱을 넘는다.
+
+워밍업 끝~부하 사이 [69,81.5)s: 272건 (tier3 116 · tier4 88) — 유휴 구간에도 승격이 이어진다.
+
+k6 (플래그 오버헤드 포함, 참고값): 핫구역 p95 480ms · 미션 220 · 카나리 422 · 버림 41. 초별 p95: 0초 555 · 2초 617 · 4초 205 · 이후 300 아래, 20초 1,656(매분 :02초 멈춤, 15:55:03Z — 멈춤은 19~20초 두 초에 걸치고 스펙 표는 시작 초 19를 적는다).

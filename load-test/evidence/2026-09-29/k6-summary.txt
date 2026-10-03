@@ -1,0 +1,46 @@
+collection-summary-ramp: reqs=22627 rate=73.9/s dropped=84470 http_fail=0
+   summary_latency med=22688.5 p90=25648.5 p95=26387.6 p99=28154.3 p99.9=29628.2 max=31568.5 ms
+   summary_failed={'value': 0}
+collection-summary-smoke: reqs=10 rate=3.8/s dropped=0 http_fail=0
+   summary_latency med=37.4 p90=294.8 p95=1289.0 p99=2084.3 p99.9=2263.3 max=2283.2 ms
+   summary_failed={'value': 0}
+hotzone-cap: reqs=176583 rate=929.4/s dropped=37416 http_fail=0
+   hotzone_latency med=874.9 p90=1178.1 p95=1246.4 p99=1325.7 p99.9=1375.3 max=1476.4 ms
+   hotzone_empty_rate={'value': 0.9238998091549017}
+   hotzone_failed={'value': 0}
+   hotzone_zones_returned={'rate': 2571.634903479041, 'count': 488622}
+hotzone-expiry-200rps: reqs=36001 rate=200.0/s dropped=0 http_fail=0
+   hotzone_latency med=2.0 p90=4.3 p95=5.1 p99=10.2 p99.9=33.7 max=84.4 ms
+   hotzone_empty_rate={'value': 0.9222243826560373}
+   hotzone_failed={'value': 0}
+   hotzone_zones_returned={'count': 102220, 'rate': 567.8724961450912}
+hotzone-scale-400rps: reqs=18001 rate=400.0/s dropped=0 http_fail=0
+   hotzone_latency med=1.6 p90=4.2 p95=5.2 p99=11.1 p99.9=35.6 max=72.3 ms
+   hotzone_empty_rate={'value': 0.9233375923559802}
+   hotzone_failed={'value': 0}
+   hotzone_zones_returned={'count': 50373, 'rate': 1119.341982564851}
+hotzone-scale-600rps: reqs=27001 rate=600.0/s dropped=0 http_fail=0
+   hotzone_latency med=1.6 p90=4.5 p95=5.9 p99=15.8 p99.9=58.1 max=86.6 ms
+   hotzone_empty_rate={'value': 0.9212992111403281}
+   hotzone_failed={'value': 0}
+   hotzone_zones_returned={'count': 78061, 'rate': 1734.5555502888099}
+hotzone-scale-800rps: reqs=36001 rate=800.0/s dropped=0 http_fail=0
+   hotzone_latency med=2.0 p90=6.1 p95=9.5 p99=29.6 p99.9=52.5 max=88.6 ms
+   hotzone_empty_rate={'value': 0.9225577067303686}
+   hotzone_failed={'value': 0}
+   hotzone_zones_returned={'count': 102328, 'rate': 2273.8265025112264}
+viewport-s1-40vu: reqs=240 rate=3.6/s dropped=0 http_fail=0
+   viewport_latency med=371.1 p90=618.0 p95=651.1 p99=773.0 p99.9=911.3 max=940.6 ms
+   viewport_failed={'value': 0}
+viewport-s1-rerun: reqs=600 rate=8.8/s dropped=0 http_fail=0
+   viewport_latency med=1000.2 p90=1475.1 p95=1631.2 p99=2344.9 p99.9=2535.3 max=2640.3 ms
+   viewport_failed={'value': 0}
+viewport-s1: reqs=600 rate=8.7/s dropped=0 http_fail=0
+   viewport_latency med=1401.1 p90=3060.7 p95=4052.5 p99=5230.0 p99.9=6494.6 max=6880.4 ms
+   viewport_failed={'value': 1}
+viewport-s3-300rps: reqs=22067 rate=88.0/s dropped=49934 http_fail=0
+   viewport_latency med=6267.3 p90=8541.4 p95=8782.0 p99=11085.1 p99.9=12096.4 max=14830.4 ms
+   viewport_failed={'value': 1}
+viewport-s4-stress: reqs=15097 rate=97.6/s dropped=44901 http_fail=0
+   viewport_latency med=10045.2 p90=10615.7 p95=10772.3 p99=12365.5 p99.9=12742.5 max=14378.0 ms
+   viewport_failed={'value': 1}

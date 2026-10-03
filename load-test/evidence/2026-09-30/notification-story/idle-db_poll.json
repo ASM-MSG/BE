@@ -1,0 +1,23 @@
+{
+  "mode": "db_poll",
+  "workload": "idle",
+  "seconds": 30,
+  "resources": {
+    "pg_cpu_seconds": 0.06,
+    "kafka_cpu_seconds": 0.395,
+    "db": {
+      "xact_commit": 32,
+      "xact_rollback": 0,
+      "tup_inserted": 0,
+      "tup_updated": 9,
+      "tup_returned": 283,
+      "tup_fetched": 240
+    },
+    "wall_seconds": 30.224
+  },
+  "pipeline": {
+    "db-poller": {
+      "polls": 34
+    }
+  }
+}

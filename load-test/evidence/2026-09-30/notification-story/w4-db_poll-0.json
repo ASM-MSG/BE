@@ -1,0 +1,51 @@
+{
+  "mode": "db_poll",
+  "workload": "w4",
+  "round": 0,
+  "count": 20,
+  "crash_fired": 1,
+  "client_retries": 0,
+  "request_errors": 0,
+  "restarted": [
+    "db-poller"
+  ],
+  "final": {
+    "PENDING": 0,
+    "PUBLISHED": 0,
+    "SENT": 20,
+    "SKIPPED": 0,
+    "DEAD": 0
+  },
+  "fcm": {
+    "calls": 21,
+    "ok": 21,
+    "rejected": 0,
+    "distinct_ok_ids": 20,
+    "duplicate_ids": 1,
+    "duplicate_extra_deliveries": 1,
+    "max_per_id": 2,
+    "outage_end_wall": null,
+    "first_ok_after_outage_wall": null
+  },
+  "duplicates": 1,
+  "reconcile": {
+    "rows": 20,
+    "counts": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 20,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    "duplicate_event_keys": 0,
+    "sent_not_delivered": 0,
+    "delivered_not_sent": 0,
+    "balanced": true
+  },
+  "pipeline": {
+    "db-poller": {
+      "polls": 1,
+      "sent": 20
+    }
+  }
+}

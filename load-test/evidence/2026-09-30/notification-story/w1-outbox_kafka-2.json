@@ -1,0 +1,95 @@
+{
+  "mode": "outbox_kafka",
+  "workload": "w1",
+  "round": 2,
+  "count": 2000,
+  "rate": 50,
+  "requests": {
+    "offered": 2000,
+    "success": 2000,
+    "errors": {},
+    "latency": {
+      "n": 2000,
+      "p50_ms": 5.82774996291846,
+      "p95_ms": 8.425874984823167,
+      "p99_ms": 9.890915942378342,
+      "max_ms": 38.19212497910485,
+      "mean_ms": 5.767203974042786
+    },
+    "service": {
+      "n": 2000,
+      "p50_ms": 2.7850419864989817,
+      "p95_ms": 4.391875001601875,
+      "p99_ms": 6.6915000206790864,
+      "max_ms": 35.066000011283904,
+      "mean_ms": 2.8909156072477344
+    }
+  },
+  "e2e_delivery": {
+    "n": 2000,
+    "p50_ms": 35615.505,
+    "p95_ms": 64100.217,
+    "p99_ms": 66882.613,
+    "max_ms": 67321.773,
+    "mean_ms": 36068.116496
+  },
+  "drain": {
+    "complete": true,
+    "elapsed_s": 67.489,
+    "final": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    }
+  },
+  "fcm": {
+    "calls": 2000,
+    "ok": 2000,
+    "rejected": 0,
+    "distinct_ok_ids": 2000,
+    "duplicate_ids": 0,
+    "duplicate_extra_deliveries": 0,
+    "max_per_id": 1,
+    "outage_end_wall": null,
+    "first_ok_after_outage_wall": null
+  },
+  "reconcile": {
+    "rows": 2000,
+    "counts": {
+      "PENDING": 0,
+      "PUBLISHED": 0,
+      "SENT": 2000,
+      "SKIPPED": 0,
+      "DEAD": 0
+    },
+    "duplicate_event_keys": 0,
+    "sent_not_delivered": 0,
+    "delivered_not_sent": 0,
+    "balanced": true
+  },
+  "resources": {
+    "pg_cpu_seconds": 5.35,
+    "kafka_cpu_seconds": 2.671,
+    "db": {
+      "xact_commit": 14230,
+      "xact_rollback": 0,
+      "tup_inserted": 2000,
+      "tup_updated": 5933,
+      "tup_returned": 556557,
+      "tup_fetched": 13881
+    },
+    "wall_seconds": 107.679
+  },
+  "pipeline": {
+    "relay": {
+      "polls": 21,
+      "published": 2000
+    },
+    "consumer": {
+      "sent": 2000
+    }
+  },
+  "raw": "w1-outbox_kafka-2.jsonl.gz"
+}
